@@ -73,6 +73,7 @@ IItemRepository repo,
         // }
         // var ct = context.HttpContext.RequestAborted;
         // _library.GetItemById(id);
+        _log.LogInformation("Getting metadata for {Type}/{Id}", image_type, id);
         var guid = _library.GetNewItemId(id, typeof(Movie));
         var item = _library.GetItemById(guid);
         if (item is null)
@@ -85,7 +86,7 @@ IItemRepository repo,
         if (string.IsNullOrEmpty(imdb))
         {
             _log.LogDebug("ExternalMedia: no IMDb id for {Id}", id);
-            return NotFound();;
+            return NotFound(); ;
         }
 
         var meta = await _provider.GetMetaAsync(imdb, "movie");
@@ -99,6 +100,8 @@ IItemRepository repo,
         _provider.ApplyMetaToEntity(item, meta);
         _repo.SaveItems(new[] { item }, CancellationToken.None);
         _repo.SaveImages(item);
+
+
 
         var image = item.GetImages(image_type).FirstOrDefault();
 

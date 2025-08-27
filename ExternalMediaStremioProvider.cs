@@ -147,7 +147,7 @@ namespace Jellyfin.Plugin.ExternalMedia
             item.ImageInfos = images.ToArray();
         }
 
-        private static ItemImageInfo? GetImageOrOriginal(BaseItem item, ImageType type, string? url)
+        private ItemImageInfo? GetImageOrOriginal(BaseItem item, ImageType type, string? url)
         {
             var image = item.GetImages(type).ToList().FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(url))
@@ -160,6 +160,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                     //return image;
                 }
             }
+            _log.LogInformation("ExternalMedia: {K} pathh {J}", type, image?.Path);
             return image;
         }
 
