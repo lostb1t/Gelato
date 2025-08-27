@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
@@ -8,9 +8,9 @@
     <RootNamespace>Jellyfin.Plugin.ExternalMedia</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Model" Version="10.10.7" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.10.7" />
-    <PackageReference Include="Jellyfin.Common" Version="10.10.7" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.*-*" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.*-*" />
+    <PackageReference Include="Jellyfin.Common" Version="10.11.*-*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
   </ItemGroup>
 </Project>

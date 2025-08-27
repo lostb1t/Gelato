@@ -119,6 +119,13 @@ IItemRepository repo,
 
         //     // _logger.LogInformation("Redirecting image request for item {Id} to {Url}", id, chosen);
 
+      if (image!.Path.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase))
+    
+        {
+
+            return NotFound();
+        }
+        
         return Redirect(image!.Path); // 302 redirect
     }
 }

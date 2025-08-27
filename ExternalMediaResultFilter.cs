@@ -17,6 +17,11 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using System.Security.Cryptography;
+using System.Text;
+
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -53,13 +58,13 @@ public class ExternalMediaResultFilter : IAsyncResultFilter
             {
                 await next(); return;
             }
-        _log.LogInformation("ExternalMedia: hooking itno items: {Path}", path);
+      //  _log.LogInformation("ExternalMedia: hooking itno items: {Path}", path);
 
         if (context.Result is not ObjectResult obj || obj.Value is not BaseItemDto dto || dto.Id == Guid.Empty)
         {
             await next(); return;
         }
-
+        _log.LogInformation("ExternalMedia: is object");
         // if (context.Result is not ObjectResult obj)
         // {
         //     await next();
@@ -71,51 +76,57 @@ public class ExternalMediaResultFilter : IAsyncResultFilter
         //     return;
         // }
 
-        if (!TryGetBaseItemDtos(obj.Value, out var list))
-        {
+      //  if (!TryGetBaseItemDtos(obj.Value, out var list))
+       // {
             //_log.LogInformation("NO LIST");
-            await next();
-            return;
-        }
+       //     await next();
+        //    return;
+        //}
 
         // if (!Guid.TryParse(dto.Id, out var id))
         // {
         //     await next(); return;
         // }
-        var ct = context.HttpContext.RequestAborted;
-        var tasks = list.Select(dto => ProcessDtoAsync(dto, ct)).ToArray();
-        await Task.WhenAll(tasks);
+        //var ct = context.HttpContext.RequestAborted;
+       // var tasks = list.Select(dto => ProcessDtoAsync(dto, ct)).ToArray();
+       // await Task.WhenAll(tasks);
         // var meta = await _provider.GetMetaAsync(item);
-        // var streams = await _provider.GetStreamsAsync(item);
+        
+        var item = _library.GetItemById(dto.Id);
+        if (item is null)
+        {
+            _log.LogInformation("ExternalMedia: item {Id} not found in library", dto.Id);
+            await next(); return;
+        }
 
-        // if (meta is not null)
-        // {
-        //     ApplyMetaToEntity(item, meta!);
-        //     _log.LogInformation("ExternalMedia: ({Raring})",  item.CommunityRating);
-        //     _repo.SaveItems([item], ct);
-        // }
+        var streams = await _provider.GetStreamsAsync(item);
+        
+        
+        if (streams is not null)
+         {
+           //  var currentMediaSources = item.GetLinkedAlternateVersions();
+             // var primaryVersion = streams.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
+             _log.LogInformation("ExternalMedia: loaded sources");
+             
+            // var newSources = streams.Select((s, i) => StreamIntoBaseItem(item, s)).ToList();
+var newSources = streams
+    .Select(s => StreamIntoBaseItem(item, s))
+    .Where(x => x != null)
+    .ToList();
+           foreach (var source in newSources)
+             {
+                       //    _log.LogInformation("ExternalMedia: video {Name}", source.Name);
+            }
 
-        // if (streams is not null)
-        // {
-        //     var sourceInfos = streams.Select((s, i) => MapToMediaSourceInfo(dto.Id, i, s)).ToList();
+        
+        }
 
-        //     // for (var source in sourceInfos)
-        //     // {
-        //     //     // Save each media source
-        //     //     // _library.CreateItem(item.Id, source, ct);
-        //     //     // _mediaSources.Create(item.Id, source, ct);
-        //     // }
-        // }
+        var dtoOptions = new DtoOptions(); // customize fields if needed
+        BaseItemDto freshDto;
 
-        // 3) Rebuild the outgoing DTO from the updated entity
-        // var dtoOptions = new DtoOptions(); // customize fields if needed
-        // BaseItemDto freshDto;
+        freshDto = _dtoService.GetBaseItemDto(item, dtoOptions);
 
-        // If you have the user id from route/query, pass it, otherwise null
-        // freshDto = await _dtoService.GetBaseItemDto(entity, dtoOptions, null, ct);
-
-        // Replace the response payload with the freshly built DTO
-        // obj.Value = freshDto;
+        obj.Value = freshDto;
         _log.LogInformation("ExternalMedia: REACHED");
         await next(); return;
     }
@@ -128,6 +139,48 @@ public class ExternalMediaResultFilter : IAsyncResultFilter
     //     if (string.IsNullOrWhiteSpace(item.Overview)) return true;
     //     return false;
     // }
+    
+    private Video? StreamIntoBaseItem(BaseItem primary, StremioStream s)
+        {
+            if (string.IsNullOrWhiteSpace(s.Url)) return null;
+            var item = new Video
+            {
+               // Id = MakeStreamId(s.Url),
+                Id = _library.GetNewItemId(s.Url, typeof(Movie)),
+                
+               // Id = $"{itemId}:{(s.Quality ?? "q")}",
+                Name = s.Name,
+                Path = s.Url,
+                IsVirtualItem = true,
+            };
+            item.SetPrimaryVersionId(primary.Id);
+            item.SetProviderId(MetadataProvider.Imdb, primary.GetProviderId("Imdb"));
+            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+            //AttachExternalImages(item, t.Tconst);
+           // _logger.LogDebug("Inserted movie: {Title} ({Imdb})", movie.Name, t.Tconst);
+            
+           // if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase)))
+            //{
+            //    alternateVersionsOfPrimary.Add(new LinkedChild
+           //     {
+           //         Path = item.Path,
+            //        ItemId = item.Id
+            //    });
+           // }
+            var linked = primary.LinkedAlternateVersions?.ToList() ?? new List<LinkedChild>();
+
+    if (!linked.Any(l => l.ItemId == alternate.Id))
+    {
+        linked.Add(new LinkedChild
+        {
+            ItemId = alternate.Id,
+        });
+    }
+
+    primary.LinkedAlternateVersions = linked.ToArray();
+            return item;
+        }
+    
 
     private static bool IsItemsRoute(string path)
         => path.StartsWith("/Items", StringComparison.OrdinalIgnoreCase);
@@ -156,23 +209,32 @@ public class ExternalMediaResultFilter : IAsyncResultFilter
         if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) entity.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
     }
 
-    private static MediaSourceInfo MapToMediaSourceInfo(Guid itemId, Int64 index, StremioStream s)
+    private static MediaSourceInfo? MapToMediaSourceInfo(Guid itemId, Int64 index, StremioStream s)
     {
+       // if (string.IsNullOrWhiteSpace(s.Url)) return;
         return new MediaSourceInfo
         {
             // Id = $"{itemId}:{(s.Quality ?? "q")}",
-            Id = $"{itemId}:{index}",
+            Id = MakeStreamId(s.Url),
             Name = s.Quality ?? "External",
             Path = s.Url,
             Protocol = MediaProtocol.Http,
             // Container = s.Container,
             IsRemote = true,
             SupportsDirectPlay = true,
+            SupportsDirectStream = true,
             SupportsTranscoding = true,
             // Fill out MediaStreams if you have track details
             // MediaStreams = new List<MediaStream> { ... }
         };
     }
+    
+    public static string MakeStreamId(string url)
+{
+    using var sha = SHA256.Create();
+    var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(url));
+    return BitConverter.ToString(hash, 0, 12).Replace("-", "").ToLowerInvariant();
+}
 
     private static bool TryGetBaseItemDtos(object value, out IEnumerable<BaseItemDto> list)
     {
