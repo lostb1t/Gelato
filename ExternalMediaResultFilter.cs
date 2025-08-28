@@ -1,27 +1,27 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Model.Querying;
-using System.Reflection;
-using System.Collections;
-//using Jellyfin.Api.Models;
-using MediaBrowser.Model.Dto;
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Persistence;
+
 using MediaBrowser.Controller.Dto;
-using MediaBrowser.Model.MediaInfo;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
-using System.Security.Cryptography;
-using System.Text;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 
+using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.MediaInfo;
+using MediaBrowser.Model.Querying;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -53,134 +53,155 @@ public class ExternalMediaResultFilter : IAsyncResultFilter
     public async Task OnResultExecutionAsync(ResultExecutingContext context, ResultExecutionDelegate next)
     {
         var path = context.HttpContext.Request.Path.Value ?? string.Empty;
-        if (!path.StartsWith("/Items", StringComparison.OrdinalIgnoreCase))
-            if (!IsItemsRoute(path) && !IsUserItemsRoute(path))
-            {
-                await next(); return;
-            }
-      //  _log.LogInformation("ExternalMedia: hooking itno items: {Path}", path);
+        if (!IsItemsRoute(path) && !IsUserItemsRoute(path))
+        {
+            await next();
+            return;
+        }
 
         if (context.Result is not ObjectResult obj || obj.Value is not BaseItemDto dto || dto.Id == Guid.Empty)
         {
-            await next(); return;
+            await next();
+            return;
         }
-        _log.LogInformation("ExternalMedia: is object");
-        // if (context.Result is not ObjectResult obj)
-        // {
-        //     await next();
-        //     return;
-        // }
-        // if (context.Result is not ObjectResult obj)
-        // {
-        //     await next();
-        //     return;
-        // }
 
-      //  if (!TryGetBaseItemDtos(obj.Value, out var list))
-       // {
-            //_log.LogInformation("NO LIST");
-       //     await next();
-        //    return;
-        //}
-
-        // if (!Guid.TryParse(dto.Id, out var id))
-        // {
-        //     await next(); return;
-        // }
-        //var ct = context.HttpContext.RequestAborted;
-       // var tasks = list.Select(dto => ProcessDtoAsync(dto, ct)).ToArray();
-       // await Task.WhenAll(tasks);
-        // var meta = await _provider.GetMetaAsync(item);
-        
-        var item = _library.GetItemById(dto.Id);
-        if (item is null)
+        var entity = _library.GetItemById(dto.Id);
+        if (entity is not Video primary)
         {
-            _log.LogInformation("ExternalMedia: item {Id} not found in library", dto.Id);
-            await next(); return;
+            await next();
+            return;
         }
 
-        var streams = await _provider.GetStreamsAsync(item);
-        
-        
+        var ct = context.HttpContext.RequestAborted;
+
+        var streams = await _provider.GetStreamsAsync(entity).ConfigureAwait(false);
         if (streams is not null)
-         {
-           //  var currentMediaSources = item.GetLinkedAlternateVersions();
-             // var primaryVersion = streams.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
-             _log.LogInformation("ExternalMedia: loaded sources");
-             
-            // var newSources = streams.Select((s, i) => StreamIntoBaseItem(item, s)).ToList();
-var newSources = streams
-    .Select(s => StreamIntoBaseItem(item, s))
-    .Where(x => x != null)
-    .ToList();
-           foreach (var source in newSources)
-             {
-                       //    _log.LogInformation("ExternalMedia: video {Name}", source.Name);
-            }
-
-        
+        {
+            await ReplaceAlternatesAsync(primary, streams, ct).ConfigureAwait(false);
         }
 
-        var dtoOptions = new DtoOptions(); // customize fields if needed
-        BaseItemDto freshDto;
+        var dtoOptions = new DtoOptions
+        {
+            Fields = new[] { ItemFields.MediaSources } // include sources in response
+        };
+        obj.Value = _dtoService.GetBaseItemDto(entity, dtoOptions);
 
-        freshDto = _dtoService.GetBaseItemDto(item, dtoOptions);
-
-        obj.Value = freshDto;
-        _log.LogInformation("ExternalMedia: REACHED");
-        await next(); return;
+        await next();
     }
 
-    // private static bool NeedsRefresh(BaseItem item)
-    // {
-    //     // Make this as strict as you want: timestamps, provider IDs, empty fields, etc.
-    //     // Example: refresh if no MediaSources yet or Overview is empty
-    //     if (item.MediaSources == null || item.MediaSources.Length == 0) return true;
-    //     if (string.IsNullOrWhiteSpace(item.Overview)) return true;
-    //     return false;
-    // }
-    
-    private Video? StreamIntoBaseItem(BaseItem primary, StremioStream s)
+    /// <summary>
+    /// Delete all current alternates, then rebuild from streams.
+    /// </summary>
+    private async Task ReplaceAlternatesAsync(Video primary, IEnumerable<StremioStream> streams, CancellationToken ct)
+    {
+        var parent = primary.GetParent() as Folder ?? (_library.GetItemById(primary.ParentId) as Folder);
+        if (parent is null)
         {
-            if (string.IsNullOrWhiteSpace(s.Url)) return null;
-            var item = new Video
+            _log.LogWarning("ExternalMedia: primary {Id} has no parent; cannot replace alternates", primary.Id);
+            return;
+        }
+
+        // 1) Delete all currently linked alternates
+        var existing = primary.LinkedAlternateVersions ?? Array.Empty<LinkedChild>();
+        foreach (var link in existing)
+        {
+            if (link.ItemId is Guid id)
             {
-               // Id = MakeStreamId(s.Url),
+                try
+                {
+                    _repo.DeleteItem(id);
+                    _log.LogInformation("ExternalMedia: deleted old alternate {Alt} for {Primary}", id, primary.Id);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "ExternalMedia: failed to delete alternate {Alt}", id);
+                }
+            }
+        
+        }
+        primary.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+       // _repo.SaveItems(new BaseItem[] { primary }, ct);
+
+        // 2) Build & persist fresh alternates
+        var newLinks = new List<LinkedChild>();
+          //          var parent = _library.GetParentItem(primary);
+        foreach (var s in streams)
+        {
+            if (s is null || string.IsNullOrWhiteSpace(s.Url))
+                continue;
+
+            var alt = BuildAlternate(primary, s);
+            if (alt is null)
+                continue;
+
+            alt.PresentationUniqueKey = alt.CreatePresentationUniqueKey();
+            
+
+            parent.AddChild(alt);
+
+            //_repo.SaveItems(new BaseItem[] { alt }, ct);
+
+            newLinks.Add(new LinkedChild { ItemId = alt.Id, Path = alt.Path });
+            _log.LogInformation("ExternalMedia: inserted alternate {Alt} -> {Url}", alt.Id, s.Url);
+        }
+
+        // 3) Link them on the primary
+        primary.LinkedAlternateVersions = newLinks.ToArray();
+      await primary.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+ // _repo.SaveItems(new BaseItem[] { primary }, ct);
+    }
+
+    /// <summary>
+    /// Build a concrete alternate (Movie/Episode) matching the primary's concrete type.
+    /// </summary>
+    private Video? BuildAlternate(Video primary, StremioStream s)
+    {
+        Video alt;
+
+        if (primary is Movie)
+        {
+            alt = new Movie
+            {
                 Id = _library.GetNewItemId(s.Url, typeof(Movie)),
-                
-               // Id = $"{itemId}:{(s.Quality ?? "q")}",
-                Name = s.Name,
+                Name = string.IsNullOrWhiteSpace(s.Name) ? primary.Name : s.Name,
                 Path = s.Url,
                 IsVirtualItem = true,
+                PrimaryVersionId = primary.Id.ToString("N")
             };
-            item.SetPrimaryVersionId(primary.Id);
-            item.SetProviderId(MetadataProvider.Imdb, primary.GetProviderId("Imdb"));
-            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            //AttachExternalImages(item, t.Tconst);
-           // _logger.LogDebug("Inserted movie: {Title} ({Imdb})", movie.Name, t.Tconst);
-            
-           // if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase)))
-            //{
-            //    alternateVersionsOfPrimary.Add(new LinkedChild
-           //     {
-           //         Path = item.Path,
-            //        ItemId = item.Id
-            //    });
-           // }
-            var linked = primary.LinkedAlternateVersions?.ToList() ?? new List<LinkedChild>();
-
-    if (!linked.Any(l => l.ItemId == alternate.Id))
-    {
-        linked.Add(new LinkedChild
+        }
+        else if (primary is Episode epPrimary)
         {
-            ItemId = alternate.Id,
-        });
+            alt = new Episode
+            {
+                Id = _library.GetNewItemId(s.Url, typeof(Episode)),
+                Name = string.IsNullOrWhiteSpace(s.Name) ? primary.Name : s.Name,
+                Path = s.Url,
+                IsVirtualItem = true,
+                PrimaryVersionId = primary.Id.ToString("N"),
+
+                // Keep episode context so UI/queries behave
+                IndexNumber = epPrimary.IndexNumber,
+                ParentIndexNumber = epPrimary.ParentIndexNumber,
+                SeriesName = epPrimary.SeriesName,
+                SeriesId = epPrimary.SeriesId,
+                SeasonId = epPrimary.SeasonId
+            };
+        }
+        else
+        {
+            return null; // not handling Series/Season/Folder as "versioned" primaries
+        }
+
+        // Copy provider ids (helps UI & queries)
+        CopyProviderIds(primary, alt);
+        return alt;
     }
 
-    primary.LinkedAlternateVersions = linked.ToArray();
-            return item;
-        }
-    
+    private static void CopyProviderIds(BaseItem from, BaseItem to)
+    {
+        foreach (var kv in from.ProviderIds)
+            to.SetProviderId(kv.Key, kv.Value);
+    }
 
     private static bool IsItemsRoute(string path)
         => path.StartsWith("/Items", StringComparison.OrdinalIgnoreCase);
@@ -189,126 +210,43 @@ var newSources = streams
     {
         var seg = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
         return seg.Length >= 3
-            && seg[0].Equals("Users", StringComparison.OrdinalIgnoreCase)
-            && Guid.TryParse(seg[1], out _)
-            && seg[2].Equals("Items", StringComparison.OrdinalIgnoreCase);
+               && seg[0].Equals("Users", StringComparison.OrdinalIgnoreCase)
+               && Guid.TryParse(seg[1], out _)
+               && seg[2].Equals("Items", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool NeedsRefresh(BaseItemDto item)
-    {
-        // Make this as strict as you want: timestamps, provider IDs, empty fields, etc.
-        // Example: refresh if no MediaSources yet or Overview is empty
-        if (item.MediaSources == null || item.MediaSources.Length == 0) return true;
-        if (string.IsNullOrWhiteSpace(item.Overview)) return true;
-        return false;
-    }
-
-    private static void ApplyMetaToEntity(BaseItem entity, StremioMeta meta)
-    {
-        if (!string.IsNullOrWhiteSpace(meta.Description)) entity.Overview = meta.Description;
-        if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) entity.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
-    }
-
-    private static MediaSourceInfo? MapToMediaSourceInfo(Guid itemId, Int64 index, StremioStream s)
-    {
-       // if (string.IsNullOrWhiteSpace(s.Url)) return;
-        return new MediaSourceInfo
-        {
-            // Id = $"{itemId}:{(s.Quality ?? "q")}",
-            Id = MakeStreamId(s.Url),
-            Name = s.Quality ?? "External",
-            Path = s.Url,
-            Protocol = MediaProtocol.Http,
-            // Container = s.Container,
-            IsRemote = true,
-            SupportsDirectPlay = true,
-            SupportsDirectStream = true,
-            SupportsTranscoding = true,
-            // Fill out MediaStreams if you have track details
-            // MediaStreams = new List<MediaStream> { ... }
-        };
-    }
-    
-    public static string MakeStreamId(string url)
-{
-    using var sha = SHA256.Create();
-    var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(url));
-    return BitConverter.ToString(hash, 0, 12).Replace("-", "").ToLowerInvariant();
-}
-
+    // Optional helpers kept in case you handle list shapes later
     private static bool TryGetBaseItemDtos(object value, out IEnumerable<BaseItemDto> list)
     {
-        // Plain list/array
         if (value is IEnumerable<BaseItemDto> seq)
         {
             list = seq;
             return true;
         }
 
-        // Jellyfin commonly returns QueryResult<BaseItemDto> with an Items property
         if (value is QueryResult<BaseItemDto> qr && qr.Items is not null)
         {
             list = qr.Items;
             return true;
         }
 
-        // Duck-typing fallback: look for an `Items` property that is IEnumerable<BaseItemDto>
         var prop = value?.GetType().GetProperty("Items", BindingFlags.Public | BindingFlags.Instance);
-        if (prop is not null)
+        if (prop is not null && prop.GetValue(value) is IEnumerable<BaseItemDto> items)
         {
-            if (prop.GetValue(value) is IEnumerable<BaseItemDto> items)
-            {
-                list = items;
-                return true;
-            }
+            list = items;
+            return true;
         }
 
-        list = null;
+        list = null!;
         return false;
     }
 
-    private async Task ProcessDtoAsync(BaseItemDto dto, CancellationToken ct)
+    public static string MakeStreamId(string url)
     {
-        try
-        {
-            var metaRefresh = dto.ImageTags != null && dto.ImageTags.Count == 0;
-
-            _log.LogInformation("ExternalMedia: path ({P}), {I}, {N}", dto.Path, dto.Id, dto.Name);
-
-            if (!metaRefresh)
-                return;
-
-            var item = _library.GetItemById(dto.Id);
-            if (item is null)
-            {
-                _log.LogDebug("ExternalMedia: item {Id} not found in library", dto.Id);
-                return;
-            }
-
-            _log.LogInformation("ExternalMedia: stremio path ({P})", item.Path);
-
-            var imdb = item.GetProviderId("Imdb");
-            if (string.IsNullOrEmpty(imdb))
-            {
-                _log.LogDebug("ExternalMedia: no IMDb id for {Id}", dto.Id);
-                return;
-            }
-
-            var meta = await _provider.GetMetaAsync(imdb, "movie");
-            if (meta is not null)
-            {
-                _log.LogInformation("ExternalMedia: applying meta for {Id}", dto.Id);
-                ApplyMetaToEntity(item, meta);
-                _repo.SaveItems(new[] { item }, ct);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // ignored
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "ExternalMedia: error processing dto {Id}", dto.Id);
-        }
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(url));
+        return BitConverter.ToString(hash, 0, 12).Replace("-", "").ToLowerInvariant();
     }
+
+    
 }
