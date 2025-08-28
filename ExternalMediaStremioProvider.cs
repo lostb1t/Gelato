@@ -1,19 +1,16 @@
-// StremioProvider.cs
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
-using System.Globalization;
-using System.Text.Json.Serialization;
-using MediaBrowser.Controller.Persistence;
+using Jellyfin.Plugin.ExternalMedia.Configuration;
 
 namespace Jellyfin.Plugin.ExternalMedia
 {
@@ -21,79 +18,128 @@ namespace Jellyfin.Plugin.ExternalMedia
     {
         private readonly IHttpClientFactory _http;
         private readonly ILogger<ExternalMediaStremioProvider> _log;
-        private readonly StremioOptions _opts;
-        private readonly IItemRepository _repo;
-
-        private static readonly JsonSerializerOptions JsonOpts = new()
-        {
-            PropertyNameCaseInsensitive = true
-        };
+        private StremioManifest? _manifest;
+        public StremioCatalog? SearchCatalog { get; private set; }
+        private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
+        private readonly ILibraryManager _library;
 
         public ExternalMediaStremioProvider(
+                  ILibraryManager library,
             IHttpClientFactory http,
             ILogger<ExternalMediaStremioProvider> log,
-            IItemRepository repo,
-            StremioOptions opts)
+            MediaBrowser.Controller.Persistence.IItemRepository repo)
         {
             _http = http;
             _log = log;
-            _opts = opts;
+                    _library = library;
         }
 
-        public async Task<StremioMeta?> GetMetaAsync(string id, string type)
+        private HttpClient NewClient()
         {
-            // var (type, extId) = ResolveKey(entity);
-            // if (type is null || extId is null) return null;
+            var c = _http.CreateClient(nameof(ExternalMediaStremioProvider));
+            c.Timeout = TimeSpan.FromSeconds(15);
+            return c;
+        }
 
-            var url = $"{_opts.BaseUrl.TrimEnd('/')}/meta/{type}/{Uri.EscapeDataString(id)}.json";
+        private string GetBaseUrlOrThrow()
+        {
+            var u = ExternalMediaPlugin.Instance!.Configuration.GetBaseUrl()?.Trim().TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(u)) throw new InvalidOperationException("ExternalMedia Url not configured.");
+            return u;
+        }
 
+        private string BuildUrl(string[] segments, IEnumerable<string>? extras = null)
+        {
+            var baseUrl = GetBaseUrlOrThrow();
+            var parts = segments.Select(s => s == null ? "" : Uri.EscapeDataString(s)).ToArray();
+            var path = string.Join("/", parts);
+            var extrasPart = (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
+            return $"{baseUrl}/{path}{extrasPart}.json";
+        }
+
+        private async Task<T?> GetJsonAsync<T>(string url)
+        {
             try
             {
-                var c = _http.CreateClient(nameof(ExternalMediaStremioProvider));
-                c.Timeout = _opts.Timeout;
-
+                using var c = NewClient();
                 using var resp = await c.GetAsync(url);
-                if (!resp.IsSuccessStatusCode) return null;
-
+                if (!resp.IsSuccessStatusCode) return default;
                 await using var s = await resp.Content.ReadAsStreamAsync();
-                var r = await JsonSerializer.DeserializeAsync<StremioMetaResponse>(s, JsonOpts);
-                return r?.Meta;
+               // var json = await resp.Content.ReadAsStringAsync();
+                //_log.LogInformation("ExternalMedia: Body {Json}", json);
+               //  _log.LogInformation("ExternalMedia: Response {StatusCode}", resp.StatusCode);
+                return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
             }
             catch (Exception ex)
             {
-                // _log.LogWarning(ex, "Meta fetch failed for {Type}/{ExtId}", type, extId);
-                _log.LogWarning(ex, "Meta fetch failed for {Type}/{ExtId}", type, id);
-                return null;
+                _log.LogWarning(ex, "External fetch failed: {Url}", url);
+                return default;
             }
+        }
+
+
+public async Task<StremioManifest?> GetManifestAsync(bool force = false)
+{
+    if (!force && _manifest is not null) return _manifest;
+
+    var baseUrl = GetBaseUrlOrThrow();
+    var url = $"{baseUrl}/manifest.json";
+    var m = await GetJsonAsync<StremioManifest>(url);
+    _manifest = m;
+
+    SearchCatalog = m?.Catalogs?.FirstOrDefault(c =>
+        c.Extra != null && c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
+
+    if (SearchCatalog == null)
+        _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable catalog", url);
+
+    return m;
+}
+
+public async Task<bool> IsReady()
+{
+    var manifest = await GetManifestAsync();
+    return manifest != null;
+}
+
+        public async Task<StremioMeta?> GetMetaAsync(string id, string mediaType)
+        {
+            var url = BuildUrl(new[] { "meta", mediaType, id });
+            var r = await GetJsonAsync<StremioMetaResponse>(url);
+            return r?.Meta;
         }
 
         public async Task<List<StremioStream>> GetStreamsAsync(BaseItem entity)
         {
-            var (type, extId) = ResolveKey(entity);
-            if (type is null || extId is null) return new();
-
-            var url = $"{_opts.BaseUrl.TrimEnd('/')}/stream/{type}/{Uri.EscapeDataString(extId)}.json";
-
-            try
-            {
-                var c = _http.CreateClient(nameof(ExternalMediaStremioProvider));
-                c.Timeout = _opts.Timeout;
-
-                using var resp = await c.GetAsync(url);
-                if (!resp.IsSuccessStatusCode) return new();
-
-                await using var s = await resp.Content.ReadAsStreamAsync();
-                var r = await JsonSerializer.DeserializeAsync<StremioStreamsResponse>(s, JsonOpts);
-
-                return r?.Streams ?? new();
-            }
-            catch (Exception ex)
-            {
-                // _log.LogDebug(ex, "Streams fetch failed for {Type}/{ExtId}", type, extId);
-                _log.LogWarning("Streams fetch failed for {Type}/{ExtId}", type, extId);
-                return new();
-            }
+            var (mediaType, extId) = ResolveKey(entity);
+            if (mediaType is null || string.IsNullOrWhiteSpace(extId)) return new();
+            var url = BuildUrl(new[] { "stream", mediaType, extId });
+            var r = await GetJsonAsync<StremioStreamsResponse>(url);
+            return r?.Streams ?? new();
         }
+
+        public async Task<IReadOnlyList<StremioMeta>> GetCatalogMetasAsync(
+            string id,
+            string mediaType,
+            string? search = null,
+            int? skip = null)
+        {
+            var extras = new List<string>();
+            if (!string.IsNullOrWhiteSpace(search)) extras.Add($"search={Uri.EscapeDataString(search)}");
+            if (skip is > 0) extras.Add($"skip={skip}");
+            var url = BuildUrl(new[] { "catalog", mediaType, id }, extras);
+            var r = await GetJsonAsync<StremioCatalogResponse>(url);
+            return r?.Metas ?? new();
+        }
+        
+        public async Task<IReadOnlyList<StremioMeta>> SearchAsync(string query, int? skip = null)
+{
+    var manifest = await GetManifestAsync();
+    if (manifest == null || SearchCatalog == null)
+        return Array.Empty<StremioMeta>();
+
+    return await GetCatalogMetasAsync(SearchCatalog.Id, SearchCatalog.Type, query, skip);
+}
 
         private static (string? type, string? extId) ResolveKey(BaseItem entity)
         {
@@ -105,107 +151,229 @@ namespace Jellyfin.Plugin.ExternalMedia
                 _ => null
             };
 
-            var imdb = entity.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Imdb);
+            var imdb = entity.GetProviderId(MetadataProvider.Imdb);
             if (!string.IsNullOrWhiteSpace(imdb)) return (type, imdb);
 
-            var tmdb = entity.GetProviderId(MediaBrowser.Model.Entities.MetadataProvider.Tmdb);
+            var tmdb = entity.GetProviderId(MetadataProvider.Tmdb);
             if (!string.IsNullOrWhiteSpace(tmdb)) return (type, $"tmdb:{tmdb}");
 
             return (type, null);
         }
+        
+        public BaseItem IntoBaseItem(StremioMeta meta)
+        {
+            BaseItem item;
+            
+            switch (meta.Type)
+        {
+            case "series":
+            item = new Series
+                    {
+                        Id = _library.GetNewItemId(meta.Id, typeof(Series)),
+                        Path = $"stremio://series/{meta.Id}"
+                    };
+            break;
+            
+            case "movie":
+            item = new Movie
+                    {
+                        Id = _library.GetNewItemId(meta.Id, typeof(Movie)),
+                        Path = $"stremio://movie/{meta.Id}"
+                    };
+            break;
+            
+            case "episode":
+            item = new Episode
+                    {
+                        Id = _library.GetNewItemId(meta.Id, typeof(Movie)),
+                        Path = $"stremio://series/{meta.Id}"
+                    };
+            break;
+            default:
+               throw new ArgumentOutOfRangeException(nameof(meta.Type), meta.Type, "Unsupported type");
+          };
+          
+            item.Name = meta.Name;
+            if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
+         //   if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
+            if (!string.IsNullOrWhiteSpace(meta.Imdb_Id))
+{
+    item.SetProviderId(MetadataProvider.Imdb, meta.Imdb_Id);
+}
+            item.SetProviderId("stremio", meta.Id);
+            var imgs = new List<ItemImageInfo?>();
+            imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
+            imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
+            imgs.Add(UpdateImage(item, ImageType.Logo, meta.Logo));
+            item.ImageInfos = imgs.Where(i => i != null).Cast<ItemImageInfo>().ToArray();
+            return item;
+        }
 
-
-        public void ApplyMetaToEntity(BaseItem item, StremioMeta meta)
+        public void MetaIntoBaseItem(BaseItem item, StremioMeta meta)
         {
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
             if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
 
-
-            var images = new List<ItemImageInfo>();
-            // if (!string.IsNullOrWhiteSpace(meta.Poster))
-            // {
-            //     var image = item.GetImages(ImageType.Primary).ToList().FirstOrDefault();
-            //     if (image is not null)
-            //     {
-            //         image.Path = meta.Poster;
-            //         images.Add(image);
-            //     }
-            // }
-
-            // if (!string.IsNullOrWhiteSpace(meta.Background))
-            // {
-            //     var image = item.GetImages(ImageType.Backdrop).ToList().FirstOrDefault();
-            //     if (image is not null)
-            //     {
-            //         image.Path = meta.Background;
-            //         images.Add(image);
-            //     }
-            // }
-            images.Add(GetImageOrOriginal(item, ImageType.Primary,  meta.Poster)!);
-            images.Add(GetImageOrOriginal(item, ImageType.Backdrop, meta.Background)!);
-            images.Add(GetImageOrOriginal(item, ImageType.Logo, meta.Logo)!);
-            item.ImageInfos = images.ToArray();
+            var imgs = new List<ItemImageInfo?>();
+            imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
+            imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
+            imgs.Add(UpdateImage(item, ImageType.Logo, meta.Logo));
+            item.ImageInfos = imgs.Where(i => i != null).Cast<ItemImageInfo>().ToArray();
         }
 
-        private ItemImageInfo? GetImageOrOriginal(BaseItem item, ImageType type, string? url)
+        private ItemImageInfo? UpdateImage(BaseItem item, ImageType type, string? url)
         {
-            var image = item.GetImages(type).ToList().FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(url))
+            var image = item.GetImages(type).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(url)) return image;
+            if (image != null)
             {
-
-                if (image is not null)
-                {
-                    image.Path = url;
-
-                    //return image;
-                }
+                image.Path = url;
+                return image;
             }
-            _log.LogInformation("ExternalMedia: {K} pathh {J}", type, image?.Path);
-            return image;
+            return null;
         }
+    }
+    
+    public class StremioManifest
+{
+    public string Name { get; set; } = "";
+    public string Id { get; set; } = "";
+    public string Version { get; set; } = "";
+    public string? Description { get; set; }
+    public List<StremioCatalog> Catalogs { get; set; } = new();
+    public List<StremioResource> Resources { get; set; } = new();
+    public List<string> Types { get; set; } = new();
+    public string? Background { get; set; }
+    public string? Logo { get; set; }
+    public StremioBehaviorHints? BehaviorHints { get; set; }
+    public List<StremioCatalog> AddonCatalogs { get; set; } = new();
+}
 
-        // private static void AttachExternalImages(BaseItem item, string imdbId, int? season = null, int? episode = null)
-        // {
-        //     var id = BuildStremioId(imdbId, season, episode);
+public class StremioCatalog
+{
+    public string Type { get; set; } = "";
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public List<StremioExtra> Extra { get; set; } = new();
+}
 
-        //     var images = new List<ItemImageInfo>
-        //     {
-        //         new ItemImageInfo { Path = BuildImageUrl(id, ImageType.Primary), Type = ImageType.Primary },
-        //         new ItemImageInfo { Path = BuildImageUrl(id, ImageType.Logo), Type = ImageType.Logo },
-        //         new ItemImageInfo { Path = BuildImageUrl(id, ImageType.Backdrop), Type = ImageType.Backdrop }
-        //     };
-        // }
+public class StremioExtra
+{
+    public string Name { get; set; } = "";
+    public bool IsRequired { get; set; }
+    public List<string> Options { get; set; } = new();
+}
 
-    };
+public class StremioResource
+{
+    public string Name { get; set; } = "";
+    public List<string> Types { get; set; } = new();
+    public List<string> IdPrefixes { get; set; } = new();
+}
 
+public class StremioBehaviorHints
+{
+    public bool Configurable { get; set; }
+    public bool ConfigurationRequired { get; set; }
+}
 
-
+    public class StremioCatalogResponse
+    {
+        public List<StremioMeta>? Metas { get; set; }
+    }
 
     public class StremioMetaResponse
-    {
-        public StremioMeta Meta { get; set; } = default!;
-    }
-    // replace the whole record with this class:
-    public class StremioMeta
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string? Description { get; set; }
-        public string? Poster { get; set; }
-        public string? Background { get; set; }
-        public string? Logo { get; set; }
-        public string[]? Genres { get; set; }
-        public string? Runtime { get; set; }
-        public string? Imdb { get; set; }
-        public string? Tmdb { get; set; }
-        public string? ImdbRating { get; set; }
-    }
+{
+    public StremioMeta Meta { get; set; } = default!;
+}
+
+public class StremioMeta
+{
+    public string Id { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string? Poster { get; set; }
+    public List<string>? Genres { get; set; }
+    public string? ImdbRating { get; set; }
+    public string? ReleaseInfo { get; set; }
+    public string? Description { get; set; }
+    public List<StremioTrailer>? Trailers { get; set; }
+    public List<StremioLink>? Links { get; set; }
+    public string? Background { get; set; }
+    public string? Logo { get; set; }
+    public List<StremioMeta>? Videos { get; set; }
+    public string? Runtime { get; set; }
+    public string? Country { get; set; }
+    public StremioBehaviorHints? BehaviorHints { get; set; }
+    public List<string>? Genre { get; set; }
+    public string? Imdb_Id { get; set; }
+    public DateTime? Released { get; set; }
+    public string? Status { get; set; }
+    public List<string>? Writer { get; set; }
+    public string? Year { get; set; }
+    public string? Slug { get; set; }
+    public List<StremioTrailerStream>? TrailerStreams { get; set; }
+    public StremioAppExtras? App_Extras { get; set; }
+    public string? Thumbnail { get; set; }
+    public int? Episode { get; set; }
+    public int? Season { get; set; }
+    public int? Number { get; set; }
+    public DateTime? FirstAired { get; set; }
+}
+
+public class StremioTrailer
+{
+    public string? Source { get; set; }
+    public string? Type { get; set; }
+}
+
+public class StremioLink
+{
+    public string? Name { get; set; }
+    public string? Category { get; set; }
+    public string? Url { get; set; }
+}
+
+public class StremioVideo
+{
+    public string Id { get; set; } = "";
+    public string? Name { get; set; }
+    public DateTime? Released { get; set; }
+    public string? Thumbnail { get; set; }
+    public int? Episode { get; set; }
+    public int? Season { get; set; }
+    public string? Overview { get; set; }
+    public int? Number { get; set; }
+    public string? Description { get; set; }
+    public string? Rating { get; set; }
+    public DateTime? FirstAired { get; set; }
+}
+
+
+
+public class StremioTrailerStream
+{
+    public string? Title { get; set; }
+    public string? YtId { get; set; }
+}
+
+public class StremioAppExtras
+{
+    public List<StremioCast>? Cast { get; set; }
+}
+
+public class StremioCast
+{
+    public string? Name { get; set; }
+    public string? Character { get; set; }
+    public string? Photo { get; set; }
+}
 
     public class StremioStreamsResponse
     {
         public List<StremioStream> Streams { get; set; } = new();
     }
-    // replace the whole record with this class:
+
     public class StremioStream
     {
         public string Url { get; set; } = "";

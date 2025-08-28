@@ -97,7 +97,7 @@ IItemRepository repo,
         }
 
         _log.LogInformation("ExternalMedia: applying meta for {Id}", id);
-        _provider.ApplyMetaToEntity(item, meta);
+        _provider.MetaIntoBaseItem(item, meta);
         _repo.SaveItems(new[] { item }, CancellationToken.None);
         _repo.SaveImages(item);
 

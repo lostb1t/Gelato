@@ -1,8 +1,10 @@
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Serialization;
+using Jellyfin.Plugin.ExternalMedia.Configuration;
 
 namespace Jellyfin.Plugin.ExternalMedia;
+
 
 public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>
 {
