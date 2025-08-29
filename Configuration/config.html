@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <title>Collection Import</title>
+</head>
+<body>
+<div data-role="page" id="collectionimportConfigurationPage" class="page type-interior pluginConfigurationPage fullWidthContent">
+    <div class="content-primary">
+        <div class="verticalSection">
+            <div class="sectionTitleContainer">
+                <h2 class="sectionTitle">Collection Import</h2>
+                <a is="emby-linkbutton" class="raised raised-mini" style="margin-left: 2em;" target="_blank"
+                    href="https://github.com/lostb1t/jellyfin-plugin-collection-import">
+                    <i class="md-icon button-icon button-icon-left secondaryText"></i>
+                    <span>Help</span>
+                </a>
+            </div>
+            <p><i>Note:</i> After making changes you can run the scheduled task manualy to apply them.</p>
+        </div>
+                    <hr class="solid">
+
+        <form class="artworkConfigurationForm">
+            <div id="configurationWrapper"></div>
+            <button id="btnAddRepo" is="emby-button" type="button" class="raised button block">
+                <span>Add new Collection</span>
+            </button>
+            <br />
+            <button id="saveConfig" is="emby-button" type="submit" class="raised button-submit block">
+                <span>Save</span>
+            </button>
+        </form>
+    </div>
+
+    <template id="template-repository">
+        <div data-id="repo-config">
+            <div class="inputContainer">
+                <input is="emby-input" type="text" data-id="txtRepositoryName" required="required"
+                    label="Collection Name:" />
+                <span>The collection name.</span>
+            </div>
+            <div class="inputContainer">
+                <span>Collection Type: </span>
+                <select is="emby-select" class="emby-select-withcolor emby-select" data-id="collectTypeSelect">
+                    <option value="0">Collection</option>
+                    <option value="1">Playlist</option>
+                </select>
+                <span>Whether the list should create a collection or playlist</span>
+            </div>
+            <div class="inputContainer">
+                <input is="emby-input" type="text" data-id="excludedLibraries"
+                    label="Excluded Libraries:" />
+                <span>Specify the libraries to exclude from the collection import. Enter library paths, separated by commas</span>
+            </div>
+            <div id="urlContainer">
+            </div>
+            <button id="btnAddUrl" is="emby-button" type="button" class="raised button block">
+                <span>Add new url</span>
+            </button>
+            <button id="btnRmSet" is="emby-button" type="button" class="raised button block">
+                <span>Remove</span>
+            </button>
+            <hr class="solid">
+        </div>
+    </template>
+    <template id="template-url">
+        <div class="inputContainer">
+            <input is="emby-input" type="text" data-id="txtRepositoryUrl" required="required" label="List Url:" />
+            <span>The external url (mdblist only).</span>
+        </div>
+    </template>
+    <script type="text/javascript">
+      if (typeof CollectionImport == 'undefined') {
+
+
+        const CollectionImport = {
+            pluginId: "a708187e-5f82-4610-9c84-ec1f2837d5fe",
+            configurationWrapper: document.querySelector("#configurationWrapper"),
+
+            template: document.querySelector("#template-repository"),
+            templateList: document.querySelector("#template-url"),
+            btnAddSet: document.querySelector("#btnAddRepo"),
+            btnAddSet: document.querySelector("#btnAddRepo"),
+            btnSave: document.querySelector("#saveConfig"),
+
+            addSet: function (set) {
+                const template = CollectionImport.template.cloneNode(true).content;
+                template.querySelector("[data-id=txtRepositoryName]").value = set.Name || "";
+                template.querySelector("[data-id=collectTypeSelect]").value = set.UsePlaylistsOverCollections ? '1' : '0';
+                
+                for (let i = 0; i < set.Urls.length; i++) {
+                    CollectionImport.addUrl(template, set.Urls[i]);
+                }
+                const el = CollectionImport.configurationWrapper.appendChild(template);
+            },
+            addSetNew: function () {
+              const set = {
+                        Name: "",
+                        Urls: [],
+                        UsePlaylistsOverCollections: false 
+                    };
+               CollectionImport.addSet(set);
+            },
+            addUrlNew: function (event) {
+                const el = event.target.closest("[data-id=repo-config]");
+                addUrl(el);
+            },
+            addUrl: function (setEl, url) {
+                const template = CollectionImport.templateList.cloneNode(true).content;
+                template.querySelector("[data-id=txtRepositoryUrl]").value = url || "";
+                setEl.querySelector("#urlContainer").appendChild(template);
+            },
+            rmSet: function (setEl) {
+                setEl.remove();
+                const configs = document.querySelectorAll("[data-id=repo-config]");
+                console.log(configs.lenght);
+            },
+            saveConfig: function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                const config = {
+                    ImportSets: []
+                };
+
+                const configs = document.querySelectorAll("[data-id=repo-config]");
+                for (let i = 0; i < configs.length; i++) {
+                    const repo = {
+                        Name: configs[i].querySelector("[data-id=txtRepositoryName]").value,
+                        Urls: [],
+                        UsePlaylistsOverCollections: configs[i].querySelector("[data-id=collectTypeSelect]").value === '1'
+                    };
+
+                    if (repo.Name == "") {
+                        continue;
+                    }
+
+                    const urls = configs[i].querySelectorAll("[data-id=txtRepositoryUrl]");
+                    for (let u = 0; u < urls.length; u++) {
+
+                        if (urls[u].value !== "") {
+                            console.log("pushin: " + u);
+                            repo.Urls.push(urls[u].value);
+                        }
+                    }
+
+                    config.ImportSets.push(repo);
+                }
+
+                window.ApiClient.updatePluginConfiguration(CollectionImport.pluginId, config)
+                    .then(Dashboard.processPluginConfigurationUpdateResult)
+                    .catch(function (error) {
+                        console.error(error);
+                    })
+                    .finally(function () {
+                        Dashboard.hideLoadingMsg();
+                    });
+            },
+            loadConfig: function () {
+                Dashboard.showLoadingMsg();
+                window.ApiClient.getPluginConfiguration(CollectionImport.pluginId)
+                    .then(function (config) {
+                        CollectionImport.configurationWrapper.innerHTML = "";
+                        for (let i = 0; i < config.ImportSets.length; i++) {
+                            CollectionImport.addSet(config.ImportSets[i]);
+                        }
+                    })
+                    .catch(function (error) {
+                        console.error(error);
+                    })
+                    .finally(function () {
+                        Dashboard.hideLoadingMsg();
+                    });
+            },
+            init: function () {
+                CollectionImport.btnAddSet.addEventListener("click", CollectionImport.addSetNew);
+                CollectionImport.btnSave.addEventListener("click", CollectionImport.saveConfig);
+                CollectionImport.configurationWrapper.addEventListener("click", (event) => {
+                    if (event.target.id == "btnAddUrl") {
+                        console.log("btnAddUrl");
+                        const el = event.target.closest("[data-id=repo-config]");
+                        CollectionImport.addUrl(el);
+                    }
+                    if (event.target.id == "btnRmSet") {
+                        console.log("btnRmSet");
+                        const el = event.target.closest("[data-id=repo-config]");
+                        CollectionImport.rmSet(el);
+                    }
+                });
+                CollectionImport.loadConfig();
+            }
+        }
+
+        // view.addEventListener("viewshow", function (e) {
+        document.querySelector('#collectionimportConfigurationPage').addEventListener("pageshow", function () {
+            CollectionImport.init();
+        });
+      }
+    </script>
+</div>
+</body>
+</html>

@@ -11,6 +11,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Plugin.ExternalMedia.Configuration;
+using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.ExternalMedia
 {
@@ -31,7 +32,7 @@ namespace Jellyfin.Plugin.ExternalMedia
         {
             _http = http;
             _log = log;
-                    _library = library;
+            _library = library;
         }
 
         private HttpClient NewClient()
@@ -65,9 +66,9 @@ namespace Jellyfin.Plugin.ExternalMedia
                 using var resp = await c.GetAsync(url);
                 if (!resp.IsSuccessStatusCode) return default;
                 await using var s = await resp.Content.ReadAsStreamAsync();
-               // var json = await resp.Content.ReadAsStringAsync();
+                // var json = await resp.Content.ReadAsStringAsync();
                 //_log.LogInformation("ExternalMedia: Body {Json}", json);
-               //  _log.LogInformation("ExternalMedia: Response {StatusCode}", resp.StatusCode);
+                //  _log.LogInformation("ExternalMedia: Response {StatusCode}", resp.StatusCode);
                 return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
             }
             catch (Exception ex)
@@ -78,29 +79,29 @@ namespace Jellyfin.Plugin.ExternalMedia
         }
 
 
-public async Task<StremioManifest?> GetManifestAsync(bool force = false)
-{
-    if (!force && _manifest is not null) return _manifest;
+        public async Task<StremioManifest?> GetManifestAsync(bool force = false)
+        {
+            if (!force && _manifest is not null) return _manifest;
 
-    var baseUrl = GetBaseUrlOrThrow();
-    var url = $"{baseUrl}/manifest.json";
-    var m = await GetJsonAsync<StremioManifest>(url);
-    _manifest = m;
+            var baseUrl = GetBaseUrlOrThrow();
+            var url = $"{baseUrl}/manifest.json";
+            var m = await GetJsonAsync<StremioManifest>(url);
+            _manifest = m;
 
-    SearchCatalog = m?.Catalogs?.FirstOrDefault(c =>
-        c.Extra != null && c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
+            SearchCatalog = m?.Catalogs?.FirstOrDefault(c =>
+                c.Extra != null && c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
 
-    if (SearchCatalog == null)
-        _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable catalog", url);
+            if (SearchCatalog == null)
+                _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable catalog", url);
 
-    return m;
-}
+            return m;
+        }
 
-public async Task<bool> IsReady()
-{
-    var manifest = await GetManifestAsync();
-    return manifest != null;
-}
+        public async Task<bool> IsReady()
+        {
+            var manifest = await GetManifestAsync();
+            return manifest != null;
+        }
 
         public async Task<StremioMeta?> GetMetaAsync(string id, string mediaType)
         {
@@ -131,15 +132,15 @@ public async Task<bool> IsReady()
             var r = await GetJsonAsync<StremioCatalogResponse>(url);
             return r?.Metas ?? new();
         }
-        
-        public async Task<IReadOnlyList<StremioMeta>> SearchAsync(string query, int? skip = null)
-{
-    var manifest = await GetManifestAsync();
-    if (manifest == null || SearchCatalog == null)
-        return Array.Empty<StremioMeta>();
 
-    return await GetCatalogMetasAsync(SearchCatalog.Id, SearchCatalog.Type, query, skip);
-}
+        public async Task<IReadOnlyList<StremioMeta>> SearchAsync(string query, int? skip = null)
+        {
+            var manifest = await GetManifestAsync();
+            if (manifest == null || SearchCatalog == null)
+                return Array.Empty<StremioMeta>();
+
+            return await GetCatalogMetasAsync(SearchCatalog.Id, SearchCatalog.Type, query, skip);
+        }
 
         private static (string? type, string? extId) ResolveKey(BaseItem entity)
         {
@@ -159,48 +160,70 @@ public async Task<bool> IsReady()
 
             return (type, null);
         }
-        
-        public BaseItem IntoBaseItem(StremioMeta meta)
+
+        public BaseItem? IntoBaseItem(StremioMeta meta)
         {
             BaseItem item;
-            
+
+            // if (string.IsNullOrWhiteSpace(meta.ImdbId))
+            // {
+            //     _log.LogInformation("ExternalMedia: Empty imdb id for {id}", meta.Id);
+            //     return null;
+            // }
+            var Id = meta.Id;
+
+            // imdb is better
+            if (!string.IsNullOrWhiteSpace(meta.ImdbId))
+            {
+                Id = meta.ImdbId;
+            }
+
             switch (meta.Type)
-        {
-            case "series":
-            item = new Series
+            {
+                case "series":
+                    item = new Series
                     {
-                        Id = _library.GetNewItemId(meta.Id, typeof(Series)),
-                        Path = $"stremio://series/{meta.Id}"
+                        Id = _library.GetNewItemId(Id, typeof(Series)),
+                        Path = $"stremio://series/{Id}"
                     };
-            break;
-            
-            case "movie":
-            item = new Movie
+                    break;
+
+                case "movie":
+                    item = new Movie
                     {
-                        Id = _library.GetNewItemId(meta.Id, typeof(Movie)),
-                        Path = $"stremio://movie/{meta.Id}"
+                        Id = _library.GetNewItemId(Id, typeof(Movie)),
+                        Path = $"stremio://movie/{Id}"
                     };
-            break;
-            
-            case "episode":
-            item = new Episode
+                    break;
+
+                case "episode":
+                    item = new Episode
                     {
-                        Id = _library.GetNewItemId(meta.Id, typeof(Movie)),
-                        Path = $"stremio://series/{meta.Id}"
+                        Id = _library.GetNewItemId(Id, typeof(Movie)),
+                        Path = $"stremio://series/{Id}"
                     };
-            break;
-            default:
-               throw new ArgumentOutOfRangeException(nameof(meta.Type), meta.Type, "Unsupported type");
-          };
-          
+                    break;
+                default:
+                    _log.LogInformation("ExternalMedia: unsupported type {type}", meta.Type);
+                    return null;
+            }
+            ;
+
             item.Name = meta.Name;
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
-         //   if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
-            if (!string.IsNullOrWhiteSpace(meta.Imdb_Id))
-{
-    item.SetProviderId(MetadataProvider.Imdb, meta.Imdb_Id);
-}
-            item.SetProviderId("stremio", meta.Id);
+            //   if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
+            if (!string.IsNullOrWhiteSpace(Id))
+            {
+                if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
+                {
+                    item.SetProviderId(MetadataProvider.Tmdb, Id.Substring("tmdb:".Length));
+                }
+                if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+                {
+                    item.SetProviderId(MetadataProvider.Imdb, Id);
+                }
+            }
+            item.SetProviderId("stremio", item.Path);
             var imgs = new List<ItemImageInfo?>();
             imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
             imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
@@ -233,49 +256,49 @@ public async Task<bool> IsReady()
             return null;
         }
     }
-    
+
     public class StremioManifest
-{
-    public string Name { get; set; } = "";
-    public string Id { get; set; } = "";
-    public string Version { get; set; } = "";
-    public string? Description { get; set; }
-    public List<StremioCatalog> Catalogs { get; set; } = new();
-    public List<StremioResource> Resources { get; set; } = new();
-    public List<string> Types { get; set; } = new();
-    public string? Background { get; set; }
-    public string? Logo { get; set; }
-    public StremioBehaviorHints? BehaviorHints { get; set; }
-    public List<StremioCatalog> AddonCatalogs { get; set; } = new();
-}
+    {
+        public string Name { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string Version { get; set; } = "";
+        public string? Description { get; set; }
+        public List<StremioCatalog> Catalogs { get; set; } = new();
+        public List<StremioResource> Resources { get; set; } = new();
+        public List<string> Types { get; set; } = new();
+        public string? Background { get; set; }
+        public string? Logo { get; set; }
+        public StremioBehaviorHints? BehaviorHints { get; set; }
+        public List<StremioCatalog> AddonCatalogs { get; set; } = new();
+    }
 
-public class StremioCatalog
-{
-    public string Type { get; set; } = "";
-    public string Id { get; set; } = "";
-    public string Name { get; set; } = "";
-    public List<StremioExtra> Extra { get; set; } = new();
-}
+    public class StremioCatalog
+    {
+        public string Type { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+        public List<StremioExtra> Extra { get; set; } = new();
+    }
 
-public class StremioExtra
-{
-    public string Name { get; set; } = "";
-    public bool IsRequired { get; set; }
-    public List<string> Options { get; set; } = new();
-}
+    public class StremioExtra
+    {
+        public string Name { get; set; } = "";
+        public bool IsRequired { get; set; }
+        public List<string> Options { get; set; } = new();
+    }
 
-public class StremioResource
-{
-    public string Name { get; set; } = "";
-    public List<string> Types { get; set; } = new();
-    public List<string> IdPrefixes { get; set; } = new();
-}
+    public class StremioResource
+    {
+        public string Name { get; set; } = "";
+        public List<string> Types { get; set; } = new();
+        public List<string> IdPrefixes { get; set; } = new();
+    }
 
-public class StremioBehaviorHints
-{
-    public bool Configurable { get; set; }
-    public bool ConfigurationRequired { get; set; }
-}
+    public class StremioBehaviorHints
+    {
+        public bool Configurable { get; set; }
+        public bool ConfigurationRequired { get; set; }
+    }
 
     public class StremioCatalogResponse
     {
@@ -283,91 +306,92 @@ public class StremioBehaviorHints
     }
 
     public class StremioMetaResponse
-{
-    public StremioMeta Meta { get; set; } = default!;
-}
+    {
+        public StremioMeta Meta { get; set; } = default!;
+    }
 
-public class StremioMeta
-{
-    public string Id { get; set; } = "";
-    public string Type { get; set; } = "";
-    public string Name { get; set; } = "";
-    public string? Poster { get; set; }
-    public List<string>? Genres { get; set; }
-    public string? ImdbRating { get; set; }
-    public string? ReleaseInfo { get; set; }
-    public string? Description { get; set; }
-    public List<StremioTrailer>? Trailers { get; set; }
-    public List<StremioLink>? Links { get; set; }
-    public string? Background { get; set; }
-    public string? Logo { get; set; }
-    public List<StremioMeta>? Videos { get; set; }
-    public string? Runtime { get; set; }
-    public string? Country { get; set; }
-    public StremioBehaviorHints? BehaviorHints { get; set; }
-    public List<string>? Genre { get; set; }
-    public string? Imdb_Id { get; set; }
-    public DateTime? Released { get; set; }
-    public string? Status { get; set; }
-    public List<string>? Writer { get; set; }
-    public string? Year { get; set; }
-    public string? Slug { get; set; }
-    public List<StremioTrailerStream>? TrailerStreams { get; set; }
-    public StremioAppExtras? App_Extras { get; set; }
-    public string? Thumbnail { get; set; }
-    public int? Episode { get; set; }
-    public int? Season { get; set; }
-    public int? Number { get; set; }
-    public DateTime? FirstAired { get; set; }
-}
+    public class StremioMeta
+    {
+        public string Id { get; set; } = "";
+        public string Type { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string? Poster { get; set; }
+        public List<string>? Genres { get; set; }
+        public string? ImdbRating { get; set; }
+        public string? ReleaseInfo { get; set; }
+        public string? Description { get; set; }
+        public List<StremioTrailer>? Trailers { get; set; }
+        public List<StremioLink>? Links { get; set; }
+        public string? Background { get; set; }
+        public string? Logo { get; set; }
+        public List<StremioMeta>? Videos { get; set; }
+        public string? Runtime { get; set; }
+        public string? Country { get; set; }
+        public StremioBehaviorHints? BehaviorHints { get; set; }
+        public List<string>? Genre { get; set; }
+        [JsonPropertyName("imdb_id")]
+        public string? ImdbId { get; set; }
+        public DateTime? Released { get; set; }
+        public string? Status { get; set; }
+        public List<string>? Writer { get; set; }
+        public string? Year { get; set; }
+        public string? Slug { get; set; }
+        public List<StremioTrailerStream>? TrailerStreams { get; set; }
+        public StremioAppExtras? App_Extras { get; set; }
+        public string? Thumbnail { get; set; }
+        public int? Episode { get; set; }
+        public int? Season { get; set; }
+        public int? Number { get; set; }
+        public DateTime? FirstAired { get; set; }
+    }
 
-public class StremioTrailer
-{
-    public string? Source { get; set; }
-    public string? Type { get; set; }
-}
+    public class StremioTrailer
+    {
+        public string? Source { get; set; }
+        public string? Type { get; set; }
+    }
 
-public class StremioLink
-{
-    public string? Name { get; set; }
-    public string? Category { get; set; }
-    public string? Url { get; set; }
-}
+    public class StremioLink
+    {
+        public string? Name { get; set; }
+        public string? Category { get; set; }
+        public string? Url { get; set; }
+    }
 
-public class StremioVideo
-{
-    public string Id { get; set; } = "";
-    public string? Name { get; set; }
-    public DateTime? Released { get; set; }
-    public string? Thumbnail { get; set; }
-    public int? Episode { get; set; }
-    public int? Season { get; set; }
-    public string? Overview { get; set; }
-    public int? Number { get; set; }
-    public string? Description { get; set; }
-    public string? Rating { get; set; }
-    public DateTime? FirstAired { get; set; }
-}
+    public class StremioVideo
+    {
+        public string Id { get; set; } = "";
+        public string? Name { get; set; }
+        public DateTime? Released { get; set; }
+        public string? Thumbnail { get; set; }
+        public int? Episode { get; set; }
+        public int? Season { get; set; }
+        public string? Overview { get; set; }
+        public int? Number { get; set; }
+        public string? Description { get; set; }
+        public string? Rating { get; set; }
+        public DateTime? FirstAired { get; set; }
+    }
 
 
 
-public class StremioTrailerStream
-{
-    public string? Title { get; set; }
-    public string? YtId { get; set; }
-}
+    public class StremioTrailerStream
+    {
+        public string? Title { get; set; }
+        public string? YtId { get; set; }
+    }
 
-public class StremioAppExtras
-{
-    public List<StremioCast>? Cast { get; set; }
-}
+    public class StremioAppExtras
+    {
+        public List<StremioCast>? Cast { get; set; }
+    }
 
-public class StremioCast
-{
-    public string? Name { get; set; }
-    public string? Character { get; set; }
-    public string? Photo { get; set; }
-}
+    public class StremioCast
+    {
+        public string? Name { get; set; }
+        public string? Character { get; set; }
+        public string? Photo { get; set; }
+    }
 
     public class StremioStreamsResponse
     {
