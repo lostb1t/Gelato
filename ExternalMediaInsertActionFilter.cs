@@ -184,9 +184,9 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
                         // await ReplaceAlternatesTestAsync(_item, streams, CancellationToken.None);
 
                         var streams = await _stremioProvider.GetStreamsAsync(_item).ConfigureAwait(false);
-                        await SaveAsStrm(meta, streams, CancellationToken.None);
+                        await SaveAsStrm(folder, meta, streams, CancellationToken.None);
 
-                        var parent = _library.FindByPath("/media/external/movies", true) as Folder;
+                        var parent = folder as Folder;
                         if (parent != null)
                         {
                             var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
@@ -200,10 +200,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
 
                             _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
                         }
-
-                        //var jfFolder = await _manager.EnsureIndexedWithFullMetadataAsync(
-                        //    $"/media/external/movies/{meta.Name} ({meta.Year})", TimeSpan.FromSeconds(15), CancellationToken.None);
-                        //_libraryMonitor.ReportFileSystemChanged($"/media/external/movies/{meta.Name} ({meta.Year})");
 
                         var citem = await _manager.WaitForMediaAsync(_item.ProviderIds, TimeSpan.FromSeconds(30), CancellationToken.None);
                         if (citem is not null)
@@ -245,7 +241,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         return;
     }
 
-    private async Task SaveAsStrm(StremioMeta meta, IEnumerable<StremioStream> streams, CancellationToken ct)
+    private async Task SaveAsStrm(Folder folder, StremioMeta meta, IEnumerable<StremioStream> streams, CancellationToken ct)
     {
         var i = 1;
         foreach (var s in streams)
@@ -254,7 +250,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
             // }
             await _manager.SaveStrmAsync(
 
-                  $"/media/external/movies/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
+                  $"{folder.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
                 s.Url
             );
             i++;

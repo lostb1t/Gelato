@@ -204,7 +204,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                     return null;
             }
             ;
-            item.Path = $"/media/test/{Id}";
+            // item.Path = $"/media/test/{Id}";
             item.Name = meta.Name;
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
             //   if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
