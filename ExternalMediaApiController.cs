@@ -97,35 +97,24 @@ IItemRepository repo,
         }
 
         _log.LogInformation("ExternalMedia: applying meta for {Id}", id);
-        _provider.MetaIntoBaseItem(item, meta);
-        _repo.SaveItems(new[] { item }, CancellationToken.None);
-        _repo.SaveImages(item);
+        // _provider.MetaIntoBaseItem(item, meta);
+        // _repo.SaveItems(new[] { item }, CancellationToken.None);
+        // _repo.SaveImages(item);
 
 
 
-        var image = item.GetImages(image_type).FirstOrDefault();
+        // var image = item.GetImages(image_type).FirstOrDefault();
 
-        // pick a random image url from a small list
-        //     var urls = new[]
+
+
+        //   if (image!.Path.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase))
+
         //     {
-        //     "https://picsum.photos/seed/1/600/900",
-        //     "https://picsum.photos/seed/2/600/900",
-        //     "https://picsum.photos/seed/3/600/900",
-        //     "https://picsum.photos/seed/4/600/900"
-        // };
 
-        //     var rnd = new Random();
-        //     var chosen = urls[rnd.Next(urls.Length)];
+        //         return NotFound();
+        //     }
 
-        //     // _logger.LogInformation("Redirecting image request for item {Id} to {Url}", id, chosen);
-
-      if (image!.Path.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase))
-    
-        {
-
-            return NotFound();
-        }
-        
-        return Redirect(image!.Path); // 302 redirect
+        //     return Redirect(image!.Path); // 302 redirect\
+    return NotFound();
     }
 }

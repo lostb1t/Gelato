@@ -13,4 +13,8 @@
     <PackageReference Include="Jellyfin.Common" Version="10.11.*-*" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
   </ItemGroup>
+
+      <ItemGroup>
+      <EmbeddedResource Include="Config\config.html" />
+    </ItemGroup>
 </Project>

@@ -99,6 +99,7 @@ namespace Jellyfin.Plugin.ExternalMedia
 
         public async Task<bool> IsReady()
         {
+            // if manifest == null) return false;
             var manifest = await GetManifestAsync();
             return manifest != null;
         }
@@ -165,11 +166,6 @@ namespace Jellyfin.Plugin.ExternalMedia
         {
             BaseItem item;
 
-            // if (string.IsNullOrWhiteSpace(meta.ImdbId))
-            // {
-            //     _log.LogInformation("ExternalMedia: Empty imdb id for {id}", meta.Id);
-            //     return null;
-            // }
             var Id = meta.Id;
 
             // imdb is better
@@ -184,7 +180,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                     item = new Series
                     {
                         Id = _library.GetNewItemId(Id, typeof(Series)),
-                        Path = $"stremio://series/{Id}"
+                        // Path = $"stremio://series/{Id}"
                     };
                     break;
 
@@ -192,15 +188,15 @@ namespace Jellyfin.Plugin.ExternalMedia
                     item = new Movie
                     {
                         Id = _library.GetNewItemId(Id, typeof(Movie)),
-                        Path = $"stremio://movie/{Id}"
+                        // Path = $"stremio://movie/{Id}"
                     };
                     break;
 
                 case "episode":
                     item = new Episode
                     {
-                        Id = _library.GetNewItemId(Id, typeof(Movie)),
-                        Path = $"stremio://series/{Id}"
+                        Id = _library.GetNewItemId(Id, typeof(Episode)),
+                        // Path = $"stremio://series/{Id}"
                     };
                     break;
                 default:
@@ -208,7 +204,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                     return null;
             }
             ;
-
+            item.Path = $"/media/test/{Id}";
             item.Name = meta.Name;
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
             //   if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
@@ -223,7 +219,9 @@ namespace Jellyfin.Plugin.ExternalMedia
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
             }
-            item.SetProviderId("stremio", item.Path);
+            item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
+            item.IsVirtualItem = true;
+            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
             var imgs = new List<ItemImageInfo?>();
             imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
             imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
@@ -232,17 +230,17 @@ namespace Jellyfin.Plugin.ExternalMedia
             return item;
         }
 
-        public void MetaIntoBaseItem(BaseItem item, StremioMeta meta)
-        {
-            if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
-            if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
+        // public void MetaIntoBaseItem(BaseItem item, StremioMeta meta)
+        // {
+        //     if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
+        //     if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
 
-            var imgs = new List<ItemImageInfo?>();
-            imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
-            imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
-            imgs.Add(UpdateImage(item, ImageType.Logo, meta.Logo));
-            item.ImageInfos = imgs.Where(i => i != null).Cast<ItemImageInfo>().ToArray();
-        }
+        //     var imgs = new List<ItemImageInfo?>();
+        //     imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
+        //     imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
+        //     imgs.Add(UpdateImage(item, ImageType.Logo, meta.Logo));
+        //     item.ImageInfos = imgs.Where(i => i != null).Cast<ItemImageInfo>().ToArray();
+        // }
 
         private ItemImageInfo? UpdateImage(BaseItem item, ImageType type, string? url)
         {

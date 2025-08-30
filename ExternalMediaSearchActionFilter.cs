@@ -54,12 +54,19 @@ namespace Jellyfin.Plugin.ExternalMedia
 
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            if (!await _provider.IsReady())
+            try
             {
-                _log.LogInformation("ExternalMedia: provider not ready");
-                await next();
-                return;
+                if (!await _provider.IsReady())
+                {
+                    await next();
+                    return;
+                }
             }
+            catch (Exception ex)
+            {
+
+            }
+
             var http = context.HttpContext;
             var path = http.Request.Path.Value?.ToLowerInvariant() ?? "";
             //_log.LogInformation("ExternalMedia: hook");

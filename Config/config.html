@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>External Media</title>
+</head>
+<body>
+<div data-role="page" id="externalmediaConfigurationPage" class="page type-interior pluginConfigurationPage fullWidthContent">
+  <div class="content-primary">
+    <div class="verticalSection">
+      <div class="sectionTitleContainer">
+        <h2 class="sectionTitle">External Media</h2>
+      </div>
+      <p><i>Note:</i> Click Save after changing settings.</p>
+    </div>
+    <hr class="solid">
+
+    <form id="externalmediaForm">
+      <div class="inputContainer">
+        <input is="emby-input" type="text" id="txtUrl" required="required" label="Stremio URL (manifest or base):" />
+        <span>Paste the manifest URL or base endpoint. <code>GetBaseUrl()</code> will strip <code>/manifest.json</code> automatically.</span>
+      </div>
+
+      <div class="inputContainer">
+        <span>Target Library:</span>
+        <select is="emby-select" class="emby-select-withcolor emby-select" id="selLibrary"></select>
+        <span>Select an existing library to attach virtual items under (a subfolder will be created if needed).</span>
+      </div>
+
+      <br />
+      <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block">
+        <span>Save</span>
+      </button>
+    </form>
+  </div>
+
+  <script type="text/javascript">
+    (function () {
+      const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A"; // <-- replace with your plugin GUID
+      const page = document.querySelector('#externalmediaConfigurationPage');
+      const form = document.querySelector('#externalmediaForm');
+      const txtUrl = document.querySelector('#txtUrl');
+      const selLibrary = document.querySelector('#selLibrary');
+
+async function loadLibraries(selectedId) {
+  selLibrary.innerHTML = "";
+  selLibrary.appendChild(new Option("(none)", ""));
+
+  const folders = await window.ApiClient.getVirtualFolders(); // returns an array
+  folders.forEach(f => {
+    const val = f.ItemId;
+    const label = f.Name;
+    selLibrary.appendChild(new Option(label, val));
+  });
+
+  if (selectedId) selLibrary.value = selectedId;
+}
+
+      async function loadConfig() {
+        Dashboard.showLoadingMsg();
+        try {
+          const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
+          txtUrl.value = cfg.Url || "";
+          await loadLibraries(cfg.MovieLibraryId || "");
+        } catch (e) {
+          console.error(e);
+          await loadLibraries("");
+        } finally {
+          Dashboard.hideLoadingMsg();
+        }
+      }
+
+      async function saveConfig(e) {
+        e.preventDefault();
+        Dashboard.showLoadingMsg();
+        try {
+          const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
+          cfg.Url = (txtUrl.value || "").trim();
+
+          const libVal = (selLibrary.value || "").trim();
+          // Send null if none selected; Jellyfin will serialize `null` for Guid?
+          cfg.MovieLibraryId = libVal === "" ? null : libVal;
+
+          await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
+          Dashboard.processPluginConfigurationUpdateResult();
+        } catch (e) {
+          console.error(e);
+        } finally {
+          Dashboard.hideLoadingMsg();
+        }
+      }
+
+      function init() {
+        form.addEventListener("submit", saveConfig);
+        loadConfig();
+      }
+
+      page.addEventListener("pageshow", init);
+    })();
+  </script>
+</div>
+</body>
+</html>

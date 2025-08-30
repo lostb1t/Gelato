@@ -13,13 +13,14 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
 
         services.AddSingleton<ExternalMediaSearchActionFilter>();
         services.AddSingleton<ExternalMediaInsertActionFilter>();
+        services.AddSingleton<ExternalMediaManager>();
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
 
             o.Filters.AddService<ExternalMediaSearchActionFilter>();
             o.Filters.AddService<ExternalMediaInsertActionFilter>();
         });
-    
+
 
     }
 }

@@ -81,7 +81,6 @@ namespace Emby.Server.Implementations.ScheduledTasks.Tasks
             _library.CreateItem(vf, parentCollection);
             parentCollection.AddChild(vf);
 
-
             return vf;
         }
 
