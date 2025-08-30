@@ -20,7 +20,8 @@ namespace Jellyfin.Plugin.ExternalMedia
         private readonly IHttpClientFactory _http;
         private readonly ILogger<ExternalMediaStremioProvider> _log;
         private StremioManifest? _manifest;
-        public StremioCatalog? SearchCatalog { get; private set; }
+        public StremioCatalog? MovieSearchCatalog { get; private set; }
+        public StremioCatalog? SeriesSearchCatalog { get; private set; }
         private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
         private readonly ILibraryManager _library;
 
@@ -88,11 +89,24 @@ namespace Jellyfin.Plugin.ExternalMedia
             var m = await GetJsonAsync<StremioManifest>(url);
             _manifest = m;
 
-            SearchCatalog = m?.Catalogs?.FirstOrDefault(c =>
-                c.Extra != null && c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
+            if (m?.Catalogs != null)
+            {
+                MovieSearchCatalog = m.Catalogs.FirstOrDefault(c =>
+                    c.Type == StremioMediaType.Movie &&
+                    c.Extra != null &&
+                    c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
 
-            if (SearchCatalog == null)
-                _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable catalog", url);
+                SeriesSearchCatalog = m.Catalogs.FirstOrDefault(c =>
+                    c.Type == StremioMediaType.Series &&
+                    c.Extra != null &&
+                    c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
+            }
+
+            if (MovieSearchCatalog == null)
+                _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable movie catalog", url);
+
+            if (SeriesSearchCatalog == null)
+                _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable series catalog", url);
 
             return m;
         }
@@ -134,13 +148,26 @@ namespace Jellyfin.Plugin.ExternalMedia
             return r?.Metas ?? new();
         }
 
-        public async Task<IReadOnlyList<StremioMeta>> SearchAsync(string query, int? skip = null)
+        public async Task<IReadOnlyList<StremioMeta>> SearchAsync(
+        string query,
+        StremioMediaType mediaType,
+        int? skip = null)
         {
             var manifest = await GetManifestAsync();
-            if (manifest == null || SearchCatalog == null)
-                return Array.Empty<StremioMeta>();
+            if (manifest == null) return Array.Empty<StremioMeta>();
 
-            return await GetCatalogMetasAsync(SearchCatalog.Id, SearchCatalog.Type, query, skip);
+            StremioCatalog? catalog = mediaType switch
+            {
+                StremioMediaType.Movie => MovieSearchCatalog,
+                StremioMediaType.Series => SeriesSearchCatalog,
+                _ => null
+            };
+
+            if (catalog == null) return Array.Empty<StremioMeta>();
+
+            // type → "movie" | "series"
+            var typeString = catalog.Type.ToString().ToLowerInvariant();
+            return await GetCatalogMetasAsync(catalog.Id, typeString, query, skip);
         }
 
         private static (string? type, string? extId) ResolveKey(BaseItem entity)
@@ -273,7 +300,8 @@ namespace Jellyfin.Plugin.ExternalMedia
 
     public class StremioCatalog
     {
-        public string Type { get; set; } = "";
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public StremioMediaType Type { get; set; } = StremioMediaType.Movie;
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public List<StremioExtra> Extra { get; set; } = new();
@@ -412,4 +440,11 @@ namespace Jellyfin.Plugin.ExternalMedia
         public string BaseUrl { get; set; } = "https://your-stremio-addon";
         public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(8);
     }
+
+    public enum StremioMediaType
+    {
+        Movie,
+        Series
+    }
+
 }

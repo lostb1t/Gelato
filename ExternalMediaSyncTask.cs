@@ -182,10 +182,10 @@ namespace Emby.Server.Implementations.ScheduledTasks.Tasks
                             {
                                 _library.CreateItems(moviesBuffer, movieParent, cancellationToken);
                                 done += moviesBuffer.Count;
-                              //  foreach (var n in moviesBuffer)
-                               // {
-                               //     _repo.SaveImages(n);
-                              //  }
+                                //  foreach (var n in moviesBuffer)
+                                // {
+                                //     _repo.SaveImages(n);
+                                //  }
                                 moviesBuffer.Clear();
                             }
                         }

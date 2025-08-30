@@ -17,16 +17,15 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
-
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Querying;
 using Jellyfin.Plugin.ExternalMedia.Common;
+using Jellyfin.Data.Enums;
 
 namespace Jellyfin.Plugin.ExternalMedia
 {
-    /// Intercepts item searches so the controller doesn't touch the DB.
     public class ExternalMediaSearchActionFilter : IAsyncActionFilter
     {
         private readonly ILibraryManager _library;
@@ -62,15 +61,14 @@ namespace Jellyfin.Plugin.ExternalMedia
                     return;
                 }
             }
-            catch (Exception ex)
+            catch
             {
-
+                await next();
+                return;
             }
 
             var http = context.HttpContext;
             var path = http.Request.Path.Value?.ToLowerInvariant() ?? "";
-            //_log.LogInformation("ExternalMedia: hook");
-            // Only care about GET /Items style endpoints
             if (!http.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) ||
                 !path.StartsWith("/items", StringComparison.Ordinal))
             {
@@ -78,28 +76,34 @@ namespace Jellyfin.Plugin.ExternalMedia
                 return;
             }
 
-            // Jellyfin search param is "SearchTerm" (case-insensitive)
             var hasSearch = http.Request.Query.Keys
                 .Any(k => string.Equals(k, "SearchTerm", StringComparison.OrdinalIgnoreCase) &&
                           !string.IsNullOrWhiteSpace(http.Request.Query[k]));
-
             if (!hasSearch)
             {
-                // Not a search → let it through
                 await next();
                 return;
             }
 
-            var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Movie", "Series" };
-            http.Request.Query.TryGetValue("IncludeItemTypes", out var includeVal);
-            var includeRaw = includeVal.ToString();
+            var requested = new HashSet<BaseItemKind>();
+            if (http.Request.Query.TryGetValue("IncludeItemTypes", out var includeVal) && !string.IsNullOrWhiteSpace(includeVal))
+            {
+                foreach (var raw in includeVal.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (Enum.TryParse<BaseItemKind>(raw, true, out var mt))
+                    {
+                        if (mt == BaseItemKind.Movie || mt == BaseItemKind.Series)
+                            requested.Add(mt);
+                    }
+                }
+            }
+            else
+            {
+                await next();
+                return;
+            }
 
-            var requested = includeRaw
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(t => allowed.Contains(t))
-                .ToArray();
-
-            if (requested.Length == 0)
+            if (requested.Count == 0)
             {
                 context.Result = new OkObjectResult(new QueryResult<BaseItemDto>
                 {
@@ -109,58 +113,57 @@ namespace Jellyfin.Plugin.ExternalMedia
                 return;
             }
 
-            // At this point: it's a search. Do NOT call next(); short-circuit.
+            int start = 0;
+            int limit = int.MaxValue;
+            if (http.Request.Query.TryGetValue("StartIndex", out var startVal) &&
+                int.TryParse(startVal, out var si) && si >= 0) start = si;
+            if (http.Request.Query.TryGetValue("Limit", out var limitVal) &&
+                int.TryParse(limitVal, out var lim) && lim > 0) limit = lim;
+
             var q = http.Request.Query.First(kv => string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)).Value.ToString();
-            _log.LogInformation("ExternalMedia: intercepted /Items search \"{Query}\" → short-circuiting to client/Stremio.", q);
+            _log.LogDebug("ExternalMedia: intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit}",
+                          q, string.Join(",", requested.Select(r => r.ToString())), start, limit);
 
-            var items = await _provider.SearchAsync(q);
+            var metas = new List<StremioMeta>(256);
 
-
-            var options = new DtoOptions();
-            var dtos = new List<BaseItemDto>();
-            foreach (var s in items)
+            if (requested.Contains(BaseItemKind.Movie))
             {
-
-                //   var imdbId = s.Imdb_Id;
-
-
-                var b = _provider.IntoBaseItem(s);
-
-                if (b is not null)
-                {
-                    var id = b.GetProviderId("stremio");
-                    if (string.IsNullOrWhiteSpace(id))
-                    {
-                        continue;
-                    }
-                    var dto = _dtoService.GetBaseItemDto(b, options);
-                    // _log.LogInformation("ExternalMedia: ID {Guid}", id);
-                    _log.LogInformation("ExternalMedia: ID {Guid}", id);
-                    dto.Id = GuidCodec.EncodeString(StremioId.Encode(id));
-                    dtos.Add(dto);
-
-                    //_log.LogInformation("ExternalMedia: {Query}", s.Name);
-                }
+                var movies = await _provider.SearchAsync(q, StremioMediaType.Movie);
+                metas.AddRange(movies);
             }
 
-            // Option A: return an empty Jellyfin-shaped page so the client won’t crash
-            var empty = new QueryResult<BaseItemDto>
+            if (requested.Contains(BaseItemKind.Series))
             {
-                Items = dtos,
+                var series = await _provider.SearchAsync(q, StremioMediaType.Series);
+                metas.AddRange(series);
+            }
+
+            var options = new DtoOptions();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var dtos = new List<BaseItemDto>(metas.Count);
+
+            foreach (var s in metas)
+            {
+                var baseItem = _provider.IntoBaseItem(s);
+                if (baseItem is null) continue;
+
+                var stremioKey = baseItem.GetProviderId("stremio");
+                if (string.IsNullOrWhiteSpace(stremioKey) || !seen.Add(stremioKey))
+                    continue;
+
+                var dto = _dtoService.GetBaseItemDto(baseItem, options);
+                dto.Id = GuidCodec.EncodeString(StremioId.Encode(stremioKey));
+                dtos.Add(dto);
+            }
+
+            var paged = dtos.Skip(start).Take(limit).ToArray();
+
+            context.Result = new OkObjectResult(new QueryResult<BaseItemDto>
+            {
+                Items = paged,
                 TotalRecordCount = dtos.Count
-            };
-            _log.LogInformation("ExternalMedia: done");
-
-            // Optional: hint to client that this came from external filter
-            //  http.Response.Headers["X-External-Search"] = "stremio";
-            // http.Response.Headers["Cache-Control"] = "no-store";
-
-            context.Result = new OkObjectResult(empty);
+            });
             return;
-
-            // Option B (alternative): 307 redirect to your own /external/search endpoint
-            // context.Result = new RedirectResult($"/Plugins/ExternalMedia/Search?query={Uri.EscapeDataString(q)}", false);
-            // return;
         }
     }
 }

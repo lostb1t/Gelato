@@ -61,9 +61,9 @@ public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
         //var folder = _manager.TryGetMovieFolder(cfg);
         //cfg.MovieFolderId = folder?.Id;
-       // _log.LogInformation("ExternalMedia: Movie Folder {Id}", cfg.MovieFolderId);
-       // base.UpdateConfiguration(cfg);
-       // _log.LogWarning("ExternalMedia: Movie Folder {Id}", folder.Id);
+        // _log.LogInformation("ExternalMedia: Movie Folder {Id}", cfg.MovieFolderId);
+        // base.UpdateConfiguration(cfg);
+        // _log.LogWarning("ExternalMedia: Movie Folder {Id}", folder.Id);
 
         // // Do your custom logic here
         // if (cfg.MovieLibraryId is Guid libId)
