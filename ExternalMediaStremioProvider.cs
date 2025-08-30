@@ -219,6 +219,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
             }
+            //item.IsRemote = true;
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
             item.IsVirtualItem = true;
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();

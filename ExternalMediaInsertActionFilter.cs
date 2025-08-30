@@ -22,6 +22,8 @@ using MediaBrowser.Model.Entities;
 using Jellyfin.Plugin.ExternalMedia.Common;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Routing;
+using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.IO;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -31,18 +33,23 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
     private readonly IItemRepository _repo;
     private readonly IMediaSourceManager _mediaSources;
     private readonly IDtoService _dtoService;
-    private readonly ExternalMediaStremioProvider _provider;
+    private readonly ExternalMediaStremioProvider _stremioProvider;
     private readonly ILogger<ExternalMediaInsertActionFilter> _log;
     private readonly ExternalMediaManager _manager;
+    private readonly IProviderManager _provider;
+    private readonly IFileSystem _fileSystem;
+
     //public int Order { get; set; } = 1;
-private readonly ILibraryMonitor _libraryMonitor;
+    private readonly ILibraryMonitor _libraryMonitor;
     public ExternalMediaInsertActionFilter(
         ILibraryManager library,
+        IFileSystem fileSystem,
         IItemRepository repo,
         IMediaSourceManager mediaSources,
-          ExternalMediaManager manager, 
+          ExternalMediaManager manager,
         IDtoService dtoService,
-        ExternalMediaStremioProvider provider,
+        ExternalMediaStremioProvider stremioProvider,
+            IProviderManager provider,
             ILibraryMonitor libraryMonitor,
         ILogger<ExternalMediaInsertActionFilter> log)
     {
@@ -51,9 +58,11 @@ private readonly ILibraryMonitor _libraryMonitor;
         _mediaSources = mediaSources;
         _dtoService = dtoService;
         _provider = provider;
+        _stremioProvider = stremioProvider;
+        _fileSystem = fileSystem;
         _manager = manager;
         _log = log;
-                _libraryMonitor = libraryMonitor;
+        _libraryMonitor = libraryMonitor;
     }
 
 
@@ -62,7 +71,7 @@ private readonly ILibraryMonitor _libraryMonitor;
 
     {
 
-      //  _log.LogInformation("ExternalMedia: ExternalMediaInsertActionFilter");
+        //  _log.LogInformation("ExternalMedia: ExternalMediaInsertActionFilter");
         if (!TryGetRouteGuid(context, out var guid))
         {
             // _log.LogInformation("ExternalMedia: NO ROUTE");
@@ -119,24 +128,24 @@ private readonly ILibraryMonitor _libraryMonitor;
         //     return;
         // }
 
-      //  var folder = Helpers.TryGetMovieFolder(cfg, _library);
-      //  _log.LogWarning("ExternalMedia: folder id, {Id}d", cfg.MovieFolderId);
+        //  var folder = Helpers.TryGetMovieFolder(cfg, _library);
+        //  _log.LogWarning("ExternalMedia: folder id, {Id}d", cfg.MovieFolderId);
 
-      //  if (folder is null)
-      //  {
-      //      _log.LogWarning("ExternalMedia: No MovieFolderconfigured");
-      //      await next();
-      //      return;
-       // }
+        //  if (folder is null)
+        //  {
+        //      _log.LogWarning("ExternalMedia: No MovieFolderconfigured");
+        //      await next();
+        //      return;
+        // }
 
         var folder = _manager.TryGetMovieFolder();
 
-         if (folder is null)
+        if (folder is null)
         {
-             _log.LogWarning("ExternalMedia: No Movie folder configured");
-             await next();
-             return;
-         }
+            _log.LogWarning("ExternalMedia: No Movie folder configured");
+            await next();
+            return;
+        }
 
 
         // var folder = library?.GetRootFolder();
@@ -152,14 +161,14 @@ private readonly ILibraryMonitor _libraryMonitor;
 
         if (item is null)
         {
-            var meta = await _provider.GetMetaAsync(Id, mediaType).ConfigureAwait(false);
+            var meta = await _stremioProvider.GetMetaAsync(Id, mediaType).ConfigureAwait(false);
             if (meta is not null)
             {
                 _log.LogInformation("ExternalMedia: ID {Guid}", meta.Id);
                 _log.LogInformation("ExternalMedia: IMDBID {Guid}", meta.ImdbId);
 
-                var _item = _provider.IntoBaseItem(meta);
-               // _item.IsPlaceHolder = true;
+                var _item = _stremioProvider.IntoBaseItem(meta);
+                // _item.IsPlaceHolder = true;
                 if (_item is not null)
                 {
                     var imdbId = _item.GetProviderId(MetadataProvider.Imdb);
@@ -167,43 +176,51 @@ private readonly ILibraryMonitor _libraryMonitor;
                     {
 
                         _log.LogInformation("ExternalMedia: creating item");
-                        
-                        folder.AddChild(_item);
-                        ReplaceGuid(context, _item.Id);
-                       var streams = await _provider.GetStreamsAsync(_item).ConfigureAwait(false);
-                       var stream = streams[0];
-                await ReplaceAlternatesTestAsync(_item, streams, CancellationToken.None);
 
-//       var streams = await _provider.GetStreamsAsync(_item).ConfigureAwait(false);
-//var i = 1;
-                              //  foreach (var s in streams) {
-                                  
-                               // }
-//await _manager.SaveStrmAsync(
+                        //   folder.AddChild(_item);
+                        // ReplaceGuid(context, _item.Id);
+                        //var streams = await _provider.GetStreamsAsync(_item).ConfigureAwait(false);
+                        //var stream = streams[0];
+                        // await ReplaceAlternatesTestAsync(_item, streams, CancellationToken.None);
 
-//      $"/media/external/movies/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
- //   s.Url
-//);
-//        i++;
-//}
-        //await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
-//var jfFolder = await _manager.EnsureIndexedWithFullMetadataAsync(
-//    $"/media/external/movies/{meta.Name} ({meta.Year})", TimeSpan.FromSeconds(15), CancellationToken.None);
+                        var streams = await _stremioProvider.GetStreamsAsync(_item).ConfigureAwait(false);
+                        await SaveAsStrm(meta, streams, CancellationToken.None);
+
+                        var parent = _library.FindByPath("/media/external/movies", true) as Folder;
+                        if (parent != null)
+                        {
+                            var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                            {
+                                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                                ReplaceAllImages = false,
+                                ReplaceAllMetadata = false,
+                                EnableRemoteContentProbe = false,
+                            };
+
+                            _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
+                        }
+
+                        //var jfFolder = await _manager.EnsureIndexedWithFullMetadataAsync(
+                        //    $"/media/external/movies/{meta.Name} ({meta.Year})", TimeSpan.FromSeconds(15), CancellationToken.None);
                         //_libraryMonitor.ReportFileSystemChanged($"/media/external/movies/{meta.Name} ({meta.Year})");
-                     
- //  var citem = await _manager.WaitForMediaAsync(_item.ProviderIds, TimeSpan.FromSeconds(30), CancellationToken.None);
-     //                                   if (citem is not null) {
-     //                   _log.LogInformation("ExternalMedia: done scan {citem.Id}");
-//
-//                        ReplaceGuid(context, citem.Id);
- //                       } else {
-                                                  _log.LogError("ExternalMedia: media poll timeout");
- //                       }
-                        
-                     //   await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+
+                        var citem = await _manager.WaitForMediaAsync(_item.ProviderIds, TimeSpan.FromSeconds(30), CancellationToken.None);
+                        if (citem is not null)
+                        {
+                            _log.LogInformation("ExternalMedia: done scan {citem.Id}");
+
+                            ReplaceGuid(context, citem.Id);
+                        }
+                        else
+                        {
+                            _log.LogError("ExternalMedia: media poll timeout");
+                        }
+
+                        //   await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
 
 
-        
+
 
                     }
                     else
@@ -231,6 +248,22 @@ private readonly ILibraryMonitor _libraryMonitor;
         return;
     }
 
+    private async Task SaveAsStrm(StremioMeta meta, IEnumerable<StremioStream> streams, CancellationToken ct)
+    {
+        var i = 1;
+        foreach (var s in streams)
+        {
+
+            // }
+            await _manager.SaveStrmAsync(
+
+                  $"/media/external/movies/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
+                s.Url
+            );
+            i++;
+        }
+        //await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+    }
     private bool TryGetRouteGuid(ResourceExecutingContext ctx, out Guid value)
     {
         value = Guid.Empty;
@@ -332,7 +365,7 @@ private readonly ILibraryMonitor _libraryMonitor;
 
         return _library.GetItemList(q).FirstOrDefault();
     }
-    
+
     private async Task ReplaceAlternatesTestAsync(BaseItem primary, IEnumerable<StremioStream> streams, CancellationToken ct)
     {
         var parent = primary.GetParent() as Folder ?? (_library.GetItemById(primary.ParentId) as Folder);
@@ -364,7 +397,7 @@ private readonly ILibraryMonitor _libraryMonitor;
 
             alt.PresentationUniqueKey = alt.CreatePresentationUniqueKey();
             //parent.AddChild(alt);
-                    await alt.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+            await alt.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
 
             newLinks.Add(new LinkedChild { ItemId = alt.Id, Path = alt.Path });
             break;
@@ -425,6 +458,7 @@ private readonly ILibraryMonitor _libraryMonitor;
                 Name = string.IsNullOrWhiteSpace(s.Name) ? primary.Name : s.Name,
                 Path = s.Url,
                 IsVirtualItem = true,
+                //  IsRemote = true,
                 PrimaryVersionId = primary.Id.ToString("N")
             };
         }
@@ -435,10 +469,11 @@ private readonly ILibraryMonitor _libraryMonitor;
                 Id = _library.GetNewItemId(s.Url, typeof(Episode)),
                 Name = string.IsNullOrWhiteSpace(s.Name) ? primary.Name : s.Name,
                 Path = s.Url,
+                //   IsRemote = true,
                 IsVirtualItem = true,
                 PrimaryVersionId = primary.Id.ToString("N"),
-               // IndexNumber = epPrimary.IndexNumber,
-               // ParentIndexNumber = epPrimary.ParentIndexNumber,
+                // IndexNumber = epPrimary.IndexNumber,
+                // ParentIndexNumber = epPrimary.ParentIndexNumber,
                 SeriesName = epPrimary.SeriesName,
                 SeriesId = epPrimary.SeriesId,
                 SeasonId = epPrimary.SeasonId
