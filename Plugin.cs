@@ -46,8 +46,8 @@ public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         base.UpdateConfiguration(configuration);
         var cfg = (PluginConfiguration)configuration;
-        _log.LogInformation("ExternalMedia: UpdateConfiguration");
-        _log.LogInformation("ExternalMedia: Movie library {Id}", cfg.MovieLibraryId);
+        // _log.LogInformation("ExternalMedia: UpdateConfiguration");
+        // _log.LogInformation("ExternalMedia: Movie library {Id}", cfg.MovieLibraryId);
         // var cfg = (PluginConfiguration)configuration;
 
         //var library = Helpers.TryGetMovieLibrary(cfg, _library);

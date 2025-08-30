@@ -219,9 +219,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
 
                         //   await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
 
-
-
-
                     }
                     else
                     {
