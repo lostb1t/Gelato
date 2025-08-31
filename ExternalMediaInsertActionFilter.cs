@@ -124,8 +124,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
             return;
         }
 
-
-
         Func<CancellationToken, Task<bool>> saver = isSeries
             ? (ct => _seriesManager.CreateSeriesTreesAsync(root, meta, ct))
             : (async ct =>
