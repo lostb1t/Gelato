@@ -30,10 +30,12 @@ public class ExternalMediaApiController : ControllerBase
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
     private readonly IDtoService _dtoService;
+    private readonly ExternalMediaRefresh _refresh;
 
 
     public ExternalMediaApiController(
         ILoggerFactory loggerFactory,
+        ExternalMediaRefresh refresh,
         ExternalMediaStremioProvider provider,
         IDtoService dtoService,
         IServerConfigurationManager config,
@@ -42,6 +44,7 @@ IItemRepository repo,
         ILibraryManager libraryManager)
     {
         _loggerFactory = loggerFactory;
+        _refresh = refresh;
         _log = loggerFactory.CreateLogger<ExternalMediaApiController>();
         _provider = provider; _dtoService = dtoService;
         _config = config;
@@ -50,71 +53,19 @@ IItemRepository repo,
         _library = libraryManager;
     }
 
-    [HttpGet("image/{id}/{image_type}")]
+    // [HttpGet("image/{id}/{image_type}")]
+    [HttpGet("test")]
     //[Authorize]
     // [ProducesResponseType(StatusCodes.Status302Found)]
     public async Task<IActionResult> Image(
-        [FromRoute] string id,
-        [FromRoute] ImageType image_type)
+        // [FromRoute] string id,
+        // [FromRoute] ImageType image_type
+        )
     {
+        var found = _library.GetItemById(Guid.Parse("a3f08293726362d3531ab671f857d968"));
+        using var cts = new CancellationTokenSource();
+        await _refresh.RefreshAsync(found, cts.Token).ConfigureAwait(false);
 
-        // var meta = await _provider.GetMetaAsync(item, ct);
-
-        // var json = JsonSerializer.Serialize(dto, new JsonSerializerOptions {
-        //     WriteIndented = true,
-        //     DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        //     ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles // safe for graphs
-        // });
-        // _log.LogInformation("Object dump:\n{Json}", json);
-        // var needRefresh = NeedsRefresh(dto);
-        // if (!needRefresh)
-        // {
-        //     await next(); return;
-        // }
-        // var ct = context.HttpContext.RequestAborted;
-        // _library.GetItemById(id);
-        _log.LogInformation("Getting metadata for {Type}/{Id}", image_type, id);
-        var guid = _library.GetNewItemId(id, typeof(Movie));
-        var item = _library.GetItemById(guid);
-        if (item is null)
-        {
-            _log.LogDebug("ExternalMedia: item {Id} not found in library", id);
-            return NotFound();
-        }
-
-        var imdb = item.GetProviderId("Imdb");
-        if (string.IsNullOrEmpty(imdb))
-        {
-            _log.LogDebug("ExternalMedia: no IMDb id for {Id}", id);
-            return NotFound(); ;
-        }
-
-        var meta = await _provider.GetMetaAsync(imdb, "movie");
-        if (meta is null)
-        {
-            _log.LogWarning("Not metadata found for {Type}/{Id}", id, "movie");
-            return NotFound();
-        }
-
-        _log.LogInformation("ExternalMedia: applying meta for {Id}", id);
-        // _provider.MetaIntoBaseItem(item, meta);
-        // _repo.SaveItems(new[] { item }, CancellationToken.None);
-        // _repo.SaveImages(item);
-
-
-
-        // var image = item.GetImages(image_type).FirstOrDefault();
-
-
-
-        //   if (image!.Path.StartsWith("http://localhost", StringComparison.OrdinalIgnoreCase))
-
-        //     {
-
-        //         return NotFound();
-        //     }
-
-        //     return Redirect(image!.Path); // 302 redirect\
         return NotFound();
     }
 }

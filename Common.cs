@@ -27,17 +27,27 @@ public static class GuidCodec
 
 public static class StremioId
 {
-    public static (string MediaType, string ExternalId)? Parse(string id)
+    public static (StremioMediaType MediaType, string ExternalId)? Parse(string id)
+{
+    if (string.IsNullOrWhiteSpace(id)) 
+        return null;
+
+    if (!id.StartsWith("stremio://", StringComparison.OrdinalIgnoreCase)) 
+        return null;
+
+    var parts = id.Substring("stremio://".Length)
+                  .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+    if (parts.Length != 2) 
+        return null;
+
+    if (Enum.TryParse<StremioMediaType>(parts[0], true, out var mediaType))
     {
-        if (string.IsNullOrWhiteSpace(id)) return null;
-        if (!id.StartsWith("stremio://", StringComparison.OrdinalIgnoreCase)) return null;
-
-        var parts = id.Substring("stremio://".Length)
-                      .Split('/', StringSplitOptions.RemoveEmptyEntries);
-
-        if (parts.Length != 2) return null;
-        return (parts[0], parts[1]);
+        return (mediaType, parts[1]);
     }
+
+    return null;
+}
 
     public static string Encode(string input)
     {
@@ -79,7 +89,6 @@ public static class StremioId
         {
             "m" => "movie",
             "s" => "series",
-            "e" => "episode",
             _ => throw new ArgumentException($"Unknown media type code: {shortType}")
         };
 

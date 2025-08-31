@@ -118,18 +118,27 @@ namespace Jellyfin.Plugin.ExternalMedia
             return manifest != null;
         }
 
-        public async Task<StremioMeta?> GetMetaAsync(string id, string mediaType)
+        public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)
         {
-            var url = BuildUrl(new[] { "meta", mediaType, id });
+            var url = BuildUrl(new[] { "meta", mediaType.ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioMetaResponse>(url);
             return r?.Meta;
         }
 
         public async Task<List<StremioStream>> GetStreamsAsync(BaseItem entity)
         {
-            var (mediaType, extId) = ResolveKey(entity);
-            if (mediaType is null || string.IsNullOrWhiteSpace(extId)) return new();
-            var url = BuildUrl(new[] { "stream", mediaType, extId });
+            var (mediaType, Id) = ResolveKey(entity);
+            // _log.LogInformation("ExternalMedia: GetStreamsAsync {Type} {Id}", mediaType, Id);
+            if (mediaType is null || string.IsNullOrWhiteSpace(Id)) return new();
+            var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), Id });
+            var r = await GetJsonAsync<StremioStreamsResponse>(url);
+            return r?.Streams ?? new();
+        }
+
+        public async Task<List<StremioStream>> GetStreamsAsync(string Id, StremioMediaType mediaType)
+        {
+            // _log.LogInformation("ExternalMedia: GetStreamsAsync {Type} {Id}", mediaType, Id);
+            var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), Id });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
         }
@@ -370,6 +379,31 @@ namespace Jellyfin.Plugin.ExternalMedia
         public int? Season { get; set; }
         public int? Number { get; set; }
         public DateTime? FirstAired { get; set; }
+
+
+        public Dictionary<string, string> GetProviderIds()
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            if (!string.IsNullOrWhiteSpace(Id))
+            {
+                if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
+                {
+                    dict[MetadataProvider.Tmdb.ToString()] = Id.Substring("tmdb:".Length);
+                }
+                else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+                {
+                    dict[MetadataProvider.Imdb.ToString()] = Id;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(ImdbId))
+            {
+                dict[MetadataProvider.Imdb.ToString()] = ImdbId;
+            }
+
+            return dict;
+        }
     }
 
     public class StremioTrailer
@@ -433,6 +467,19 @@ namespace Jellyfin.Plugin.ExternalMedia
         public string? Quality { get; set; }
         public string? Subtitle { get; set; }
         public string? Audio { get; set; }
+
+        public string GetName()
+        {
+            if (!string.IsNullOrWhiteSpace(Title))
+            {
+                return Title;
+            }
+            if (!string.IsNullOrWhiteSpace(Name))
+            {
+                return Name;
+            }
+            return "";
+        }
     }
 
     public class StremioOptions

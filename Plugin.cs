@@ -46,46 +46,14 @@ public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         base.UpdateConfiguration(configuration);
         var cfg = (PluginConfiguration)configuration;
-        // _log.LogInformation("ExternalMedia: UpdateConfiguration");
-        // _log.LogInformation("ExternalMedia: Movie library {Id}", cfg.MovieLibraryId);
-        // var cfg = (PluginConfiguration)configuration;
 
-        //var library = Helpers.TryGetMovieLibrary(cfg, _library);
-        //if (library is null)
-        //{
-        //    _log.LogWarning("ExternalMedia: No MovieLibrary configured");
-        //    return;
-        //}
-
-        //_manager.EnsureLib(library);
-
-        //var folder = _manager.TryGetMovieFolder(cfg);
-        //cfg.MovieFolderId = folder?.Id;
-        // _log.LogInformation("ExternalMedia: Movie Folder {Id}", cfg.MovieFolderId);
-        // base.UpdateConfiguration(cfg);
-        // _log.LogWarning("ExternalMedia: Movie Folder {Id}", folder.Id);
-
-        // // Do your custom logic here
-        // if (cfg.MovieLibraryId is Guid libId)
-        // {
-        //     var lib = _libraryManager.GetItemById(libId) as Folder;
-        //     if (lib != null)
-        //     {
-        //         // Check if the "Stremio" folder already exists
-        //         var existing = lib.GetChildren(new InternalSystemUser(), true)
-        //                           .FirstOrDefault(x => x.Name == "Stremio");
-        //         if (existing == null)
-        //         {
-        //             var stremioFolder = new Folder
-        //             {
-        //                 Name = "Stremio",
-        //                 Id = _libraryManager.GetNewItemId("stremio", typeof(Folder)),
-        //                 Path = "stremio://", // or some fake path to distinguish
-        //             };
-        //             lib.AddChild(stremioFolder);
-        //             _libraryManager.UpdateItem(stremioFolder, lib, CancellationToken.None);
-        //         }
-        //     }
-        // }
+        if (cfg.MoviePath is not null)
+        {
+            ExternalMediaManager.SeedFolder(cfg.MoviePath);
+        }
+        if (cfg.SeriesPath is not null)
+        {
+            ExternalMediaManager.SeedFolder(cfg.SeriesPath);
+        }
     }
 }

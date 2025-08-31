@@ -23,6 +23,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Providers;          // MetadataRefreshOptions, MetadataRefreshMode, DirectoryService
 using MediaBrowser.Model.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -31,19 +33,23 @@ public class ExternalMediaManager
     private readonly ILogger<ExternalMediaManager> _log;
     private readonly ILoggerFactory _loggerFactory;
     // private readonly IFileSystem _fileSystem;
-    private readonly ExternalMediaStremioProvider _provider;
+    private readonly ExternalMediaStremioProvider _stremioProvider;
     private readonly IServerConfigurationManager _config;
     private readonly IUserManager _user;
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
     private readonly IDtoService _dtoService;
     private readonly IFileSystem _fileSystem;
+    private readonly IProviderManager _provider;
+
     // private readonly string path = "/media/external/movies";
     // private readonly string name = "external_movies";
 
     public ExternalMediaManager(
+
         ILoggerFactory loggerFactory,
-        ExternalMediaStremioProvider provider,
+        IProviderManager provider,
+        ExternalMediaStremioProvider stremioProvider,
         IDtoService dtoService,
         IServerConfigurationManager config,
         IUserManager userManager,
@@ -53,7 +59,9 @@ IItemRepository repo,
     {
         _loggerFactory = loggerFactory;
         _log = loggerFactory.CreateLogger<ExternalMediaManager>();
-        _provider = provider; _dtoService = dtoService;
+        _provider = provider;
+        _stremioProvider = stremioProvider;
+        _dtoService = dtoService;
         _config = config;
         _repo = repo;
         _user = userManager;
@@ -61,13 +69,32 @@ IItemRepository repo,
         _fileSystem = fileSystem;
     }
 
-    // private static void SeedFolder(string path)
-    // {
-    //     Directory.CreateDirectory(path);
-    //     var seed = System.IO.Path.Combine(path, "stub.txt");
-    //     if (!File.Exists(seed))
-    //         File.WriteAllBytes(seed, Array.Empty<byte>());
-    // }
+    public static void SeedFolder(string path)
+    {
+        Directory.CreateDirectory(path);
+        var seed = System.IO.Path.Combine(path, "stub.txt");
+        if (!File.Exists(seed))
+            File.WriteAllBytes(seed, Array.Empty<byte>());
+    }
+
+    public async Task WriteAllTextAsync(string path, string contents, CancellationToken ct)
+    {
+        var bytes = new UTF8Encoding(false).GetBytes(contents);
+        await using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+        await fs.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+    }
+
+    public void DeleteStrmFiles(string folderPath)
+    {
+        if (!Directory.Exists(folderPath))
+            return;
+
+        var strmFiles = Directory.GetFiles(folderPath, "*.strm", SearchOption.TopDirectoryOnly);
+        foreach (var file in strmFiles)
+        {
+            File.Delete(file);
+        }
+    }
 
     // public Folder? TryGetMovieLibrary(PluginConfiguration cfg)
     // {
@@ -96,11 +123,8 @@ IItemRepository repo,
     public Folder? TryGetMovieFolder()
     {
         var cfg = ExternalMediaPlugin.Instance!.Configuration;
-        // var lib = TryGetMovieLibrary(cfg, library);
-
         return _library.GetItemList(new InternalItemsQuery
         {
-            // ParentId = id
             Path = cfg.MoviePath
         })
             .OfType<Folder>()
@@ -110,11 +134,9 @@ IItemRepository repo,
     public Folder? TryGetSeriesFolder()
     {
         var cfg = ExternalMediaPlugin.Instance!.Configuration;
-        // var lib = TryGetMovieLibrary(cfg, library);
-
+        _log.LogDebug("Looking for series folder at {Path}", cfg.SeriesPath);
         return _library.GetItemList(new InternalItemsQuery
         {
-            // ParentId = id
             Path = cfg.SeriesPath
         })
             .OfType<Folder>()
@@ -233,9 +255,10 @@ IItemRepository repo,
         CancellationToken ct)
     {
         var stop = DateTime.UtcNow + timeout;
+
         while (DateTime.UtcNow < stop)
         {
-            var q = new InternalItemsQuery
+            var rootQ = new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Series },
                 Recursive = true,
@@ -243,15 +266,83 @@ IItemRepository repo,
                 HasAnyProviderId = providerIds
             };
 
-            var results = _library.GetItemList(q);
-            var match = results.FirstOrDefault();
-            if (match != null) return match;
+            var root = _library.GetItemList(rootQ).FirstOrDefault();
 
-            await Task.Delay(250, ct);
+            if (root != null && await IsReadyAsync(root, ct).ConfigureAwait(false))
+                return root;
+
+            await Task.Delay(300, ct).ConfigureAwait(false);
         }
+
         return null;
     }
 
+    private async Task<bool> IsReadyAsync(BaseItem root, CancellationToken ct)
+    {
+        // Must have a primary image before we consider it "ready"
+        if (!root.HasImage(ImageType.Primary))
+            return false;
 
+        // Movies: done
+        if (root is MediaBrowser.Controller.Entities.Movies.Movie)
+            return true;
+
+        // Series: require at least one season (no episode checks)
+        if (root is MediaBrowser.Controller.Entities.TV.Series series)
+        {
+            var seasonsQ = new InternalItemsQuery
+            {
+                ParentId = series.Id,
+                IncludeItemTypes = new[] { BaseItemKind.Season },
+                Recursive = false,
+                Limit = 1
+            };
+
+            var anySeason = _library.GetItemList(seasonsQ).FirstOrDefault();
+            if (anySeason is not null && !anySeason.HasImage(ImageType.Primary))
+            {
+                return false;
+            }
+            return anySeason is not null;
+        }
+
+        return true;
+    }
+
+    public async Task SaveStreamAsStrm(Folder folder, StremioMeta meta, IEnumerable<StremioStream> streams, CancellationToken ct)
+    {
+        var i = 1;
+        foreach (var s in streams)
+        {
+            var r = await SaveStrmAsync(
+                  $"{folder.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
+                s.Url
+            );
+            if (r is null)
+            {
+                Console.WriteLine(JsonSerializer.Serialize(s));
+            }
+            i++;
+        }
+    }
+
+    public void QueueParentRefresh(BaseItem item)
+    {
+        var parent = item.GetParent();
+        if (parent == null) return;
+
+        _log.LogInformation("ExternalMedia: queueing refresh for parent {Name}", parent.Name);
+
+        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+        {
+            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            ReplaceAllImages = false,
+            ReplaceAllMetadata = false,
+            EnableRemoteContentProbe = false
+        };
+
+        _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
+    }
 
 }
