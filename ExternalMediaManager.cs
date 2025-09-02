@@ -25,6 +25,7 @@ using MediaBrowser.Controller.Providers;          // MetadataRefreshOptions, Met
 using MediaBrowser.Model.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Globalization;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -343,6 +344,73 @@ IItemRepository repo,
         };
 
         _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
+    }
+
+    // public BaseItem ApplyStream(BaseItem item, StremioMeta meta, StremioStream stream, Folder parent)
+    // {
+    //     item.ShortcutPath = stream.Url;
+    //     item.IsShortcut = true;
+    //     item.Path = $"{parent.Path}/{meta.Year} ({meta.Year})/{item.Name} ({meta.Year}) - {i} {s.Name}.strm";
+    //     // item.Path = $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}.strm";
+    //     return item;
+    // }
+
+    public async Task MergeVersions(Video[] items)
+    {
+        var primaryVersion = items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
+        _log.LogInformation("Merging {Count} versions, primary is {Primary}", items.Length, primaryVersion?.Id);
+        if (primaryVersion is null)
+        {
+            primaryVersion = items
+                .OrderBy(i =>
+                {
+                    if (i.Video3DFormat.HasValue || i.VideoType != VideoType.VideoFile)
+                    {
+                        return 1;
+                    }
+
+                    return 0;
+                })
+                .ThenByDescending(i => i.GetDefaultVideoStream()?.Width ?? 0)
+                .First();
+        }
+        _log.LogInformation("Chosen primary version is {Primary}", primaryVersion.Id);
+        var alternateVersionsOfPrimary = primaryVersion.LinkedAlternateVersions.ToList();
+
+        foreach (var item in items.Where(i => !i.Id.Equals(primaryVersion.Id)))
+        {
+            item.SetPrimaryVersionId(primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture));
+
+            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+
+            if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase)))
+            {
+                _log.LogInformation("Adding {Alt} as alternate version to {Primary}", item.Id, primaryVersion.Id);
+                alternateVersionsOfPrimary.Add(new LinkedChild
+                {
+                    Path = item.Path,
+                    ItemId = item.Id
+                });
+            }
+
+            foreach (var linkedItem in item.LinkedAlternateVersions)
+            {
+                if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, linkedItem.Path, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _log.LogInformation("Adding {Alt} as alternate version to {Primary}", linkedItem.ItemId, primaryVersion.Id);
+                    alternateVersionsOfPrimary.Add(linkedItem);
+                }
+            }
+
+            if (item.LinkedAlternateVersions.Length > 0)
+            {
+                item.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+                await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+
+        primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
+        await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
     }
 
 }

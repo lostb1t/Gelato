@@ -17,6 +17,7 @@ using Jellyfin.Plugin.ExternalMedia.Common;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Dto;
 using Jellyfin.Data.Enums;
+using Microsoft.AspNetCore.Mvc.Controllers;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -31,8 +32,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
     private readonly ExternalMediaManager _manager;
     private readonly ExternalMediaSeriesManager _seriesManager;
     private readonly ExternalMediaRefresh _refresh;
-
-
 
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
@@ -68,6 +67,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
     {
+
         if (!TryGetRouteGuid(context, out var guid))
         {
             await next();
@@ -129,22 +129,74 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
             : (async ct =>
             {
                 var streams = await _stremioProvider.GetStreamsAsync(baseItem).ConfigureAwait(false);
-                await _manager.SaveStreamAsStrm(root, meta, streams, ct);
+                //vare base = IntoBaseItem
+                // var s = streams[0];
+                var items = new List<Video>();
+                var i = 1;
+                foreach (StremioStream stream in streams)
+                {
+
+                    baseItem.Id = Guid.NewGuid();
+                    baseItem.ShortcutPath = stream.Url;
+                    baseItem.IsShortcut = true;
+                    baseItem.Path = $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {stream.Name}.strm";
+                    baseItem.PresentationUniqueKey = baseItem.CreatePresentationUniqueKey();
+                    // item.Path = $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}.strm";
+                    // baseItem = _manager.ApplyStream(baseItem, s);
+                    await _manager.SaveStrmAsync(
+                        baseItem.Path,
+                        // $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}.strm",
+                        stream.Url
+                    );
+                    root.AddChild(baseItem);
+                    items.Add(baseItem as Video);
+                    i++;
+                }
+
+                await _manager.MergeVersions(items.ToArray());
+
+                foreach (Video item in items)
+                {
+                    var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                    {
+                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                        ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                        //ForceSave = performFullRefresh
+                    };
+                    //await item.RefreshMetadata(options, CancellationToken.None);
+                }
+                ReplaceGuid(context, items[0].Id);
+
+                // };
+
+
+                // _library.RefreshItemOnDemandIfNeeded(baseItem);
+                // await _manager.SaveStrmAsync(
+                //   $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
+                // s.Url
+                //);
+                //root.AddChild(baseItem);
+                //var items = new[];
+                //  foreach (stream in streams) {
+                //   var
+                //}
+                //  await _manager.SaveStreamAsStrm(root, meta, streams, ct);
+                //_log.LogInformatio(ex, "ExternalMedia: background refresh failed for {Name}", root.Name);
                 return true;
             });
 
-        var timeout = TimeSpan.FromSeconds(isSeries ? 45 : 30);
-        var created = await MaterializeAndResolveAsync(root, baseItem, saver, timeout, CancellationToken.None).ConfigureAwait(false);
-
-        if (created is not null)
-        {
-            ReplaceGuid(context, created.Id);
-            StartRefreshDettached(created);
-        }
-        else
-        {
-            _log.LogError("ExternalMedia: media poll timeout");
-        }
+        // var timeout = TimeSpan.FromSeconds(isSeries ? 45 : 30);
+        // var created = await MaterializeAndResolveAsync(root, baseItem, saver, timeout, CancellationToken.None).ConfigureAwait(false);
+        var ok = await saver(CancellationToken.None).ConfigureAwait(false);
+        // if (created is not null)
+        // {
+        // ReplaceGuid(context, items[0].Id);
+        //StartRefreshDettached(created);
+        // }
+        // else
+        // {
+        //    _log.LogError("ExternalMedia: media poll timeout");
+        //}
 
         await next();
     }
@@ -184,6 +236,22 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         return resolved;
     }
 
+    private void Refresh(BaseItem item)
+    {
+
+
+        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+        {
+            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            ReplaceAllImages = true,
+            ReplaceAllMetadata = true,
+            EnableRemoteContentProbe = false
+        };
+        //await _library.RefreshMetadata(item, options, cancellationToken);
+        //_provider.QueueRefresh(item.Id, opts, RefreshPriority.High);
+    }
+
     private void QueueParentRefresh(BaseItem parent)
     {
         var folder = parent as Folder ?? (_library.GetItemById(parent.ParentId) as Folder);
@@ -204,6 +272,15 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
     private bool TryGetRouteGuid(ResourceExecutingContext ctx, out Guid value)
     {
         value = Guid.Empty;
+
+        // Skip legacy endpoint entirely
+        if (ctx.ActionDescriptor is ControllerActionDescriptor cad &&
+            string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+
         var rd = ctx.RouteData.Values;
 
         foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })

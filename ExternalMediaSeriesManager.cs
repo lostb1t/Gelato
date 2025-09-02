@@ -11,6 +11,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Persistence;
 
 namespace Jellyfin.Plugin.ExternalMedia
 {
@@ -19,12 +21,16 @@ namespace Jellyfin.Plugin.ExternalMedia
         private readonly IFileSystem _fs;
         private readonly ILogger<ExternalMediaSeriesManager> _log;
         private readonly ExternalMediaManager _manager;
+        private readonly ExternalMediaStremioProvider _stremioProvider;
+        private readonly IItemRepository _repo;
 
-        public ExternalMediaSeriesManager(IFileSystem fs, ILogger<ExternalMediaSeriesManager> log, ExternalMediaManager manager)
+        public ExternalMediaSeriesManager(IFileSystem fs, ILogger<ExternalMediaSeriesManager> log, ExternalMediaManager manager, ExternalMediaStremioProvider stremioProvider, IItemRepository repo)
         {
             _fs = fs;
             _log = log;
             _manager = manager;
+            _stremioProvider = stremioProvider;
+            _repo = repo;
         }
 
         // public string GetSeasonFolderName(StremioMeta meta)
@@ -42,7 +48,7 @@ namespace Jellyfin.Plugin.ExternalMedia
         public async Task<bool> CreateSeriesTreesAsync(
             Folder seriesRootFolder,
             StremioMeta seriesMeta,
-            // bool addPlaceholders,
+            bool placeholders,
             CancellationToken ct)
         {
             if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
@@ -50,6 +56,20 @@ namespace Jellyfin.Plugin.ExternalMedia
                 _log.LogWarning("SaveSeriesPlaceholdersAsync: invalid series root folder");
                 return false;
             }
+
+    //         _log.LogInformation("CreateSeriesTreesAsync: processing series meta {Id} '{Title}'", seriesMeta.Id, seriesMeta.Name);
+    //         var _episodesBySeason = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
+    // .OrderBy(e => e.Season)
+    // .ThenBy(e => e.Episode)
+    // .GroupBy(e => e.Season)
+    // .ToList();
+
+    //         foreach (var group in _episodesBySeason)
+    //         {
+    //             _log.LogInformation("Season {Season} has {Count} episodes", group.Key, group.Count());
+
+    //         }
+    //         return true;
 
             // var title = seriesMeta.Name;
             // if (string.IsNullOrWhiteSpace(title))
@@ -65,52 +85,111 @@ namespace Jellyfin.Plugin.ExternalMedia
             var seriesPath = Path.Combine(seriesRootFolder.Path, seriesFolderName);
             Directory.CreateDirectory(seriesPath);
 
-            var episodes = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
+            // var episodes = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
+            //     .OrderBy(e => e.Season)
+            //     .ThenBy(e => e.Episode)
+            //     .ToList();
+            var episodesBySeason = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
                 .OrderBy(e => e.Season)
                 .ThenBy(e => e.Episode)
+                .GroupBy(e => e.Season)
                 .ToList();
 
-            if (episodes.Count == 0)
+            if (episodesBySeason.Count == 0)
             {
                 _log.LogWarning("SaveSeriesPlaceholdersAsync: series has no episodes in meta; aborting");
                 return false;
             }
 
+            var serieItem = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
+            if (serieItem is null || serieItem.ProviderIds is null || serieItem.ProviderIds.Count == 0)
+            {
+                _log.LogWarning("ExternalMedia: Missing provider ids, skipping");
+                return false;
+            }
+
+            serieItem.Path = seriesPath;
+            serieItem.PresentationUniqueKey = serieItem.CreatePresentationUniqueKey();
+            // save
+            seriesRootFolder.AddChild(serieItem);
+
             int created = 0;
 
-            foreach (var group in episodes.GroupBy(e => e.Season))
+            foreach (var seasonGroup in episodesBySeason)
+
             {
+
                 ct.ThrowIfCancellationRequested();
 
-                var seasonFolder = Path.Combine(seriesPath, $"Season {group.Key:D2}");
-                if (Directory.Exists(seasonFolder))
+                var seasonPath = Path.Combine(seriesPath, $"Season {seasonGroup.Key:D2}");
+                _log.LogInformation("SaveSeriesPlaceholdersAsync: creating season folder {SeasonPath}", seasonPath);
+                if (Directory.Exists(seasonPath))
                 {
-                    _log.LogDebug("SaveSeriesPlaceholdersAsync: season folder already exists; skipping");
+                    _log.LogWarning("SaveSeriesPlaceholdersAsync: season folder already exists; skipping");
                     continue;
                 }
 
-                Directory.CreateDirectory(seasonFolder);
+                // var seasonItem = (Season)_stremioProvider.IntoBaseItem(seriesMeta);
+                var seasonItem = new Season
+                {
+                    // Id = Guid.NewGuid().ToString(),
+                    Name = $"Season {seasonGroup.Key:D2}",
+                    IndexNumber = seasonGroup.Key,
+                    ParentId = serieItem.Id,
+                    SeriesId = serieItem.Id,
+                    SeriesName = serieItem.Name,
+                    Path = seasonPath,
+                    SeriesPresentationUniqueKey = serieItem.GetPresentationUniqueKey()
+                };
 
-                foreach (var ep in group)
+                Directory.CreateDirectory(seasonPath);
+                serieItem.AddChild(seasonItem);
+
+                var episodes = new List<Episode>();
+                foreach (var ep in seasonGroup)
                 {
                     ct.ThrowIfCancellationRequested();
+                    //_log.LogInformation("SaveSeriesPlaceholdersAsync: creating episode {SxE} - {Title}", $"S{ep.Season:D2}E{ep.Episode:D2}", ep.Name ?? "(no title)");
 
                     var baseName = $"{SanitizeForPath(seriesFolderName)} S{ep.Season:D2}E{ep.Episode:D2}";
-                    var epPath = Path.Combine(seasonFolder, baseName + ".strm");
+                    var epPath = Path.Combine(seasonPath, baseName + ".strm");
+
+                    // var epItem = (Episode)_stremioProvider.IntoBaseItem(ep);
+                    var epItem = new Episode
+                    {
+                        Name = ep.Name,
+                        IndexNumber = ep.Number,
+                        ParentIndexNumber = ep.Season,
+                        ParentId = seasonItem.Id,
+                        IsVirtualItem = true,
+                        SeasonId = seasonItem.Id,
+                        SeriesId = serieItem.Id,
+                        // Overview = episode.Overview,
+                        SeriesName = serieItem.Name,
+                        SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
+                        SeasonName = seasonItem.Name,
+                        // DateLastSaved = DateTime.UtcNow
+                    };
+
+                     seasonItem.AddChild(epItem);
+                    // seasonItem.SetParent(epItem);
+
+                    //episodes.Add(epItem);
 
                     // Placeholder only; resolved later at playback by your resolver
-                    var placeholderUrl = BuildEpisodePlaceholderUrl(seriesMeta, ep);
+                    //var placeholderUrl = BuildEpisodePlaceholderUrl(seriesMeta, ep);
 
-                    await _manager.WriteAllTextAsync(epPath, placeholderUrl, ct).ConfigureAwait(false);
-                    created++;
+                    //await _manager.WriteAllTextAsync(epPath, "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_30MB.mp4", ct).ConfigureAwait(false);
+                    //created++;
                 }
+                //_repo.SaveItems(episodes, ct);
             }
 
             // _log.LogInformation(
             //     "SaveSeriesPlaceholdersAsync: created {Count} placeholder .strm files for '{Title}' at {SeriesPath}",
             //     created, title, seriesPath);
-
-            return created > 0;
+            return true;
+            //return created > 0;
         }
 
         private static string BuildEpisodePlaceholderUrl(StremioMeta seriesMeta, StremioMeta ep)

@@ -198,7 +198,7 @@ namespace Jellyfin.Plugin.ExternalMedia
             return (type, null);
         }
 
-        public BaseItem? IntoBaseItem(StremioMeta meta)
+        public BaseItem IntoBaseItem(StremioMeta meta)
         {
             BaseItem item;
 
@@ -256,8 +256,10 @@ namespace Jellyfin.Plugin.ExternalMedia
                 }
             }
             //item.IsRemote = true;
+
+
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
-            item.IsVirtualItem = true;
+            //item.IsVirtualItem = true;
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
             var imgs = new List<ItemImageInfo?>();
             imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
@@ -379,7 +381,6 @@ namespace Jellyfin.Plugin.ExternalMedia
         public int? Season { get; set; }
         public int? Number { get; set; }
         public DateTime? FirstAired { get; set; }
-
 
         public Dictionary<string, string> GetProviderIds()
         {
