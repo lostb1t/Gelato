@@ -27,74 +27,79 @@ public static class GuidCodec
 
 public static class StremioId
 {
-    public static (StremioMediaType MediaType, string ExternalId)? Parse(string id)
+    public static (StremioMediaType MediaType, string ExternalId) Parse(string id)
 {
-    if (string.IsNullOrWhiteSpace(id)) 
-        return null;
+    if (string.IsNullOrWhiteSpace(id))
+        throw new ArgumentException("Value cannot be null or empty.", nameof(id));
 
-    if (!id.StartsWith("stremio://", StringComparison.OrdinalIgnoreCase)) 
-        return null;
+    if (!id.StartsWith("stremio://", StringComparison.OrdinalIgnoreCase))
+        throw new FormatException($"Invalid StremioId: {id}");
 
     var parts = id.Substring("stremio://".Length)
                   .Split('/', StringSplitOptions.RemoveEmptyEntries);
 
-    if (parts.Length != 2) 
-        return null;
+    if (parts.Length != 2)
+        throw new FormatException($"Invalid StremioId: {id}");
 
-    if (Enum.TryParse<StremioMediaType>(parts[0], true, out var mediaType))
-    {
-        return (mediaType, parts[1]);
-    }
+    if (!Enum.TryParse(parts[0], true, out StremioMediaType mediaType))
+        throw new FormatException($"Unknown media type in StremioId: {parts[0]}");
 
-    return null;
+    return (mediaType, parts[1]);
 }
 
-    public static string Encode(string input)
+public static bool TryParse(string id, out (StremioMediaType MediaType, string ExternalId) result)
+{
+    try
     {
-
-        if (string.IsNullOrWhiteSpace(input))
-            throw new ArgumentException("id cannot be null or empty", nameof(input));
-        //  _log.LogInformation("ExternalMedia: STEEMIOID {Guid}", input);
-        // Remove the prefix
-        var trimmed = input.Replace("stremio://", "");
-
-        // Split into ["movie", "tmdb:1120768"]
-        var parts = trimmed.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length < 2)
-            throw new ArgumentException("Invalid stremio id format", nameof(input));
-
-        var mediaType = parts[0];
-        var extId = parts[1];
-
-        var shortType = mediaType[0].ToString();
-
-        var encoded = $"{shortType}:{extId}";
-        return encoded.Length > 16 ? encoded.Substring(0, 16) : encoded;
+        result = Parse(id);
+        return true;
     }
-
-    public static string Decode(string encoded)
+    catch
     {
-        if (string.IsNullOrWhiteSpace(encoded))
-            throw new ArgumentException("id cannot be null or empty", nameof(encoded));
-
-        var parts = encoded.Split(':', 2); // split only once
-        if (parts.Length < 2)
-            throw new ArgumentException("Invalid encoded format", nameof(encoded));
-
-        var shortType = parts[0];
-        var extId = parts[1];
-
-        // Map back to full type
-        string mediaType = shortType switch
-        {
-            "m" => "movie",
-            "s" => "series",
-            _ => throw new ArgumentException($"Unknown media type code: {shortType}")
-        };
-
-        return $"stremio://{mediaType}/{extId}";
-        // return $"{mediaType}/{extId}";
+        result = default;
+        return false;
     }
+}
+
+    public static string ToCompactId(string stremioId)
+{
+    if (string.IsNullOrWhiteSpace(stremioId))
+        throw new ArgumentException("id cannot be null or empty", nameof(stremioId));
+
+    var trimmed = stremioId.Replace("stremio://", "");
+    var parts = trimmed.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    if (parts.Length < 2)
+        throw new ArgumentException("Invalid stremio id format", nameof(stremioId));
+
+    var mediaType = parts[0];
+    var extId = parts[1];
+    var shortType = mediaType[0].ToString();
+
+    var compact = $"{shortType}:{extId}";
+    return compact.Length > 16 ? compact.Substring(0, 16) : compact;
+}
+
+public static string FromCompactId(string compactId)
+{
+    if (string.IsNullOrWhiteSpace(compactId))
+        throw new ArgumentException("id cannot be null or empty", nameof(compactId));
+
+    var parts = compactId.Split(':', 2);
+    if (parts.Length < 2)
+        throw new ArgumentException("Invalid compact id format", nameof(compactId));
+
+    var shortType = parts[0];
+    var extId = parts[1];
+
+    var mediaType = shortType switch
+    {
+        "m" => "movie",
+        "s" => "series",
+        _ => throw new ArgumentException($"Unknown media type code: {shortType}")
+    };
+
+    return $"stremio://{mediaType}/{extId}";
+}
 
 }
 

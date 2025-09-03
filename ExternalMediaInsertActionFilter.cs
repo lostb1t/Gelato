@@ -18,6 +18,9 @@ using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Dto;
 using Jellyfin.Data.Enums;
 using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
+using Microsoft.AspNetCore.Http;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -31,7 +34,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
     private readonly ILogger<ExternalMediaInsertActionFilter> _log;
     private readonly ExternalMediaManager _manager;
     private readonly ExternalMediaSeriesManager _seriesManager;
-    private readonly ExternalMediaRefresh _refresh;
+    // private readonly ExternalMediaRefresh _refresh;
 
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
@@ -39,7 +42,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
 
     public ExternalMediaInsertActionFilter(
         ILibraryManager library,
-        ExternalMediaRefresh refresh,
+        //  ExternalMediaRefresh refresh,
         IFileSystem fileSystem,
         IItemRepository repo,
         IMediaSourceManager mediaSources,
@@ -52,7 +55,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         ILogger<ExternalMediaInsertActionFilter> log)
     {
         _library = library;
-        _refresh = refresh;
+        //  _refresh = refresh;
         _repo = repo;
         _mediaSources = mediaSources;
         _dtoService = dtoService;
@@ -65,36 +68,53 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         _libraryMonitor = libraryMonitor;
     }
 
-    public async Task OnResourceExecutionAsync(ResourceExecutingContext context, ResourceExecutionDelegate next)
+    public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
     {
 
-        if (!TryGetRouteGuid(context, out var guid))
+        // _log.LogInformation("ExternalMedia: No {Type} folder configured", isSeries ? "Series" : "Movie");
+
+        if (!IsItemsAction(ctx))
+        {
+            await next();
+            return;
+
+        }
+        var req = ctx.HttpContext.Request;
+        _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
+
+        if (!TryGetRouteGuid(ctx, out var guid))
         {
             await next();
             return;
         }
 
-        var existing = _library.GetItemById(guid);
-        if (existing is not null)
+
+
+        // declare in outer scope
+        // declare once, in outer scope
+        string stremioId = default!;
+        StremioMediaType mediaType = default;
+        string Id = default!;
+
+        try
+        {
+            var decoded = GuidCodec.DecodeString(guid);      // whatever your guid codec returns
+            stremioId = StremioId.FromCompactId(decoded);    // formerly Decode(...)
+
+            var parsed = StremioId.Parse(stremioId);         // throws if invalid
+            mediaType = parsed.MediaType;                   // assign to the outer vars
+            Id = parsed.ExternalId;
+        }
+        catch
         {
             await next();
             return;
         }
-
-        var stremioId = StremioId.Decode(GuidCodec.DecodeString(guid));
-        var parsed = StremioId.Parse(stremioId);
-        if (parsed is null)
-        {
-            await next();
-            return;
-        }
-
-        var (mediaType, Id) = parsed.Value;
 
         var found = FindByStremioId(stremioId) as Video;
         if (found is not null)
         {
-            ReplaceGuid(context, found.Id);
+            ReplaceGuid(ctx, found.Id);
             await next();
             return;
         }
@@ -125,93 +145,43 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         }
 
         Func<CancellationToken, Task<bool>> saver = isSeries
-            ? (ct => _seriesManager.CreateSeriesTreesAsync(root, meta, ct))
+            ? (async ct =>
+            {
+                await _seriesManager.CreateSeriesTreesAsync(root, meta, true, ct);
+                StartSeriesRefreshDettached(root, meta);
+                return true;
+            })
             : (async ct =>
             {
                 var streams = await _stremioProvider.GetStreamsAsync(baseItem).ConfigureAwait(false);
-                //vare base = IntoBaseItem
-                // var s = streams[0];
-                var items = new List<Video>();
-                var i = 1;
-                foreach (StremioStream stream in streams)
+                var items = await _manager.SaveStreams(streams, root, meta, CancellationToken.None).ConfigureAwait(false);
+                var primaryItem = _manager.GetPrimaryVersion(items);
+                if (primaryItem is not null)
                 {
-
-                    baseItem.Id = Guid.NewGuid();
-                    baseItem.ShortcutPath = stream.Url;
-                    baseItem.IsShortcut = true;
-                    baseItem.Path = $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {stream.Name}.strm";
-                    baseItem.PresentationUniqueKey = baseItem.CreatePresentationUniqueKey();
-                    // item.Path = $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}.strm";
-                    // baseItem = _manager.ApplyStream(baseItem, s);
-                    await _manager.SaveStrmAsync(
-                        baseItem.Path,
-                        // $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}.strm",
-                        stream.Url
-                    );
-                    root.AddChild(baseItem);
-                    items.Add(baseItem as Video);
-                    i++;
+                    ReplaceGuid(ctx, primaryItem.Id);
                 }
-
-                await _manager.MergeVersions(items.ToArray());
-
-                foreach (Video item in items)
-                {
-                    var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-                    {
-                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                        ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                        //ForceSave = performFullRefresh
-                    };
-                    //await item.RefreshMetadata(options, CancellationToken.None);
-                }
-                ReplaceGuid(context, items[0].Id);
-
-                // };
-
-
-                // _library.RefreshItemOnDemandIfNeeded(baseItem);
-                // await _manager.SaveStrmAsync(
-                //   $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
-                // s.Url
-                //);
-                //root.AddChild(baseItem);
-                //var items = new[];
-                //  foreach (stream in streams) {
-                //   var
-                //}
-                //  await _manager.SaveStreamAsStrm(root, meta, streams, ct);
-                //_log.LogInformatio(ex, "ExternalMedia: background refresh failed for {Name}", root.Name);
+                await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
                 return true;
             });
 
-        // var timeout = TimeSpan.FromSeconds(isSeries ? 45 : 30);
-        // var created = await MaterializeAndResolveAsync(root, baseItem, saver, timeout, CancellationToken.None).ConfigureAwait(false);
+
         var ok = await saver(CancellationToken.None).ConfigureAwait(false);
-        // if (created is not null)
-        // {
-        // ReplaceGuid(context, items[0].Id);
-        //StartRefreshDettached(created);
-        // }
-        // else
-        // {
-        //    _log.LogError("ExternalMedia: media poll timeout");
-        //}
+        _log.LogInformation("ExternalMedia: saved media");
 
         await next();
     }
 
-    public void StartRefreshDettached(BaseItem root)
+    public void StartSeriesRefreshDettached(Folder root, StremioMeta meta)
     {
         _ = Task.Run(async () =>
         {
             try
             {
                 // wait 10 seconds before starting the refresh
-                await Task.Delay(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
-                using var cts = new CancellationTokenSource();
-                await _refresh.RefreshAsync(root, cts.Token).ConfigureAwait(false);
+                using var ct = new CancellationTokenSource();
+                await _seriesManager.CreateSeriesTreesAsync(root, meta, false, CancellationToken.None);
+                //await _refresh.RefreshAsync(root, cts.Token).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -220,53 +190,32 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         });
     }
 
-    private async Task<BaseItem?> MaterializeAndResolveAsync(
-        BaseItem root,
-        BaseItem baseItem,
-        Func<CancellationToken, Task<bool>> saver,
-        TimeSpan timeout,
-        CancellationToken ct)
+    private bool IsItemsAction(ResourceExecutingContext ctx)
     {
-        var ok = await saver(ct).ConfigureAwait(false);
-        if (!ok) return null;
+        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
+            return false;
 
-        QueueParentRefresh(root);
+        // _log.LogInformation("ExternalMedia: Action = {Action}", cad.ActionName);
+        return string.Equals(cad.ActionName, "GetItems", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(cad.ActionName, "GetItem", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(cad.ActionName, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
 
-        var resolved = await _manager.WaitForMediaAsync(baseItem.ProviderIds, timeout, ct).ConfigureAwait(false);
-        return resolved;
     }
 
-    private void Refresh(BaseItem item)
+    static bool IsJellyfinWeb(HttpRequest req)
     {
-
-
-        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-            ReplaceAllImages = true,
-            ReplaceAllMetadata = true,
-            EnableRemoteContentProbe = false
-        };
-        //await _library.RefreshMetadata(item, options, cancellationToken);
-        //_provider.QueueRefresh(item.Id, opts, RefreshPriority.High);
+        var h = req.Headers["X-Emby-Authorization"].ToString();
+        // very forgiving parse
+        return h.IndexOf("Client=Jellyfin Web", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
-    private void QueueParentRefresh(BaseItem parent)
+    private bool IsLegacyItemAction(ResourceExecutingContext ctx)
     {
-        var folder = parent as Folder ?? (_library.GetItemById(parent.ParentId) as Folder);
-        if (folder is null) return;
+        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
+            return false;
+        return string.Equals(cad.ActionName, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
 
-        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-            ReplaceAllImages = false,
-            ReplaceAllMetadata = false,
-            EnableRemoteContentProbe = false
-        };
-
-        _provider.QueueRefresh(folder.Id, opts, RefreshPriority.High);
     }
 
     private bool TryGetRouteGuid(ResourceExecutingContext ctx, out Guid value)
@@ -274,12 +223,11 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         value = Guid.Empty;
 
         // Skip legacy endpoint entirely
-        if (ctx.ActionDescriptor is ControllerActionDescriptor cad &&
-            string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
+        //if (ctx.ActionDescriptor is ControllerActionDescriptor cad &&
+        //    string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase))
+        //{
+        //    return false;
+        // }
 
         var rd = ctx.RouteData.Values;
 
@@ -293,11 +241,21 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
             }
         }
 
+        // Fallback: check query string "ids"
+        var query = ctx.HttpContext.Request.Query;
+        if (query.TryGetValue("ids", out var ids) && ids.Count == 1)
+        {
+            var s = ids[0];
+            if (!string.IsNullOrWhiteSpace(s) && Guid.TryParse(s, out value))
+                return true;
+        }
+
         return false;
     }
 
     private void ReplaceGuid(ResourceExecutingContext ctx, Guid value)
     {
+        // Replace route values
         var rd = ctx.RouteData.Values;
         foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
         {
@@ -307,9 +265,26 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }
+
+        // Replace query string "ids"
+        var request = ctx.HttpContext.Request;
+        var parsed = QueryHelpers.ParseQuery(request.QueryString.Value ?? "");
+
+        if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
+        {
+            _log.LogInformation("ExternalMedia: Replacing query ids {Old} → {New}", existing[0], value);
+
+            var dict = new Dictionary<string, StringValues>(parsed)
+            {
+                ["ids"] = new StringValues(value.ToString())
+            };
+
+            request.QueryString = QueryString.Create(dict);
+        }
     }
 
-    public BaseItem? FindByStremioId(string id)
+
+    public Video? FindByStremioId(string id)
     {
         if (string.IsNullOrWhiteSpace(id))
             return null;
@@ -348,6 +323,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
             HasAnyProviderId = new Dictionary<string, string> { [providerKey] = providerValue }
         };
 
-        return _library.GetItemList(q).FirstOrDefault();
+        return _library.GetItemList(q).OfType<Video>().FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
     }
 }

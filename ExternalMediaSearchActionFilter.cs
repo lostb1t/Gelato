@@ -68,13 +68,13 @@ namespace Jellyfin.Plugin.ExternalMedia
             }
 
             var http = context.HttpContext;
-            var path = http.Request.Path.Value?.ToLowerInvariant() ?? "";
-            if (!http.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) ||
-                !path.StartsWith("/items", StringComparison.Ordinal))
-            {
-                await next();
-                return;
-            }
+            // var path = http.Request.Path.Value?.ToLowerInvariant() ?? "";
+            // if (!http.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) ||
+            //    !path.StartsWith("/items", StringComparison.Ordinal))
+            //{
+            //    await next();
+            //    return;
+            //}
 
             var hasSearch = http.Request.Query.Keys
                 .Any(k => string.Equals(k, "SearchTerm", StringComparison.OrdinalIgnoreCase) &&
@@ -152,7 +152,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                     continue;
 
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
-                dto.Id = GuidCodec.EncodeString(StremioId.Encode(stremioKey));
+                dto.Id = GuidCodec.EncodeString(StremioId.ToCompactId(stremioKey));
                 dtos.Add(dto);
             }
 

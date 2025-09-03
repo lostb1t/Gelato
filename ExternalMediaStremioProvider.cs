@@ -332,11 +332,7 @@ namespace Jellyfin.Plugin.ExternalMedia
         public List<string> IdPrefixes { get; set; } = new();
     }
 
-    public class StremioBehaviorHints
-    {
-        public bool Configurable { get; set; }
-        public bool ConfigurationRequired { get; set; }
-    }
+
 
     public class StremioCatalogResponse
     {
@@ -468,6 +464,7 @@ namespace Jellyfin.Plugin.ExternalMedia
         public string? Quality { get; set; }
         public string? Subtitle { get; set; }
         public string? Audio { get; set; }
+        public StremioBehaviorHints? BehaviorHints { get; set; }
 
         public string GetName()
         {
@@ -481,6 +478,38 @@ namespace Jellyfin.Plugin.ExternalMedia
             }
             return "";
         }
+
+        public Guid GetGuid()
+        {
+            var size = BehaviorHints?.VideoSize?.ToString() ?? "0";
+            var filename = BehaviorHints?.Filename ?? string.Empty;
+
+            var key = $"{size}:{filename}";
+
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(key);
+            var hash = md5.ComputeHash(bytes);
+            return new Guid(hash);
+        }
+
+        public bool IsValid()
+        {
+            var size = BehaviorHints?.VideoSize?.ToString();
+            var filename = BehaviorHints?.Filename;
+            return !string.IsNullOrWhiteSpace(size)
+                && !string.IsNullOrWhiteSpace(filename)
+                && !string.IsNullOrWhiteSpace(Url);
+        }
+
+
+    }
+
+    public class StremioBehaviorHints
+    {
+        public long? VideoSize { get; set; }
+        public string? Filename { get; set; }
+        public bool Configurable { get; set; }
+        public bool ConfigurationRequired { get; set; }
     }
 
     public class StremioOptions

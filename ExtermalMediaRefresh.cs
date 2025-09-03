@@ -103,7 +103,7 @@ namespace Jellyfin.Plugin.ExternalMedia
 
             var imdbId = series.GetProviderId(MetadataProvider.Imdb);
             var seriesMeta = await _provider.GetMetaAsync(imdbId, StremioMediaType.Series).ConfigureAwait(false);
-            await _seriesManager.CreateSeriesTreesAsync(series.GetParent() as Folder, seriesMeta, ct).ConfigureAwait(false);
+            await _seriesManager.CreateSeriesTreesAsync(series.GetParent() as Folder, seriesMeta, false, ct).ConfigureAwait(false);
             // var seriesFolderName = _seriesManager.GetSeriesFolderName(seriesMeta);
 
             var seasons = series.GetSeasons(null, new DtoOptions()).OfType<Season>();

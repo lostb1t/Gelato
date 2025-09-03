@@ -355,37 +355,134 @@ IItemRepository repo,
     //     return item;
     // }
 
+    public Dictionary<string, string> GetProviderIds(StremioMeta meta)
+    {
+        var providerIds = new Dictionary<string, string>();
+        var Id = meta.Id;
+        if (!string.IsNullOrWhiteSpace(Id))
+        {
+            if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
+            {
+
+            }
+            if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+            {
+                providerIds.Add(MetadataProvider.Imdb.ToString(), Id);
+            }
+        }
+        //item.IsRemote = true;
+
+        providerIds.Add(MetadataProvider.Imdb.ToString(), Id);
+        providerIds.Add("stremio", $"stremio://{meta.Type}/{Id}");
+        return providerIds;
+    }
+
+    public async Task<List<Video>> SaveStreams(IEnumerable<StremioStream> streams, Folder parent, StremioMeta meta, CancellationToken ct)
+    {
+        var desiredIds = new HashSet<Guid>();
+        var items = new List<Video>();
+        var providerIds = GetProviderIds(meta);
+        var i = 1;
+        foreach (StremioStream stream in streams)
+        {
+            if (!stream.IsValid()) continue;
+            var Id = stream.GetGuid();
+
+            _log.LogInformation("ExternalMedia: Adding stream {Id} {Filename}", stream.GetGuid(), stream.BehaviorHints?.Filename);
+            var item = new Movie()
+            {
+                Id = stream.GetGuid(),
+                Name = stream.GetName(),
+                ShortcutPath = stream.Url,
+                IsShortcut = true,
+                // Path = $"{parent.Path}/{meta.Name} ({meta.Year})/{Id}.strm",
+                Path = $"{parent.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {stream.Name}.strm",
+                ParentId = parent.Id,
+                ProviderIds = providerIds,
+            };
+            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+
+            await SaveStrmAsync(
+                item.Path,
+                stream.Url
+            );
+
+            //root.AddChild(baseItem);
+            items.Add(item as Video);
+            i++;
+        }
+        var ids = new HashSet<Guid>(items.Select(x => x.Id));
+
+        var stale = _library.GetItemList(new InternalItemsQuery
+        {
+            ParentId = parent.Id,
+            IncludeItemTypes = new[] { BaseItemKind.Movie },
+            HasAnyProviderId = providerIds,
+            Recursive = false
+        })
+        .OfType<Video>()
+        .Where(m => !ids.Contains(m.Id))
+        .ToList();
+
+        foreach (var m in stale)
+        {
+            _library.DeleteItem(
+                m,
+                new DeleteOptions { DeleteFileLocation = true },
+                true
+            );
+        }
+
+        if (items.Any())
+        {
+            var item = items[0];
+            // {
+            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            {
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                ForceSave = true
+            };
+            await item.RefreshMetadata(options, CancellationToken.None);
+
+            await MergeVersions(items.ToArray());
+        }
+
+        return items;
+
+    }
+
+    public Video? GetPrimaryVersion(List<Video> items)
+    {
+        return items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
+    }
+
     public async Task MergeVersions(Video[] items)
     {
+        if (!items.Any()) return;
         var primaryVersion = items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
         _log.LogInformation("Merging {Count} versions, primary is {Primary}", items.Length, primaryVersion?.Id);
         if (primaryVersion is null)
         {
-            primaryVersion = items
-                .OrderBy(i =>
-                {
-                    if (i.Video3DFormat.HasValue || i.VideoType != VideoType.VideoFile)
-                    {
-                        return 1;
-                    }
-
-                    return 0;
-                })
-                .ThenByDescending(i => i.GetDefaultVideoStream()?.Width ?? 0)
-                .First();
+            primaryVersion = items.First();
         }
-        _log.LogInformation("Chosen primary version is {Primary}", primaryVersion.Id);
+        //  _log.LogInformation("Chosen primary version is {Primary}", primaryVersion.Id);
         var alternateVersionsOfPrimary = primaryVersion.LinkedAlternateVersions.ToList();
 
+        foreach (var item in items)
+        {
+            _log.LogInformation("Item {Item} has {Media} media sources", item.Id, item.Name);
+        }
         foreach (var item in items.Where(i => !i.Id.Equals(primaryVersion.Id)))
         {
+            _log.LogInformation("Setting primary version of {Item} to {Primary}", item.Id, primaryVersion.Id);
             item.SetPrimaryVersionId(primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture));
 
             await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
 
             if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase)))
             {
-                _log.LogInformation("Adding {Alt} as alternate version to {Primary}", item.Id, primaryVersion.Id);
+                //     _log.LogInformation("Adding {Alt} as alternate version to {Primary}", item.Id, primaryVersion.Id);
                 alternateVersionsOfPrimary.Add(new LinkedChild
                 {
                     Path = item.Path,
@@ -397,7 +494,7 @@ IItemRepository repo,
             {
                 if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, linkedItem.Path, StringComparison.OrdinalIgnoreCase)))
                 {
-                    _log.LogInformation("Adding {Alt} as alternate version to {Primary}", linkedItem.ItemId, primaryVersion.Id);
+                    //  _log.LogInformation("Adding {Alt} as alternate version to {Primary}", linkedItem.ItemId, primaryVersion.Id);
                     alternateVersionsOfPrimary.Add(linkedItem);
                 }
             }
@@ -405,6 +502,7 @@ IItemRepository repo,
             if (item.LinkedAlternateVersions.Length > 0)
             {
                 item.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+                _log.LogInformation("Cleared alternate versions from {Item}", item.Id);
                 await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
             }
         }

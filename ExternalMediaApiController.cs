@@ -30,12 +30,12 @@ public class ExternalMediaApiController : ControllerBase
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
     private readonly IDtoService _dtoService;
-    private readonly ExternalMediaRefresh _refresh;
+   // private readonly ExternalMediaRefresh _refresh;
 
 
     public ExternalMediaApiController(
         ILoggerFactory loggerFactory,
-        ExternalMediaRefresh refresh,
+    //    ExternalMediaRefresh refresh,
         ExternalMediaStremioProvider provider,
         IDtoService dtoService,
         IServerConfigurationManager config,
@@ -44,7 +44,7 @@ IItemRepository repo,
         ILibraryManager libraryManager)
     {
         _loggerFactory = loggerFactory;
-        _refresh = refresh;
+     //   _refresh = refresh;
         _log = loggerFactory.CreateLogger<ExternalMediaApiController>();
         _provider = provider; _dtoService = dtoService;
         _config = config;
@@ -64,7 +64,7 @@ IItemRepository repo,
     {
         var found = _library.GetItemById(Guid.Parse("a3f08293726362d3531ab671f857d968"));
         using var cts = new CancellationTokenSource();
-        await _refresh.RefreshAsync(found, cts.Token).ConfigureAwait(false);
+      //  await _refresh.RefreshAsync(found, cts.Token).ConfigureAwait(false);
 
         return NotFound();
     }
