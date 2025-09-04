@@ -26,6 +26,9 @@ using MediaBrowser.Model.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Globalization;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Primitives;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -446,9 +449,9 @@ IItemRepository repo,
             await items[0].RefreshMetadata(options, CancellationToken.None);
 
             await MergeVersions(items.ToArray());
-          //  foreach (var item in items) {
+            //  foreach (var item in items) {
             //_repo.SaveItems(items, CancellationToken.None);
-          //}
+            //}
         }
 
         return items;
@@ -474,65 +477,155 @@ IItemRepository repo,
                 .LinkedAlternateVersions.Where(l => items.Any(i => i.Path == l.Path))
                 .ToList();
 
-            var alternateVersionsChanged = false;
-            foreach (var item in items.Where(i =>
-                !i.Id.Equals(primaryVersion.Id) &&
-                !alternateVersionsOfPrimary.Any(l => l.ItemId == i.Id)))
-            {
-                item.SetPrimaryVersionId(
-                    primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture)
-                );
+        var alternateVersionsChanged = false;
+        foreach (var item in items.Where(i =>
+            !i.Id.Equals(primaryVersion.Id) &&
+            !alternateVersionsOfPrimary.Any(l => l.ItemId == i.Id)))
+        {
+            item.SetPrimaryVersionId(
+                primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture)
+            );
 
+            await item.UpdateToRepositoryAsync(
+                    ItemUpdateType.MetadataEdit,
+                    CancellationToken.None
+                )
+                .ConfigureAwait(false);
+
+            // TODO: due to check in foreach it can't be an alternate version yet?
+            AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
+                                            new LinkedChild
+                                            {
+                                                Path = item.Path,
+                                                ItemId = item.Id
+                                            });
+
+            foreach (var linkedItem in item.LinkedAlternateVersions)
+            {
+                AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
+                                                linkedItem);
+            }
+
+            if (item.LinkedAlternateVersions.Length > 0)
+            {
+                item.LinkedAlternateVersions = [];
                 await item.UpdateToRepositoryAsync(
                         ItemUpdateType.MetadataEdit,
                         CancellationToken.None
                     )
                     .ConfigureAwait(false);
-
-                // TODO: due to check in foreach it can't be an alternate version yet?
-                AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
-                                                new LinkedChild { Path = item.Path,
-                                                                  ItemId = item.Id });
-
-                foreach (var linkedItem in item.LinkedAlternateVersions)
-                {
-                    AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
-                                                    linkedItem);
-                }
-
-                if (item.LinkedAlternateVersions.Length > 0)
-                {
-                    item.LinkedAlternateVersions = [];
-                    await item.UpdateToRepositoryAsync(
-                            ItemUpdateType.MetadataEdit,
-                            CancellationToken.None
-                        )
-                        .ConfigureAwait(false);
-                }
-                alternateVersionsChanged = true;
             }
+            alternateVersionsChanged = true;
+        }
 
-            if (alternateVersionsChanged)
-            {
-                primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
-                await primaryVersion
-                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                    .ConfigureAwait(false);
-            }
+        if (alternateVersionsChanged)
+        {
+            primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
+            await primaryVersion
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
     }
-    
+
     private void AddToAlternateVersionsIfNotPresent(List<LinkedChild> alternateVersions,
                                                         LinkedChild newVersion)
+    {
+        if (!alternateVersions.Any(
+            i => string.Equals(i.Path,
+                            newVersion.Path,
+                            StringComparison.OrdinalIgnoreCase
+                        )))
         {
-            if (!alternateVersions.Any(
-                i => string.Equals(i.Path,
-                                newVersion.Path,
-                                StringComparison.OrdinalIgnoreCase
-                            )))
+            alternateVersions.Add(newVersion);
+        }
+    }
+
+    public bool IsItemsAction(ActionContext ctx)
+    {
+        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
+            return false;
+
+        var name = cad.ActionName;
+        return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public bool TryGetRouteGuid(ActionContext ctx, out Guid value)
+    {
+        value = Guid.Empty;
+        if (TryGetRouteGuidString(ctx, out var s) && Guid.TryParse(s, out var g))
+        {
+            value = g;
+            return true;
+        }
+        return false;
+    }
+
+    public bool TryGetRouteGuidString(ActionContext ctx, out string value)
+    {
+        value = "";
+
+        var rd = ctx.RouteData.Values;
+
+        foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
+        {
+            if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                alternateVersions.Add(newVersion);
+                var s = raw.ToString();
+                _log.LogDebug("Checking route param {Key} = '{Value}'", key, s);
+                if (!string.IsNullOrWhiteSpace(s))
+                {
+                    value = s;
+                    return true;
+                }
             }
         }
 
+        // Fallback: check query string "ids"
+        var query = ctx.HttpContext.Request.Query;
+        if (query.TryGetValue("ids", out var ids) && ids.Count == 1)
+        {
+            var s = ids[0];
+            if (!string.IsNullOrWhiteSpace(s))
+            {
+                value = s;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void ReplaceGuid(ActionContext ctx, Guid value)
+    {
+        // Replace route values
+        var rd = ctx.RouteData.Values;
+        foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
+        {
+            if (rd.TryGetValue(key, out var raw) && raw is not null)
+            {
+                _log.LogInformation("ExternalMedia: Replacing route {Key} {Old} → {New}", key, raw, value);
+                ctx.RouteData.Values[key] = value.ToString();
+            }
+        }
+
+        // Replace query string "ids"
+        var request = ctx.HttpContext.Request;
+        var parsed = QueryHelpers.ParseQuery(request.QueryString.Value ?? "");
+
+        if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
+        {
+            _log.LogInformation("ExternalMedia: Replacing query ids {Old} → {New}", existing[0], value);
+
+            var dict = new Dictionary<string, StringValues>(parsed)
+            {
+                ["ids"] = new StringValues(value.ToString())
+            };
+
+            ctx.HttpContext.Request.QueryString = QueryString.Create(dict);
+        }
+    }
 
 }

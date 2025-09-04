@@ -21,10 +21,11 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Primitives;
 using Microsoft.AspNetCore.Http;
+using MediaBrowser.Model.Dto;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
-public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
+public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 {
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
@@ -34,11 +35,14 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
     private readonly ILogger<ExternalMediaInsertActionFilter> _log;
     private readonly ExternalMediaManager _manager;
     private readonly ExternalMediaSeriesManager _seriesManager;
+    private readonly IMediaSourceManager _sourceManager;
     // private readonly ExternalMediaRefresh _refresh;
 
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
     private readonly ILibraryMonitor _libraryMonitor;
+
+    public int Order { get; set; } = int.MinValue;
 
     public ExternalMediaInsertActionFilter(
         ILibraryManager library,
@@ -52,9 +56,11 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         ExternalMediaStremioProvider stremioProvider,
         IProviderManager provider,
         ILibraryMonitor libraryMonitor,
+        IMediaSourceManager sourceManager,
         ILogger<ExternalMediaInsertActionFilter> log)
     {
         _library = library;
+        _sourceManager = sourceManager;
         //  _refresh = refresh;
         _repo = repo;
         _mediaSources = mediaSources;
@@ -70,25 +76,42 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
     {
-
         // _log.LogInformation("ExternalMedia: No {Type} folder configured", isSeries ? "Series" : "Movie");
+        var req = ctx.HttpContext.Request;
+        _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
 
         if (!IsItemsAction(ctx))
         {
             await next();
             return;
-
         }
-        var req = ctx.HttpContext.Request;
-        _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
 
-        if (!TryGetRouteGuid(ctx, out var guid))
+        if (!_manager.TryGetRouteGuidString(ctx, out var guidString))
         {
+            _log.LogInformation("ExternalMedia: No route guid");
             await next();
             return;
         }
+ _log.LogInformation("ExternalMedia: uhu");
+        // should probaoly be in its own action
+        if (TryParseSourceId(guidString, out var guid, out var mediaSourceGuid))
+        {
 
+            _log.LogInformation("ExternalMedia: Parsed source id {Guid} index {Index}", guid, mediaSourceGuid);
+            if (mediaSourceGuid is not null)
+            {
+                ctx.HttpContext.Items["MediaSourceGuid"] = mediaSourceGuid;
+                ReplaceGuid(ctx, guid);
+                await next();
+                return;
+            }
+        }
 
+        // if (!_manager.TryGetRouteGuid(ctx, out var guid))
+        // {
+        //     await next();
+        //     return;
+        // }
 
         // declare in outer scope
         // declare once, in outer scope
@@ -153,14 +176,23 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
             })
             : (async ct =>
             {
-                var streams = await _stremioProvider.GetStreamsAsync(baseItem).ConfigureAwait(false);
-                var items = await _manager.SaveStreams(streams, root, meta, CancellationToken.None).ConfigureAwait(false);
-                var primaryItem = _manager.GetPrimaryVersion(items);
-                if (primaryItem is not null)
+                // var streams = await _stremioProvider.GetStreamsAsync(baseItem).ConfigureAwait(false);
+                // var items = await _manager.SaveStreams(streams, root, meta, CancellationToken.None).ConfigureAwait(false);
+                root.AddChild(baseItem);
+                var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                 {
-                    ReplaceGuid(ctx, primaryItem.Id);
-                }
-               // await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ForceSave = true
+                };
+                await baseItem.RefreshMetadata(options, CancellationToken.None);
+                // var primaryItem = _manager.GetPrimaryVersion(items);
+                ReplaceGuid(ctx, baseItem.Id);
+                // if (primaryItem is not null)
+                // {
+                //     ReplaceGuid(ctx, baseItem.Id);
+                // }
+                // await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
                 return true;
             });
 
@@ -169,6 +201,32 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
         _log.LogInformation("ExternalMedia: saved media");
 
         await next();
+    }
+
+    public static bool TryParseSourceId(string sourceId, out Guid itemId, out Guid? mediaSourceId)
+    {
+        itemId = Guid.Empty;
+        mediaSourceId = null;
+
+        if (string.IsNullOrWhiteSpace(sourceId))
+            return false;
+
+        var parts = sourceId.Split(new[] { "::" }, StringSplitOptions.None);
+
+        if (parts.Length == 1)
+        {
+            return Guid.TryParse(parts[0], out itemId);
+        }
+
+        if (parts.Length == 2 &&
+            Guid.TryParse(parts[0], out itemId) &&
+            Guid.TryParse(parts[1], out var msId))
+        {
+            mediaSourceId = msId;
+            return true;
+        }
+
+        return false;
     }
 
     public void StartSeriesRefreshDettached(Folder root, StremioMeta meta)
@@ -218,40 +276,40 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
 
     }
 
-    private bool TryGetRouteGuid(ResourceExecutingContext ctx, out Guid value)
-    {
-        value = Guid.Empty;
+    // private bool TryGetRouteGuid(ResourceExecutingContext ctx, out Guid value)
+    // {
+    //     value = Guid.Empty;
 
-        // Skip legacy endpoint entirely
-        //if (ctx.ActionDescriptor is ControllerActionDescriptor cad &&
-        //    string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase))
-        //{
-        //    return false;
-        // }
+    //     // Skip legacy endpoint entirely
+    //     //if (ctx.ActionDescriptor is ControllerActionDescriptor cad &&
+    //     //    string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase))
+    //     //{
+    //     //    return false;
+    //     // }
 
-        var rd = ctx.RouteData.Values;
+    //     var rd = ctx.RouteData.Values;
 
-        foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
-        {
-            if (rd.TryGetValue(key, out var raw) && raw is not null)
-            {
-                var s = raw.ToString();
-                if (!string.IsNullOrWhiteSpace(s) && Guid.TryParse(s, out value))
-                    return true;
-            }
-        }
+    //     foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
+    //     {
+    //         if (rd.TryGetValue(key, out var raw) && raw is not null)
+    //         {
+    //             var s = raw.ToString();
+    //             if (!string.IsNullOrWhiteSpace(s) && Guid.TryParse(s, out value))
+    //                 return true;
+    //         }
+    //     }
 
-        // Fallback: check query string "ids"
-        var query = ctx.HttpContext.Request.Query;
-        if (query.TryGetValue("ids", out var ids) && ids.Count == 1)
-        {
-            var s = ids[0];
-            if (!string.IsNullOrWhiteSpace(s) && Guid.TryParse(s, out value))
-                return true;
-        }
+    //     // Fallback: check query string "ids"
+    //     var query = ctx.HttpContext.Request.Query;
+    //     if (query.TryGetValue("ids", out var ids) && ids.Count == 1)
+    //     {
+    //         var s = ids[0];
+    //         if (!string.IsNullOrWhiteSpace(s) && Guid.TryParse(s, out value))
+    //             return true;
+    //     }
 
-        return false;
-    }
+    //     return false;
+    // }
 
     private void ReplaceGuid(ResourceExecutingContext ctx, Guid value)
     {

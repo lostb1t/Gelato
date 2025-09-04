@@ -26,7 +26,7 @@ using Jellyfin.Data.Enums;
 
 namespace Jellyfin.Plugin.ExternalMedia
 {
-    public class ExternalMediaSearchActionFilter : IAsyncActionFilter
+    public class ExternalMediaSearchActionFilter : IAsyncActionFilter, IOrderedFilter
     {
         private readonly ILibraryManager _library;
         private readonly IItemRepository _repo;
@@ -51,8 +51,12 @@ namespace Jellyfin.Plugin.ExternalMedia
             _log = log;
         }
 
-        public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+        public int Order => throw new NotImplementedException();
+
+        public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
         {
+            var req = ctx.HttpContext.Request;
+            _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
             try
             {
                 if (!await _provider.IsReady())
@@ -67,7 +71,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                 return;
             }
 
-            var http = context.HttpContext;
+            var http = ctx.HttpContext;
             // var path = http.Request.Path.Value?.ToLowerInvariant() ?? "";
             // if (!http.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) ||
             //    !path.StartsWith("/items", StringComparison.Ordinal))
@@ -105,7 +109,7 @@ namespace Jellyfin.Plugin.ExternalMedia
 
             if (requested.Count == 0)
             {
-                context.Result = new OkObjectResult(new QueryResult<BaseItemDto>
+                ctx.Result = new OkObjectResult(new QueryResult<BaseItemDto>
                 {
                     Items = Array.Empty<BaseItemDto>(),
                     TotalRecordCount = 0
@@ -158,7 +162,7 @@ namespace Jellyfin.Plugin.ExternalMedia
 
             var paged = dtos.Skip(start).Take(limit).ToArray();
 
-            context.Result = new OkObjectResult(new QueryResult<BaseItemDto>
+            ctx.Result = new OkObjectResult(new QueryResult<BaseItemDto>
             {
                 Items = paged,
                 TotalRecordCount = dtos.Count

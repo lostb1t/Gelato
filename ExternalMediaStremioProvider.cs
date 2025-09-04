@@ -259,7 +259,16 @@ namespace Jellyfin.Plugin.ExternalMedia
 
 
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
-            //item.IsVirtualItem = true;
+            // item.IsVirtualItem = true;
+
+            // path is needed otherwise its set as placeholder and you cant play
+            item.Path = "stremio://{meta.Type}/{Id}";
+            item.IsVirtualItem = false;
+            // item.LocationType
+            // item.RemoteTrailers =
+            // item.CanDownload = true;
+            // item.GetType
+            //item.
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
             var imgs = new List<ItemImageInfo?>();
             imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
