@@ -481,10 +481,10 @@ namespace Jellyfin.Plugin.ExternalMedia
 
         public Guid GetGuid()
         {
-            var size = BehaviorHints?.VideoSize?.ToString() ?? "0";
+            //var size = BehaviorHints?.VideoSize?.ToString() ?? "0";
             var filename = BehaviorHints?.Filename ?? string.Empty;
-
-            var key = $"{size}:{filename}";
+            var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
+            var key = $"{bingeGroup}{filename}";
 
             using var md5 = System.Security.Cryptography.MD5.Create();
             var bytes = System.Text.Encoding.UTF8.GetBytes(key);
@@ -506,6 +506,8 @@ namespace Jellyfin.Plugin.ExternalMedia
 
     public class StremioBehaviorHints
     {
+        public string? BingeGroup { get; set; }
+        public string? VideoHash { get; set; }
         public long? VideoSize { get; set; }
         public string? Filename { get; set; }
         public bool Configurable { get; set; }

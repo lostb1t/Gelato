@@ -160,7 +160,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
                 {
                     ReplaceGuid(ctx, primaryItem.Id);
                 }
-                await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+               // await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
                 return true;
             });
 
@@ -279,7 +279,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter
                 ["ids"] = new StringValues(value.ToString())
             };
 
-            request.QueryString = QueryString.Create(dict);
+            ctx.HttpContext.Request.QueryString = QueryString.Create(dict);
         }
     }
 

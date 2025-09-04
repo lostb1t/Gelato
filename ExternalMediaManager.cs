@@ -407,7 +407,7 @@ IItemRepository repo,
                 stream.Url
             );
 
-            //root.AddChild(baseItem);
+            parent.AddChild(item);
             items.Add(item as Video);
             i++;
         }
@@ -435,7 +435,7 @@ IItemRepository repo,
 
         if (items.Any())
         {
-            var item = items[0];
+            //var item = items[0];
             // {
             var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
@@ -443,9 +443,12 @@ IItemRepository repo,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ForceSave = true
             };
-            await item.RefreshMetadata(options, CancellationToken.None);
+            await items[0].RefreshMetadata(options, CancellationToken.None);
 
             await MergeVersions(items.ToArray());
+          //  foreach (var item in items) {
+            //_repo.SaveItems(items, CancellationToken.None);
+          //}
         }
 
         return items;
@@ -467,48 +470,69 @@ IItemRepository repo,
             primaryVersion = items.First();
         }
         //  _log.LogInformation("Chosen primary version is {Primary}", primaryVersion.Id);
-        var alternateVersionsOfPrimary = primaryVersion.LinkedAlternateVersions.ToList();
+        var alternateVersionsOfPrimary = primaryVersion
+                .LinkedAlternateVersions.Where(l => items.Any(i => i.Path == l.Path))
+                .ToList();
 
-        foreach (var item in items)
-        {
-            _log.LogInformation("Item {Item} has {Media} media sources", item.Id, item.Name);
-        }
-        foreach (var item in items.Where(i => !i.Id.Equals(primaryVersion.Id)))
-        {
-            _log.LogInformation("Setting primary version of {Item} to {Primary}", item.Id, primaryVersion.Id);
-            item.SetPrimaryVersionId(primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture));
-
-            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
-
-            if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase)))
+            var alternateVersionsChanged = false;
+            foreach (var item in items.Where(i =>
+                !i.Id.Equals(primaryVersion.Id) &&
+                !alternateVersionsOfPrimary.Any(l => l.ItemId == i.Id)))
             {
-                //     _log.LogInformation("Adding {Alt} as alternate version to {Primary}", item.Id, primaryVersion.Id);
-                alternateVersionsOfPrimary.Add(new LinkedChild
-                {
-                    Path = item.Path,
-                    ItemId = item.Id
-                });
-            }
+                item.SetPrimaryVersionId(
+                    primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture)
+                );
 
-            foreach (var linkedItem in item.LinkedAlternateVersions)
-            {
-                if (!alternateVersionsOfPrimary.Any(i => string.Equals(i.Path, linkedItem.Path, StringComparison.OrdinalIgnoreCase)))
+                await item.UpdateToRepositoryAsync(
+                        ItemUpdateType.MetadataEdit,
+                        CancellationToken.None
+                    )
+                    .ConfigureAwait(false);
+
+                // TODO: due to check in foreach it can't be an alternate version yet?
+                AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
+                                                new LinkedChild { Path = item.Path,
+                                                                  ItemId = item.Id });
+
+                foreach (var linkedItem in item.LinkedAlternateVersions)
                 {
-                    //  _log.LogInformation("Adding {Alt} as alternate version to {Primary}", linkedItem.ItemId, primaryVersion.Id);
-                    alternateVersionsOfPrimary.Add(linkedItem);
+                    AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
+                                                    linkedItem);
                 }
+
+                if (item.LinkedAlternateVersions.Length > 0)
+                {
+                    item.LinkedAlternateVersions = [];
+                    await item.UpdateToRepositoryAsync(
+                            ItemUpdateType.MetadataEdit,
+                            CancellationToken.None
+                        )
+                        .ConfigureAwait(false);
+                }
+                alternateVersionsChanged = true;
             }
 
-            if (item.LinkedAlternateVersions.Length > 0)
+            if (alternateVersionsChanged)
             {
-                item.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-                _log.LogInformation("Cleared alternate versions from {Item}", item.Id);
-                await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+                primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
+                await primaryVersion
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+    }
+    
+    private void AddToAlternateVersionsIfNotPresent(List<LinkedChild> alternateVersions,
+                                                        LinkedChild newVersion)
+        {
+            if (!alternateVersions.Any(
+                i => string.Equals(i.Path,
+                                newVersion.Path,
+                                StringComparison.OrdinalIgnoreCase
+                            )))
+            {
+                alternateVersions.Add(newVersion);
             }
         }
 
-        primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
-        await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
-    }
 
 }
