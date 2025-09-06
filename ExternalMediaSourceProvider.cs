@@ -31,13 +31,14 @@ public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
     private readonly IMediaEncoder _mediaEncoder;
     private readonly IMemoryCache _cache;
     private readonly IMediaStreamRepository _streamRepo;
-    // private readonly FFProbeVideoInfo _ffprobe;
+    private readonly ExternalMediaManager _manager;
     private readonly IFileSystem _fs;
 
     private static readonly TimeSpan NoProbeTtl = TimeSpan.FromMinutes(3600);
 
     public ExternalMediaSourceProvider(
         //   FFProbeVideoInfo ffprobe,
+             ExternalMediaManager manager, 
         IMediaStreamRepository streamRepo,
         ILogger<ExternalMediaSourceProvider> log,
         ExternalMediaStremioProvider stremioProvider,
@@ -46,7 +47,7 @@ public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
         IFileSystem fs)
     {
         _log = log;
-        //  _ffprobe = ffprobe;
+         _manager = manager;
         _streamRepo = streamRepo;
         _stremioProvider = stremioProvider;
         _mediaEncoder = mediaEncoder;
@@ -89,14 +90,14 @@ public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
                 if (!stream.IsValid())
                     continue;
 
-                var streamId = stream.GetShortId();
+                var streamGuid = stream.GetGuid();
                 var stremioBaseUri = item.GetProviderId("stremio");
-                var uri = StremioUri.LoadFromString($"{stremioBaseUri:N}/{streamId}");
-                // var streamOd = $"{item.Id:N}::{strea}",
+                var uri = StremioUri.LoadFromString($"{stremioBaseUri:N}/{streamGuid}");
+                _manager.SaveStremioUri(streamGuid, uri);
 
                 built.Add(new MediaSourceInfo
                 {
-                    Id = uri.ToGuidEncoded().ToString("N"),
+                    Id = streamGuid.ToString(),
                     Name = stream.GetName(),
                     Path = stream.Url,
                     Protocol = MediaProtocol.Http,
@@ -124,6 +125,20 @@ public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
     private async Task ProbeAndPatchAsync(BaseItem item, MediaSourceInfo src, CancellationToken ct)
     {
 
+        _log.LogInformation("Probing source {Id} ({Path})", src.Id, src.Path);
+
+       //  var streams = _streamRepo.GetMediaStreams(new MediaStreamQuery
+       //  {
+      //       ItemId = Guid.Parse(src.Id)
+      //   });
+
+     //   if (streams.Any())
+      //    {
+
+
+    //         src.MediaStreams = streams.ToList();
+    //         return;
+     //    }
 
         try
         {
@@ -160,7 +175,8 @@ public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
 
 
             PatchFromMediaInfo(src, info);
-            // _streamRepo.SaveMediaStreams(src.Id, info.MediaStreams, ct);
+
+            // _streamRepo.SaveMediaStreams(Guid.Parse(src.Id), info.MediaStreams, ct);
             _log.LogInformation(
                 "Probed {Id}: container={Container}, bitrate={Bitrate}bps, streams={Streams}",
                 src.Id,

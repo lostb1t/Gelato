@@ -14,6 +14,7 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities;
 using Jellyfin.Plugin.ExternalMedia.Configuration;
+using Jellyfin.Plugin.ExternalMedia.Common;
 using MediaBrowser.Model.Configuration;
 using System.Text;
 using Jellyfin.Data.Enums;
@@ -29,6 +30,8 @@ using System.Globalization;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Primitives;
+using Microsoft.Extensions.Caching.Memory;
+
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -45,7 +48,7 @@ public class ExternalMediaManager
     private readonly IDtoService _dtoService;
     private readonly IFileSystem _fileSystem;
     private readonly IProviderManager _provider;
-
+    private readonly IMemoryCache _memoryCache;
     // private readonly string path = "/media/external/movies";
     // private readonly string name = "external_movies";
 
@@ -59,9 +62,11 @@ public class ExternalMediaManager
         IUserManager userManager,
 IItemRepository repo,
           IFileSystem fileSystem,
+         IMemoryCache memoryCache,
         ILibraryManager libraryManager)
     {
         _loggerFactory = loggerFactory;
+        _memoryCache = memoryCache;
         _log = loggerFactory.CreateLogger<ExternalMediaManager>();
         _provider = provider;
         _stremioProvider = stremioProvider;
@@ -72,6 +77,16 @@ IItemRepository repo,
         _library = libraryManager;
         _fileSystem = fileSystem;
     }
+    
+    public void SaveStremioUri(Guid guid, StremioUri stremioUri)
+    {
+        _memoryCache.Set(guid, stremioUri, TimeSpan.FromMinutes(3600));
+    }
+    
+    public StremioUri? GetStremioUri(Guid guid)
+{
+    return _memoryCache.TryGetValue(guid, out var value) ? value as StremioUri : null;
+}
 
     public static void SeedFolder(string path)
     {
@@ -546,6 +561,7 @@ IItemRepository repo,
             return false;
 
         var name = cad.ActionName;
+        // _log.LogInformation("ExternalMedia: Action name is {Name}", name);
         return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
             || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
             || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)

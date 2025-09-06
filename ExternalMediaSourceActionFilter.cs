@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
 using Jellyfin.Database.Implementations.Entities.Libraries;
+using Microsoft.AspNetCore.Mvc.Controllers;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -80,8 +81,8 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
-        // var req = ctx.HttpContext.Request;
-        // _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
+        var req = ctx.HttpContext.Request;
+        _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
 
         if (!_manager.IsItemsAction(ctx))
         {
@@ -89,16 +90,69 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
             return;
         }
 
-        var executed = await next();
-        if (executed?.Result is not ObjectResult obj || obj.Value is null) return;
+        
+        // this also fails if there are multiple ids
+        if (!_manager.TryGetRouteGuid(ctx, out var guid))
+        {
+            // _log.LogInformation("ExternalMedia: No route guid");
+            await next();
+            return;
+        }
+
+        // i think this only happens with the web client. For some reason makes a extra request to the stream
+        var stremioUri = _manager.GetStremioUri(guid);
+      //  if (stremioUri is null)
+       // {
+        //    await next();
+        //    return;
+        //}
+        
+       // var isUri = StremioUri.TryParseFromGuidEncoded(guid, out var stremioUri);
+        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
+        {
+            await next();
+            return;
+        }
+        // _log.LogInformation("ExternalMedia: Found route guid {Guid}, isUri={IsUri}", guid, stremioUri.ToString());
+        var isStream = stremioUri is not null && stremioUri.StreamId is not null;
+        var isList = cad.ActionName == "GetItemList" || cad.ActionName == "GetItemsByUserIdLegacy";
+        BaseItem? item = null;
+       // _log.LogInformation("ExternalMedia: IsStream={IsStream} IsList={IsList} StremioUri={StremioUri}", isStream, isList, isUri ? stremioUri.ToString() : "<null>");
+        
+        
+        // get the base
+        if (isStream)
+        {
+            item = _library.GetItemList(new InternalItemsQuery
+            {
+                // ParentId = parent.Id,
+                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
+                HasAnyProviderId = new Dictionary<string, string> { ["stremio"] = stremioUri.ToString() },
+                Recursive = true
+            })
+            .OfType<Video>()
+            .FirstOrDefault();
+        }
+        else
+        {
+            item = _library.GetItemById(guid);
+        }
+
+        if (item is null) return;
 
         var ct = ctx.HttpContext.RequestAborted;
-
-        async Task<BaseItemDto> ProcessOneAsync(BaseItemDto dto, CancellationToken token)
+        // _log.LogInformation("ExternalMedia: Processing response object of type {Type}", obj.Value.GetType().FullName);
+        async Task<BaseItemDto> ProcessOneAsync(BaseItem item, CancellationToken token)
         {
 
-            var item = _library.GetItemById(dto.Id);
-            if (item is null) return dto;
+            // var item = _library.GetItemById(dto.Id);
+            // if (item is null) return dto;
+
+            var dto = _dtoService.GetBaseItemDto(
+                item,
+                new DtoOptions(),
+                user: null
+            );
 
             var kind = item.GetBaseItemKind();
 
@@ -112,14 +166,13 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
                 return dto;
             }
 
-
             var sources = await _externalMediaSourceProvider.GetMediaSources(
                 item,
                 allowMediaProbe: false,
                 ct: CancellationToken.None
             ).ConfigureAwait(false);
 
-            _log.LogInformation("ExternalMedia: Processing item {Name} ({Id})", item.Name, item.Id);
+            // _log.LogInformation("ExternalMedia: Processing item {Name} ({Id})", item.Name, item.Id);
 
             dto.MediaSources = sources
                 .Where(src => !string.Equals(src.Id, item.Id.ToString("N"), StringComparison.OrdinalIgnoreCase))
@@ -129,28 +182,25 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
             return dto;
         }
 
-        if (obj.Value is BaseItemDto single)
+        var patchedItem = await ProcessOneAsync(item, ct);
+
+        if (!isList)
         {
-            obj.Value = await ProcessOneAsync(single, ct);
+            ctx.Result = new ObjectResult(patchedItem);
             return;
         }
 
         // Query with list
         // QueryResult<BaseItemDto>
-        if (obj.Value is QueryResult<BaseItemDto> qr && qr.Items is { } roItems)
+        if (isList)
         {
-            // Only mutate if ?ids=... with exactly 1 id AND result has exactly 1 item
-            var ids = ctx.HttpContext.Request.Query["ids"].ToString()
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var qr = new QueryResult<BaseItemDto>(
+                0,
+                1,
+                new BaseItemDto[] { patchedItem }
+            );
 
-            if (ids.Length == 1 && roItems.Count == 1)
-            {
-                var items = roItems.ToList();
-                items[0] = await ProcessOneAsync(items[0], ctx.HttpContext.RequestAborted);
-                qr.Items = items;
-                obj.Value = qr;
-            }
-
+            ctx.Result = new ObjectResult(qr);
             return;
         }
     }

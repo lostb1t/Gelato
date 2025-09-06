@@ -82,47 +82,39 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             return;
         }
 
-        if (!_manager.TryGetRouteGuidString(ctx, out var guidString))
+        if (!_manager.TryGetRouteGuid(ctx, out var guid))
         {
             // _log.LogInformation("ExternalMedia: No route guid");
             await next();
             return;
         }
+        
+
 
         // should probaoly be in its own action
-        if (TryParseSourceId(guidString, out var guid, out var mediaSourceGuid))
-        {
+      //  if (TryParseSourceId(guidString, out var guid, out var mediaSourceGuid))
+      //  {
             // _log.LogInformation("ExternalMedia: Parsed source id {Guid} index {Index}", guid, mediaSourceGuid);
-            if (mediaSourceGuid is not null)
-            {
-                ctx.HttpContext.Items["MediaSourceGuid"] = mediaSourceGuid;
-                ReplaceGuid(ctx, guid);
-                await next();
-                return;
-            }
-        }
+      //      if (mediaSourceGuid is not null)
+      //      {
+      //          ctx.HttpContext.Items["MediaSourceGuid"] = mediaSourceGuid;
+      //          ReplaceGuid(ctx, guid);
+      //          await next();
+      //          return;
+      //      }
+      //  }
 
-        string stremioId = default!;
-        StremioMediaType mediaType = default;
-        string externalId = default!;
-
-        try
-        {
-            var sid = StremioUri.FromGuidEncoded(guid);
-            mediaType = sid.MediaType;
-            externalId = sid.ExternalId;
-            stremioId = sid.ExternalId;
-        }
-        catch
+        var stremioUri = _manager.GetStremioUri(guid);
+        if (stremioUri is null)
         {
             await next();
             return;
         }
 
-        _log.LogInformation("ExternalMedia: StremioId {StremioId} Type {MediaType} ExternalId {ExternalId}", stremioId, mediaType, externalId);
+       // _log.LogInformation("ExternalMedia: StremioId {StremioId} Type {MediaType} ExternalId {ExternalId}", stremioId, mediaType, externalId);
 
 
-        var found = FindByStremioId(stremioId) as Video;
+        var found = FindByStremioId(stremioUri.ToString()) as Video;
         if (found is not null)
         {
             ReplaceGuid(ctx, found.Id);
@@ -130,7 +122,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             return;
         }
 
-        bool isSeries = mediaType == StremioMediaType.Series;
+        bool isSeries = stremioUri.MediaType == StremioMediaType.Series;
         var root = isSeries ? _manager.TryGetSeriesFolder() : _manager.TryGetMovieFolder();
         if (root is null)
         {
@@ -139,10 +131,10 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             return;
         }
 
-        var meta = await _stremioProvider.GetMetaAsync(stremioId, mediaType).ConfigureAwait(false);
+        var meta = await _stremioProvider.GetMetaAsync(stremioUri.ExternalId, stremioUri.MediaType).ConfigureAwait(false);
         if (meta is null)
         {
-            _log.LogWarning("ExternalMedia: Meta not found for {0} {1}", stremioId, mediaType);
+            //_log.LogWarning("ExternalMedia: Meta not found for {0} {1}", stremioId, mediaType);
             await next();
             return;
         }

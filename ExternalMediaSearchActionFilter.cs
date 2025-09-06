@@ -35,16 +35,19 @@ namespace Jellyfin.Plugin.ExternalMedia
         private readonly IDtoService _dtoService;
         private readonly ExternalMediaStremioProvider _provider;
         private readonly ILogger<ExternalMediaSearchActionFilter> _log;
+    private readonly ExternalMediaManager _manager;
 
         public ExternalMediaSearchActionFilter(
             ILibraryManager library,
             IItemRepository repo,
             IMediaSourceManager mediaSources,
             IDtoService dtoService,
+            ExternalMediaManager manager,
             ExternalMediaStremioProvider provider,
             ILogger<ExternalMediaSearchActionFilter> log)
         {
             _library = library;
+            _manager = manager;
             _repo = repo;
             _mediaSources = mediaSources;
             _dtoService = dtoService;
@@ -156,8 +159,10 @@ namespace Jellyfin.Plugin.ExternalMedia
 
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.LoadFromString(stremioKey);
-                // _log.LogInformation($"ExternalMedia: Search found {stremioUri.ToString()}");
-                dto.Id = stremioUri.ToGuidEncoded();
+                dto.Id = stremioUri.ToGuid();
+                _manager.SaveStremioUri(dto.Id, stremioUri);
+               // _log.LogInformation($"ExternalMedia: Search found {stremioUri.ToString()}, {stremioUri.ToCompactString()}");
+                
                 // dto.Id = GuidCodec.EncodeString(StremioId.ToCompactId(stremioKey));
                 dtos.Add(dto);
             }
