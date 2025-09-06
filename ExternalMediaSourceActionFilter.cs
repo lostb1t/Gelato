@@ -17,11 +17,10 @@ using Jellyfin.Plugin.ExternalMedia.Common;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Dto;
 using Jellyfin.Data.Enums;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Primitives;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Querying;
+using Jellyfin.Database.Implementations.Entities.Libraries;
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -40,11 +39,13 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
 
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
-    private readonly ILibraryMonitor _libraryMonitor;
+    private readonly ExternalMediaSourceProvider _externalMediaSourceProvider;
 
-    public int Order => throw new NotImplementedException();
+    public int Order => 1;
 
     public ExternalMediaSourceActionFilter(
+        // ExternalMediaSourceProvider externalMediaSourceProvider,
+        IEnumerable<IMediaSourceProvider> providers,
         ILibraryManager library,
         //  ExternalMediaRefresh refresh,
         IFileSystem fileSystem,
@@ -55,11 +56,14 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
         IDtoService dtoService,
         ExternalMediaStremioProvider stremioProvider,
         IProviderManager provider,
-        ILibraryMonitor libraryMonitor,
+        // ILibraryMonitor libraryMonitor,
         IMediaSourceManager sourceManager,
         ILogger<ExternalMediaSourceActionFilter> log)
     {
         _library = library;
+        // _externalMediaSourceProvider = externalMediaSourceProvider;
+        _externalMediaSourceProvider = providers.OfType<ExternalMediaSourceProvider>().FirstOrDefault()
+     ?? throw new InvalidOperationException("ExternalMediaSourceProvider not registered.");
         _sourceManager = sourceManager;
         //  _refresh = refresh;
         _repo = repo;
@@ -71,108 +75,84 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
         _manager = manager;
         _seriesManager = seriesManager;
         _log = log;
-        _libraryMonitor = libraryMonitor;
+        // _libraryMonitor = libraryMonitor;
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
-        // _log.LogInformation("ExternalMedia: OnActionExecutionAsync");
-        // _log.LogInformation("ExternalMedia: No {Type} folder configured", isSeries ? "Series" : "Movie");
-        var req = ctx.HttpContext.Request;
-        _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
+        // var req = ctx.HttpContext.Request;
+        // _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
+
         if (!_manager.IsItemsAction(ctx))
         {
             await next();
             return;
-
         }
 
-        ctx.HttpContext.Items.TryGetValue("MediaSourceGuid", out var MediaSourceGuid);
-        _log.LogInformation("Guid from HttpContext.Items = {Guid}", MediaSourceGuid);
-
-        // if (ctx.HttpContext.Items.TryGetValue("MediaSourceGuid", out var MediaSourceGuid) && raw is Guid g)
-        // {
-        //     _log.LogInformation("Guid from HttpContext.Items = {Guid}", g);
-        // }
-        // else
-        // {
-        //     _log.LogDebug("Guid not set in HttpContext.Items");
-        // }
-        // // var req = ctx.HttpContext.Request;
-        // _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
-
-
-        if (!_manager.TryGetRouteGuid(ctx, out var guid))
-        {
-            await next();
-            return;
-        }
-        ;
-
-        // if (StremioId.TryParseFromGuid(guid, out var stremioId, out var mt, out var extId))
-        // {
-        //     _log.LogDebug("StremioId {Id}, Type {Type}, External {Ext}", stremioId, mt, extId);
-        //     _manager.ReplaceGuid(ctx, guid);
-        // }
-
-        // _log.LogInformation("ExternalMedia: Found route guid {Guid}", guidString);
-        // TryParseSourceId(guidString, out var guid, out var index);
-        // if (index is not null)
-        // {
-        //     _manager.ReplaceGuid(ctx, guid);
-        // }
-        // var item = _library.GetItemById(itemDto.Id);
-        // if (item is null)
-        // {
-        //     return;
-        // }
-        // _log.LogWarning("ExternalMedia: Invalid stremio id in guid {Guid}", guid);
-        // existing
         var executed = await next();
-        // PostPatchItemsDtosIfAny(executed);
-        if (executed?.Result is not Microsoft.AspNetCore.Mvc.ObjectResult obj || obj.Value is not BaseItemDto itemDto)
-            return;
-        // var r = itemDto as BaseItem;
+        if (executed?.Result is not ObjectResult obj || obj.Value is null) return;
 
-        var item = _library.GetItemById(itemDto.Id);
-        if (item is null)
+        var ct = ctx.HttpContext.RequestAborted;
+
+        async Task<BaseItemDto> ProcessOneAsync(BaseItemDto dto, CancellationToken token)
         {
-            await next();
+
+            var item = _library.GetItemById(dto.Id);
+            if (item is null) return dto;
+
+            var kind = item.GetBaseItemKind();
+
+            if (kind is not BaseItemKind.Movie && kind is not BaseItemKind.Episode)
+            {
+                return dto;
+            }
+
+            if (!_manager.IsStremioProvider(item))
+            {
+                return dto;
+            }
+
+
+            var sources = await _externalMediaSourceProvider.GetMediaSources(
+                item,
+                allowMediaProbe: false,
+                ct: CancellationToken.None
+            ).ConfigureAwait(false);
+
+            _log.LogInformation("ExternalMedia: Processing item {Name} ({Id})", item.Name, item.Id);
+
+            dto.MediaSources = sources
+                .Where(src => !string.Equals(src.Id, item.Id.ToString("N"), StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            dto.CanDownload = true;
+            return dto;
+        }
+
+        if (obj.Value is BaseItemDto single)
+        {
+            obj.Value = await ProcessOneAsync(single, ct);
             return;
         }
-        var sources = await _mediaSources.GetPlaybackMediaSources(
-            item,
-            null,
-            allowMediaProbe: false,  // should enable this at one point.
-            enablePathSubstitution: true,
-            cancellationToken: CancellationToken.None
-        ).ConfigureAwait(false);
 
-        itemDto.MediaSources = sources
-        // remove the placeholder
-        .Where(src => src.Id != item.Id.ToString("N"))
-        .Select(src =>
+        // Query with list
+        // QueryResult<BaseItemDto>
+        if (obj.Value is QueryResult<BaseItemDto> qr && qr.Items is { } roItems)
         {
-            //if (Guid.TryParse(src.Id, out var msid))
-            //if (MediaSourceGuid is null)
-            //{
-                //src.Id = $"{item.Id:N}::{src.Id:N}";
-            //}
-            return src;
-        })
-        .ToArray();
-        // not sure howto set these otherwise
-        itemDto.CanDownload = true;
-        // itemDto.LocationType = "Remote";
-        // itemDto.Container = "mp4";
-        // itemDto.LocationType = LocationType.Remote;
-        _log.LogInformation("ExternalMedia: Existing item, returning {0} media sources", sources.Count);
-        // t.GetMediaSources =
-        obj.Value = itemDto;
-        // return;
+            // Only mutate if ?ids=... with exactly 1 id AND result has exactly 1 item
+            var ids = ctx.HttpContext.Request.Query["ids"].ToString()
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
+            if (ids.Length == 1 && roItems.Count == 1)
+            {
+                var items = roItems.ToList();
+                items[0] = await ProcessOneAsync(items[0], ctx.HttpContext.RequestAborted);
+                qr.Items = items;
+                obj.Value = qr;
+            }
 
-        // await next();
+            return;
+        }
     }
 
     public static bool TryParseSourceId(string sourceId, out Guid itemId, out int? index)

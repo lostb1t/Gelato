@@ -501,6 +501,21 @@ namespace Jellyfin.Plugin.ExternalMedia
             return new Guid(hash);
         }
 
+        public string GetKey()
+        {
+            var filename = BehaviorHints?.Filename ?? string.Empty;
+            var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
+            return $"{bingeGroup}{filename}";
+        }
+
+        public string GetShortId()
+        {
+            var key = GetKey();
+            using var md5 = System.Security.Cryptography.MD5.Create();
+            var bytes = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key));
+            return BitConverter.ToUInt32(bytes, 0).ToString("X8");
+        }
+
         public bool IsValid()
         {
             var size = BehaviorHints?.VideoSize?.ToString();
@@ -532,7 +547,9 @@ namespace Jellyfin.Plugin.ExternalMedia
     public enum StremioMediaType
     {
         Movie,
-        Series
+        Series,
+        Channel,
+        Anime
     }
 
 }

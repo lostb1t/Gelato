@@ -7,9 +7,10 @@ using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Library;
 using Jellyfin.Plugin.ExternalMedia.Common;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using System;
+using System.Reflection;
 
 namespace Jellyfin.Plugin.ExternalMedia;
-
 
 public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
@@ -23,6 +24,7 @@ public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _log = log;
         _library = library;
         _manager = manager;
+        
     }
 
     public static ExternalMediaPlugin? Instance { get; private set; }
@@ -30,7 +32,7 @@ public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Name => "External Media";
     public override Guid Id => Guid.Parse("94EA4E14-8163-4989-96FE-0A2094BC2D6A");
     public override string Description => "Adds virtual items (external://…) with on-demand MediaSources and optional image suppression.";
-
+  
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
     {

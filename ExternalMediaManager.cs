@@ -563,6 +563,14 @@ IItemRepository repo,
         return false;
     }
 
+    public bool IsStremioProvider(BaseItem item)
+    {
+
+        if (!string.IsNullOrWhiteSpace(item.Path) && item.Path.StartsWith("stremio://", StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+
     public bool TryGetRouteGuidString(ActionContext ctx, out string value)
     {
         value = "";
@@ -606,7 +614,7 @@ IItemRepository repo,
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                _log.LogInformation("ExternalMedia: Replacing route {Key} {Old} → {New}", key, raw, value);
+                // _log.LogInformation("ExternalMedia: Replacing route {Key} {Old} → {New}", key, raw, value);
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }
@@ -617,7 +625,7 @@ IItemRepository repo,
 
         if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
         {
-            _log.LogInformation("ExternalMedia: Replacing query ids {Old} → {New}", existing[0], value);
+            // _log.LogInformation("ExternalMedia: Replacing query ids {Old} → {New}", existing[0], value);
 
             var dict = new Dictionary<string, StringValues>(parsed)
             {

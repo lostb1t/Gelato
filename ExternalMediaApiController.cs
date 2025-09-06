@@ -24,7 +24,7 @@ public class ExternalMediaApiController : ControllerBase
     private readonly ILogger<ExternalMediaApiController> _log;
     private readonly ILoggerFactory _loggerFactory;
     // private readonly IFileSystem _fileSystem;
-    private readonly ExternalMediaStremioProvider _provider;
+   // private readonly ExternalMediaStremioProvider _provider;
     private readonly IServerConfigurationManager _config;
     private readonly IUserManager _user;
     private readonly ILibraryManager _library;
@@ -36,7 +36,7 @@ public class ExternalMediaApiController : ControllerBase
     public ExternalMediaApiController(
         ILoggerFactory loggerFactory,
     //    ExternalMediaRefresh refresh,
-        ExternalMediaStremioProvider provider,
+       // ExternalMediaStremioProvider provider,
         IDtoService dtoService,
         IServerConfigurationManager config,
         IUserManager userManager,
@@ -46,7 +46,7 @@ IItemRepository repo,
         _loggerFactory = loggerFactory;
      //   _refresh = refresh;
         _log = loggerFactory.CreateLogger<ExternalMediaApiController>();
-        _provider = provider; _dtoService = dtoService;
+       // _provider = provider; _dtoService = dtoService;
         _config = config;
         _repo = repo;
         _user = userManager;

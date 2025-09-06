@@ -76,10 +76,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
     {
-        // _log.LogInformation("ExternalMedia: No {Type} folder configured", isSeries ? "Series" : "Movie");
-        var req = ctx.HttpContext.Request;
-        _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
-
         if (!IsItemsAction(ctx))
         {
             await next();
@@ -88,16 +84,15 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
         if (!_manager.TryGetRouteGuidString(ctx, out var guidString))
         {
-            _log.LogInformation("ExternalMedia: No route guid");
+            // _log.LogInformation("ExternalMedia: No route guid");
             await next();
             return;
         }
- _log.LogInformation("ExternalMedia: uhu");
+
         // should probaoly be in its own action
         if (TryParseSourceId(guidString, out var guid, out var mediaSourceGuid))
         {
-
-            _log.LogInformation("ExternalMedia: Parsed source id {Guid} index {Index}", guid, mediaSourceGuid);
+            // _log.LogInformation("ExternalMedia: Parsed source id {Guid} index {Index}", guid, mediaSourceGuid);
             if (mediaSourceGuid is not null)
             {
                 ctx.HttpContext.Items["MediaSourceGuid"] = mediaSourceGuid;
@@ -107,32 +102,25 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             }
         }
 
-        // if (!_manager.TryGetRouteGuid(ctx, out var guid))
-        // {
-        //     await next();
-        //     return;
-        // }
-
-        // declare in outer scope
-        // declare once, in outer scope
         string stremioId = default!;
         StremioMediaType mediaType = default;
-        string Id = default!;
+        string externalId = default!;
 
         try
         {
-            var decoded = GuidCodec.DecodeString(guid);      // whatever your guid codec returns
-            stremioId = StremioId.FromCompactId(decoded);    // formerly Decode(...)
-
-            var parsed = StremioId.Parse(stremioId);         // throws if invalid
-            mediaType = parsed.MediaType;                   // assign to the outer vars
-            Id = parsed.ExternalId;
+            var sid = StremioUri.FromGuidEncoded(guid);
+            mediaType = sid.MediaType;
+            externalId = sid.ExternalId;
+            stremioId = sid.ExternalId;
         }
         catch
         {
             await next();
             return;
         }
+
+        _log.LogInformation("ExternalMedia: StremioId {StremioId} Type {MediaType} ExternalId {ExternalId}", stremioId, mediaType, externalId);
+
 
         var found = FindByStremioId(stremioId) as Video;
         if (found is not null)
@@ -151,10 +139,10 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             return;
         }
 
-        var meta = await _stremioProvider.GetMetaAsync(Id, mediaType).ConfigureAwait(false);
+        var meta = await _stremioProvider.GetMetaAsync(stremioId, mediaType).ConfigureAwait(false);
         if (meta is null)
         {
-            _log.LogWarning("ExternalMedia: Meta not found for {0} {1}", Id, mediaType);
+            _log.LogWarning("ExternalMedia: Meta not found for {0} {1}", stremioId, mediaType);
             await next();
             return;
         }
@@ -198,7 +186,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
 
         var ok = await saver(CancellationToken.None).ConfigureAwait(false);
-        _log.LogInformation("ExternalMedia: saved media");
+        // _log.LogInformation("ExternalMedia: saved media");
 
         await next();
     }
@@ -319,7 +307,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                _log.LogInformation("ExternalMedia: Replacing route {Key} {Old} → {New}", key, raw, value);
+                // _log.LogInformation("ExternalMedia: Replacing route {Key} {Old} → {New}", key, raw, value);
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }

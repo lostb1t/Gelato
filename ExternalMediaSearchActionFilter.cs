@@ -21,8 +21,9 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Querying;
-using Jellyfin.Plugin.ExternalMedia.Common;
+// using Jellyfin.Plugin.ExternalMedia.Common;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.ExternalMedia.Common;
 
 namespace Jellyfin.Plugin.ExternalMedia
 {
@@ -55,8 +56,6 @@ namespace Jellyfin.Plugin.ExternalMedia
 
         public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
         {
-            var req = ctx.HttpContext.Request;
-            _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
             try
             {
                 if (!await _provider.IsReady())
@@ -156,7 +155,10 @@ namespace Jellyfin.Plugin.ExternalMedia
                     continue;
 
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
-                dto.Id = GuidCodec.EncodeString(StremioId.ToCompactId(stremioKey));
+                var stremioUri = StremioUri.LoadFromString(stremioKey);
+                // _log.LogInformation($"ExternalMedia: Search found {stremioUri.ToString()}");
+                dto.Id = stremioUri.ToGuidEncoded();
+                // dto.Id = GuidCodec.EncodeString(StremioId.ToCompactId(stremioKey));
                 dtos.Add(dto);
             }
 
