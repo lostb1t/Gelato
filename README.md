@@ -38,6 +38,7 @@ Profit!
 ### FAQ
 
 - You need to restart the server after editing the manifest in aiostreams.
+- You should have at least one search enabled catalog. I suggest the tmdb addon.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - stream cache is 3600 min. Can be cleared by restarting the server
 - bump up probing and analyse to your liking
