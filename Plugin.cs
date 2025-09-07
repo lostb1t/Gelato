@@ -2,37 +2,33 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Serialization;
 using MediaBrowser.Model.Plugins;
-using Jellyfin.Plugin.ExternalMedia.Configuration;
+using Gelato.Configuration;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Library;
-using Jellyfin.Plugin.ExternalMedia.Common;
-using Microsoft.AspNetCore.DataProtection.KeyManagement;
-using System;
-using System.Reflection;
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato;
 
-public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
+public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
-    private readonly ILogger<ExternalMediaPlugin> _log;
+    private readonly ILogger<GelatoPlugin> _log;
     private readonly ILibraryManager _library;
-    private readonly ExternalMediaManager _manager;
-    public ExternalMediaPlugin(IApplicationPaths applicationPaths, ExternalMediaManager manager, IXmlSerializer xmlSerializer, ILogger<ExternalMediaPlugin> log, ILibraryManager library)
+    private readonly GelatoManager _manager;
+    public GelatoPlugin(IApplicationPaths applicationPaths, GelatoManager manager, IXmlSerializer xmlSerializer, ILogger<GelatoPlugin> log, ILibraryManager library)
     : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
         _log = log;
         _library = library;
         _manager = manager;
-        
+
     }
 
-    public static ExternalMediaPlugin? Instance { get; private set; }
+    public static GelatoPlugin? Instance { get; private set; }
 
-    public override string Name => "External Media";
+    public override string Name => "Gelato";
     public override Guid Id => Guid.Parse("94EA4E14-8163-4989-96FE-0A2094BC2D6A");
-    public override string Description => "Adds virtual items (external://…) with on-demand MediaSources and optional image suppression.";
-  
+    public override string Description => "on-demand MediaSources and optional image suppression.";
+
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
     {
@@ -51,11 +47,11 @@ public class ExternalMediaPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
         if (cfg.MoviePath is not null)
         {
-            ExternalMediaManager.SeedFolder(cfg.MoviePath);
+            GelatoManager.SeedFolder(cfg.MoviePath);
         }
         if (cfg.SeriesPath is not null)
         {
-            ExternalMediaManager.SeedFolder(cfg.SeriesPath);
+            GelatoManager.SeedFolder(cfg.SeriesPath);
         }
     }
 }

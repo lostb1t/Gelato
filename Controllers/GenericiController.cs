@@ -13,30 +13,30 @@ using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Entities.Movies;
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato;
 
 [ApiController]
 //[Authorize(Policy = "DefaultAuthorization")]
 //[Authorize]
 [Route("externalmedia")]
-public class ExternalMediaApiController : ControllerBase
+public class GelatoApiController : ControllerBase
 {
-    private readonly ILogger<ExternalMediaApiController> _log;
+    private readonly ILogger<GelatoApiController> _log;
     private readonly ILoggerFactory _loggerFactory;
     // private readonly IFileSystem _fileSystem;
-   // private readonly ExternalMediaStremioProvider _provider;
+   // private readonly GelatoStremioProvider _provider;
     private readonly IServerConfigurationManager _config;
     private readonly IUserManager _user;
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
     private readonly IDtoService _dtoService;
-   // private readonly ExternalMediaRefresh _refresh;
+   // private readonly GelatoRefresh _refresh;
 
 
-    public ExternalMediaApiController(
+    public GelatoApiController(
         ILoggerFactory loggerFactory,
-    //    ExternalMediaRefresh refresh,
-       // ExternalMediaStremioProvider provider,
+    //    GelatoRefresh refresh,
+       // GelatoStremioProvider provider,
         IDtoService dtoService,
         IServerConfigurationManager config,
         IUserManager userManager,
@@ -45,7 +45,7 @@ IItemRepository repo,
     {
         _loggerFactory = loggerFactory;
      //   _refresh = refresh;
-        _log = loggerFactory.CreateLogger<ExternalMediaApiController>();
+        _log = loggerFactory.CreateLogger<GelatoApiController>();
        // _provider = provider; _dtoService = dtoService;
         _config = config;
         _repo = repo;

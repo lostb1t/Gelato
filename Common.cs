@@ -1,9 +1,9 @@
-using System;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace Jellyfin.Plugin.ExternalMedia.Common;
+namespace Gelato.Common;
 
 public sealed class StremioUri
 {
@@ -132,5 +132,90 @@ public static class Utils
             mins = onlyNum;
 
         return new TimeSpan(hours, mins, secs).Ticks;
+    }
+}
+
+
+
+public sealed class FileCache
+{
+    private readonly string _basePath;
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private sealed class Envelope<T>
+    {
+        public T? Value { get; set; }
+        public DateTimeOffset? ExpiresAt { get; set; }
+    }
+
+    public FileCache(string basePath)
+    {
+        _basePath = basePath ?? throw new ArgumentNullException(nameof(basePath));
+        Directory.CreateDirectory(_basePath);
+    }
+
+    public async Task SetAsync<T>(string key, T value, TimeSpan? ttl = null, CancellationToken ct = default)
+    {
+        var path = PathFor(key);
+        await using var fs = File.Create(path);
+        var envelope = new Envelope<T>
+        {
+            Value = value,
+            ExpiresAt = ttl.HasValue ? DateTimeOffset.UtcNow.Add(ttl.Value) : null
+        };
+        await JsonSerializer.SerializeAsync(fs, envelope, JsonOpts, ct).ConfigureAwait(false);
+    }
+
+    public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return default;
+
+        var path = PathFor(key);
+        if (!File.Exists(path))
+            return default;
+
+        try
+        {
+            await using var fs = File.OpenRead(path);
+            var envelope = await JsonSerializer
+                .DeserializeAsync<Envelope<T>>(fs, JsonOpts, ct)
+                .ConfigureAwait(false);
+
+            if (envelope is null)
+                return default;
+
+            if (envelope.ExpiresAt.HasValue && envelope.ExpiresAt.Value <= DateTimeOffset.UtcNow)
+            {
+                try { File.Delete(path); } catch { /* ignore */ }
+                return default;
+            }
+
+            return envelope.Value;
+        }
+        catch
+        {
+            try { File.Delete(path); } catch { /* ignore */ }
+            return default;
+        }
+    }
+
+    public void Remove(string key)
+    {
+        var path = PathFor(key);
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+
+    private string PathFor(string key)
+    {
+        using var sha = SHA256.Create();
+        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(key));
+        var sb = new StringBuilder(hash.Length * 2);
+        foreach (var b in hash) sb.Append(b.ToString("x2"));
+        return Path.Combine(_basePath, sb.ToString() + ".json");
     }
 }

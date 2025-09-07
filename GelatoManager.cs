@@ -13,8 +13,8 @@ using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities;
-using Jellyfin.Plugin.ExternalMedia.Configuration;
-using Jellyfin.Plugin.ExternalMedia.Common;
+using Gelato.Configuration;
+using Gelato.Common;
 using MediaBrowser.Model.Configuration;
 using System.Text;
 using Jellyfin.Data.Enums;
@@ -33,14 +33,14 @@ using Microsoft.Extensions.Primitives;
 using Microsoft.Extensions.Caching.Memory;
 
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato;
 
-public class ExternalMediaManager
+public class GelatoManager
 {
-    private readonly ILogger<ExternalMediaManager> _log;
+    private readonly ILogger<GelatoManager> _log;
     private readonly ILoggerFactory _loggerFactory;
     // private readonly IFileSystem _fileSystem;
-    private readonly ExternalMediaStremioProvider _stremioProvider;
+    private readonly GelatoStremioProvider _stremioProvider;
     private readonly IServerConfigurationManager _config;
     private readonly IUserManager _user;
     private readonly ILibraryManager _library;
@@ -52,11 +52,11 @@ public class ExternalMediaManager
     // private readonly string path = "/media/external/movies";
     // private readonly string name = "external_movies";
 
-    public ExternalMediaManager(
+    public GelatoManager(
 
         ILoggerFactory loggerFactory,
         IProviderManager provider,
-        ExternalMediaStremioProvider stremioProvider,
+        GelatoStremioProvider stremioProvider,
         IDtoService dtoService,
         IServerConfigurationManager config,
         IUserManager userManager,
@@ -67,7 +67,7 @@ IItemRepository repo,
     {
         _loggerFactory = loggerFactory;
         _memoryCache = memoryCache;
-        _log = loggerFactory.CreateLogger<ExternalMediaManager>();
+        _log = loggerFactory.CreateLogger<GelatoManager>();
         _provider = provider;
         _stremioProvider = stremioProvider;
         _dtoService = dtoService;
@@ -141,7 +141,7 @@ IItemRepository repo,
 
     public Folder? TryGetMovieFolder()
     {
-        var cfg = ExternalMediaPlugin.Instance!.Configuration;
+        var cfg = GelatoPlugin.Instance!.Configuration;
         return _library.GetItemList(new InternalItemsQuery
         {
             Path = cfg.MoviePath
@@ -152,7 +152,7 @@ IItemRepository repo,
 
     public Folder? TryGetSeriesFolder()
     {
-        var cfg = ExternalMediaPlugin.Instance!.Configuration;
+        var cfg = GelatoPlugin.Instance!.Configuration;
         _log.LogDebug("Looking for series folder at {Path}", cfg.SeriesPath);
         return _library.GetItemList(new InternalItemsQuery
         {
@@ -350,7 +350,7 @@ IItemRepository repo,
         var parent = item.GetParent();
         if (parent == null) return;
 
-        _log.LogInformation("ExternalMedia: queueing refresh for parent {Name}", parent.Name);
+        _log.LogInformation("Gelato: queueing refresh for parent {Name}", parent.Name);
 
         var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
         {
@@ -406,7 +406,7 @@ IItemRepository repo,
             if (!stream.IsValid()) continue;
             var Id = stream.GetGuid();
 
-            _log.LogInformation("ExternalMedia: Adding stream {Id} {Filename}", stream.GetGuid(), stream.BehaviorHints?.Filename);
+            _log.LogInformation("Gelato: Adding stream {Id} {Filename}", stream.GetGuid(), stream.BehaviorHints?.Filename);
             var item = new Movie()
             {
                 Id = stream.GetGuid(),
@@ -561,7 +561,7 @@ IItemRepository repo,
             return false;
 
         var name = cad.ActionName;
-        // _log.LogInformation("ExternalMedia: Action name is {Name}", name);
+        // _log.LogInformation("Gelato: Action name is {Name}", name);
         return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
             || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
             || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
@@ -630,7 +630,7 @@ IItemRepository repo,
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                // _log.LogInformation("ExternalMedia: Replacing route {Key} {Old} → {New}", key, raw, value);
+                // _log.LogInformation("Gelato: Replacing route {Key} {Old} → {New}", key, raw, value);
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }
@@ -641,7 +641,7 @@ IItemRepository repo,
 
         if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
         {
-            // _log.LogInformation("ExternalMedia: Replacing query ids {Old} → {New}", existing[0], value);
+            // _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
 
             var dict = new Dictionary<string, StringValues>(parsed)
             {

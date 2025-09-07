@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Plugin.ExternalMedia.Common;
+using Gelato.Common;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
@@ -15,17 +15,17 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Library;
 
-namespace Jellyfin.Plugin.ExternalMedia
+namespace Gelato
 {
-    public partial class ExternalMediaSeriesManager
+    public partial class GelatoSeriesManager
     {
         private readonly IFileSystem _fs;
-        private readonly ILogger<ExternalMediaSeriesManager> _log;
-        private readonly ExternalMediaManager _manager;
-        private readonly ExternalMediaStremioProvider _stremioProvider;
+        private readonly ILogger<GelatoSeriesManager> _log;
+        private readonly GelatoManager _manager;
+        private readonly GelatoStremioProvider _stremioProvider;
         private readonly IItemRepository _repo;
         private readonly ILibraryManager _library;
-        public ExternalMediaSeriesManager(IFileSystem fs, ILibraryManager library, ILogger<ExternalMediaSeriesManager> log, ExternalMediaManager manager, ExternalMediaStremioProvider stremioProvider, IItemRepository repo)
+        public GelatoSeriesManager(IFileSystem fs, ILibraryManager library, ILogger<GelatoSeriesManager> log, GelatoManager manager, GelatoStremioProvider stremioProvider, IItemRepository repo)
         {
             _fs = fs;
             _log = log;
@@ -48,7 +48,7 @@ namespace Jellyfin.Plugin.ExternalMedia
             if (providerIds is null || providerIds.Count == 0)
                 return false;
 
-            _log.LogInformation("ExternalMedia: series");
+            _log.LogInformation("Gelato: series");
             var seriesFolderName = GetSeriesFolderName(seriesMeta);
             var seriesPath = Path.Combine(seriesRootFolder.Path, seriesFolderName);
             Directory.CreateDirectory(seriesPath);
@@ -75,7 +75,7 @@ namespace Jellyfin.Plugin.ExternalMedia
             foreach (var seasonGroup in groups)
             {
                 ct.ThrowIfCancellationRequested();
-                _log.LogInformation($"ExternalMedia: season {seasonGroup.Key}");
+                _log.LogInformation($"Gelato: season {seasonGroup.Key}");
                 var seasonIndex = seasonGroup.Key;
                 var seasonPath = Path.Combine(seriesPath, $"Season {seasonIndex:D2}");
                 Directory.CreateDirectory(seasonPath);
@@ -190,7 +190,7 @@ namespace Jellyfin.Plugin.ExternalMedia
             }
 
 
-            _log.LogInformation($"ExternalMedia: done sync series");
+            _log.LogInformation($"Gelato: done sync series");
             return true;
         }
 

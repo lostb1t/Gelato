@@ -4,34 +4,31 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Controller.Library;
 using System.Reflection;
-using Jellyfin.Plugin.ExternalMedia.Filters;
+using Gelato.Filters;
 
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato;
 
 public sealed class ServiceRegistrator : IPluginServiceRegistrator
 {
     public void RegisterServices(IServiceCollection services, IServerApplicationHost host)
     {
-        services.AddSingleton<ExternalMediaStremioProvider>();
+        services.AddSingleton<GelatoStremioProvider>();
 
-        services.AddSingleton<ExternalMediaInsertActionFilter>();
-        services.AddSingleton<ExternalMediaSearchActionFilter>();
-        services.AddSingleton<ExternalMediaSourceActionFilter>();
+        services.AddSingleton<InsertActionFilter>();
+        services.AddSingleton<SearchActionFilter>();
+        services.AddSingleton<SourceActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
-        
-        services.AddSingleton<ExternalMediaManager>();
-        services.AddSingleton<ExternalMediaSeriesManager>();
-        services.AddSingleton<IMediaSourceProvider, ExternalMediaSourceProvider>();
-        
-        //var mediaSourceManagerProxy = DispatchProxy.Create<IMediaSourceManager, MediaSourceManagerProxy>();
-       // services.AddSingleton<IMediaSourceManager>(mediaSourceManagerProxy);
+
+        services.AddSingleton<GelatoManager>();
+        services.AddSingleton<GelatoSeriesManager>();
+        services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
-            o.Filters.AddService<ExternalMediaInsertActionFilter>(order: 0);
-            o.Filters.AddService<ExternalMediaSourceActionFilter>(order: 1);
-            o.Filters.AddService<ExternalMediaSearchActionFilter>(order: 2);
+            o.Filters.AddService<InsertActionFilter>(order: 0);
+            o.Filters.AddService<SourceActionFilter>(order: 1);
+            o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
         });
 

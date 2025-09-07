@@ -21,30 +21,30 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Querying;
-// using Jellyfin.Plugin.ExternalMedia.Common;
+// using Gelato.Common;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.ExternalMedia.Common;
+using Gelato.Common;
 
-namespace Jellyfin.Plugin.ExternalMedia
+namespace Gelato.Filters
 {
-    public class ExternalMediaSearchActionFilter : IAsyncActionFilter, IOrderedFilter
+    public class SearchActionFilter : IAsyncActionFilter, IOrderedFilter
     {
         private readonly ILibraryManager _library;
         private readonly IItemRepository _repo;
         private readonly IMediaSourceManager _mediaSources;
         private readonly IDtoService _dtoService;
-        private readonly ExternalMediaStremioProvider _provider;
-        private readonly ILogger<ExternalMediaSearchActionFilter> _log;
-    private readonly ExternalMediaManager _manager;
+        private readonly GelatoStremioProvider _provider;
+        private readonly ILogger<SearchActionFilter> _log;
+        private readonly GelatoManager _manager;
 
-        public ExternalMediaSearchActionFilter(
+        public SearchActionFilter(
             ILibraryManager library,
             IItemRepository repo,
             IMediaSourceManager mediaSources,
             IDtoService dtoService,
-            ExternalMediaManager manager,
-            ExternalMediaStremioProvider provider,
-            ILogger<ExternalMediaSearchActionFilter> log)
+            GelatoManager manager,
+            GelatoStremioProvider provider,
+            ILogger<SearchActionFilter> log)
         {
             _library = library;
             _manager = manager;
@@ -59,28 +59,13 @@ namespace Jellyfin.Plugin.ExternalMedia
 
         public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
         {
-            try
-            {
-                if (!await _provider.IsReady())
-                {
-                    await next();
-                    return;
-                }
-            }
-            catch
+            if (!await _provider.IsReady())
             {
                 await next();
                 return;
             }
 
             var http = ctx.HttpContext;
-            // var path = http.Request.Path.Value?.ToLowerInvariant() ?? "";
-            // if (!http.Request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase) ||
-            //    !path.StartsWith("/items", StringComparison.Ordinal))
-            //{
-            //    await next();
-            //    return;
-            //}
 
             var hasSearch = http.Request.Query.Keys
                 .Any(k => string.Equals(k, "SearchTerm", StringComparison.OrdinalIgnoreCase) &&
@@ -127,7 +112,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                 int.TryParse(limitVal, out var lim) && lim > 0) limit = lim;
 
             var q = http.Request.Query.First(kv => string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)).Value.ToString();
-            _log.LogDebug("ExternalMedia: intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit}",
+            _log.LogDebug("Gelato: intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit}",
                           q, string.Join(",", requested.Select(r => r.ToString())), start, limit);
 
             var metas = new List<StremioMeta>(256);
@@ -161,8 +146,8 @@ namespace Jellyfin.Plugin.ExternalMedia
                 var stremioUri = StremioUri.LoadFromString(stremioKey);
                 dto.Id = stremioUri.ToGuid();
                 _manager.SaveStremioUri(dto.Id, stremioUri);
-               // _log.LogInformation($"ExternalMedia: Search found {stremioUri.ToString()}, {stremioUri.ToCompactString()}");
-                
+                // _log.LogInformation($"Gelato: Search found {stremioUri.ToString()}, {stremioUri.ToCompactString()}");
+
                 // dto.Id = GuidCodec.EncodeString(StremioId.ToCompactId(stremioKey));
                 dtos.Add(dto);
             }

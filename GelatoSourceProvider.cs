@@ -20,30 +20,33 @@ using MediaBrowser.Model.Dlna;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
-using Jellyfin.Plugin.ExternalMedia.Common;
+using Gelato.Common;
+using MediaBrowser.Common.Configuration;
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato;
 
-public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
+public sealed class GelatoSourceProvider : IMediaSourceProvider
 {
-    private readonly ILogger<ExternalMediaSourceProvider> _log;
-    private readonly ExternalMediaStremioProvider _stremioProvider;
+    private readonly ILogger<GelatoSourceProvider> _log;
+    private readonly GelatoStremioProvider _stremioProvider;
     private readonly IMediaEncoder _mediaEncoder;
     private readonly IMemoryCache _cache;
     private readonly IMediaStreamRepository _streamRepo;
-    private readonly ExternalMediaManager _manager;
+    private readonly GelatoManager _manager;
     private readonly IFileSystem _fs;
     private readonly IHttpContextAccessor _http;
     private static readonly TimeSpan NoProbeTtl = TimeSpan.FromMinutes(3600);
+    private readonly FileCache _fileCache;
 
-    public ExternalMediaSourceProvider(
-        ExternalMediaManager manager,
+    public GelatoSourceProvider(
+        GelatoManager manager,
         IMediaStreamRepository streamRepo,
-        ILogger<ExternalMediaSourceProvider> log,
-        ExternalMediaStremioProvider stremioProvider,
+        ILogger<GelatoSourceProvider> log,
+        GelatoStremioProvider stremioProvider,
         IMediaEncoder mediaEncoder,
         IMemoryCache cache,
           IHttpContextAccessor http,
+          IApplicationPaths appPaths,
         IFileSystem fs)
     {
         _log = log;
@@ -54,6 +57,9 @@ public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
         _cache = cache;
         _fs = fs;
         _http = http;
+
+        var cacheDir = Path.Combine(appPaths.CachePath, "GelatoMediaInfo");
+        _fileCache = new FileCache(cacheDir);
     }
 
     public async Task<IEnumerable<MediaSourceInfo>> GetMediaSources(
@@ -135,13 +141,18 @@ public sealed class ExternalMediaSourceProvider : IMediaSourceProvider
         try
         {
 
-            var mediaInfo = await _mediaEncoder.GetMediaInfo(
-                new MediaInfoRequest
-                {
-                    MediaType = DlnaProfileType.Video,
-                    MediaSource = mediaSource
-                },
-                ct);
+            var mediaInfo = await _fileCache.GetAsync<MediaInfo>(mediaSource.Id, ct);
+
+            if (mediaInfo is null)
+            {
+                mediaInfo = await _mediaEncoder.GetMediaInfo(
+                    new MediaInfoRequest
+                    {
+                        MediaType = DlnaProfileType.Video,
+                        MediaSource = mediaSource
+                    },
+                    ct);
+            }
 
             mediaSource.Bitrate = mediaInfo.Bitrate;
             mediaSource.Container = mediaInfo.Container;

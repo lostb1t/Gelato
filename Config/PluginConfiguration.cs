@@ -4,7 +4,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
 using System;
 
-namespace Jellyfin.Plugin.ExternalMedia.Configuration
+namespace Gelato.Configuration
 {
     public class PluginConfiguration : BasePluginConfiguration
     {
@@ -20,7 +20,7 @@ namespace Jellyfin.Plugin.ExternalMedia.Configuration
         public string GetBaseUrl()
         {
             if (string.IsNullOrWhiteSpace(Url))
-                throw new InvalidOperationException("ExternalMedia Url not configured.");
+                throw new InvalidOperationException("Gelato Url not configured.");
 
             var u = Url.Trim().TrimEnd('/');
 

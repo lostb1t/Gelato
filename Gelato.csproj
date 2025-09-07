@@ -4,23 +4,23 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <AssemblyName>Jellyfin.Plugin.ExternalMedia</AssemblyName>
-    <RootNamespace>Jellyfin.Plugin.ExternalMedia</RootNamespace>
+    <AssemblyName>Gelato</AssemblyName>
+    <RootNamespace>Gelato</RootNamespace>
   <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
-    
+
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Jellyfin.Model" Version="10.11.*-*" />
     <PackageReference Include="Jellyfin.Controller" Version="10.11.*-*" />
     <PackageReference Include="Jellyfin.Common" Version="10.11.*-*" />
-    
+
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
   </ItemGroup>
 
       <ItemGroup>
       <EmbeddedResource Include="Config\config.html" />
     </ItemGroup>
-    
-   
- 
+
+
+
 </Project>

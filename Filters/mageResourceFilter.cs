@@ -9,18 +9,18 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato.Filters;
 
-public sealed class ExternalMediaImageResourceFilter : IAsyncResourceFilter
+public sealed class ImageResourceFilter : IAsyncResourceFilter
 {
     private readonly ILibraryManager _library;
     private readonly IHttpClientFactory _http;
-    private readonly ILogger<ExternalMediaImageResourceFilter> _log;
+    private readonly ILogger<ImageResourceFilter> _log;
 
-    public ExternalMediaImageResourceFilter(
+    public ImageResourceFilter(
         ILibraryManager library,
         IHttpClientFactory http,
-        ILogger<ExternalMediaImageResourceFilter> log)
+        ILogger<ImageResourceFilter> log)
     {
         _library = library;
         _http = http;

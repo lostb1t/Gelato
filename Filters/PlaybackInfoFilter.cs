@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 
-namespace Jellyfin.Plugin.ExternalMedia.Filters;
+namespace Gelato.Filters;
 
 public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
 {
@@ -15,12 +15,6 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
-        if (ctx.ActionDescriptor is ControllerActionDescriptor cad) {
-                System.Console.WriteLine($"[Gelato] ACTIONNAME = {cad.ActionName}");
-
-        }
-
-
         // Already captured on this request? bail.
         if (ctx.HttpContext.Items.ContainsKey(Key))
         {
@@ -34,7 +28,7 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
             if (!string.IsNullOrWhiteSpace(id))
             {
                 ctx.HttpContext.Items[Key] = id!;
-                System.Console.WriteLine($"[Gelato] Captured MediaSourceId = {id}");
+                // System.Console.WriteLine($"[Gelato] Captured MediaSourceId = {id}");
             }
         }
 

@@ -13,7 +13,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
-using Jellyfin.Plugin.ExternalMedia.Common;
+using Gelato.Common;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Dto;
 using Jellyfin.Data.Enums;
@@ -23,20 +23,20 @@ using Microsoft.Extensions.Primitives;
 using Microsoft.AspNetCore.Http;
 using MediaBrowser.Model.Dto;
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato.Filters;
 
-public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFilter
+public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 {
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
     private readonly IMediaSourceManager _mediaSources;
     private readonly IDtoService _dtoService;
-    private readonly ExternalMediaStremioProvider _stremioProvider;
-    private readonly ILogger<ExternalMediaInsertActionFilter> _log;
-    private readonly ExternalMediaManager _manager;
-    private readonly ExternalMediaSeriesManager _seriesManager;
+    private readonly GelatoStremioProvider _stremioProvider;
+    private readonly ILogger<InsertActionFilter> _log;
+    private readonly GelatoManager _manager;
+    private readonly GelatoSeriesManager _seriesManager;
     private readonly IMediaSourceManager _sourceManager;
-    // private readonly ExternalMediaRefresh _refresh;
+    // private readonly GelatoRefresh _refresh;
 
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
@@ -44,20 +44,20 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
     public int Order { get; set; } = int.MinValue;
 
-    public ExternalMediaInsertActionFilter(
+    public InsertActionFilter(
         ILibraryManager library,
-        //  ExternalMediaRefresh refresh,
+        //  GelatoRefresh refresh,
         IFileSystem fileSystem,
         IItemRepository repo,
         IMediaSourceManager mediaSources,
-        ExternalMediaManager manager,
-          ExternalMediaSeriesManager seriesManager,
+        GelatoManager manager,
+          GelatoSeriesManager seriesManager,
         IDtoService dtoService,
-        ExternalMediaStremioProvider stremioProvider,
+        GelatoStremioProvider stremioProvider,
         IProviderManager provider,
         ILibraryMonitor libraryMonitor,
         IMediaSourceManager sourceManager,
-        ILogger<ExternalMediaInsertActionFilter> log)
+        ILogger<InsertActionFilter> log)
     {
         _library = library;
         _sourceManager = sourceManager;
@@ -84,7 +84,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
         if (!_manager.TryGetRouteGuid(ctx, out var guid))
         {
-            // _log.LogInformation("ExternalMedia: No route guid");
+            // _log.LogInformation("Gelato: No route guid");
             await next();
             return;
         }
@@ -108,7 +108,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
         var root = isSeries ? _manager.TryGetSeriesFolder() : _manager.TryGetMovieFolder();
         if (root is null)
         {
-            _log.LogWarning("ExternalMedia: No {Type} folder configured", isSeries ? "Series" : "Movie");
+            _log.LogWarning("Gelato: No {Type} folder configured", isSeries ? "Series" : "Movie");
             await next();
             return;
         }
@@ -116,7 +116,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
         var meta = await _stremioProvider.GetMetaAsync(stremioUri.ExternalId, stremioUri.MediaType).ConfigureAwait(false);
         if (meta is null)
         {
-            //_log.LogWarning("ExternalMedia: Meta not found for {0} {1}", stremioId, mediaType);
+            //_log.LogWarning("Gelato: Meta not found for {0} {1}", stremioId, mediaType);
             await next();
             return;
         }
@@ -124,7 +124,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
         var baseItem = _stremioProvider.IntoBaseItem(meta);
         if (baseItem is null || baseItem.ProviderIds is null || baseItem.ProviderIds.Count == 0)
         {
-            _log.LogWarning("ExternalMedia: Missing provider ids, skipping");
+            _log.LogWarning("Gelato: Missing provider ids, skipping");
             await next();
             return;
         }
@@ -160,7 +160,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
 
         var ok = await saver(CancellationToken.None).ConfigureAwait(false);
-        // _log.LogInformation("ExternalMedia: saved media");
+        // _log.LogInformation("Gelato: saved media");
 
         await next();
     }
@@ -179,7 +179,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "ExternalMedia: background refresh failed for {Name}", root.Name);
+                _log.LogError(ex, "Gelato: background refresh failed for {Name}", root.Name);
             }
         });
     }
@@ -189,7 +189,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
         if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
             return false;
 
-        // _log.LogInformation("ExternalMedia: Action = {Action}", cad.ActionName);
+        // _log.LogInformation("Gelato: Action = {Action}", cad.ActionName);
         return string.Equals(cad.ActionName, "GetItems", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItem", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
@@ -206,7 +206,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                // _log.LogInformation("ExternalMedia: Replacing route {Key} {Old} → {New}", key, raw, value);
+                // _log.LogInformation("Gelato: Replacing route {Key} {Old} → {New}", key, raw, value);
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }
@@ -217,7 +217,7 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
         if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
         {
-            _log.LogInformation("ExternalMedia: Replacing query ids {Old} → {New}", existing[0], value);
+            _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
 
             var dict = new Dictionary<string, StringValues>(parsed)
             {

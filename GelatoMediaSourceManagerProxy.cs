@@ -17,7 +17,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 //using Emby.Server.Implementations.Library;
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato;
 
 public class MediaSourceManagerProxy : DispatchProxy
 {
@@ -30,11 +30,11 @@ public class MediaSourceManagerProxy : DispatchProxy
 
     protected override object? Invoke(MethodInfo targetMethod, object?[]? args)
     {
-        Console.WriteLine($"[ExternalMedia] Intercept: IMediaSourceManager.{targetMethod}");
+        Console.WriteLine($"[Gelato] Intercept: IMediaSourceManager.{targetMethod}");
 
         if (targetMethod.Name == "GetMediaStreams")
         {
-            Console.WriteLine($"[ExternalMedia] Intercepted GetMediaStreams overload: {targetMethod}");
+            Console.WriteLine($"[Gelato] Intercepted GetMediaStreams overload: {targetMethod}");
 
             var result = targetMethod.Invoke(_inner, args);
             var retType = targetMethod.ReturnType;
@@ -83,7 +83,7 @@ public class MediaSourceManagerProxy : DispatchProxy
                     .Where(s => s.Type == MediaStreamType.Video || s.Type == MediaStreamType.Audio)
                     .Select(FixStream)
                     .ToArray();
-                Console.WriteLine($"[ExternalMedia] GetMediaStreams -> {filtered.Length} filtered streams");
+                Console.WriteLine($"[Gelato] GetMediaStreams -> {filtered.Length} filtered streams");
                 return filtered;
             }
 
@@ -93,7 +93,7 @@ public class MediaSourceManagerProxy : DispatchProxy
                     .Where(s => s.Type == MediaStreamType.Video || s.Type == MediaStreamType.Audio)
                     .Select(FixStream)
                     .ToArray();
-                Console.WriteLine($"[ExternalMedia] GetMediaStreams -> {filtered.Length} filtered streams");
+                Console.WriteLine($"[Gelato] GetMediaStreams -> {filtered.Length} filtered streams");
                 return filtered;
             }
 
@@ -104,7 +104,7 @@ public class MediaSourceManagerProxy : DispatchProxy
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[ExternalMedia] TransformResult failed: {ex}");
+            Console.WriteLine($"[Gelato] TransformResult failed: {ex}");
         }
 
         return value;

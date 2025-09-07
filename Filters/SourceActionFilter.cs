@@ -13,7 +13,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
-using Jellyfin.Plugin.ExternalMedia.Common;
+using Gelato.Common;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Dto;
 using Jellyfin.Data.Enums;
@@ -23,48 +23,48 @@ using MediaBrowser.Model.Querying;
 using Jellyfin.Database.Implementations.Entities.Libraries;
 using Microsoft.AspNetCore.Mvc.Controllers;
 
-namespace Jellyfin.Plugin.ExternalMedia;
+namespace Gelato.Filters;
 
-public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilter
+public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
 {
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
     private readonly IMediaSourceManager _mediaSources;
     private readonly IDtoService _dtoService;
-    private readonly ExternalMediaStremioProvider _stremioProvider;
-    private readonly ILogger<ExternalMediaSourceActionFilter> _log;
-    private readonly ExternalMediaManager _manager;
-    private readonly ExternalMediaSeriesManager _seriesManager;
+    private readonly GelatoStremioProvider _stremioProvider;
+    private readonly ILogger<SourceActionFilter> _log;
+    private readonly GelatoManager _manager;
+    private readonly GelatoSeriesManager _seriesManager;
     private readonly IMediaSourceManager _sourceManager;
-    // private readonly ExternalMediaRefresh _refresh;
+    // private readonly GelatoRefresh _refresh;
 
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
-    private readonly ExternalMediaSourceProvider _externalMediaSourceProvider;
+    private readonly GelatoSourceProvider _externalMediaSourceProvider;
 
     public int Order => 1;
 
-    public ExternalMediaSourceActionFilter(
-        // ExternalMediaSourceProvider externalMediaSourceProvider,
+    public SourceActionFilter(
+        // GelatoSourceProvider externalMediaSourceProvider,
         IEnumerable<IMediaSourceProvider> providers,
         ILibraryManager library,
-        //  ExternalMediaRefresh refresh,
+        //  GelatoRefresh refresh,
         IFileSystem fileSystem,
         IItemRepository repo,
         IMediaSourceManager mediaSources,
-        ExternalMediaManager manager,
-          ExternalMediaSeriesManager seriesManager,
+        GelatoManager manager,
+          GelatoSeriesManager seriesManager,
         IDtoService dtoService,
-        ExternalMediaStremioProvider stremioProvider,
+        GelatoStremioProvider stremioProvider,
         IProviderManager provider,
         // ILibraryMonitor libraryMonitor,
         IMediaSourceManager sourceManager,
-        ILogger<ExternalMediaSourceActionFilter> log)
+        ILogger<SourceActionFilter> log)
     {
         _library = library;
         // _externalMediaSourceProvider = externalMediaSourceProvider;
-        _externalMediaSourceProvider = providers.OfType<ExternalMediaSourceProvider>().FirstOrDefault()
-     ?? throw new InvalidOperationException("ExternalMediaSourceProvider not registered.");
+        _externalMediaSourceProvider = providers.OfType<GelatoSourceProvider>().FirstOrDefault()
+     ?? throw new InvalidOperationException("GelatoSourceProvider not registered.");
         _sourceManager = sourceManager;
         //  _refresh = refresh;
         _repo = repo;
@@ -81,8 +81,8 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
-        var req = ctx.HttpContext.Request;
-        _log.LogInformation("ExternalMedia: Requested path = {Path}{Query}", req.Path, req.QueryString);
+        // var req = ctx.HttpContext.Request;
+        // _log.LogInformation("Gelato: Requested path = {Path}{Query}", req.Path, req.QueryString);
 
         if (!_manager.IsItemsAction(ctx))
         {
@@ -94,7 +94,7 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
         // this also fails if there are multiple ids
         if (!_manager.TryGetRouteGuid(ctx, out var guid))
         {
-            // _log.LogInformation("ExternalMedia: No route guid");
+            // _log.LogInformation("Gelato: No route guid");
             await next();
             return;
         }
@@ -107,7 +107,7 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
             await next();
             return;
         }
-        // _log.LogInformation("ExternalMedia: Found route guid {Guid}, isUri={IsUri}", guid, stremioUri.ToString());
+        // _log.LogInformation("Gelato: Found route guid {Guid}, isUri={IsUri}", guid, stremioUri.ToString());
         var isStream = stremioUri is not null && stremioUri.StreamId is not null;
         var isList = cad.ActionName == "GetItemList" || cad.ActionName == "GetItemsByUserIdLegacy";
         BaseItem? item = null;
@@ -133,7 +133,7 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
         if (item is null) return;
 
         var ct = ctx.HttpContext.RequestAborted;
-        // _log.LogInformation("ExternalMedia: Processing response object of type {Type}", obj.Value.GetType().FullName);
+        // _log.LogInformation("Gelato: Processing response object of type {Type}", obj.Value.GetType().FullName);
         async Task<BaseItemDto> ProcessOneAsync(BaseItem item, CancellationToken token)
         {
             var dto = _dtoService.GetBaseItemDto(
@@ -160,7 +160,7 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
                 ct: CancellationToken.None
             ).ConfigureAwait(false);
 
-            // _log.LogInformation("ExternalMedia: Processing item {Name} ({Id})", item.Name, item.Id);
+            // _log.LogInformation("Gelato: Processing item {Name} ({Id})", item.Name, item.Id);
 
             dto.MediaSources = sources
                 .Where(src => !string.Equals(src.Id, item.Id.ToString("N"), StringComparison.OrdinalIgnoreCase))

@@ -10,26 +10,26 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
-using Jellyfin.Plugin.ExternalMedia.Configuration;
+using Gelato.Configuration;
 using System.Text.Json.Serialization;
-using Jellyfin.Plugin.ExternalMedia.Common;
+using Gelato.Common;
 
-namespace Jellyfin.Plugin.ExternalMedia
+namespace Gelato
 {
-    public class ExternalMediaStremioProvider
+    public class GelatoStremioProvider
     {
         private readonly IHttpClientFactory _http;
-        private readonly ILogger<ExternalMediaStremioProvider> _log;
+        private readonly ILogger<GelatoStremioProvider> _log;
         private StremioManifest? _manifest;
         public StremioCatalog? MovieSearchCatalog { get; private set; }
         public StremioCatalog? SeriesSearchCatalog { get; private set; }
         private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
         private readonly ILibraryManager _library;
 
-        public ExternalMediaStremioProvider(
+        public GelatoStremioProvider(
                   ILibraryManager library,
             IHttpClientFactory http,
-            ILogger<ExternalMediaStremioProvider> log,
+            ILogger<GelatoStremioProvider> log,
             MediaBrowser.Controller.Persistence.IItemRepository repo)
         {
             _http = http;
@@ -39,15 +39,15 @@ namespace Jellyfin.Plugin.ExternalMedia
 
         private HttpClient NewClient()
         {
-            var c = _http.CreateClient(nameof(ExternalMediaStremioProvider));
+            var c = _http.CreateClient(nameof(GelatoStremioProvider));
             c.Timeout = TimeSpan.FromSeconds(15);
             return c;
         }
 
         private string GetBaseUrlOrThrow()
         {
-            var u = ExternalMediaPlugin.Instance!.Configuration.GetBaseUrl()?.Trim().TrimEnd('/');
-            if (string.IsNullOrWhiteSpace(u)) throw new InvalidOperationException("ExternalMedia Url not configured.");
+            var u = GelatoPlugin.Instance!.Configuration.GetBaseUrl()?.Trim().TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(u)) throw new InvalidOperationException("Gelato Url not configured.");
             return u;
         }
 
@@ -69,8 +69,8 @@ namespace Jellyfin.Plugin.ExternalMedia
                 if (!resp.IsSuccessStatusCode) return default;
                 await using var s = await resp.Content.ReadAsStreamAsync();
                 // var json = await resp.Content.ReadAsStringAsync();
-                //_log.LogInformation("ExternalMedia: Body {Json}", json);
-                //  _log.LogInformation("ExternalMedia: Response {StatusCode}", resp.StatusCode);
+                //_log.LogInformation("Gelato: Body {Json}", json);
+                //  _log.LogInformation("Gelato: Response {StatusCode}", resp.StatusCode);
                 return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
             }
             catch (Exception ex)
@@ -104,19 +104,24 @@ namespace Jellyfin.Plugin.ExternalMedia
             }
 
             if (MovieSearchCatalog == null)
-                _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable movie catalog", url);
+                _log.LogWarning("Gelato: manifest at {Url} has no search-capable movie catalog", url);
 
             if (SeriesSearchCatalog == null)
-                _log.LogWarning("ExternalMedia: manifest at {Url} has no search-capable series catalog", url);
+                _log.LogWarning("Gelato: manifest at {Url} has no search-capable series catalog", url);
 
             return m;
         }
 
         public async Task<bool> IsReady()
         {
-            // if manifest == null) return false;
-            var manifest = await GetManifestAsync();
-            return manifest != null;
+            try
+            {
+                var manifest = await GetManifestAsync();
+                return manifest != null;
+            } catch
+            {
+                return false;
+            }
         }
 
         public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)
@@ -129,7 +134,7 @@ namespace Jellyfin.Plugin.ExternalMedia
         public async Task<List<StremioStream>> GetStreamsAsync(BaseItem entity)
         {
             var (mediaType, Id) = ResolveKey(entity);
-            // _log.LogInformation("ExternalMedia: GetStreamsAsync {Type} {Id}", mediaType, Id);
+            // _log.LogInformation("Gelato: GetStreamsAsync {Type} {Id}", mediaType, Id);
             if (mediaType is null || string.IsNullOrWhiteSpace(Id)) return new();
             var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), Id });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
@@ -138,7 +143,7 @@ namespace Jellyfin.Plugin.ExternalMedia
 
         public async Task<List<StremioStream>> GetStreamsAsync(string Id, StremioMediaType mediaType)
         {
-            // _log.LogInformation("ExternalMedia: GetStreamsAsync {Type} {Id}", mediaType, Id);
+            // _log.LogInformation("Gelato: GetStreamsAsync {Type} {Id}", mediaType, Id);
             var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), Id });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
@@ -237,7 +242,7 @@ namespace Jellyfin.Plugin.ExternalMedia
                     };
                     break;
                 default:
-                    _log.LogInformation("ExternalMedia: unsupported type {type}", meta.Type);
+                    _log.LogInformation("Gelato: unsupported type {type}", meta.Type);
                     return null;
             }
             ;
