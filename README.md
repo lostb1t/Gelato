@@ -33,7 +33,7 @@ Profit!
 - [ ] Import media from stremio catalogs (scheduled task)
 - [ ] Create collections from stremio catalogs (scheduled task)
 - [ ] Add more settings like cache ttl and stream name options etc
-- [ ] Add support for combing static streams (local and dynamic stremio streams
+- [ ] Add support for combing static streams (local) and dynamic stremio streams
 - [ ] Add proxy option. Maybe.. low prio
 
 ### FAQ
