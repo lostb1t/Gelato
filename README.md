@@ -5,6 +5,8 @@
 2. Configure plugin by going to Plugins -> Gelato.  
 ONLY AIOSTREAMS IS SUPPORTED. You can create an an manifest through a public instance like: https://aiostreams.elfhosted.com/stremio/configure
 
-bump up probing and analyse
+Tips
+
+bump up probing and analyse to your liking
 
 JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
