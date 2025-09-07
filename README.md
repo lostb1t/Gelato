@@ -1,4 +1,11 @@
-# Gelato
+<div align="center">
+   <img width="200" height="200" src="logo.png" alt="Logo">
+</div>
+   
+<div align="center">
+  <h1><b>Gelato</b></h1>
+  <p><i>Jellyfin Stremio Integration Plugin</i></p>
+</div>
 
 Bring the power of Stremio addons directly into Jellyfin. This plugin replaces Jellyfin’s default search with Stremio-powered results, seamlessly injecting them into your Jellyfin library and database.
 
