@@ -7,3 +7,7 @@ framework: "net8.0"
 owner: "lstb1t"
 artifacts:
   - "Gelato.dll"
+overview: "Stream external media."
+description: >
+  Stream external media.
+category: "General"
