@@ -21,6 +21,7 @@ Profit!
 
 - only supports aiostreams
 - no support for p2p as of yet
+- If a item already exists in your library as a local file, the plugin does nothing. This will probaply change in the future.
 
 ### Todo:
 
