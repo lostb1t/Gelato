@@ -28,8 +28,9 @@ Profit!
 - [ ] Replace search images
 - [x] Use stremio streams as media sources
 - [ ] Enable deletion of stremio media items
+- [ ] Add support for subtitle addons
 - [ ] Import media from stremio catalogs (scheduled task)
-- [ ] Create collectioms from stremio catalogs (scheduled task)
+- [ ] Create collections from stremio catalogs (scheduled task)
 
 ### FAQ
 
