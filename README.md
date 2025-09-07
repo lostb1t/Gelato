@@ -41,5 +41,6 @@ Profit!
 - You should have at least one search enabled catalog. I suggest the tmdb addon.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - stream cache is 3600 min. Can be cleared by restarting the server
+- If a search result already exists in your library the plugin does nothing. This might change in the future.
 - bump up probing and analyse to your liking
   JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
