@@ -90,7 +90,7 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
             return;
         }
 
-        
+
         // this also fails if there are multiple ids
         if (!_manager.TryGetRouteGuid(ctx, out var guid))
         {
@@ -101,13 +101,7 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
 
         // i think this only happens with the web client. For some reason makes a extra request to the stream
         var stremioUri = _manager.GetStremioUri(guid);
-      //  if (stremioUri is null)
-       // {
-        //    await next();
-        //    return;
-        //}
-        
-       // var isUri = StremioUri.TryParseFromGuidEncoded(guid, out var stremioUri);
+
         if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
         {
             await next();
@@ -117,9 +111,7 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
         var isStream = stremioUri is not null && stremioUri.StreamId is not null;
         var isList = cad.ActionName == "GetItemList" || cad.ActionName == "GetItemsByUserIdLegacy";
         BaseItem? item = null;
-       // _log.LogInformation("ExternalMedia: IsStream={IsStream} IsList={IsList} StremioUri={StremioUri}", isStream, isList, isUri ? stremioUri.ToString() : "<null>");
-        
-        
+
         // get the base
         if (isStream)
         {
@@ -144,10 +136,6 @@ public class ExternalMediaSourceActionFilter : IAsyncActionFilter, IOrderedFilte
         // _log.LogInformation("ExternalMedia: Processing response object of type {Type}", obj.Value.GetType().FullName);
         async Task<BaseItemDto> ProcessOneAsync(BaseItem item, CancellationToken token)
         {
-
-            // var item = _library.GetItemById(dto.Id);
-            // if (item is null) return dto;
-
             var dto = _dtoService.GetBaseItemDto(
                 item,
                 new DtoOptions(),

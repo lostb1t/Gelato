@@ -77,16 +77,16 @@ IItemRepository repo,
         _library = libraryManager;
         _fileSystem = fileSystem;
     }
-    
+
     public void SaveStremioUri(Guid guid, StremioUri stremioUri)
     {
         _memoryCache.Set(guid, stremioUri, TimeSpan.FromMinutes(3600));
     }
-    
+
     public StremioUri? GetStremioUri(Guid guid)
-{
-    return _memoryCache.TryGetValue(guid, out var value) ? value as StremioUri : null;
-}
+    {
+        return _memoryCache.TryGetValue(guid, out var value) ? value as StremioUri : null;
+    }
 
     public static void SeedFolder(string path)
     {

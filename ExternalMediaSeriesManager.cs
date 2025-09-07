@@ -35,23 +35,11 @@ namespace Jellyfin.Plugin.ExternalMedia
             _repo = repo;
         }
 
-        // public string GetSeasonFolderName(StremioMeta meta)
-        // {
-        //     // var seriesFolderName = GetSeriesFolderName(meta);
-        //     return $"Season {group.Key:D2}";
-        // }
-
-        /// <summary>
-        /// Builds Series/Season/Episode structure from Stremio meta and writes one .strm per episode
-        /// with a placeholder URL. No network calls.
-        /// Series folder name format: "Title (Year) [imdbid-ttxxxxxx] [tmdbid-yyyyy] …"
-        /// Returns true if at least one episode file was created.
-        /// </summary>
         public async Task<bool> CreateSeriesTreesAsync(
-    Folder seriesRootFolder,
-    StremioMeta seriesMeta,
-    bool placeholders,
-    CancellationToken ct)
+            Folder seriesRootFolder,
+            StremioMeta seriesMeta,
+            bool placeholders,
+            CancellationToken ct)
         {
             if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
                 return false;

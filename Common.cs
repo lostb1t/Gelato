@@ -53,7 +53,7 @@ public sealed class StremioUri
 
         var mediaType = typeStr switch
         {
-            "movie"  => StremioMediaType.Movie,
+            "movie" => StremioMediaType.Movie,
             "series" => StremioMediaType.Series,
             _ => throw new FormatException($"Unknown media type in StremioId: {typeStr}")
         };
@@ -93,4 +93,44 @@ public sealed class StremioUri
 
     public static StremioUri Series(string externalId, string? streamId = null)
         => new(StremioMediaType.Series, externalId, streamId);
+}
+
+public static class Utils
+{
+    public static long? ParseToTicks(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        input = input.Trim().ToLowerInvariant();
+
+        // Try built-in parse (hh:mm:ss)
+        if (TimeSpan.TryParse(input, out var ts))
+            return ts.Ticks;
+
+        // Try XML ISO8601 style (PT2H29M)
+        try
+        {
+            ts = System.Xml.XmlConvert.ToTimeSpan(input);
+            return ts.Ticks;
+        }
+        catch
+        {
+            // ignore
+        }
+        // Regex fallback for human formats like "2h29min"
+        var h = Regex.Match(input, @"(\d+)\s*h");
+        var m = Regex.Match(input, @"(\d+)\s*min");
+        var s = Regex.Match(input, @"(\d+)\s*s(ec)?");
+
+        int hours = h.Success ? int.Parse(h.Groups[1].Value) : 0;
+        int mins = m.Success ? int.Parse(m.Groups[1].Value) : 0;
+        int secs = s.Success ? int.Parse(s.Groups[1].Value) : 0;
+
+        // If plain number like "149" → minutes
+        if (!h.Success && !m.Success && !s.Success && int.TryParse(input, out var onlyNum))
+            mins = onlyNum;
+
+        return new TimeSpan(hours, mins, secs).Ticks;
+    }
 }

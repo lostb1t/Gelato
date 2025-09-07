@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Controller.Library;
 using System.Reflection;
+using Jellyfin.Plugin.ExternalMedia.Filters;
+
 
 namespace Jellyfin.Plugin.ExternalMedia;
 
@@ -16,6 +18,8 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ExternalMediaInsertActionFilter>();
         services.AddSingleton<ExternalMediaSearchActionFilter>();
         services.AddSingleton<ExternalMediaSourceActionFilter>();
+        services.AddSingleton<PlaybackInfoFilter>();
+        
         services.AddSingleton<ExternalMediaManager>();
         services.AddSingleton<ExternalMediaSeriesManager>();
         services.AddSingleton<IMediaSourceProvider, ExternalMediaSourceProvider>();
@@ -28,6 +32,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<ExternalMediaInsertActionFilter>(order: 0);
             o.Filters.AddService<ExternalMediaSourceActionFilter>(order: 1);
             o.Filters.AddService<ExternalMediaSearchActionFilter>(order: 2);
+            o.Filters.AddService<PlaybackInfoFilter>(order: 3);
         });
 
 

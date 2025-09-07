@@ -88,21 +88,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             await next();
             return;
         }
-        
-
-
-        // should probaoly be in its own action
-      //  if (TryParseSourceId(guidString, out var guid, out var mediaSourceGuid))
-      //  {
-            // _log.LogInformation("ExternalMedia: Parsed source id {Guid} index {Index}", guid, mediaSourceGuid);
-      //      if (mediaSourceGuid is not null)
-      //      {
-      //          ctx.HttpContext.Items["MediaSourceGuid"] = mediaSourceGuid;
-      //          ReplaceGuid(ctx, guid);
-      //          await next();
-      //          return;
-      //      }
-      //  }
 
         var stremioUri = _manager.GetStremioUri(guid);
         if (stremioUri is null)
@@ -110,9 +95,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
             await next();
             return;
         }
-
-       // _log.LogInformation("ExternalMedia: StremioId {StremioId} Type {MediaType} ExternalId {ExternalId}", stremioId, mediaType, externalId);
-
 
         var found = FindByStremioId(stremioUri.ToString()) as Video;
         if (found is not null)
@@ -183,32 +165,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
         await next();
     }
 
-    public static bool TryParseSourceId(string sourceId, out Guid itemId, out Guid? mediaSourceId)
-    {
-        itemId = Guid.Empty;
-        mediaSourceId = null;
-
-        if (string.IsNullOrWhiteSpace(sourceId))
-            return false;
-
-        var parts = sourceId.Split(new[] { "::" }, StringSplitOptions.None);
-
-        if (parts.Length == 1)
-        {
-            return Guid.TryParse(parts[0], out itemId);
-        }
-
-        if (parts.Length == 2 &&
-            Guid.TryParse(parts[0], out itemId) &&
-            Guid.TryParse(parts[1], out var msId))
-        {
-            mediaSourceId = msId;
-            return true;
-        }
-
-        return false;
-    }
-
     public void StartSeriesRefreshDettached(Folder root, StremioMeta meta)
     {
         _ = Task.Run(async () =>
@@ -241,55 +197,6 @@ public class ExternalMediaInsertActionFilter : IAsyncResourceFilter, IOrderedFil
 
     }
 
-    static bool IsJellyfinWeb(HttpRequest req)
-    {
-        var h = req.Headers["X-Emby-Authorization"].ToString();
-        // very forgiving parse
-        return h.IndexOf("Client=Jellyfin Web", StringComparison.OrdinalIgnoreCase) >= 0;
-    }
-
-    private bool IsLegacyItemAction(ResourceExecutingContext ctx)
-    {
-        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
-            return false;
-        return string.Equals(cad.ActionName, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
-
-    }
-
-    // private bool TryGetRouteGuid(ResourceExecutingContext ctx, out Guid value)
-    // {
-    //     value = Guid.Empty;
-
-    //     // Skip legacy endpoint entirely
-    //     //if (ctx.ActionDescriptor is ControllerActionDescriptor cad &&
-    //     //    string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase))
-    //     //{
-    //     //    return false;
-    //     // }
-
-    //     var rd = ctx.RouteData.Values;
-
-    //     foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
-    //     {
-    //         if (rd.TryGetValue(key, out var raw) && raw is not null)
-    //         {
-    //             var s = raw.ToString();
-    //             if (!string.IsNullOrWhiteSpace(s) && Guid.TryParse(s, out value))
-    //                 return true;
-    //         }
-    //     }
-
-    //     // Fallback: check query string "ids"
-    //     var query = ctx.HttpContext.Request.Query;
-    //     if (query.TryGetValue("ids", out var ids) && ids.Count == 1)
-    //     {
-    //         var s = ids[0];
-    //         if (!string.IsNullOrWhiteSpace(s) && Guid.TryParse(s, out value))
-    //             return true;
-    //     }
-
-    //     return false;
-    // }
 
     private void ReplaceGuid(ResourceExecutingContext ctx, Guid value)
     {

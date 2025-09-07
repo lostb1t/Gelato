@@ -12,6 +12,7 @@ using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Plugin.ExternalMedia.Configuration;
 using System.Text.Json.Serialization;
+using Jellyfin.Plugin.ExternalMedia.Common;
 
 namespace Jellyfin.Plugin.ExternalMedia
 {
@@ -269,6 +270,7 @@ namespace Jellyfin.Plugin.ExternalMedia
             // item.CanDownload = true;
             // item.GetType
             //item.
+            item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
             var imgs = new List<ItemImageInfo?>();
             imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
