@@ -11,6 +11,11 @@ ONLY AIOSTREAMS IS SUPPORTED. You can create an an manifest through a public ins
 4. Search for something thats not in your library. Select result.
 Profit!
 
+Notes:
+
+- only supports aiostreams
+- no support for p2p as of yet
+
 Todo:
 
 
