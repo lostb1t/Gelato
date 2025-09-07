@@ -25,7 +25,7 @@ Profit!
 ### Todo:
 
 - [x] Replace search
-- [x] Inject selected search items into databass
+- [x] Inject selected search items into the library
 - [ ] Replace search images
 - [x] Use stremio streams as media sources
 - [ ] Enable deletion of stremio media items
