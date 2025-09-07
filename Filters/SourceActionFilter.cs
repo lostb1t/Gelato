@@ -20,7 +20,7 @@ using Jellyfin.Data.Enums;
 using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
-using Jellyfin.Database.Implementations.Entities.Libraries;
+//using Jellyfin.Database.Implementations.Entities.Libraries;
 using Microsoft.AspNetCore.Mvc.Controllers;
 
 namespace Gelato.Filters;

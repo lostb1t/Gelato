@@ -5,10 +5,10 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using MediaBrowser.Model.MediaInfo;                 // MediaStream
-using MediaBrowser.Controller.MediaEncoding;        // IMediaSourceManager
+using MediaBrowser.Model.MediaInfo;                
+using MediaBrowser.Controller.MediaEncoding;        
 using MediaBrowser.Controller.Library;
-using Jellyfin.Database.Implementations.Entities;
+//using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Persistence;

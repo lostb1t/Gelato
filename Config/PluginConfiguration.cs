@@ -1,4 +1,4 @@
-using Jellyfin.Database.Implementations.Entities.Libraries;
+//using Jellyfin.Database.Implementations.Entities.Libraries;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
@@ -8,9 +8,6 @@ namespace Gelato.Configuration
 {
     public class PluginConfiguration : BasePluginConfiguration
     {
-
-        // public Guid? MovieLibraryId { get; set; }
-        // public Guid? MovieFolderId { get; set; }
 
         public string? MoviePath { get; set; }
         public string? SeriesPath { get; set; }
