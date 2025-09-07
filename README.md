@@ -1,7 +1,7 @@
 # Gelato
 
 Use stremio addons with jellyfin. This plugin replaces the search with stremio search and injects it into your database.
-Stream results are loaded realtime. (with a cache of 30 min)
+Stream results are loaded realtime. (with a cache of 3600 min)
 
 
 1. Install the plugin: https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json
@@ -21,6 +21,6 @@ Todo:
 
 Tips
 
-bump up probing and analyse to your liking
-
-JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
+- stream cache is 3600 min. Can be cleared by restarting the server
+- bump up probing and analyse to your liking
+  JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
