@@ -1,8 +1,14 @@
 # Gelato
 
-Use stremio addons with jellyfin. This plugin replaces the search with stremio search and injects it into your database.
-Stream results are loaded realtime. (with a cache of 3600 min)
+Bring the power of Stremio addons directly into Jellyfin.
+This plugin replaces Jellyfin’s default search with Stremio-powered results, seamlessly injecting them into your Jellyfin library and database.
 
+✨ Features
+	•	🔎 Unified Search – Jellyfin search now pulls results from Stremio addons.
+	•	⚡ Realtime Streaming – Streams are resolved on demand and play instantly.
+	•	📂 Database Integration – Stremio items appear like native Jellyfin items.
+	•	🗄️ Smart Caching – Results are cached for up to 3600 minutes for fast repeat access.
+	•	🎬 More Content, Less Hassle – Expand Jellyfin with community-driven Stremio catalogs.
 
 1. Install the plugin: https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json
 2. Configure plugin by going to Plugins -> Gelato.  
