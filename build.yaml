@@ -5,3 +5,5 @@ version: "0.1.0.0"
 targetAbi: "10.10.7.0"
 framework: "net8.0"
 owner: "lstb1t"
+artifacts:
+  - "Gelato.dll"
