@@ -158,14 +158,14 @@ public sealed class FileCache
         Directory.CreateDirectory(_basePath);
     }
 
-    public async Task SetAsync<T>(string key, T value, TimeSpan? ttl = null, CancellationToken ct = default)
+    public async Task SetAsync<T>(string key, T value, CancellationToken ct = default)
     {
         var path = PathFor(key);
         await using var fs = File.Create(path);
         var envelope = new Envelope<T>
         {
             Value = value,
-            ExpiresAt = ttl.HasValue ? DateTimeOffset.UtcNow.Add(ttl.Value) : null
+            // ExpiresAt = ttl.HasValue ? DateTimeOffset.UtcNow.Add(ttl.Value) : null
         };
         await JsonSerializer.SerializeAsync(fs, envelope, JsonOpts, ct).ConfigureAwait(false);
     }

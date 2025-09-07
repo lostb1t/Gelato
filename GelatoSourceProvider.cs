@@ -152,6 +152,7 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
                         MediaSource = mediaSource
                     },
                     ct);
+                await _fileCache.SetAsync(mediaSource.Id, mediaInfo, ct);
             }
 
             mediaSource.Bitrate = mediaInfo.Bitrate;

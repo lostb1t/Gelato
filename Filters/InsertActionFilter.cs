@@ -1,19 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
-
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
-using Gelato.Common;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Dto;
 using Jellyfin.Data.Enums;
@@ -21,7 +12,6 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Primitives;
 using Microsoft.AspNetCore.Http;
-using MediaBrowser.Model.Dto;
 
 namespace Gelato.Filters;
 
@@ -36,8 +26,6 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
     private readonly GelatoManager _manager;
     private readonly GelatoSeriesManager _seriesManager;
     private readonly IMediaSourceManager _sourceManager;
-    // private readonly GelatoRefresh _refresh;
-
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
     private readonly ILibraryMonitor _libraryMonitor;
@@ -46,12 +34,11 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
     public InsertActionFilter(
         ILibraryManager library,
-        //  GelatoRefresh refresh,
         IFileSystem fileSystem,
         IItemRepository repo,
         IMediaSourceManager mediaSources,
         GelatoManager manager,
-          GelatoSeriesManager seriesManager,
+        GelatoSeriesManager seriesManager,
         IDtoService dtoService,
         GelatoStremioProvider stremioProvider,
         IProviderManager provider,
@@ -61,7 +48,6 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
     {
         _library = library;
         _sourceManager = sourceManager;
-        //  _refresh = refresh;
         _repo = repo;
         _mediaSources = mediaSources;
         _dtoService = dtoService;
@@ -84,7 +70,6 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
         if (!_manager.TryGetRouteGuid(ctx, out var guid))
         {
-            // _log.LogInformation("Gelato: No route guid");
             await next();
             return;
         }
