@@ -32,6 +32,7 @@ Profit!
 - [ ] Add support for subtitle addons
 - [ ] Import media from stremio catalogs (scheduled task)
 - [ ] Create collections from stremio catalogs (scheduled task)
+- [ ] Add more settings like cache ttl and stream name options etc
 
 ### FAQ
 
