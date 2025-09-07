@@ -22,6 +22,8 @@ Profit!
 - [ ] Replace search images
 - [x] Use stremio streams as media sources
 - [ ] Enable deletion of stremio media items
+- [ ] Import media from stremio catalogs (scheduled task)
+- [ ] Create collectioms from stremio catalogs (scheduled task)
 
 Tips
 
