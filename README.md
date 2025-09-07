@@ -43,7 +43,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - [x] Replace search  
 - [x] Inject selected search results into the library  
 - [x] Use Stremio streams as media sources  
-- [ ] Replace search result images  
+- [ ] Support search result images  
 - [ ] Enable deletion of Stremio media items  
 - [ ] Add support for subtitle addons  
 - [ ] Import media from Stremio catalogs (scheduled task)  
