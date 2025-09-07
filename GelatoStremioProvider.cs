@@ -219,7 +219,7 @@ namespace Gelato
 
             switch (meta.Type)
             {
-                case "series":
+                case StremioMediaType.Series:
                     item = new Series
                     {
                         Id = _library.GetNewItemId(Id, typeof(Series)),
@@ -227,7 +227,7 @@ namespace Gelato
                     };
                     break;
 
-                case "movie":
+                case StremioMediaType.Movie:
                     item = new Movie
                     {
                         Id = _library.GetNewItemId(Id, typeof(Movie)),
@@ -236,13 +236,13 @@ namespace Gelato
 
                     break;
 
-                case "episode":
-                    item = new Episode
-                    {
-                        Id = _library.GetNewItemId(Id, typeof(Episode)),
-                        RunTimeTicks = Utils.ParseToTicks(meta.Runtime)
-                    };
-                    break;
+               // case "episode":
+               //     item = new Episode
+                //    {
+                //        Id = _library.GetNewItemId(Id, typeof(Episode)),
+                //        RunTimeTicks = Utils.ParseToTicks(meta.Runtime)
+                //    };
+                //    break;
                 default:
                     _log.LogInformation("Gelato: unsupported type {type}", meta.Type);
                     return null;
@@ -263,16 +263,15 @@ namespace Gelato
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
             }
-            //item.IsRemote = true;
 
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
-            // item.IsVirtualItem = true;
 
             // path is needed otherwise its set as placeholder and you cant play
             item.Path = $"stremio://{meta.Type}/{Id}";
             item.IsVirtualItem = false;
-
+            item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+
             var imgs = new List<ItemImageInfo?>();
             imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
             imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
@@ -280,18 +279,6 @@ namespace Gelato
             item.ImageInfos = imgs.Where(i => i != null).Cast<ItemImageInfo>().ToArray();
             return item;
         }
-
-        // public void MetaIntoBaseItem(BaseItem item, StremioMeta meta)
-        // {
-        //     if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
-        //     if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
-
-        //     var imgs = new List<ItemImageInfo?>();
-        //     imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
-        //     imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
-        //     imgs.Add(UpdateImage(item, ImageType.Logo, meta.Logo));
-        //     item.ImageInfos = imgs.Where(i => i != null).Cast<ItemImageInfo>().ToArray();
-        // }
 
         private ItemImageInfo? UpdateImage(BaseItem item, ImageType type, string? url)
         {
@@ -324,7 +311,7 @@ namespace Gelato
     public class StremioCatalog
     {
         [JsonConverter(typeof(JsonStringEnumConverter))]
-        public StremioMediaType Type { get; set; } = StremioMediaType.Movie;
+        public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public List<StremioExtra> Extra { get; set; } = new();
@@ -359,7 +346,8 @@ namespace Gelato
     public class StremioMeta
     {
         public string Id { get; set; } = "";
-        public string Type { get; set; } = "";
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Name { get; set; } = "";
         public string? Poster { get; set; }
         public List<string>? Genres { get; set; }
@@ -412,6 +400,42 @@ namespace Gelato
             }
 
             return dict;
+        }
+        
+        public int? GetYear()
+        {
+
+            if (int.TryParse(Year, out var y) && y is > 1800 and < 2200)
+                return y;
+
+            if (Released is DateTime dt)
+                return dt.Year;
+
+            // "2007-2019", "2020-", or "2015"
+            if (!string.IsNullOrWhiteSpace(ReleaseInfo))
+            {
+                var s = ReleaseInfo.Trim();
+
+                if (s.Length >= 4 && int.TryParse(s.AsSpan(0, 4), out var startYear) && startYear is > 1800 and < 2200)
+                    return startYear;
+
+                var dashIndex = s.IndexOf('-');
+                if (dashIndex > 0 && int.TryParse(s[..dashIndex], out var year2) && year2 is > 1800 and < 2200)
+                    return year2;
+
+                if (int.TryParse(s, out var plainYear) && plainYear is > 1800 and < 2200)
+                    return plainYear;
+            }
+
+            return null;
+        }
+        
+        public DateTime? GetPremiereDate() {
+          var year = GetYear();
+          if (year is null) {
+            return null;
+          }
+          return new DateTime(year.Value, 1, 1);
         }
     }
 
@@ -548,11 +572,15 @@ namespace Gelato
     }
 
     public enum StremioMediaType
-    {
-        Movie,
-        Series,
-        Channel,
-        Anime
-    }
+{
+    Unknown = 0,
+    Movie,
+    Series,
+    Channel,
+    Anime,
+    Other,
+    Tv,
+    Events
+}
 
 }

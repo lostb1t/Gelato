@@ -222,7 +222,7 @@ namespace Gelato
         public string GetSeriesFolderName(StremioMeta meta)
         {
             var title = meta.Name;
-            var year = ExtractYear(meta);
+            var year = meta.GetYear();
             var providerIds = meta.GetProviderIds();
             var cleanTitle = SanitizeForPath(title);
             var sb = new StringBuilder(cleanTitle);
@@ -297,35 +297,6 @@ namespace Gelato
             foreach (var ch in name)
                 sb.Append(Array.IndexOf(invalid, ch) >= 0 ? '_' : ch);
             return sb.ToString().Trim().TrimEnd('.');
-        }
-
-        private static int? ExtractYear(StremioMeta meta)
-        {
-            if (meta == null) return null;
-
-            if (int.TryParse(meta.Year, out var y) && y is > 1800 and < 2200)
-                return y;
-
-            if (meta.Released is DateTime dt)
-                return dt.Year;
-
-            // "2007-2019", "2020-", or "2015"
-            if (!string.IsNullOrWhiteSpace(meta.ReleaseInfo))
-            {
-                var s = meta.ReleaseInfo.Trim();
-
-                if (s.Length >= 4 && int.TryParse(s.AsSpan(0, 4), out var startYear) && startYear is > 1800 and < 2200)
-                    return startYear;
-
-                var dashIndex = s.IndexOf('-');
-                if (dashIndex > 0 && int.TryParse(s[..dashIndex], out var year2) && year2 is > 1800 and < 2200)
-                    return year2;
-
-                if (int.TryParse(s, out var plainYear) && plainYear is > 1800 and < 2200)
-                    return plainYear;
-            }
-
-            return null;
         }
     }
 }
