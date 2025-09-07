@@ -18,8 +18,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 ### Usage
 
 1. Install the plugin: https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json
-2. Configure plugin by going to Plugins -> Gelato.  
-ONLY AIOSTREAMS IS SUPPORTED. You can create an an manifest through a public instance like: https://aiostreams.elfhosted.com/stremio/configure
+2. Configure plugin by going to Plugins -> Gelato.ONLY AIOSTREAMS IS SUPPORTED. aiostreams combines all your favorite addons! You can create an an manifest through a public instance like: https://aiostreams.elfhosted.com/stremio/configure
 3. Add configured base paths to the library of your choice.
 4. Search for something thats not in your library. Select result.
 Profit!
