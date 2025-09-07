@@ -35,23 +35,23 @@ namespace Gelato
             _repo = repo;
         }
 
-        public async Task<bool> CreateSeriesTreesAsync(
+        public async Task<BaseItem?> CreateSeriesTreesAsync(
             Folder seriesRootFolder,
             StremioMeta seriesMeta,
             bool placeholders,
             CancellationToken ct)
         {
             if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
-                return false;
+                return null;
 
             var providerIds = seriesMeta.GetProviderIds();
             if (providerIds is null || providerIds.Count == 0)
-                return false;
+                return null;
 
             _log.LogInformation("Gelato: series");
-            var seriesFolderName = GetSeriesFolderName(seriesMeta);
-            var seriesPath = Path.Combine(seriesRootFolder.Path, seriesFolderName);
-            Directory.CreateDirectory(seriesPath);
+            //var seriesFolderName = GetSeriesFolderName(seriesMeta);
+            //var seriesPath = Path.Combine(seriesRootFolder.Path, seriesFolderName);
+            //Directory.CreateDirectory(seriesPath);
 
             var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
                 .OrderBy(e => e.Season)
@@ -59,17 +59,25 @@ namespace Gelato
                 .GroupBy(e => e.Season)
                 .ToList();
             if (groups.Count == 0)
-                return false;
+                return null;
 
-            var seriesItem = _library.FindByPath(seriesPath, true) as Series;
+            //var seriesStremioUri = StremioUri.LoadFromString(stremioKey);
+            var seriesItem = _library.GetItemList(new InternalItemsQuery
+                {
+                    ParentId = seriesRootFolder.Id,
+                    HasAnyProviderId = _manager.GetProviderIds(seriesMeta),
+                    Recursive = false
+                })
+                .OfType<Series>()
+                .FirstOrDefault();
+           // var seriesItem = _library.FindByPath(seriesPath, true) as Series;
             if (seriesItem is null)
             {
-                var newSeries = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
-                if (newSeries.Id == Guid.Empty) newSeries.Id = Guid.NewGuid();
-                newSeries.Path = seriesPath;
-                newSeries.PresentationUniqueKey = newSeries.CreatePresentationUniqueKey();
-                seriesRootFolder.AddChild(newSeries);
-                seriesItem = newSeries;
+                seriesItem = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
+                if (seriesItem.Id == Guid.Empty) seriesItem.Id = Guid.NewGuid();
+               // seriesItem.Path =  "stremio://{meta.Type}/{Id}";;
+                seriesItem.PresentationUniqueKey = seriesItem.CreatePresentationUniqueKey();
+                seriesRootFolder.AddChild(seriesItem);
             }
 
             foreach (var seasonGroup in groups)
@@ -77,8 +85,8 @@ namespace Gelato
                 ct.ThrowIfCancellationRequested();
                 _log.LogInformation($"Gelato: season {seasonGroup.Key}");
                 var seasonIndex = seasonGroup.Key;
-                var seasonPath = Path.Combine(seriesPath, $"Season {seasonIndex:D2}");
-                Directory.CreateDirectory(seasonPath);
+                var seasonPath = $"{seriesItem.Path}:{seasonIndex}";
+               // Directory.CreateDirectory(seasonPath);
 
                 var seasonItem = _library.FindByPath(seasonPath, true) as Season;
                 if (seasonItem is null)
@@ -94,6 +102,7 @@ namespace Gelato
                         Path = seasonPath,
                         SeriesPresentationUniqueKey = seriesItem.GetPresentationUniqueKey()
                     };
+                    seasonItem.SetProviderId("stremio", seasonItem.Path);
                     seriesItem.AddChild(seasonItem);
                 }
 
@@ -108,41 +117,41 @@ namespace Gelato
                     Recursive = false
                 })
                 .OfType<Episode>()
-                .ToDictionary(e => e.Id, e => e);
+                .ToDictionary(e => e.Path, e => e);
 
                 var desiredIds = new HashSet<Guid>();
 
                 foreach (var epMeta in seasonGroup)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (placeholders)
-                    {
-                        continue;
-                    }
-                    var episodes = new List<Video>();
+                   // if (placeholders)
+                   // {
+                   //     continue;
+                   // }
+                  //  var episodes = new List<Video>();
                     //var epMeta = await _stremioProvider.GetNetaAsync(epM.Id, StremioMediaType.Series);
-                    var streams = await _stremioProvider.GetStreamsAsync(epMeta.Id, StremioMediaType.Series);
-                    if (streams is null) continue;
+                    //var streams = await _stremioProvider.GetStreamsAsync(epMeta.Id, StremioMediaType.Series);
+                   // if (streams is null) continue;
 
-                    foreach (StremioStream stream in streams)
-                    {
+                    //foreach (StremioStream stream in streams)
+                    //{
                         ct.ThrowIfCancellationRequested();
 
-                        var epId = stream.GetGuid();
-                        desiredIds.Add(epId);
+                       // var epId = stream.GetGuid();
+                        //desiredIds.Add(epId);
 
-                        string fileNameBase = $"{SanitizeForPath(seriesFolderName)} S{epMeta.Season:D2}E{epMeta.Episode:D2}";
+                       // string fileNameBase = $"{SanitizeForPath(seriesFolderName)} S{epMeta.Season:D2}E{epMeta.Episode:D2}";
                         //string? suffix = TryGetStreamSuffix(stream);
-                        string epFileName = epId.ToString();
-                        string epPath = Path.Combine(seasonPath, epFileName + ".strm");
-
+                        //string epFileName = epId.ToString();
+                        //string epPath = Path.Combine(seasonPath, epFileName + ".strm");
+                        var epPath = $"{seasonItem.Path}:{epMeta.Number}";
                         //   if (!placeholders)
                         //  {
                         //     await _manager.WriteAllTextAsync(epPath, stream.Url ?? string.Empty, ct).ConfigureAwait(false);
                         // }
-                        var epItem = existing.GetValueOrDefault(epId) ?? new Episode
+                        var epItem = existing.GetValueOrDefault(epPath) ?? new Episode
                         {
-                            Id = epId,
+                            Id = Guid.NewGuid(),
                             Name = epMeta.Name,
                             IndexNumber = epMeta.Number,
                             ParentIndexNumber = epMeta.Season,
@@ -151,47 +160,37 @@ namespace Gelato
                             SeriesId = seriesItem.Id,
                             SeriesName = seriesItem.Name,
                             SeasonName = seasonItem.Name,
+                            Path = epPath,
                             SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
 
                         };
+                        epItem.SetProviderId("stremio", epItem.Path);
 
+                        //epItem.Name = epMeta.Name;
+                        //epItem.IsVirtualItem = placeholders;
 
-                        epItem.Name = epMeta.Name;
-                        epItem.IsVirtualItem = placeholders;
-
-                        epItem.ShortcutPath = stream.Url;
-                        epItem.IsShortcut = true;
-                        epItem.Path = placeholders ? null : epPath;
-                        await _manager.SaveStrmAsync(
-                            epItem.Path,
-                            stream.Url
-                        );
+                        //epItem.ShortcutPath = stream.Url;
+                       // epItem.IsShortcut = true;
+                        //epItem.Path = placeholders ? null : epPath;
+                        //await _manager.SaveStrmAsync(
+                        //    epItem.Path,
+                        //    stream.Url
+                        //);
                         _repo.SaveItems(new BaseItem[] { epItem }, ct);
-                        episodes.Add(epItem);
-                    }
+                      //  episodes.Add(epItem);
+                   // }
 
-                    await _manager.MergeVersions(episodes.ToArray());
+                    //await _manager.MergeVersions(episodes.ToArray());
                 }
 
 
-                foreach (var kv in existing)
-                {
-                    if (!desiredIds.Contains(kv.Key))
-                    {
-                        _library.DeleteItem(
-                              kv.Value,
-                              new DeleteOptions { DeleteFileLocation = true },
-                              true);
-                        // _repo.DeleteItem(kv.Value, ct);
-                    }
-                }
-
+                
 
             }
 
 
             _log.LogInformation($"Gelato: done sync series");
-            return true;
+            return seriesItem;
         }
 
 

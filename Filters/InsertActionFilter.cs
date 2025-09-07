@@ -117,14 +117,23 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         Func<CancellationToken, Task<bool>> saver = isSeries
             ? (async ct =>
             {
-                await _seriesManager.CreateSeriesTreesAsync(root, meta, true, ct);
-                StartSeriesRefreshDettached(root, meta);
+                baseItem = await _seriesManager.CreateSeriesTreesAsync(root, meta, true, ct);
+                
+_provider.QueueRefresh(
+  baseItem.Id,
+                new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                {
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                    //ReplaceAllMetadata = true,
+                    ForceSave = true
+                      
+                },
+                RefreshPriority.High);
                 return true;
             })
             : (async ct =>
             {
-                // var streams = await _stremioProvider.GetStreamsAsync(baseItem).ConfigureAwait(false);
-                // var items = await _manager.SaveStreams(streams, root, meta, CancellationToken.None).ConfigureAwait(false);
                 root.AddChild(baseItem);
                 var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                 {
@@ -133,38 +142,36 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
                     ForceSave = true
                 };
                 await baseItem.RefreshMetadata(options, CancellationToken.None);
-                // var primaryItem = _manager.GetPrimaryVersion(items);
-                ReplaceGuid(ctx, baseItem.Id);
-                // if (primaryItem is not null)
-                // {
-                //     ReplaceGuid(ctx, baseItem.Id);
-                // }
-                // await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+               // ReplaceGuid(ctx, baseItem.Id);
                 return true;
             });
 
-
+        ReplaceGuid(ctx, baseItem.Id);
         var ok = await saver(CancellationToken.None).ConfigureAwait(false);
-        // _log.LogInformation("Gelato: saved media");
 
         await next();
     }
 
-    public void StartSeriesRefreshDettached(Folder root, StremioMeta meta)
+    public void StartSeriesRefreshDettached(Folder series)
     {
         _ = Task.Run(async () =>
         {
             try
             {
-                // wait 10 seconds before starting the refresh
-
                 using var ct = new CancellationTokenSource();
-                await _seriesManager.CreateSeriesTreesAsync(root, meta, false, CancellationToken.None);
-                //await _refresh.RefreshAsync(root, cts.Token).ConfigureAwait(false);
+                var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                {
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ForceSave = true
+                };
+                await series.RefreshMetadata(options, CancellationToken.None);
+                //ValidateChildren
+                //await _seriesManager.CreateSeriesTreesAsync(root, meta, false, CancellationToken.None);
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Gelato: background refresh failed for {Name}", root.Name);
+                //_log.LogError(ex, "Gelato: background refresh failed for {Name}", root.Name);
             }
         });
     }

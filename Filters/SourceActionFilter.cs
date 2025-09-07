@@ -133,7 +133,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         if (item is null) return;
 
         var ct = ctx.HttpContext.RequestAborted;
-        // _log.LogInformation("Gelato: Processing response object of type {Type}", obj.Value.GetType().FullName);
+       // _log.LogInformation("Gelato: Processing response object of type {Type}", guid);
         async Task<BaseItemDto> ProcessOneAsync(BaseItem item, CancellationToken token)
         {
             var dto = _dtoService.GetBaseItemDto(

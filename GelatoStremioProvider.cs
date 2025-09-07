@@ -230,15 +230,16 @@ namespace Gelato
                     item = new Movie
                     {
                         Id = _library.GetNewItemId(Id, typeof(Movie)),
-                        // Path = $"stremio://movie/{Id}"
+                        RunTimeTicks = Utils.ParseToTicks(meta.Runtime)
                     };
+
                     break;
 
                 case "episode":
                     item = new Episode
                     {
                         Id = _library.GetNewItemId(Id, typeof(Episode)),
-                        // Path = $"stremio://series/{Id}"
+                        RunTimeTicks = Utils.ParseToTicks(meta.Runtime)
                     };
                     break;
                 default:
@@ -263,19 +264,13 @@ namespace Gelato
             }
             //item.IsRemote = true;
 
-
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
             // item.IsVirtualItem = true;
 
             // path is needed otherwise its set as placeholder and you cant play
-            item.Path = "stremio://{meta.Type}/{Id}";
+            item.Path = $"stremio://{meta.Type}/{Id}";
             item.IsVirtualItem = false;
-            // item.LocationType
-            // item.RemoteTrailers =
-            // item.CanDownload = true;
-            // item.GetType
-            //item.
-            item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
+
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
             var imgs = new List<ItemImageInfo?>();
             imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));

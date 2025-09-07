@@ -9,13 +9,12 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.Persistence;
-using MediaBrowser.Controller.Providers;   // MetadataRefreshOptions, DirectoryService, ImageRefreshMode
-using MediaBrowser.Model.Providers;        // IDirectoryService interface
+using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Providers;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.MediaInfo;
-//using MediaBrowser.Providers.MediaInfo;
 using MediaBrowser.Model.Dlna;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Caching.Memory;
@@ -45,8 +44,8 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
         GelatoStremioProvider stremioProvider,
         IMediaEncoder mediaEncoder,
         IMemoryCache cache,
-          IHttpContextAccessor http,
-          IApplicationPaths appPaths,
+        IHttpContextAccessor http,
+        IApplicationPaths appPaths,
         IFileSystem fs)
     {
         _log = log;
@@ -90,9 +89,6 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
     async Task<IEnumerable<MediaSourceInfo>> IMediaSourceProvider.GetMediaSources(BaseItem item, CancellationToken ct)
         => await GetMediaSources(item, allowMediaProbe: true, ct).ConfigureAwait(false);
 
-    /// <summary>
-    /// Build sources using Stremio (cached). Does NOT probe and does NOT apply any probe cache.
-    /// </summary>
     public async Task<IEnumerable<MediaSourceInfo>> GetMediaSourcesNoProbe(BaseItem item, CancellationToken ct)
     {
         var cacheKey = $"mediaSource:{item.Id:N}";
@@ -165,8 +161,7 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
             mediaSource.Video3DFormat = mediaInfo.Video3DFormat;
             mediaSource.VideoType = mediaInfo.VideoType;
 
-            // _streamRepo.SaveMediaStreams(Guid.Parse(src.Id), info.MediaStreams, ct);
-            _log.LogInformation(
+            _log.LogDebug(
                 "Probed {Id}: container={Container}, bitrate={Bitrate}bps, streams={Streams}",
                 mediaSource.Id,
                 mediaSource.Container ?? "(unknown)",
