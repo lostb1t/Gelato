@@ -9,6 +9,14 @@
     "versions": [
       {
         "changelog": "Initial release",
+        "checksum": "d4329c4f592c1c972eedadb0722a0030",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.1.2.0/gelato_0.1.2.0.zip",
+        "targetAbi": "10.10.7.0",
+        "timestamp": "2025-09-07T16:23:52Z",
+        "version": "0.1.2.0"
+      },
+      {
+        "changelog": "Initial release",
         "checksum": "a4740e82d95803f2a9f8ff65b0820317",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.1.1.0/gelato_0.1.0.0.zip",
         "targetAbi": "10.10.7.0",
