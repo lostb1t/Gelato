@@ -32,8 +32,9 @@ Profit!
 - [ ] Import media from stremio catalogs (scheduled task)
 - [ ] Create collectioms from stremio catalogs (scheduled task)
 
-Tips
+### FAQ
 
+- You need to restart the server after editing the manifest in aiostreams.
 - stream cache is 3600 min. Can be cleared by restarting the server
 - bump up probing and analyse to your liking
   JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
