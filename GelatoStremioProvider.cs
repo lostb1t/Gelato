@@ -131,12 +131,13 @@ namespace Gelato
             return r?.Meta;
         }
 
-        public async Task<List<StremioStream>> GetStreamsAsync(BaseItem entity)
+        public async Task<List<StremioStream>> GetStreamsAsync(BaseItem item)
         {
-            var (mediaType, Id) = ResolveKey(entity);
+            //var (mediaType, Id) = ResolveKey(entity);
             // _log.LogInformation("Gelato: GetStreamsAsync {Type} {Id}", mediaType, Id);
-            if (mediaType is null || string.IsNullOrWhiteSpace(Id)) return new();
-            var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), Id });
+            var uri = StremioUri.LoadFromString(item.GetProviderId("stremio"));
+            //(mediaType is null || string.IsNullOrWhiteSpace(Id)) return new();
+            var url = BuildUrl(new[] { "stream", uri.MediaType.ToString().ToLower(), uri.ExternalId });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
         }
