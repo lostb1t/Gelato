@@ -37,6 +37,7 @@ Profit!
 ### FAQ
 
 - You need to restart the server after editing the manifest in aiostreams.
+- I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - stream cache is 3600 min. Can be cleared by restarting the server
 - bump up probing and analyse to your liking
   JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
