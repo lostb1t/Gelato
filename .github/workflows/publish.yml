@@ -6,6 +6,9 @@ on:
       - released
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@master
