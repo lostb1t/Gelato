@@ -1,7 +1,6 @@
 # Gelato
 
-Bring the power of Stremio addons directly into Jellyfin.  
-This plugin replaces Jellyfin’s default search with Stremio-powered results, seamlessly injecting them into your Jellyfin library and database.
+Bring the power of Stremio addons directly into Jellyfin. This plugin replaces Jellyfin’s default search with Stremio-powered results, seamlessly injecting them into your Jellyfin library and database.
 
 ### Features
 - **Unified Search** – Jellyfin search now pulls results from Stremio addons
