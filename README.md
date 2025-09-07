@@ -2,7 +2,8 @@
 
 
 1. Install the plugin: https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json
-2. Goto Plugins -> 
+2. Configure plugin by going to Plugins -> Gelato. 
+ONLY AIOSTREAMS IS SUPPORTED. You can create an an manifest through a public instance like: https://aiostreams.elfhosted.com/stremio/configure
 
 bump up probing and analyse
 
