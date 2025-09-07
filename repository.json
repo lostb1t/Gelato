@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "category": "General",
+    "description": "Stream external media.\n",
+    "guid": "94EA4E14-8163-4989-96FE-0A2094BC2D6A",
+    "name": "Gelato",
+    "overview": "Stream external media.",
+    "owner": "lstb1t",
+    "versions": [
+      {
+        "changelog": "Initial release",
+        "checksum": "c2338891702ea82301d6d63cca430b25",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.1.0.0/gelato_0.1.0.0.zip",
+        "targetAbi": "10.10.7.0",
+        "timestamp": "2025-09-07T15:29:25Z",
+        "version": "0.1.0.0"
+      }
+    ]
+  }
+]
