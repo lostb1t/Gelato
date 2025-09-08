@@ -7,10 +7,11 @@
   <p><i>Jellyfin Stremio Integration Plugin</i></p>
 </div>
 
-Bring the power of Stremio addons directly into Jellyfin. This plugin replaces Jellyfin’s default search with Stremio-powered results, seamlessly injecting them into your Jellyfin library and database.
+Bring the power of Stremio addons directly into Jellyfin. This plugin replaces Jellyfin’s default search with Stremio-powered results and can automatically import entire catalogs into your library through scheduled tasks — seamlessly injecting them into Jellyfin’s database so they behave like native items.
 
 ### Features
 - **Unified Search** – Jellyfin search now pulls results from Stremio addons
+- **Catalogs** – Import items from stremio catalogs into your library with scheduled tasks
 - **Realtime Streaming** – Streams are resolved on demand and play instantly
 - **Database Integration** – Stremio items appear like native Jellyfin items
 - **More Content, Less Hassle** – Expand Jellyfin with community-driven Stremio catalogs
@@ -44,9 +45,9 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - [x] Inject selected search results into the library
 - [x] Use Stremio streams as media sources
 - [x] Support search result images
+- [x] Import media from Stremio catalogs (scheduled task)
 - [ ] Enable deletion of Stremio media items
 - [ ] Add support for subtitle addons
-- [ ] Import media from Stremio catalogs (scheduled task)
 - [ ] Create collections from Stremio catalogs (scheduled task)
 - [ ] Add more settings (e.g. cache TTL, stream naming options)
 - [ ] Combine static (local) and dynamic (Stremio) streams
