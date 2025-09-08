@@ -9,10 +9,10 @@ using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Persistence;
-using Jellyfin.Api.Controllers;
+// using Jellyfin.Api.Controllers;
 using Gelato.Controllers;
 using Microsoft.AspNetCore.Http;
-using Jellyfin.Api.Extensions;
+// using Jellyfin.Api.Extensions;
 using Jellyfin.Extensions;
 using MediaBrowser.Controller.Entities;
 

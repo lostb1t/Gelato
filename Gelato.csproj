@@ -19,11 +19,11 @@
       <EmbeddedResource Include="Config\config.html" />
     </ItemGroup>
 
-  <ItemGroup>
+  <!-- <ItemGroup>
     <Reference Include="Jellyfin.Api">
       <HintPath>Vendor\Jellyfin.Api.dll</HintPath>
       <Private>false</Private>
     </Reference>
-  </ItemGroup>
+  </ItemGroup> -->
 
 </Project>
