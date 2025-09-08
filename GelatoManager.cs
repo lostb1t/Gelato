@@ -359,6 +359,11 @@ public class GelatoManager
     /// <returns></returns>
     public async Task<BaseItem?> InsertMeta(Folder parent, StremioMeta meta, CancellationToken ct)
     {
+if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
+{
+    return null;
+}
+      
         var baseItem = _stremioProvider.IntoBaseItem(meta);
         if (baseItem is null || baseItem.ProviderIds is null || baseItem.ProviderIds.Count == 0)
         {

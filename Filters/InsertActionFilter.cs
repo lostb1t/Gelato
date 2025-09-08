@@ -103,19 +103,15 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
             return;
         }
 
-        var baseItem = _stremioProvider.IntoBaseItem(meta);
-        if (baseItem is null || baseItem.ProviderIds is null || baseItem.ProviderIds.Count == 0)
-        {
-            _log.LogWarning("Gelato: Missing provider ids, skipping");
-            await next();
-            return;
-        }
+        BaseItem? baseItem = null;
 
         Func<CancellationToken, Task<bool>> saver = isSeries
             ? (async ct =>
             {
-                baseItem = await _manager.CreateSeriesTreesAsync(root, meta, ct);
-                _provider.QueueRefresh(
+                //baseItem = await _manager.CreateSeriesTreesAsync(root, meta, ct);
+               baseItem = await _manager.InsertMeta(root, meta, ct);
+                        if (baseItem is not null) {
+               _provider.QueueRefresh(
                   baseItem.Id,
                                 new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                                 {
@@ -126,25 +122,27 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
                                 },
                                 RefreshPriority.High);
+                                  }
                 return true;
             })
             : (async ct =>
             {
-                root.AddChild(baseItem);
+                //root.AddChild(baseItem);
+                baseItem = await _manager.InsertMeta(root, meta, ct);
                 var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                 {
                     MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                     ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                     ForceSave = true
                 };
-                await baseItem.RefreshMetadata(options, CancellationToken.None);
-                // ReplaceGuid(ctx, baseItem.Id);
+                await baseItem?.RefreshMetadata(options, CancellationToken.None);
                 return true;
             });
 
 
         var ok = await saver(CancellationToken.None).ConfigureAwait(false);
-        ReplaceGuid(ctx, baseItem.Id);
+        if (baseItem is not null)
+          ReplaceGuid(ctx, baseItem.Id);
         await next();
     }
 

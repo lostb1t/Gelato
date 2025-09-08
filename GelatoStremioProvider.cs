@@ -266,7 +266,7 @@ namespace Gelato
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
 
             // path is needed otherwise its set as placeholder and you cant play
-            item.Path = $"stremio://{meta.Type}/{Id}";
+            item.Path = $"stremio://{meta.Type}/{Id}".ToLower();
             item.IsVirtualItem = false;
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
@@ -583,6 +583,7 @@ namespace Gelato
         Movie,
         Series,
         Channel,
+        Collections,
         Anime,
         Other,
         Tv,
