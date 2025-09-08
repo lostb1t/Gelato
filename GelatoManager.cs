@@ -803,7 +803,7 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
             seriesRootFolder.AddChild(seriesItem);
         }
 
-        _log.LogInformation($"Gelato: syncing series {seriesItem.Name}");
+        //_log.LogInformation($"syncing series {seriesItem.Name}");
 
         foreach (var seasonGroup in groups)
         {
@@ -881,7 +881,7 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
         }
 
 
-        _log.LogInformation($"Gelato: done sync series");
+       // _log.LogInformation($"Gelato: done sync series");
         return seriesItem;
     }
 

@@ -11,7 +11,7 @@ namespace Gelato.Configuration
 
         public string? MoviePath { get; set; }
         public string? SeriesPath { get; set; }
-        public int? CatalogMaxItems { get; set; } = 250;
+        public int CatalogMaxItems { get; set; } = 250;
         //public bool? ImportItemsFromCatalogs { get; set; } = false;
 
         public string Url { get; set; } = "";

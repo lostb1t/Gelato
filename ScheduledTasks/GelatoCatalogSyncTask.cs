@@ -63,14 +63,16 @@ namespace Gelato.Tasks
             }
 
             double done = 0;
-            double total = catalogs.Count();
             var max = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
-
+            int total = catalogs.Count() * max;
+            var seriesFolder = _manager.TryGetSeriesFolder();
+            var movieFolder = _manager.TryGetMovieFolder();
+           
             foreach (var cat in catalogs)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                var root = cat.Type == StremioMediaType.Series ? _manager.TryGetSeriesFolder() : _manager.TryGetMovieFolder();
+                var root = cat.Type == StremioMediaType.Series ? seriesFolder : movieFolder;
 
                 if (root is null)
                 {
@@ -103,6 +105,8 @@ namespace Gelato.Tasks
 
                             await _manager.InsertMeta(root, meta, cancellationToken).ConfigureAwait(false);
                             processed++;
+                            done++;
+                            progress.Report(Math.Min(100, (done / total) * 100.0));
 
                             if (processed >= max)
                                 break;
@@ -119,8 +123,7 @@ namespace Gelato.Tasks
                 }
                 finally
                 {
-                    done++;
-                    progress.Report(Math.Min(100, (done / total) * 100.0));
+                    
                 }
             }
             _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
