@@ -118,7 +118,8 @@ namespace Gelato
             {
                 var manifest = await GetManifestAsync();
                 return manifest != null;
-            } catch
+            }
+            catch
             {
                 return false;
             }
@@ -236,8 +237,8 @@ namespace Gelato
 
                     break;
 
-               // case "episode":
-               //     item = new Episode
+                // case "episode":
+                //     item = new Episode
                 //    {
                 //        Id = _library.GetNewItemId(Id, typeof(Episode)),
                 //        RunTimeTicks = Utils.ParseToTicks(meta.Runtime)
@@ -269,28 +270,27 @@ namespace Gelato
             // path is needed otherwise its set as placeholder and you cant play
             item.Path = $"stremio://{meta.Type}/{Id}";
             item.IsVirtualItem = false;
+            item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
-            var imgs = new List<ItemImageInfo?>();
-            imgs.Add(UpdateImage(item, ImageType.Primary, meta.Poster));
-            imgs.Add(UpdateImage(item, ImageType.Backdrop, meta.Background));
-            imgs.Add(UpdateImage(item, ImageType.Logo, meta.Logo));
-            item.ImageInfos = imgs.Where(i => i != null).Cast<ItemImageInfo>().ToArray();
+            if (!string.IsNullOrWhiteSpace(meta.Runtime))
+                item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
+
+            if (!string.IsNullOrWhiteSpace(meta.Poster))
+            {
+                item.ImageInfos = new List<ItemImageInfo> {
+                    new ItemImageInfo
+                    {
+                        Type = ImageType.Primary,
+                        Path = meta.Poster,
+                    }
+                }.ToArray();
+            }
             return item;
         }
 
-        private ItemImageInfo? UpdateImage(BaseItem item, ImageType type, string? url)
-        {
-            var image = item.GetImages(type).FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(url)) return image;
-            if (image != null)
-            {
-                image.Path = url;
-                return image;
-            }
-            return null;
-        }
+
     }
 
     public class StremioManifest
@@ -401,7 +401,7 @@ namespace Gelato
 
             return dict;
         }
-        
+
         public int? GetYear()
         {
 
@@ -429,13 +429,15 @@ namespace Gelato
 
             return null;
         }
-        
-        public DateTime? GetPremiereDate() {
-          var year = GetYear();
-          if (year is null) {
-            return null;
-          }
-          return new DateTime(year.Value, 1, 1);
+
+        public DateTime? GetPremiereDate()
+        {
+            var year = GetYear();
+            if (year is null)
+            {
+                return null;
+            }
+            return new DateTime(year.Value, 1, 1);
         }
     }
 
@@ -572,15 +574,15 @@ namespace Gelato
     }
 
     public enum StremioMediaType
-{
-    Unknown = 0,
-    Movie,
-    Series,
-    Channel,
-    Anime,
-    Other,
-    Tv,
-    Events
-}
+    {
+        Unknown = 0,
+        Movie,
+        Series,
+        Channel,
+        Anime,
+        Other,
+        Tv,
+        Events
+    }
 
 }

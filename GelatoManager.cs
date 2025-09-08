@@ -60,9 +60,9 @@ public class GelatoManager
         IDtoService dtoService,
         IServerConfigurationManager config,
         IUserManager userManager,
-IItemRepository repo,
-          IFileSystem fileSystem,
-         IMemoryCache memoryCache,
+        IItemRepository repo,
+        IFileSystem fileSystem,
+        IMemoryCache memoryCache,
         ILibraryManager libraryManager)
     {
         _loggerFactory = loggerFactory;
@@ -86,6 +86,16 @@ IItemRepository repo,
     public StremioUri? GetStremioUri(Guid guid)
     {
         return _memoryCache.TryGetValue(guid, out var value) ? value as StremioUri : null;
+    }
+    
+    public void SaveStremioMeta(Guid guid, StremioMeta meta)
+    {
+        _memoryCache.Set(guid, meta, TimeSpan.FromMinutes(360));
+    }
+
+    public StremioMeta? GetStremioMeta(Guid guid)
+    {
+        return _memoryCache.TryGetValue(guid, out var value) ? value as StremioMeta : null;
     }
 
     public static void SeedFolder(string path)

@@ -37,7 +37,6 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
 
     private static bool TryFromArgs(IDictionary<string, object?> args, out string? id)
     {
-        // a) Direct arg named "MediaSourceId"
         foreach (var kv in args)
         {
             if (kv.Value is null) continue;
@@ -50,7 +49,6 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
             }
         }
 
-        // b) Any arg that has a property called "MediaSourceId"
         foreach (var kv in args)
         {
             var v = kv.Value;

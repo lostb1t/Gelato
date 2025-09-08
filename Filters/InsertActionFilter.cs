@@ -74,14 +74,14 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
             return;
         }
 
-        var stremioUri = _manager.GetStremioUri(guid);
-        if (stremioUri is null)
+        var stremioMeta = _manager.GetStremioMeta(guid);
+        if (stremioMeta is null)
         {
             await next();
             return;
         }
 
-        var found = FindByStremioId(stremioUri.ToString()) as Video;
+        var found = FindByStremioId(stremioMeta.Id) as Video;
         if (found is not null)
         {
             ReplaceGuid(ctx, found.Id);
@@ -89,7 +89,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
             return;
         }
 
-        bool isSeries = stremioUri.MediaType == StremioMediaType.Series;
+        bool isSeries = stremioMeta.Type == StremioMediaType.Series;
         var root = isSeries ? _manager.TryGetSeriesFolder() : _manager.TryGetMovieFolder();
         if (root is null)
         {
@@ -98,7 +98,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
             return;
         }
 
-        var meta = await _stremioProvider.GetMetaAsync(stremioUri.ExternalId, stremioUri.MediaType).ConfigureAwait(false);
+        var meta = await _stremioProvider.GetMetaAsync(stremioMeta.Id, stremioMeta.Type).ConfigureAwait(false);
         if (meta is null)
         {
             //_log.LogWarning("Gelato: Meta not found for {0} {1}", stremioId, mediaType);
@@ -209,7 +209,7 @@ _provider.QueueRefresh(
 
         if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
         {
-            _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
+          //  _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
 
             var dict = new Dictionary<string, StringValues>(parsed)
             {

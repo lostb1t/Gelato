@@ -145,7 +145,7 @@ namespace Gelato.Filters
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.LoadFromString(stremioKey);
                 dto.Id = stremioUri.ToGuid();
-                _manager.SaveStremioUri(dto.Id, stremioUri);
+                _manager.SaveStremioMeta(dto.Id, s);
                 // _log.LogInformation($"Gelato: Search found {stremioUri.ToString()}, {stremioUri.ToCompactString()}");
 
                 // dto.Id = GuidCodec.EncodeString(StremioId.ToCompactId(stremioKey));

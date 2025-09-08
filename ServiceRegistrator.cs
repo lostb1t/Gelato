@@ -19,6 +19,8 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<SourceActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
+        services.AddSingleton<ImageResourceFilter>();
+
 
         services.AddSingleton<GelatoManager>();
         services.AddSingleton<GelatoSeriesManager>();
@@ -30,6 +32,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<SourceActionFilter>(order: 1);
             o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
+            o.Filters.AddService<ImageResourceFilter>();
         });
 
 
