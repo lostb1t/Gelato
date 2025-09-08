@@ -80,22 +80,24 @@ public class GelatoManager
 
     public void SaveStremioUri(Guid guid, StremioUri stremioUri)
     {
-        _memoryCache.Set(guid, stremioUri, TimeSpan.FromMinutes(3600));
+        _memoryCache.Set($"uri:{guid}", stremioUri, TimeSpan.FromMinutes(3600));
     }
 
     public StremioUri? GetStremioUri(Guid guid)
     {
-        return _memoryCache.TryGetValue(guid, out var value) ? value as StremioUri : null;
+        return _memoryCache.TryGetValue($"uri:{guid}", out var value) ? value as StremioUri : null;
     }
-    
+
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
     {
-        _memoryCache.Set(guid, meta, TimeSpan.FromMinutes(360));
+        // _log.LogInformation("Caching StremioMeta {Guid} {Name} ({Year})", guid, meta.Name, meta.Year);
+        _memoryCache.Set($"meta:{guid}", meta, TimeSpan.FromMinutes(360));
     }
 
     public StremioMeta? GetStremioMeta(Guid guid)
     {
-        return _memoryCache.TryGetValue(guid, out var value) ? value as StremioMeta : null;
+        // _log.LogInformation("Retrieving StremioMeta for {Guid}", guid);
+        return _memoryCache.TryGetValue($"meta:{guid}", out var value) ? value as StremioMeta : null;
     }
 
     public static void SeedFolder(string path)

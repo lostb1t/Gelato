@@ -136,7 +136,7 @@ namespace Gelato
         {
             //var (mediaType, Id) = ResolveKey(entity);
             // _log.LogInformation("Gelato: GetStreamsAsync {Type} {Id}", mediaType, Id);
-            var uri = StremioUri.LoadFromString(item.GetProviderId("stremio"));
+            var uri = StremioUri.FromString(item.GetProviderId("stremio"));
             //(mediaType is null || string.IsNullOrWhiteSpace(Id)) return new();
             var url = BuildUrl(new[] { "stream", uri.MediaType.ToString().ToLower(), uri.ExternalId });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
@@ -551,6 +551,7 @@ namespace Gelato
             var filename = BehaviorHints?.Filename;
             return !string.IsNullOrWhiteSpace(size)
                 && !string.IsNullOrWhiteSpace(filename)
+                && !string.IsNullOrWhiteSpace(GetName())
                 && !string.IsNullOrWhiteSpace(Url);
         }
 

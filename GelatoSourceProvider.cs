@@ -105,9 +105,11 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
                 if (!stream.IsValid())
                     continue;
 
+                // _log.LogInformation("Found stream {Name} ({Url})", stream.GetName(), stream.Url);
+
                 var streamGuid = stream.GetGuid();
                 var stremioBaseUri = item.GetProviderId("stremio");
-                var uri = StremioUri.LoadFromString($"{stremioBaseUri:N}/{streamGuid}");
+                var uri = StremioUri.FromString($"{stremioBaseUri:N}/{streamGuid}");
                 _manager.SaveStremioUri(streamGuid, uri);
 
                 built.Add(new MediaSourceInfo

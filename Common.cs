@@ -21,13 +21,11 @@ public sealed class StremioUri
         StreamId = string.IsNullOrWhiteSpace(streamId) ? null : streamId;
     }
 
-    // ==== Parsing ====
-
     private static readonly Regex Rx =
         new(@"^stremio://(?<type>movie|series)/(?<ext>[^/\s]+)(?:/(?<stream>[^/\s]+))?$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-    public static StremioUri LoadFromString(string value)
+    public static StremioUri FromString(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
             throw new ArgumentException("Value cannot be null or empty.", nameof(value));
@@ -36,6 +34,14 @@ public sealed class StremioUri
             return sid;
 
         throw new FormatException($"Invalid StremioId string: {value}");
+    }
+
+    public static StremioUri? FromMeta(StremioMeta meta)
+    {
+        if (TryParse(meta.Id, out var sid) && sid is not null)
+            return sid;
+
+        return null;
     }
 
     public static StremioUri Parse(string id)
@@ -75,7 +81,12 @@ public sealed class StremioUri
             : $"stremio://{type}/{ExternalId}/{StreamId}";
     }
 
-    // ==== Stable, non-reversible GUID (MD5 of canonical URI) ====
+    // without stream id
+    public string ToBaseString()
+    {
+        var type = MediaType == StremioMediaType.Movie ? "movie" : "series";
+        return $"stremio://{type}/{ExternalId}";
+    }
 
     public Guid ToGuid()
     {

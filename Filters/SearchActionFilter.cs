@@ -143,7 +143,7 @@ namespace Gelato.Filters
                     continue;
 
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
-                var stremioUri = StremioUri.LoadFromString(stremioKey);
+                var stremioUri = StremioUri.FromString(stremioKey);
                 dto.Id = stremioUri.ToGuid();
                 _manager.SaveStremioMeta(dto.Id, s);
                 // _log.LogInformation($"Gelato: Search found {stremioUri.ToString()}, {stremioUri.ToCompactString()}");

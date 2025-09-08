@@ -24,6 +24,7 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 
 namespace Gelato.Filters;
 
+// Todo: should probaplya override the mediasourcemanager and inject there instead of an actionfilter.
 public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
 {
     private readonly ILibraryManager _library;
@@ -35,8 +36,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
     private readonly GelatoManager _manager;
     private readonly GelatoSeriesManager _seriesManager;
     private readonly IMediaSourceManager _sourceManager;
-    // private readonly GelatoRefresh _refresh;
-
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
     private readonly GelatoSourceProvider _externalMediaSourceProvider;
@@ -61,11 +60,9 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         ILogger<SourceActionFilter> log)
     {
         _library = library;
-        // _externalMediaSourceProvider = externalMediaSourceProvider;
         _externalMediaSourceProvider = providers.OfType<GelatoSourceProvider>().FirstOrDefault()
      ?? throw new InvalidOperationException("GelatoSourceProvider not registered.");
         _sourceManager = sourceManager;
-        //  _refresh = refresh;
         _repo = repo;
         _mediaSources = mediaSources;
         _dtoService = dtoService;
@@ -75,7 +72,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         _manager = manager;
         _seriesManager = seriesManager;
         _log = log;
-        // _libraryMonitor = libraryMonitor;
     }
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
@@ -89,7 +85,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
-
         // this also fails if there are multiple ids
         if (!_manager.TryGetRouteGuid(ctx, out var guid))
         {
@@ -98,16 +93,26 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
-        // i think this only happens with the web client. For some reason makes a extra request to the stream
+        var stremioMeta = _manager.GetStremioMeta(guid);
         var stremioUri = _manager.GetStremioUri(guid);
-
         if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
         {
             await next();
             return;
         }
-        // _log.LogInformation("Gelato: Found route guid {Guid}, isUri={IsUri}", guid, stremioUri.ToString());
-        var isStream = stremioUri is not null && stremioUri.StreamId is not null;
+
+        var isStream = false;
+        if (stremioMeta is not null)
+        {
+            stremioUri = StremioUri.FromMeta(stremioMeta);
+            isStream = stremioUri.StreamId is not null;
+        }
+        else if (stremioUri is not null)
+        {
+            isStream = stremioUri.StreamId is not null;
+        }
+        // _log.LogInformation("Gelato: Action {Action}, Guid {Guid}, Stremio {Stremio}, IsStream {IsStream}", stremioMeta?.Id, guid, stremioUri?.ToString() ?? "null", isStream);
+
         var isList = cad.ActionName == "GetItemList" || cad.ActionName == "GetItemsByUserIdLegacy";
         BaseItem? item = null;
 
@@ -118,7 +123,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
             {
                 // ParentId = parent.Id,
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
-                HasAnyProviderId = new Dictionary<string, string> { ["stremio"] = stremioUri.ToString() },
+                HasAnyProviderId = new Dictionary<string, string> { ["stremio"] = stremioUri.ToBaseString() },
                 Recursive = true
             })
             .OfType<Video>()
@@ -126,13 +131,14 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         }
         else
         {
+            // issue... guid can also be from an media source. Cause jellyfin is retarted. We dont persist that so... yeah.
             item = _library.GetItemById(guid);
         }
 
         if (item is null) return;
 
         var ct = ctx.HttpContext.RequestAborted;
-       // _log.LogInformation("Gelato: Processing response object of type {Type}", guid);
+        // _log.LogInformation("Gelato: Processing response object of type {Type}", guid);
         async Task<BaseItemDto> ProcessOneAsync(BaseItem item, CancellationToken token)
         {
             var dto = _dtoService.GetBaseItemDto(
