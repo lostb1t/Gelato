@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Controller.Library;
 using System.Reflection;
 using Gelato.Filters;
+using MediaBrowser.Model.Tasks;
+using Gelato.Tasks;
 
 
 namespace Gelato;
@@ -20,11 +22,11 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<SourceActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
-
+        // services.AddSingleton<DeleteResourceFilter>();
 
         services.AddSingleton<GelatoManager>();
-        services.AddSingleton<GelatoSeriesManager>();
         services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
+        services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
@@ -33,8 +35,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
+            // o.Filters.AddService<DeleteResourceFilter>();
         });
-
-
     }
 }

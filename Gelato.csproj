@@ -15,10 +15,15 @@
     <PackageReference Include="Jellyfin.Common" Version="10.10.7" />
   </ItemGroup>
 
-      <ItemGroup>
+    <ItemGroup>
       <EmbeddedResource Include="Config\config.html" />
     </ItemGroup>
 
-
+  <ItemGroup>
+    <Reference Include="Jellyfin.Api">
+      <HintPath>Vendor\Jellyfin.Api.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
 
 </Project>

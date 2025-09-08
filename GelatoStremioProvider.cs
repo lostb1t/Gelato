@@ -153,14 +153,14 @@ namespace Gelato
 
         public async Task<IReadOnlyList<StremioMeta>> GetCatalogMetasAsync(
             string id,
-            string mediaType,
+            StremioMediaType mediaType,
             string? search = null,
             int? skip = null)
         {
             var extras = new List<string>();
             if (!string.IsNullOrWhiteSpace(search)) extras.Add($"search={Uri.EscapeDataString(search)}");
             if (skip is > 0) extras.Add($"skip={skip}");
-            var url = BuildUrl(new[] { "catalog", mediaType, id }, extras);
+            var url = BuildUrl(new[] { "catalog", mediaType.ToString().ToLower(), id }, extras);
             var r = await GetJsonAsync<StremioCatalogResponse>(url);
             return r?.Metas ?? new();
         }
@@ -182,9 +182,7 @@ namespace Gelato
 
             if (catalog == null) return Array.Empty<StremioMeta>();
 
-            // type → "movie" | "series"
-            var typeString = catalog.Type.ToString().ToLowerInvariant();
-            return await GetCatalogMetasAsync(catalog.Id, typeString, query, skip);
+            return await GetCatalogMetasAsync(catalog.Id, mediaType, query, skip);
         }
 
         private static (string? type, string? extId) ResolveKey(BaseItem entity)
@@ -315,6 +313,11 @@ namespace Gelato
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public List<StremioExtra> Extra { get; set; } = new();
+
+        public bool IsSearchCapable()
+        {
+            return Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     public class StremioExtra

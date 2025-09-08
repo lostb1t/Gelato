@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <title>External Media</title>
 </head>
+
 <body>
   <div data-role="page" id="externalmediaConfigurationPage"
-       class="page type-interior pluginConfigurationPage fullWidthContent">
+    class="page type-interior pluginConfigurationPage fullWidthContent">
     <div class="content-primary">
       <div class="verticalSection">
         <div class="sectionTitleContainer">
@@ -17,24 +19,26 @@
 
       <form id="externalmediaForm">
         <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtUrl" required="required"
-                 label="Stremio URL (manifest or base):" />
+          <input is="emby-input" type="text" id="txtUrl" required="required" label="Stremio URL (manifest or base):" />
           <span>Paste the manifest URL or base endpoint. <code>GetBaseUrl()</code> will strip
             <code>/manifest.json</code> automatically.</span>
         </div>
 
         <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtMoviePath"
-                 label="Movies base path:" />
+          <input is="emby-input" type="text" id="txtMoviePath" label="Movies base path:" />
           <span>Filesystem path for movie items (e.g. <code>/media/external_movies</code>). Must exist
             and be readable by Jellyfin. They should be empty.</span>
         </div>
 
         <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtSeriesPath"
-                 label="Series base path:" />
+          <input is="emby-input" type="text" id="txtSeriesPath" label="Series base path:" />
           <span>Filesystem path for series items (e.g. <code>/media/external_series</code>). Must exist
             and be readable by Jellyfin. They should be empty.</span>
+        </div>
+
+
+        <div class="inputContainer">
+          <input is="emby-input" type="number" id="txtCatalogMaxItems" label="Max items per catalog import:" />
         </div>
 
         <br />
@@ -50,17 +54,19 @@
         const page = document.querySelector('#externalmediaConfigurationPage');
         const form = document.querySelector('#externalmediaForm');
 
-        const txtUrl       = document.querySelector('#txtUrl');
+        const txtUrl = document.querySelector('#txtUrl');
         const txtMoviePath = document.querySelector('#txtMoviePath');
-        const txtSeriesPath= document.querySelector('#txtSeriesPath');
+        const txtSeriesPath = document.querySelector('#txtSeriesPath');
+        const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
 
         async function loadConfig() {
           Dashboard.showLoadingMsg();
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            txtUrl.value        = cfg.Url || "";
-            txtMoviePath.value  = cfg.MoviePath || "";
+            txtUrl.value = cfg.Url || "";
+            txtMoviePath.value = cfg.MoviePath || "";
             txtSeriesPath.value = cfg.SeriesPath || "";
+            txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
           } catch (e) {
             console.error(e);
           } finally {
@@ -73,9 +79,10 @@
           Dashboard.showLoadingMsg();
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            cfg.Url        = (txtUrl.value || "").trim();
-            cfg.MoviePath  = (txtMoviePath.value || "").trim() || null;
+            cfg.Url = (txtUrl.value || "").trim();
+            cfg.MoviePath = (txtMoviePath.value || "").trim() || null;
             cfg.SeriesPath = (txtSeriesPath.value || "").trim() || null;
+            cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
 
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
@@ -96,4 +103,5 @@
     </script>
   </div>
 </body>
+
 </html>

@@ -24,7 +24,10 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 
 namespace Gelato.Filters;
 
-// Todo: should probaplya override the mediasourcemanager and inject there instead of an actionfilter.
+/// <summary>
+/// Action filter for handling external media source requests.
+/// Todo: should probably override the mediasourcemanager and inject there instead of an actionfilter.
+/// </summary>
 public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
 {
     private readonly ILibraryManager _library;
@@ -34,7 +37,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
     private readonly GelatoStremioProvider _stremioProvider;
     private readonly ILogger<SourceActionFilter> _log;
     private readonly GelatoManager _manager;
-    private readonly GelatoSeriesManager _seriesManager;
     private readonly IMediaSourceManager _sourceManager;
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
@@ -51,7 +53,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         IItemRepository repo,
         IMediaSourceManager mediaSources,
         GelatoManager manager,
-          GelatoSeriesManager seriesManager,
         IDtoService dtoService,
         GelatoStremioProvider stremioProvider,
         IProviderManager provider,
@@ -70,7 +71,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         _stremioProvider = stremioProvider;
         _fileSystem = fileSystem;
         _manager = manager;
-        _seriesManager = seriesManager;
         _log = log;
     }
 
@@ -166,7 +166,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
             ).ConfigureAwait(false);
 
             // _log.LogInformation("Gelato: Processing item {Name} ({Id})", item.Name, item.Id);
-
+            dto.CanDelete = true;
             dto.MediaSources = sources
                 .Where(src => !string.Equals(src.Id, item.Id.ToString("N"), StringComparison.OrdinalIgnoreCase))
                 .ToArray();
