@@ -4,10 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Model.Tasks;                // IScheduledTask, ITaskTrigger, IntervalTrigger
+using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
-using Gelato;                                  // your namespaces
-using Gelato.Common;                           // if you keep helpers here
+using Gelato;
+using Gelato.Common;
+using MediaBrowser.Controller.Library;
 
 namespace Gelato.Tasks
 {
@@ -15,14 +16,17 @@ namespace Gelato.Tasks
     {
         private readonly ILogger<GelatoCatalogItemsSyncTask> _log;
         private readonly GelatoStremioProvider _stremio;
-        private readonly GelatoManager _manager; // <- put your insert/upsert logic here
+        private readonly GelatoManager _manager;
+        private readonly ILibraryManager _library;
 
         public GelatoCatalogItemsSyncTask(
+            ILibraryManager libraryManager,
             ILogger<GelatoCatalogItemsSyncTask> log,
             GelatoStremioProvider stremio,
             GelatoManager manager)
         {
             _log = log;
+            _library = libraryManager;
             _stremio = stremio;
             _manager = manager;
         }
@@ -112,7 +116,7 @@ namespace Gelato.Tasks
                     progress.Report(Math.Min(100, (done / total) * 100.0));
                 }
             }
-
+            _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
             _log.LogInformation("[Gelato] Catalog sync completed");
         }
     }

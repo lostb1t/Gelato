@@ -793,6 +793,7 @@ public class GelatoManager
             var seasonItem = _library.FindByPath(seasonPath, true) as Season;
             if (seasonItem is null)
             {
+                // _log.LogInformation($"Gelato: creating series {seriesItem.Name} season {seasonIndex:D2}");
                 seasonItem = new Season
                 {
                     Id = Guid.NewGuid(),
@@ -833,7 +834,7 @@ public class GelatoManager
                     // _log.LogInformation($"Gelato: episode already exists, skipping");
                     continue;
                 }
-
+                // _log.LogInformation($"Gelato: creating series episode {seriesItem.Name} S{epMeta.Season:D2}E{epMeta.Number:D2} {epMeta.Name}");
                 var epItem = new Episode
                 {
                     Id = Guid.NewGuid(),

@@ -87,7 +87,7 @@ public class GelatoApiController : ControllerBase
     // }
 
     // [HttpGet("image/{id}/{image_type}")]
-    [HttpGet("test")]
+    [HttpPost("a3f08293726362d3531ab671f857d968")]
     //[Authorize]
     // [ProducesResponseType(StatusCodes.Status302Found)]
     public async Task<IActionResult> Image(
@@ -95,10 +95,11 @@ public class GelatoApiController : ControllerBase
         // [FromRoute] ImageType image_type
         )
     {
-        var found = _library.GetItemById(Guid.Parse("a3f08293726362d3531ab671f857d968"));
-        using var cts = new CancellationTokenSource();
-        //  await _refresh.RefreshAsync(found, cts.Token).ConfigureAwait(false);
 
+        // var items = _library.GetItemList(new InternalItemsQuery
+        // {
+        // })
+        //     .OfType<BaseItem>();
         return NotFound();
     }
 }
