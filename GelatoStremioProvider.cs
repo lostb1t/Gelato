@@ -243,7 +243,7 @@ namespace Gelato
                 //    };
                 //    break;
                 default:
-                   // _log.LogInformation("Gelato: unsupported type {type}", meta.Type);
+                    _log.LogWarning("Gelato: unsupported type {type}", meta.Type);
                     return null;
             }
             ;
