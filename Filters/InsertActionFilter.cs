@@ -142,9 +142,9 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
                 return true;
             });
 
-        ReplaceGuid(ctx, baseItem.Id);
-        var ok = await saver(CancellationToken.None).ConfigureAwait(false);
 
+        var ok = await saver(CancellationToken.None).ConfigureAwait(false);
+        ReplaceGuid(ctx, baseItem.Id);
         await next();
     }
 
@@ -194,28 +194,29 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                // _log.LogInformation("Gelato: Replacing route {Key} {Old} → {New}", key, raw, value);
+                _log.LogInformation("Gelato: Replacing route {Key} {Old} → {New}", key, raw, value);
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }
 
         // Replace query string "ids"
-        var request = ctx.HttpContext.Request;
-        var parsed = QueryHelpers.ParseQuery(request.QueryString.Value ?? "");
+        // var request = ctx.HttpContext.Request;
+        // var parsed = QueryHelpers.ParseQuery(request.QueryString.Value ?? "");
 
-        if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
-        {
-            //  _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
+        // if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
+        // {
+        //     _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
 
-            var dict = new Dictionary<string, StringValues>(parsed)
-            {
-                ["ids"] = new StringValues(value.ToString())
-            };
+        //     var dict = new Dictionary<string, StringValues>(parsed)
+        //     {
+        //         ["ids"] = new StringValues(value.ToString())
+        //     };
 
-            ctx.HttpContext.Request.QueryString = QueryString.Create(dict);
-        }
+        //     ctx.HttpContext.Request.QueryString = QueryString.Create(dict);
+        // }
+
+        // mutation for query is not allowed so we set it like this aswell.
+        ctx.HttpContext.Items["GuidResolved"] = value;
     }
-
-
 
 }

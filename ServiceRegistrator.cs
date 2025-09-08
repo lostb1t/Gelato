@@ -31,9 +31,9 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
             o.Filters.AddService<InsertActionFilter>(order: 0);
-            o.Filters.AddService<SourceActionFilter>(order: 1);
-            o.Filters.AddService<SearchActionFilter>(order: 2);
-            o.Filters.AddService<PlaybackInfoFilter>(order: 3);
+            o.Filters.AddService<SearchActionFilter>(order: 1);
+            o.Filters.AddService<PlaybackInfoFilter>(order: 2);
+            o.Filters.AddService<SourceActionFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
             // o.Filters.AddService<DeleteResourceFilter>();
         });

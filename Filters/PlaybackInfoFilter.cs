@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Gelato.Filters;
 
+/// <summary>
+/// Captures media source index for playback request and ave it for later reuse.
+/// </summary>
 public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
 {
     public int Order { get; set; } = 3;

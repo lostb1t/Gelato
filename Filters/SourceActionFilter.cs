@@ -78,7 +78,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
     {
         // var req = ctx.HttpContext.Request;
         // _log.LogInformation("Gelato: Requested path = {Path}{Query}", req.Path, req.QueryString);
-
+        // _log.LogInformation("Gelato: SourceActionFilter executing");
         if (!_manager.IsItemsAction(ctx))
         {
             await next();
@@ -98,7 +98,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         if (stremioMeta is not null)
         {
             stremioUri = StremioUri.FromString($"stremio://{stremioMeta.Type.ToString().ToLower()}/{stremioMeta.Id}");
-            _log.LogInformation("Gelato: Found {StremioId}", stremioUri.ToString());
+            // _log.LogInformation("Gelato: Found {StremioId}", stremioUri.ToString());
         }
 
         if (stremioUri is null)
@@ -115,7 +115,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         // var isStream = false;
         var isStream = stremioUri?.StreamId is not null;
 
-        _log.LogInformation("Gelato: Action {Action}, Guid {Guid}, Stremio {Stremio}, IsStream {IsStream}", stremioMeta?.Id, guid, stremioUri?.ToString() ?? "null", isStream);
+       // _log.LogInformation("Gelato: Action {Action}, Guid {Guid}, Stremio {Stremio}, IsStream {IsStream}", stremioMeta?.Id, guid, stremioUri?.ToString() ?? "null", isStream);
 
         var isList = cad.ActionName == "GetItemList" || cad.ActionName == "GetItemsByUserIdLegacy";
         BaseItem? item = null;
@@ -141,13 +141,15 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         // _log.LogInformation("Gelato: ItemId {ItemId}", item?.Id);
         //_log.LogInformation("Gelato: Action {Action}, Guid {Guid}, Stremio {Stremio}, IsStream {IsStream}, Found {Found}, ItemId {ItemId}", cad.ActionName, guid, stremioUri?.ToString() ?? "null", isStream, item is not null, item?.Id);
 
-        if (item is null) return;
+        if (item is null)
+        {
+            await next();
+            return;
+        }
 
         var ct = ctx.HttpContext.RequestAborted;
-        // _log.LogInformation("Gelato: Processing response object of type {Type}", guid);
         async Task<BaseItemDto> ProcessOneAsync(BaseItem item, CancellationToken token)
         {
-
             var dto = _dtoService.GetBaseItemDto(
                 item,
                 new DtoOptions(),

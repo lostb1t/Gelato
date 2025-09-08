@@ -153,18 +153,30 @@ public class GelatoManager
     public Folder? TryGetMovieFolder()
     {
         var cfg = GelatoPlugin.Instance!.Configuration;
+        if (cfg.MoviePath is null)
+        {
+            return null;
+        }
+
+        SeedFolder(cfg.MoviePath);
         return _library.GetItemList(new InternalItemsQuery
         {
             Path = cfg.MoviePath
         })
             .OfType<Folder>()
             .FirstOrDefault();
+
     }
 
     public Folder? TryGetSeriesFolder()
     {
         var cfg = GelatoPlugin.Instance!.Configuration;
-        _log.LogDebug("Looking for series folder at {Path}", cfg.SeriesPath);
+        if (cfg.SeriesPath is null)
+        {
+            return null;
+        }
+
+        SeedFolder(cfg.SeriesPath);
         return _library.GetItemList(new InternalItemsQuery
         {
             Path = cfg.SeriesPath
@@ -681,12 +693,19 @@ public class GelatoManager
 
         var rd = ctx.RouteData.Values;
 
+        // in flight changing for query items is not allowed
+        if (ctx.HttpContext.Items["GuidResolved"] is Guid g)
+        {
+            value = g.ToString("N");
+            return true;
+        }
+
         foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
                 var s = raw.ToString();
-                _log.LogDebug("Checking route param {Key} = '{Value}'", key, s);
+                // _log.LogDebug("Checking route param {Key} = '{Value}'", key, s);
                 if (!string.IsNullOrWhiteSpace(s))
                 {
                     value = s;
