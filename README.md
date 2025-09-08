@@ -50,6 +50,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - [ ] Create collections from Stremio catalogs (scheduled task)
 - [ ] Add more settings (e.g. cache TTL, stream naming options)
 - [ ] Combine static (local) and dynamic (Stremio) streams
+- [ ] Look more into the possibility of add to different libraries
 - [ ] Add proxy option (low priority)
 
 ### FAQ
