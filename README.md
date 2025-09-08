@@ -1,7 +1,7 @@
 <div align="center">
    <img width="125" src="logo.png" alt="Logo">
 </div>
-   
+
 <div align="center">
   <h1><b>Gelato</b></h1>
   <p><i>Jellyfin Stremio Integration Plugin</i></p>
@@ -17,12 +17,12 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 ## Usage
 
-1. Install the plugin:  
+1. Install the plugin:
    `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json`
 
-2. Configure the plugin under **Plugins → Gelato**.  
-   **Note:** Only **AIOStreams** is supported. AIOStreams bundles all your favorite addons into one.  
-   You can create a manifest via a public instance, for example:  
+2. Configure the plugin under **Plugins → Gelato**.
+   **Note:** Only **AIOStreams** is supported. AIOStreams bundles all your favorite addons into one.
+   You can create a manifest via a public instance, for example:
    `https://aiostreams.elfhosted.com/stremio/configure`
 
 3. Add the configured base paths to the Jellyfin library of your choice.
@@ -31,26 +31,26 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 ## Notes
 
-- Only **AIOStreams** is supported  
-- **P2P streams are not yet supported**  
-- If an item already exists in your library as a local file, the plugin will skip it  
+- Only **AIOStreams** is supported
+- **P2P streams are not yet supported**
+- If an item already exists in your library as a local file, the plugin will skip it
   (this behavior may change in the future)
 
 ---
 
 ## Roadmap
 
-- [x] Replace search  
-- [x] Inject selected search results into the library  
-- [x] Use Stremio streams as media sources  
-- [ ] Support search result images  
-- [ ] Enable deletion of Stremio media items  
-- [ ] Add support for subtitle addons  
-- [ ] Import media from Stremio catalogs (scheduled task)  
-- [ ] Create collections from Stremio catalogs (scheduled task)  
-- [ ] Add more settings (e.g. cache TTL, stream naming options)  
-- [ ] Combine static (local) and dynamic (Stremio) streams  
-- [ ] Add proxy option (low priority)  
+- [x] Replace search
+- [x] Inject selected search results into the library
+- [x] Use Stremio streams as media sources
+- [x] Support search result images
+- [ ] Enable deletion of Stremio media items
+- [ ] Add support for subtitle addons
+- [ ] Import media from Stremio catalogs (scheduled task)
+- [ ] Create collections from Stremio catalogs (scheduled task)
+- [ ] Add more settings (e.g. cache TTL, stream naming options)
+- [ ] Combine static (local) and dynamic (Stremio) streams
+- [ ] Add proxy option (low priority)
 
 ### FAQ
 
