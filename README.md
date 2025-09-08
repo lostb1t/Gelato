@@ -30,6 +30,8 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 4. Search for a title not already in your library, select a result, and start streaming.
 
+5. Run or schedule the catalog import tasks.
+
 ## Notes
 
 - Only **AIOStreams** is supported

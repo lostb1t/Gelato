@@ -30,7 +30,7 @@ public sealed class StremioUri
         if (string.IsNullOrWhiteSpace(value))
             throw new ArgumentException("Value cannot be null or empty.", nameof(value));
 
-        if (TryParse(value, out var sid) && sid is not null)
+        if (TryParse(value.ToLowerInvariant(), out var sid) && sid is not null)
             return sid;
 
         throw new FormatException($"Invalid StremioId string: {value}");

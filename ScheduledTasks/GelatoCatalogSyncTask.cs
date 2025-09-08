@@ -69,7 +69,14 @@ namespace Gelato.Tasks
             foreach (var cat in catalogs)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
                 var root = cat.Type == StremioMediaType.Series ? _manager.TryGetSeriesFolder() : _manager.TryGetMovieFolder();
+
+                if (root is null)
+                {
+                    _log.LogWarning("[Gelato] Catalog task: No movie or series root folder found skipping");
+                    continue;
+                }
 
                 try
                 {
