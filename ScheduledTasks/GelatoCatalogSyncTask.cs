@@ -51,14 +51,14 @@ namespace Gelato.Tasks
 
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            _log.LogInformation("[Gelato] Catalog sync started");
+            _log.LogInformation("Catalog sync started");
 
             var manifest = await _stremio.GetManifestAsync().ConfigureAwait(false);
             var catalogs = manifest?.Catalogs.Where(c => !c.IsSearchCapable());
             if (catalogs.Count() == 0)
             {
                 progress.Report(100);
-                _log.LogInformation("[Gelato] No catalogs found");
+                _log.LogInformation("No catalogs found");
                 return;
             }
 
@@ -67,7 +67,7 @@ namespace Gelato.Tasks
             int total = catalogs.Count() * max;
             var seriesFolder = _manager.TryGetSeriesFolder();
             var movieFolder = _manager.TryGetMovieFolder();
-           
+
             foreach (var cat in catalogs)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -76,13 +76,13 @@ namespace Gelato.Tasks
 
                 if (root is null)
                 {
-                    _log.LogWarning("[Gelato] Catalog task: No movie or series root folder found skipping");
+                    _log.LogWarning("Catalog task: No movie or series root folder found skipping");
                     continue;
                 }
 
                 try
                 {
-                    _log.LogInformation("[Gelato] Loading catalog: {Type} / {Id}",
+                    _log.LogInformation("Loading catalog: {Type} / {Id}",
                         cat.Type, cat.Id);
 
                     var skip = 0;
@@ -102,8 +102,16 @@ namespace Gelato.Tasks
                         foreach (var meta in page)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
+                            try
+                            {
+                                var item = await _manager.InsertMeta(root, meta, true, cancellationToken).ConfigureAwait(false);
 
-                            await _manager.InsertMeta(root, meta, cancellationToken).ConfigureAwait(false);
+
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.LogWarning(ex, "insert meta failed for {Id}", meta.Id);
+                            }
                             processed++;
                             done++;
                             progress.Report(Math.Min(100, (done / total) * 100.0));
@@ -114,19 +122,19 @@ namespace Gelato.Tasks
 
                         skip += page.Count;
                     }
-                    _log.LogInformation("[Gelato] Catalog {Id} synced ({Count} items)", cat.Id, processed);
+                    _log.LogInformation("Catalog {Id} synced ({Count} items)", cat.Id, processed);
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex)
                 {
-                    _log.LogWarning(ex, "[Gelato] Catalog sync failed for {Id}", cat.Id);
+                    _log.LogWarning(ex, "Catalog sync failed for {Id}", cat.Id);
                 }
                 finally
                 {
-                    
+
                 }
             }
-            _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
+            //_library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
             _log.LogInformation("[Gelato] Catalog sync completed");
         }
     }

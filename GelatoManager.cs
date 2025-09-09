@@ -357,13 +357,13 @@ public class GelatoManager
     /// <param name="meta"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    public async Task<BaseItem?> InsertMeta(Folder parent, StremioMeta meta, CancellationToken ct)
+    public async Task<BaseItem?> InsertMeta(Folder parent, StremioMeta meta, bool refreshItem, CancellationToken ct)
     {
-if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
-{
-    return null;
-}
-      
+        if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
+        {
+            return null;
+        }
+
         var baseItem = _stremioProvider.IntoBaseItem(meta);
         if (baseItem is null || baseItem.ProviderIds is null || baseItem.ProviderIds.Count == 0)
         {
@@ -377,6 +377,13 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
             return found;
         }
 
+        var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+        {
+            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            ForceSave = true
+        };
+
         if (meta.Type == StremioMediaType.Movie)
         {
             parent.AddChild(baseItem);
@@ -384,11 +391,21 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
 
         if (meta.Type == StremioMediaType.Series)
         {
-            //parent.AddChild(baseItem);
-            return await CreateSeriesTreesAsync(parent, meta, ct);
+            baseItem = await CreateSeriesTreesAsync(parent, meta, ct);
         }
-
-        return baseItem;
+        if (refreshItem && baseItem is not null)
+        {
+            _provider.QueueRefresh(
+                    baseItem.Id,
+                                 new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                                 {
+                                     MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                                     ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                                     ForceSave = true
+                                 },
+                                  RefreshPriority.High);
+        }
+        return baseItem as BaseItem;
     }
 
     public Video? FindByStremioId(string id)
@@ -801,6 +818,7 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
             // seriesItem.Path =  "stremio://{meta.Type}/{Id}";;
             seriesItem.PresentationUniqueKey = seriesItem.CreatePresentationUniqueKey();
             seriesRootFolder.AddChild(seriesItem);
+            //         _provider.QueueRefresh(seriesItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
         }
 
         //_log.LogInformation($"syncing series {seriesItem.Name}");
@@ -808,11 +826,8 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
         foreach (var seasonGroup in groups)
         {
             ct.ThrowIfCancellationRequested();
-            // _log.LogInformation($"Gelato: season {seasonGroup.Key}");
-            // _log.LogInformation($"Gelato: syncing series {seriesItem.Name} season {seasonGroup.Key}");
             var seasonIndex = seasonGroup.Key;
             var seasonPath = $"{seriesItem.Path}:{seasonIndex}";
-            // Directory.CreateDirectory(seasonPath);
 
             var seasonItem = _library.FindByPath(seasonPath, true) as Season;
             if (seasonItem is null)
@@ -823,7 +838,7 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
                     Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
                     IndexNumber = seasonIndex,
-                    ParentId = seriesItem.Id,
+                    //  ParentId = seriesItem.Id,
                     SeriesId = seriesItem.Id,
                     SeriesName = seriesItem.Name,
                     Path = seasonPath,
@@ -831,6 +846,7 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
                 };
                 seasonItem.SetProviderId("stremio", seasonItem.Path);
                 seriesItem.AddChild(seasonItem);
+                //_provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
             }
 
             var existing = _library.GetItemList(new InternalItemsQuery
@@ -865,7 +881,7 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
                     Name = epMeta.Name,
                     IndexNumber = epMeta.Number,
                     ParentIndexNumber = epMeta.Season,
-                    ParentId = seasonItem.Id,
+                    //  ParentId = seasonItem.Id,
                     SeasonId = seasonItem.Id,
                     SeriesId = seriesItem.Id,
                     SeriesName = seriesItem.Name,
@@ -874,14 +890,24 @@ if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
                     SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
 
                 };
+
+                epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
                 epItem.SetProviderId("stremio", epItem.Path);
                 seasonItem.AddChild(epItem);
+                //    _provider.QueueRefresh(epItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High); 
+
+                //            _provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
+                //     await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+                //await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+                //await seriesItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+
+
                 // _repo.SaveItems(new BaseItem[] { epItem }, ct);
             }
         }
 
 
-       // _log.LogInformation($"Gelato: done sync series");
+        // _log.LogInformation($"Gelato: done sync series");
         return seriesItem;
     }
 

@@ -30,7 +30,7 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
     private readonly GelatoStremioProvider _stremioProvider;
     private readonly IMediaEncoder _mediaEncoder;
     private readonly IMemoryCache _cache;
-   // private readonly IMediaStreamRepository _streamRepo;
+    // private readonly IMediaStreamRepository _streamRepo;
     private readonly GelatoManager _manager;
     private readonly IFileSystem _fs;
     private readonly IHttpContextAccessor _http;
@@ -39,7 +39,7 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
 
     public GelatoSourceProvider(
         GelatoManager manager,
-      //  IMediaStreamRepository streamRepo,
+        //  IMediaStreamRepository streamRepo,
         ILogger<GelatoSourceProvider> log,
         GelatoStremioProvider stremioProvider,
         IMediaEncoder mediaEncoder,
@@ -50,7 +50,7 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
     {
         _log = log;
         _manager = manager;
-      //  _streamRepo = streamRepo;
+        //  _streamRepo = streamRepo;
         _stremioProvider = stremioProvider;
         _mediaEncoder = mediaEncoder;
         _cache = cache;

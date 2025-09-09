@@ -115,7 +115,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         // var isStream = false;
         var isStream = stremioUri?.StreamId is not null;
 
-       // _log.LogInformation("Gelato: Action {Action}, Guid {Guid}, Stremio {Stremio}, IsStream {IsStream}", stremioMeta?.Id, guid, stremioUri?.ToString() ?? "null", isStream);
+        // _log.LogInformation("Gelato: Action {Action}, Guid {Guid}, Stremio {Stremio}, IsStream {IsStream}", stremioMeta?.Id, guid, stremioUri?.ToString() ?? "null", isStream);
 
         var isList = cad.ActionName == "GetItemList" || cad.ActionName == "GetItemsByUserIdLegacy";
         BaseItem? item = null;

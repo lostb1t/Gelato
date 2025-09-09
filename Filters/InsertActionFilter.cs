@@ -103,46 +103,30 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
             return;
         }
 
-        BaseItem? baseItem = null;
+        //BaseItem? baseItem = null;
 
-        Func<CancellationToken, Task<bool>> saver = isSeries
-            ? (async ct =>
-            {
-                //baseItem = await _manager.CreateSeriesTreesAsync(root, meta, ct);
-               baseItem = await _manager.InsertMeta(root, meta, ct);
-                        if (baseItem is not null) {
-               _provider.QueueRefresh(
-                  baseItem.Id,
-                                new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-                                {
-                                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                                    //ReplaceAllMetadata = true,
-                                    ForceSave = true
+        var baseItem = await _manager.InsertMeta(root, meta, false, CancellationToken.None);
 
-                                },
-                                RefreshPriority.High);
-                                  }
-                return true;
-            })
-            : (async ct =>
-            {
-                //root.AddChild(baseItem);
-                baseItem = await _manager.InsertMeta(root, meta, ct);
-                var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-                {
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                    ForceSave = true
-                };
-                await baseItem?.RefreshMetadata(options, CancellationToken.None);
-                return true;
-            });
-
-
-        var ok = await saver(CancellationToken.None).ConfigureAwait(false);
         if (baseItem is not null)
-          ReplaceGuid(ctx, baseItem.Id);
+        {
+            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            {
+                MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
+                ImageRefreshMode = MetadataRefreshMode.None,
+                ForceSave = true
+            };
+            await _provider.RefreshFullItem(baseItem, options, CancellationToken.None);
+            _provider.QueueRefresh(
+            baseItem.Id,
+                         new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                         {
+                             MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                             ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                             ForceSave = true
+                         },
+                          RefreshPriority.High);
+            ReplaceGuid(ctx, baseItem.Id);
+        }
         await next();
     }
 
