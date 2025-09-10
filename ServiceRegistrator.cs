@@ -1,5 +1,6 @@
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
+//using MediaBrowser.Model.Dto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Controller.Library;
@@ -7,7 +8,9 @@ using System.Reflection;
 using Gelato.Filters;
 using MediaBrowser.Model.Tasks;
 using Gelato.Tasks;
-
+using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato;
 
@@ -16,17 +19,34 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
     public void RegisterServices(IServiceCollection services, IServerApplicationHost host)
     {
         services.AddSingleton<GelatoStremioProvider>();
-
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<SourceActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
         // services.AddSingleton<DeleteResourceFilter>();
-
         services.AddSingleton<GelatoManager>();
+        // services.AddSingleton<GelatoSourceProvider>();
         services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
+        // services.AddSingleton<IMediaSourceProvider>(sp => sp.GetRequiredService<GelatoSourceProvider>());
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
+
+        var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
+        services.Remove(original);
+
+        services.AddSingleton<IMediaSourceManager>(sp =>
+        {
+            IMediaSourceManager real =
+                original.ImplementationInstance as IMediaSourceManager
+                ?? (IMediaSourceManager)(original.ImplementationFactory?.Invoke(sp)
+                    ?? ActivatorUtilities.CreateInstance(sp, original.ImplementationType!));
+
+            var log = sp.GetRequiredService<ILogger<MediaSourceManagerDecorator>>();
+            var http = sp.GetRequiredService<IHttpContextAccessor>();
+            // var p = sp.GetRequiredService<GelatoSourceProvider>();
+
+            return new Gelato.MediaSourceManagerDecorator(real, log, http);
+        });
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {

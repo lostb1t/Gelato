@@ -65,26 +65,32 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
     BaseItem item,
     bool allowMediaProbe,
     CancellationToken ct)
+{
+    var sources = await GetMediaSourcesNoProbe(item, ct).ConfigureAwait(false);
+
+    if (!allowMediaProbe)
+        return sources;
+
+    IEnumerable<MediaSourceInfo> selected = sources;
+
+    var ctx = _http.HttpContext;
+    if (ctx != null && ctx.Items.TryGetValue("MediaSourceId", out var idObj) && idObj is string mediaSourceId)
     {
-        var sources = await GetMediaSourcesNoProbe(item, ct).ConfigureAwait(false);
-
-        if (!allowMediaProbe)
-            return sources;
-
-        IEnumerable<MediaSourceInfo> selected = sources;
-
-        var ctx = _http.HttpContext;
-        if (ctx != null && ctx.Items.TryGetValue("MediaSourceId", out var idObj) && idObj is string mediaSourceId)
-        {
-            _log.LogInformation("Probing only selected media source {MediaSourceId}", mediaSourceId);
-            selected = sources.Where(s => s.Id == mediaSourceId);
-        }
-
-        var tasks = selected.Select(src => ProbeAndPatchAsync(item, src, ct));
-        await Task.WhenAll(tasks).ConfigureAwait(false);
-
-        return selected;
+        _log.LogInformation("Probing only selected media source {MediaSourceId}", mediaSourceId);
+        selected = sources.Where(s => s.Id == mediaSourceId);
     }
+    else if (sources.Any())
+    {
+        var first = sources.First();
+        _log.LogInformation("No MediaSourceId provided, defaulting to first source {MediaSourceId}", first.Id);
+        selected = new[] { first };
+    }
+
+    var tasks = selected.Select(src => ProbeAndPatchAsync(item, src, ct));
+    await Task.WhenAll(tasks).ConfigureAwait(false);
+
+    return selected;
+}
 
     async Task<IEnumerable<MediaSourceInfo>> IMediaSourceProvider.GetMediaSources(BaseItem item, CancellationToken ct)
         => await GetMediaSources(item, allowMediaProbe: true, ct).ConfigureAwait(false);
