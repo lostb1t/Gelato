@@ -26,7 +26,8 @@ namespace Gelato.Filters;
 
 /// <summary>
 /// Action filter for handling external media source requests.
-/// Todo: should probably override the mediasourcemanager and inject there instead of an actionfilter.
+/// Media sources are "virtual" so we have to mimic them.
+/// I believe this is only a web thing. Really theres not need for these calls but whatever
 /// </summary>
 public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
 {
@@ -41,7 +42,8 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
     private readonly GelatoSourceProvider _externalMediaSourceProvider;
-
+    private readonly IUserManager _userManager;
+    
     public int Order => 1;
 
     public SourceActionFilter(
@@ -51,6 +53,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         //  GelatoRefresh refresh,
         IFileSystem fileSystem,
         IItemRepository repo,
+        IUserManager userManager,
         IMediaSourceManager mediaSources,
         GelatoManager manager,
         IDtoService dtoService,
@@ -61,6 +64,7 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         ILogger<SourceActionFilter> log)
     {
         _library = library;
+                _userManager = userManager;
         _externalMediaSourceProvider = providers.OfType<GelatoSourceProvider>().FirstOrDefault()
      ?? throw new InvalidOperationException("GelatoSourceProvider not registered.");
         _sourceManager = sourceManager;
@@ -138,8 +142,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
             // issue... guid can also be from an media source. Cause jellyfin is retarted. We dont persist that so... yeah.
             item = _library.GetItemById(guid);
         }
-        // _log.LogInformation("Gelato: ItemId {ItemId}", item?.Id);
-        //_log.LogInformation("Gelato: Action {Action}, Guid {Guid}, Stremio {Stremio}, IsStream {IsStream}, Found {Found}, ItemId {ItemId}", cad.ActionName, guid, stremioUri?.ToString() ?? "null", isStream, item is not null, item?.Id);
 
         if (item is null)
         {
@@ -150,10 +152,25 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
         var ct = ctx.HttpContext.RequestAborted;
         async Task<BaseItemDto> ProcessOneAsync(BaseItem item, CancellationToken token)
         {
+          
+          if (!ctx.ActionArguments.TryGetValue("userId", out var userIdObj))
+            userIdObj = null;
+
+        // Use the Authorization header if there is no userId
+        // The userId query parameter is more important
+        userIdObj ??= ctx.HttpContext.User.Claims.FirstOrDefault(claim => claim.Type.Equals("Jellyfin-UserId", StringComparison.OrdinalIgnoreCase))?.Value;
+
+        var user = userIdObj switch
+        {
+            string strUserId => _userManager.GetUserById(Guid.Parse(strUserId)),
+            Guid guidUserId => _userManager.GetUserById(guidUserId),
+            _ => null
+        };
+
             var dto = _dtoService.GetBaseItemDto(
                 item,
                 new DtoOptions(),
-                user: null
+                user
             );
 
             var kind = item.GetBaseItemKind();
@@ -174,7 +191,6 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
                 ct: CancellationToken.None
             ).ConfigureAwait(false);
 
-            // _log.LogInformation("Gelato: Processing item {Name} ({Id})", item.Name, item.Id);
             dto.CanDelete = true;
             dto.MediaSources = sources
                 .Where(src => !string.Equals(src.Id, item.Id.ToString("N"), StringComparison.OrdinalIgnoreCase))

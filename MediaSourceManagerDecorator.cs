@@ -39,12 +39,30 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _http = http ?? throw new ArgumentNullException(nameof(http));
         // _externalMediaSourceProvider = externalMediaSourceProvider ?? throw new ArgumentNullException(nameof(externalMediaSourceProvider));
+    
     }
+    
+        private GelatoSourceProvider? GetGelatoSourceProvider()
+{
+    return _providers
+        .OfType<GelatoSourceProvider>()
+        .FirstOrDefault();
+}
 
-    public List<MediaSourceInfo> GetStaticMediaSources(BaseItem item, bool enablePathSubstitution, User user = null)
-    {
+    public List<MediaSourceInfo> GetStaticMediaSources(
+    BaseItem item, 
+    bool enablePathSubstitution, 
+    User user = null)
+{
+    if (!IsExternal(item))
         return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-    }
+
+    var provider = GetGelatoSourceProvider();
+    return provider
+        .GetMediaSources(item, allowMediaProbe: false, ct: CancellationToken.None)
+        .GetAwaiter()
+        .GetResult().ToList();
+}
 
     private static bool IsExternal(BaseItem item)
     {
@@ -64,8 +82,7 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
 
     public List<MediaStream> GetMediaStreams(Guid itemId)
     {
-        // _log.LogInformation("GETTTINGfor item {ItemId}", itemId);
-        return _inner.GetMediaStreams(itemId);
+      return _inner.GetMediaStreams(itemId);
     }
 
     public List<MediaStream> GetMediaStreams(MediaStreamQuery query) => _inner.GetMediaStreams(query);
@@ -84,18 +101,8 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         if (!IsExternal(item))
             await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, cancellationToken);
 
-        // var sources = await _providers.GetMediaSources(
-        //         item,
-        //         allowMediaProbe: true,
-        //         ct: CancellationToken.None
-        //     ).ConfigureAwait(false);
+        var sources = await GetGelatoSourceProvider().GetMediaSources(item, true, cancellationToken).ConfigureAwait(false);
 
-        //var sources = _providers.Select(async i => await i.GetMediaSources(item, cancellationToken).ConfigureAwait(false));
-        var all = await Task.WhenAll(
-            _providers.Select(p => p.GetMediaSources(item, cancellationToken))
-        ).ConfigureAwait(false);
-
-        var sources = all.SelectMany(x => x); // IEnumerable<MediaSourceInfo>
         var list = new List<MediaSourceInfo>();
 
         foreach (var source in sources)

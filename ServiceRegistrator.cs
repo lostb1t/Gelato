@@ -26,9 +26,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ImageResourceFilter>();
         // services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<GelatoManager>();
-        // services.AddSingleton<GelatoSourceProvider>();
         services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
-        // services.AddSingleton<IMediaSourceProvider>(sp => sp.GetRequiredService<GelatoSourceProvider>());
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
 
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));

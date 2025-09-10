@@ -61,6 +61,8 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
         _fileCache = new FileCache(cacheDir);
     }
 
+
+
     public async Task<IEnumerable<MediaSourceInfo>> GetMediaSources(
     BaseItem item,
     bool allowMediaProbe,
