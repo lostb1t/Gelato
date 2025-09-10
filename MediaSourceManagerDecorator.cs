@@ -49,19 +49,20 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         .FirstOrDefault();
 }
 
+    /// lots of episodes rewauwst episodes including streams. Have to fix that before using thisp 
     public List<MediaSourceInfo> GetStaticMediaSources(
     BaseItem item, 
     bool enablePathSubstitution, 
     User user = null)
 {
-    if (!IsExternal(item))
-        return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+    //if (!IsExternal(item))
+    return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
 
-    var provider = GetGelatoSourceProvider();
-    return provider
-        .GetMediaSources(item, allowMediaProbe: false, ct: CancellationToken.None)
-        .GetAwaiter()
-        .GetResult().ToList();
+    //var provider = GetGelatoSourceProvider();
+    //return provider
+    //    .GetMediaSources(item, allowMediaProbe: false, ct: CancellationToken.None)
+    //    .GetAwaiter()
+    //    .GetResult().ToList();
 }
 
     private static bool IsExternal(BaseItem item)

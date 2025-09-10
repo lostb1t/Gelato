@@ -68,6 +68,10 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
     bool allowMediaProbe,
     CancellationToken ct)
 {
+  
+              
+ 
+    _log.LogInformation("getting sources");
     var sources = await GetMediaSourcesNoProbe(item, ct).ConfigureAwait(false);
 
     if (!allowMediaProbe)
@@ -87,6 +91,8 @@ public sealed class GelatoSourceProvider : IMediaSourceProvider
         _log.LogInformation("No MediaSourceId provided, defaulting to first source {MediaSourceId}", first.Id);
         selected = new[] { first };
     }
+    
+    _log.LogInformation("getting probes");
 
     var tasks = selected.Select(src => ProbeAndPatchAsync(item, src, ct));
     await Task.WhenAll(tasks).ConfigureAwait(false);
