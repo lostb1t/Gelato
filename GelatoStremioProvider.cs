@@ -308,7 +308,7 @@ namespace Gelato
 
     public class StremioCatalog
     {
-        [JsonConverter(typeof(JsonStringEnumConverter))]
+       [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
@@ -589,5 +589,28 @@ namespace Gelato
         Tv,
         Events
     }
+    
+    public class SafeStringEnumConverter<T> : JsonConverter<T> where T : struct, Enum
+{
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var s = reader.GetString();
+            if (Enum.TryParse<T>(s, true, out var value)) return value;
+            if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
+        }
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
+        }
+        reader.Skip();
+        if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
+        return default;
+    }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.ToString());
+}
 
 }
