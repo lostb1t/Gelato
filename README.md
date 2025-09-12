@@ -49,6 +49,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - [x] Support search result images
 - [x] Import media from Stremio catalogs (scheduled task)
 - [ ] Enable deletion of Stremio media items
+- [ ] Enable downloads of Stremio media items
 - [ ] Add support for subtitle addons
 - [ ] Create collections from Stremio catalogs (scheduled task)
 - [ ] Add more settings (e.g. cache TTL, stream naming options)
