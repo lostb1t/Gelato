@@ -34,6 +34,7 @@ public class GelatoApiController : ControllerBase
     private readonly ILibraryManager _library;
     private readonly IItemRepository _repo;
     private readonly IDtoService _dtoService;
+    //private readonly ExternalMediaManager _manager;
     // private readonly GelatoRefresh _refresh;
 
 
@@ -42,6 +43,7 @@ public class GelatoApiController : ControllerBase
         IDtoService dtoService,
         IServerConfigurationManager config,
         IUserManager userManager,
+    //    ExternalMediaManager manager,
         IItemRepository repo,
         ILibraryManager libraryManager)
     {
@@ -52,6 +54,7 @@ public class GelatoApiController : ControllerBase
         _repo = repo;
         _user = userManager;
         _library = libraryManager;
+       // _manager = manager;
     }
 
     // /// <summary>
@@ -87,8 +90,8 @@ public class GelatoApiController : ControllerBase
     // }
 
     // [HttpGet("image/{id}/{image_type}")]
-    [HttpPost("a3f08293726362d3531ab671f857d968")]
-    //[Authorize]
+    [HttpPost("test")]
+   // [Authorize]
     // [ProducesResponseType(StatusCodes.Status302Found)]
     public async Task<IActionResult> Image(
         // [FromRoute] string id,
@@ -96,10 +99,8 @@ public class GelatoApiController : ControllerBase
         )
     {
 
-        // var items = _library.GetItemList(new InternalItemsQuery
-        // {
-        // })
-        //     .OfType<BaseItem>();
         return NotFound();
+
+
     }
 }

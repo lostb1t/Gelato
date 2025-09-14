@@ -25,6 +25,7 @@ using MediaBrowser.Common.Configuration;
 namespace Gelato;
 
 public sealed class GelatoSourceProvider : IMediaSourceProvider
+//public sealed class GelatoSourceProvider : IMediaSourceProvider
 {
     private readonly ILogger<GelatoSourceProvider> _log;
     private readonly GelatoStremioProvider _stremioProvider;

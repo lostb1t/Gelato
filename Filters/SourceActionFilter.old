@@ -41,13 +41,13 @@ public class SourceActionFilter : IAsyncActionFilter, IOrderedFilter
     private readonly IMediaSourceManager _sourceManager;
     private readonly IProviderManager _provider;
     private readonly IFileSystem _fileSystem;
-    private readonly GelatoSourceProvider _externalMediaSourceProvider;
+ //   private readonly GelatoSourceProvider _externalMediaSourceProvider;
     private readonly IUserManager _userManager;
     
     public int Order => 1;
 
     public SourceActionFilter(
-        // GelatoSourceProvider externalMediaSourceProvider,
+        GelatoSourceProvider externalMediaSourceProvider,
         IEnumerable<IMediaSourceProvider> providers,
         ILibraryManager library,
         //  GelatoRefresh refresh,

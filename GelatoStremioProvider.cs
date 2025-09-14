@@ -150,6 +150,14 @@ namespace Gelato
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
         }
+        
+        public async Task<List<StremioSubtitle>> GetSubtitlesAsync(BaseItem item, string? fileName)
+        {
+            var uri = StremioUri.FromString(item.GetProviderId("stremio"));
+            var url = BuildUrl(new[] { "subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId });
+            var r = await GetJsonAsync<StremioSubtitleResponse>(url);
+            return r.Subtitles;
+        }
 
         public async Task<IReadOnlyList<StremioMeta>> GetCatalogMetasAsync(
             string id,
@@ -334,12 +342,29 @@ namespace Gelato
         public List<string> IdPrefixes { get; set; } = new();
     }
 
-
-
     public class StremioCatalogResponse
     {
         public List<StremioMeta>? Metas { get; set; }
     }
+    
+    public struct StremioSubtitle
+{
+    public string Id { get; set; }
+    public string Url { get; set; }
+    public string? Lang { get; set; }
+    public int? SubId { get; set; }
+    public bool? AiTranslated { get; set; }
+    public bool? FromTrusted { get; set; }
+    public int? UploaderId { get; set; }
+    public string? LangCode { get; set; }
+    public string? Title { get; set; }
+    public string? Moviehash { get; set; }
+}
+
+public struct StremioSubtitleResponse
+{
+    public List<StremioSubtitle> Subtitles { get; set; }
+}
 
     public class StremioMetaResponse
     {
