@@ -111,8 +111,8 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         {
             var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
-               // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh, 
+                // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.None,
                 ForceSave = true
             };
@@ -122,15 +122,15 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
                     CancellationToken.None
                 )
                 .ConfigureAwait(false);
-           // _provider.QueueRefresh(
-           // baseItem.Id,
-           //              new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-           //              {
-           //                  MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-           //                  ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-           //                  ForceSave = true
-           //              },
-           //               RefreshPriority.High);
+            // _provider.QueueRefresh(
+            // baseItem.Id,
+            //              new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            //              {
+            //                  MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            //                  ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            //                  ForceSave = true
+            //              },
+            //               RefreshPriority.High);
             ReplaceGuid(ctx, baseItem.Id);
         }
         await next();
