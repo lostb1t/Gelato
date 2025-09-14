@@ -150,7 +150,7 @@ namespace Gelato.Filters
                 var stremioKey = baseItem.GetProviderId("stremio");
                 if (string.IsNullOrWhiteSpace(stremioKey) || !seen.Add(stremioKey))
                     continue;
-
+                //_log.LogInformation($"Gelato: Search found {baseItem.Name}");
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.FromString(stremioKey);
                 dto.Id = stremioUri.ToGuid();
