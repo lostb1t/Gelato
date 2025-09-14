@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
-
+using Microsoft.AspNetCore.Mvc.Controllers;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -65,6 +65,12 @@ namespace Gelato.Filters
                 return;
             }
 
+         if (!_manager.IsItemsAction(ctx))
+        {
+            await next();
+            return;
+        }
+         
             var http = ctx.HttpContext;
 
             var hasSearch = http.Request.Query.Keys
@@ -90,8 +96,11 @@ namespace Gelato.Filters
             }
             else
             {
-                await next();
-                return;
+               // if everything is requested. return wat we can
+              requested.Add(BaseItemKind.Movie);
+              requested.Add(BaseItemKind.Series);
+               // await next();
+               // return;
             }
 
             if (requested.Count == 0)
@@ -112,7 +121,7 @@ namespace Gelato.Filters
                 int.TryParse(limitVal, out var lim) && lim > 0) limit = lim;
 
             var q = http.Request.Query.First(kv => string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)).Value.ToString();
-            _log.LogDebug("Gelato: intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit}",
+            _log.LogInformation("intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit}",
                           q, string.Join(",", requested.Select(r => r.ToString())), start, limit);
 
             var metas = new List<StremioMeta>(256);

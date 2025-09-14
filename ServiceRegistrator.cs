@@ -21,12 +21,14 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<GelatoStremioProvider>();
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
-        services.AddSingleton<SourceActionFilter>();
+        //services.AddSingleton<SourceActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
         // services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<GelatoManager>();
-        services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
+        services.AddSingleton(sp =>
+    new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
+      //  services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
 
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
@@ -34,16 +36,12 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
 
         services.AddSingleton<IMediaSourceManager>(sp =>
         {
-            IMediaSourceManager real =
+            IMediaSourceManager inner =
                 original.ImplementationInstance as IMediaSourceManager
                 ?? (IMediaSourceManager)(original.ImplementationFactory?.Invoke(sp)
                     ?? ActivatorUtilities.CreateInstance(sp, original.ImplementationType!));
 
-            var log = sp.GetRequiredService<ILogger<MediaSourceManagerDecorator>>();
-            var http = sp.GetRequiredService<IHttpContextAccessor>();
-            // var p = sp.GetRequiredService<GelatoSourceProvider>();
-
-            return new Gelato.MediaSourceManagerDecorator(real, log, http);
+            return ActivatorUtilities.CreateInstance<MediaSourceManagerDecorator>(sp, inner);
         });
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
@@ -51,7 +49,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<InsertActionFilter>(order: 0);
             o.Filters.AddService<SearchActionFilter>(order: 1);
             o.Filters.AddService<PlaybackInfoFilter>(order: 2);
-            o.Filters.AddService<SourceActionFilter>(order: 3);
+            //o.Filters.AddService<SourceActionFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
             // o.Filters.AddService<DeleteResourceFilter>();
         });

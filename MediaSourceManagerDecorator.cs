@@ -16,6 +16,8 @@ using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Controller.Persistence;
 using Jellyfin.Data.Entities;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.IO;        
 
 namespace Gelato;
 
@@ -24,14 +26,19 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
     private readonly IMediaSourceManager _inner;
     private readonly ILogger<MediaSourceManagerDecorator> _log;
     private readonly IHttpContextAccessor _http;
-    // private readonly GelatoSourceProvider _externalMediaSourceProvider;
-
+private readonly ILibraryManager _libraryManager;
+    private readonly Lazy<GelatoManager> _manager;
     private IMediaSourceProvider[] _providers;
-
+        //private readonly GelatoStremioProvider _stremioProvider;
+private readonly IDirectoryService _directoryService;
     public MediaSourceManagerDecorator(
         IMediaSourceManager inner,
+          ILibraryManager libraryManager,
         ILogger<MediaSourceManagerDecorator> log,
-        IHttpContextAccessor http
+        IHttpContextAccessor http,
+          IDirectoryService directoryService,
+            //    GelatoStremioProvider stremioProvider,  
+        Lazy<GelatoManager> manager
         // GelatoSourceProvider externalMediaSourceProvider
         )
     {
@@ -39,15 +46,25 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _http = http ?? throw new ArgumentNullException(nameof(http));
         // _externalMediaSourceProvider = externalMediaSourceProvider ?? throw new ArgumentNullException(nameof(externalMediaSourceProvider));
-    
+        _manager = manager;
+         _libraryManager = libraryManager;
+        _directoryService = directoryService;
+             //   _stremioProvider = stremioProvider;
     }
     
-        private GelatoSourceProvider? GetGelatoSourceProvider()
-{
-    return _providers
-        .OfType<GelatoSourceProvider>()
-        .FirstOrDefault();
-}
+  public bool IsItemsActionName(string name)
+    {
+        return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
+    }  
+//        private GelatoSourceProvider? GetGelatoSourceProvider()
+//{
+//    return _providers
+//        .OfType<GelatoSourceProvider>()
+//        .FirstOrDefault();
+//}
 
     /// lots of episodes rewauwst episodes including streams. Have to fix that before using thisp 
     public List<MediaSourceInfo> GetStaticMediaSources(
@@ -55,14 +72,34 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
     bool enablePathSubstitution, 
     User user = null)
 {
-    //if (!IsExternal(item))
-    return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+  var manager = _manager.Value;
+var ctx = _http.HttpContext;
+    if (IsExternal(item) && ctx != null && ctx.Items.TryGetValue("actionName", out var actionName) && IsItemsActionName(actionName as string))
+    {
+      _log.LogInformation("huhhhsa");
+     
+      if (!manager.HasStreamSync(item.Id)) {
+     manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
+     manager.SetStreamSync(item.Id);
+     _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).GetAwaiter().GetResult();
+   }
+    }
+    
+    var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+    var sorted = sources
+    .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+    .Select(s =>
+    {
 
-    //var provider = GetGelatoSourceProvider();
-    //return provider
-    //    .GetMediaSources(item, allowMediaProbe: false, ct: CancellationToken.None)
-    //    .GetAwaiter()
-    //    .GetResult().ToList();
+        if (s.Name.Length > 4)
+            s.Name = s.Name.Substring(4);
+        return s;
+    })
+    .Where(s => s.Path == null ||
+                !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+    .ToList();
+
+return sorted;
 }
 
     private static bool IsExternal(BaseItem item)
@@ -99,40 +136,41 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         bool enablePathSubstitution,
         CancellationToken cancellationToken)
     {
-        if (!IsExternal(item))
-            await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, cancellationToken);
-
-        var sources = await GetGelatoSourceProvider().GetMediaSources(item, true, cancellationToken).ConfigureAwait(false);
-
-        var list = new List<MediaSourceInfo>();
-
-        foreach (var source in sources)
-        {
-            // Validate that this is actually possible
-            if (source.SupportsDirectStream)
+       // if (!IsExternal(item))
+    //   _log.LogInformation("playbackinfo calked  {MediaSourceId}", item.Id); 
+      var ctx = _http.HttpContext;
+      
+      if (ctx?.Items.TryGetValue("MediaSourceId", out var idObjj) == true)
+{
+    _log.LogInformation("got id {MediaSourceId}", idObjj);
+}
+      
+    if (ctx != null && ctx.Items.TryGetValue("MediaSourceId", out var idObj) && idObj is string mediaSourceId)
+    {
+          //var mediaSources = GetStaticMediaSources(item, enablePathSubstitution, user);
+                 //     _log.LogInformation("got iddddd {MediaSourceId}", mediaSourceId); 
+        //selected = sources.Where(s => s.Id == mediaSourceId);
+        var sourceItem = _libraryManager.GetItemById(Guid.Parse(mediaSourceId));
+        var mediaSources = GetStaticMediaSources(sourceItem, enablePathSubstitution, user);
+        if (allowMediaProbe && !sourceItem.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase)
+                    && (sourceItem.MediaType == MediaType.Video && mediaSources[0].MediaStreams.All(i => i.Type != MediaStreamType.Video)))
+                   // || (item.MediaType == MediaType.Audio && mediaSources[0].MediaStreams.All(i => i.Type != MediaStreamType.Audio))))
             {
-                source.SupportsDirectStream = SupportsDirectStream(source.Path, source.Protocol);
+                     // _log.LogInformation("Probing only selected media source {MediaSourceId}", mediaSourceId); 
+              await sourceItem.RefreshMetadata(
+                    new MetadataRefreshOptions(_directoryService)
+                    {
+                        EnableRemoteContentProbe = true,
+                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh
+                    },
+                    cancellationToken).ConfigureAwait(false);
+
+                //mediaSources = GetStaticMediaSources(item, enablePathSubstitution, user);
             }
-
-            if (user is not null)
-            {
-                SetDefaultAudioAndSubtitleStreamIndices(item, source, user);
-
-                if (item.MediaType == MediaType.Audio)
-                {
-                    source.SupportsTranscoding = user.HasPermission(PermissionKind.EnableAudioPlaybackTranscoding);
-                }
-                else if (item.MediaType == MediaType.Video)
-                {
-                    source.SupportsTranscoding = user.HasPermission(PermissionKind.EnableVideoPlaybackTranscoding);
-                    source.SupportsDirectStream = user.HasPermission(PermissionKind.EnablePlaybackRemuxing);
-                }
-            }
-
-            list.Add(source);
-        }
-
-        return list;
+    }
+    
+      
+        return await _inner.GetPlaybackMediaSources(item, user, false, enablePathSubstitution, cancellationToken);     
     }
 
     public Task<MediaSourceInfo> GetMediaSource(
