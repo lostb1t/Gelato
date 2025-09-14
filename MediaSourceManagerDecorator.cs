@@ -86,20 +86,19 @@ var ctx = _http.HttpContext;
     }
     
     var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-    var sorted = sources
+    return sources
     .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
     .Select(s =>
     {
-
         if (s.Name.Length > 4)
             s.Name = s.Name.Substring(4);
         return s;
     })
-    .Where(s => s.Path == null ||
+    .Where(s => sources.Count <= 1 || 
+                s.Path == null || 
                 !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
     .ToList();
 
-return sorted;
 }
 
     private static bool IsExternal(BaseItem item)
@@ -130,6 +129,75 @@ return sorted;
     public List<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query) => _inner.GetMediaAttachments(query);
 
     public async Task<List<MediaSourceInfo>> GetPlaybackMediaSources(
+    BaseItem item,
+    User user,
+    bool allowMediaProbe,
+    bool enablePathSubstitution,
+    CancellationToken ct)
+{
+    var ctx = _http.HttpContext;
+
+    static bool IsStremio(BaseItem? i) =>
+        i?.Path != null && i.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase);
+
+    static bool NeedsProbe(BaseItem? i, MediaSourceInfo s) =>
+        i is not null
+        && i.MediaType == MediaType.Video
+        && !IsStremio(i)
+        && (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
+
+    MediaSourceInfo? PickFirst(BaseItem owner) =>
+        GetStaticMediaSources(owner, enablePathSubstitution, user).FirstOrDefault();
+
+    BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback)
+        => Guid.TryParse(s.Id, out var g) ? (_libraryManager.GetItemById(g) ?? fallback) : fallback;
+
+    string? mediaSourceId =
+        ctx is not null && ctx.Items.TryGetValue("MediaSourceId", out var idObj) && idObj is string idStr
+            ? idStr : null;
+
+    MediaSourceInfo? selected;
+    BaseItem owner;
+
+    if (!string.IsNullOrEmpty(mediaSourceId))
+    {
+        var ownerById = Guid.TryParse(mediaSourceId, out var gid) ? _libraryManager.GetItemById(gid) : null;
+        owner = ownerById ?? item;
+        var sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
+        selected = sources.FirstOrDefault(s => string.Equals(s.Id, mediaSourceId, StringComparison.OrdinalIgnoreCase))
+                   ?? sources.FirstOrDefault();
+    }
+    else
+    {
+        owner = item;
+        selected = PickFirst(owner);
+    }
+
+    if (selected is null)
+        return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
+
+    var probeOwner = ResolveOwnerFor(selected, owner);
+
+    if (allowMediaProbe && NeedsProbe(probeOwner, selected))
+    {
+        await probeOwner.RefreshMetadata(
+            new MetadataRefreshOptions(_directoryService)
+            {
+                EnableRemoteContentProbe = true,
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh
+            },
+            ct).ConfigureAwait(false);
+
+        var refreshed = GetStaticMediaSources(probeOwner, enablePathSubstitution, user);
+        selected = !string.IsNullOrEmpty(selected.Id)
+            ? refreshed.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? refreshed.FirstOrDefault()
+            : refreshed.FirstOrDefault();
+    }
+
+    return selected is null ? new List<MediaSourceInfo>() : new List<MediaSourceInfo> { selected };
+}
+    
+    public async Task<List<MediaSourceInfo>> GetPlaybackMediaSourcesOld(
         BaseItem item,
         User user,
         bool allowMediaProbe,
