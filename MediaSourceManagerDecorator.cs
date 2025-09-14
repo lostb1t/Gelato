@@ -72,12 +72,13 @@ private readonly IDirectoryService _directoryService;
     bool enablePathSubstitution, 
     User user = null)
 {
+  if (!IsExternal(item))
+     return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+  
   var manager = _manager.Value;
 var ctx = _http.HttpContext;
-    if (IsExternal(item) && ctx != null && ctx.Items.TryGetValue("actionName", out var actionName) && IsItemsActionName(actionName as string))
-    {
-      _log.LogInformation("huhhhsa");
-     
+    if (ctx != null && ctx.Items.TryGetValue("actionName", out var actionName) && IsItemsActionName(actionName as string))
+    {    
       if (!manager.HasStreamSync(item.Id)) {
      manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
      manager.SetStreamSync(item.Id);
@@ -135,9 +136,12 @@ var ctx = _http.HttpContext;
     bool enablePathSubstitution,
     CancellationToken ct)
 {
-    var ctx = _http.HttpContext;
+     if (!IsExternal(item))
+        return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct);
+    
+     var ctx = _http.HttpContext;
 
-    static bool IsStremio(BaseItem? i) =>
+     static bool IsStremio(BaseItem? i) =>
         i?.Path != null && i.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase);
 
     static bool NeedsProbe(BaseItem? i, MediaSourceInfo s) =>

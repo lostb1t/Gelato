@@ -54,7 +54,7 @@ public class GelatoApiController : ControllerBase
         _repo = repo;
         _user = userManager;
         _library = libraryManager;
-       // _manager = manager;
+        // _manager = manager;
     }
 
     // /// <summary>
@@ -91,7 +91,7 @@ public class GelatoApiController : ControllerBase
 
     // [HttpGet("image/{id}/{image_type}")]
     [HttpPost("test")]
-   // [Authorize]
+    // [Authorize]
     // [ProducesResponseType(StatusCodes.Status302Found)]
     public async Task<IActionResult> Image(
         // [FromRoute] string id,

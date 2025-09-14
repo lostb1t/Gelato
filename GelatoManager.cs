@@ -87,16 +87,16 @@ public class GelatoManager
     {
         return _memoryCache.TryGetValue($"uri:{guid}", out var value) ? value as StremioUri : null;
     }
-    
+
     public void SetStreamSync(Guid guid)
     {
         _memoryCache.Set($"streamsync:{guid}", guid, TimeSpan.FromMinutes(3600));
     }
 
     public bool HasStreamSync(Guid guid)
-{
-    return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
-}
+    {
+        return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
+    }
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
     {
@@ -528,192 +528,192 @@ public class GelatoManager
         providerIds.Add("stremio", $"stremio://{meta.Type}/{Id}");
         return providerIds;
     }
- 
 
 
-public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
-{
-    var isEpisode = item.GetBaseItemKind() == BaseItemKind.Episode;
-    var parent = isEpisode ? TryGetSeriesFolder() : TryGetMovieFolder();
-    if (parent is null) return new List<Video>();
-    if (!item.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase)) return new List<Video>();
 
-    var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
-    var streams = await _stremioProvider.GetStreamsAsync(item).ConfigureAwait(false);
-
-    var current = _library.GetItemList(new InternalItemsQuery
+    public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     {
-        ParentId = parent.Id,
-        IncludeItemTypes = new[] { item.GetBaseItemKind() },
-        HasAnyProviderId = providerIds,
-        Recursive = false
-    })
-    .OfType<Video>()
-    .ToList();
+        var isEpisode = item.GetBaseItemKind() == BaseItemKind.Episode;
+        var parent = isEpisode ? TryGetSeriesFolder() : TryGetMovieFolder();
+        if (parent is null) return new List<Video>();
+        if (!item.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase)) return new List<Video>();
 
-    var currentById = current.ToDictionary(v => v.Id, v => v);
-    var currentIds  = new HashSet<Guid>(current.Select(v => v.Id));
+        var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
+        var streams = await _stremioProvider.GetStreamsAsync(item).ConfigureAwait(false);
 
-    var desiredIds = new HashSet<Guid> { item.Id };
-    var created = new List<Video>();
-    if (item is Video baseVideo) created.Add(baseVideo);
-
-    var i = 0;
-    foreach (var s in streams)
-    {
-        if (!s.IsValid()) continue;
-        i++;
-
-        var id = s.GetGuid();
-        if (!desiredIds.Add(id)) continue;
-
-
-        var sort  = i.ToString("D3");
-        var label = $"{sort} {s.GetName()}";
-
-        if (currentIds.Contains(id))
+        var current = _library.GetItemList(new InternalItemsQuery
         {
-            var existing = currentById[id];
-            
-            var locked = existing.LockedFields?.ToList() ?? new List<MetadataField>();
+            ParentId = parent.Id,
+            IncludeItemTypes = new[] { item.GetBaseItemKind() },
+            HasAnyProviderId = providerIds,
+            Recursive = false
+        })
+        .OfType<Video>()
+        .ToList();
 
-    var _ = locked.Remove(MetadataField.Name);
-    existing.LockedFields = locked.ToArray();
-    await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+        var currentById = current.ToDictionary(v => v.Id, v => v);
+        var currentIds = new HashSet<Guid>(current.Select(v => v.Id));
 
-            existing.Name = label;
-            existing.SortName = sort;
+        var desiredIds = new HashSet<Guid> { item.Id };
+        var created = new List<Video>();
+        if (item is Video baseVideo) created.Add(baseVideo);
 
-            if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
-            existing.LockedFields = locked.ToArray();
+        var i = 0;
+        foreach (var s in streams)
+        {
+            if (!s.IsValid()) continue;
+            i++;
 
-            await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-            continue;
+            var id = s.GetGuid();
+            if (!desiredIds.Add(id)) continue;
+
+
+            var sort = i.ToString("D3");
+            var label = $"{sort} {s.GetName()}";
+
+            if (currentIds.Contains(id))
+            {
+                var existing = currentById[id];
+
+                var locked = existing.LockedFields?.ToList() ?? new List<MetadataField>();
+
+                var _ = locked.Remove(MetadataField.Name);
+                existing.LockedFields = locked.ToArray();
+                await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+
+                existing.Name = label;
+                existing.SortName = sort;
+
+                if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
+                existing.LockedFields = locked.ToArray();
+
+                await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+                continue;
+            }
+
+            Video child = isEpisode ? new Episode { Id = id } : new Movie { Id = id };
+
+            child.Name = label;
+            child.IsVirtualItem = false;
+            child.ProviderIds = providerIds;
+            child.Path = s.Url;                    // if you prefer stremio: scheme, set it here instead
+            child.RunTimeTicks = item.RunTimeTicks;
+            child.SortName = sort;
+
+            var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
+            if (!lockedNew.Contains(MetadataField.Name)) lockedNew.Add(MetadataField.Name);
+            //if (!lockedNew.Contains(MetadataField.SortName)) lockedNew.Add(MetadataField.SortName);
+            child.LockedFields = lockedNew.ToArray();
+
+            parent.AddChild(child);
+            await child.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+
+            created.Add(child);
         }
 
-        Video child = isEpisode ? new Episode { Id = id } : new Movie { Id = id };
+        // delete stale
+        var stale = current.Where(m => !desiredIds.Contains(m.Id)).ToList();
+        foreach (var m in stale)
+            _library.DeleteItem(m, new DeleteOptions { DeleteFileLocation = false }, true);
 
-        child.Name = label;
-        child.IsVirtualItem = false;
-        child.ProviderIds = providerIds;
-        child.Path = s.Url;                    // if you prefer stremio: scheme, set it here instead
-        child.RunTimeTicks = item.RunTimeTicks;
-        child.SortName = sort;
+        // merge
+        if (created.Count > 0 || desiredIds.Count > 1)
+        {
+            var keep = current.Where(m => desiredIds.Contains(m.Id));
+            var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
+            await MergeVersions(merged).ConfigureAwait(false);
+        }
 
-        var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
-        if (!lockedNew.Contains(MetadataField.Name))    lockedNew.Add(MetadataField.Name);
-        //if (!lockedNew.Contains(MetadataField.SortName)) lockedNew.Add(MetadataField.SortName);
-        child.LockedFields = lockedNew.ToArray();
 
-        parent.AddChild(child);
-        await child.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
 
-        created.Add(child);
+        return created;
     }
 
-    // delete stale
-    var stale = current.Where(m => !desiredIds.Contains(m.Id)).ToList();
-    foreach (var m in stale)
-        _library.DeleteItem(m, new DeleteOptions { DeleteFileLocation = false }, true);
-
-    // merge
-    if (created.Count > 0 || desiredIds.Count > 1)
+    public async Task<List<Video>> SyncStreamsOld(BaseItem item, CancellationToken ct)
     {
-        var keep = current.Where(m => desiredIds.Contains(m.Id));
-        var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
-        await MergeVersions(merged).ConfigureAwait(false);
+        var isEpisode = item.GetBaseItemKind() == BaseItemKind.Episode;
+        var parent = isEpisode ? TryGetSeriesFolder() : TryGetMovieFolder();
+        if (parent is null) return new List<Video>();
+        if (!item.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase)) return new List<Video>();
+        var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
+        var streams = await _stremioProvider.GetStreamsAsync(item).ConfigureAwait(false);
+
+        var current = _library.GetItemList(new InternalItemsQuery
+        {
+            ParentId = parent.Id,
+            IncludeItemTypes = new[] { item.GetBaseItemKind() },
+            HasAnyProviderId = providerIds,
+            Recursive = false
+        })
+        .OfType<Video>()
+        .ToList();
+
+        _log.LogInformation("COUNT {Count}", current.Count);
+
+        var currentIds = new HashSet<Guid>(current.Select(v => v.Id));
+        var desiredIds = new HashSet<Guid> { item.Id };
+        var created = new List<Video>();
+        if (item is Video baseVideo) created.Add(baseVideo);
+        var i = 0;
+        foreach (var s in streams)
+        {
+            if (!s.IsValid()) continue;
+            i++;
+
+            var id = s.GetGuid();
+            if (!desiredIds.Add(id)) continue;
+            if (currentIds.Contains(id)) continue;
+
+            Video child = isEpisode
+                ? new Episode { Id = id }
+                : new Movie { Id = id };
+
+            // child.Name = $"{item.Name} {s.GetName()}";
+            child.Name = $"{s.GetName()}";
+            child.IsVirtualItem = false;
+            child.ProviderIds = providerIds;
+            child.Path = s.Url;
+            child.RunTimeTicks = item.RunTimeTicks;
+            //  child.SortName = i;
+
+            var locked = child.LockedFields?.ToList();
+            if (!locked.Contains(MetadataField.Name))
+                locked.Add(MetadataField.Name);
+            // if (!locked.Contains(MetadataField.SortName))
+            //    locked.Add(MetadataField.SortName);
+            child.LockedFields = locked.ToArray();
+            //child.IsRemote = true;
+            //child.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+            //child.PresentationUniqueKey = item.Id;
+            parent.AddChild(child);
+            await child.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+            created.Add(child);
+        }
+
+
+
+        var stale = current.Where(m => !desiredIds.Contains(m.Id)).ToList();
+        _log.LogInformation("DELETING {Count}", stale.Count);
+        foreach (var m in stale)
+            _library.DeleteItem(m, new DeleteOptions { DeleteFileLocation = false }, true);
+
+        if (created.Count > 0 || desiredIds.Count > 1)
+        {
+            var keep = current.Where(m => desiredIds.Contains(m.Id));
+            var merged = created.Concat(keep)
+                                .GroupBy(v => v.Id)
+                                .Select(g => g.First())
+                                .ToArray();
+
+            await MergeVersions(merged).ConfigureAwait(false);
+        }
+
+        await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+
+
+        return created;
     }
 
-
-
-    return created;
-}
- 
- public async Task<List<Video>> SyncStreamsOld(BaseItem item, CancellationToken ct)
-{
-    var isEpisode = item.GetBaseItemKind() == BaseItemKind.Episode;
-    var parent = isEpisode ? TryGetSeriesFolder() : TryGetMovieFolder();
-    if (parent is null) return new List<Video>();
-    if (!item.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase)) return new List<Video>();
-    var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
-    var streams = await _stremioProvider.GetStreamsAsync(item).ConfigureAwait(false);
-
-    var current = _library.GetItemList(new InternalItemsQuery
-    {
-        ParentId = parent.Id,
-        IncludeItemTypes = new[] { item.GetBaseItemKind() },
-        HasAnyProviderId = providerIds,
-        Recursive = false
-    })
-    .OfType<Video>()
-    .ToList();
-
-    _log.LogInformation("COUNT {Count}", current.Count);
-
-    var currentIds = new HashSet<Guid>(current.Select(v => v.Id));
-    var desiredIds = new HashSet<Guid> { item.Id };
-    var created = new List<Video>();
-    if (item is Video baseVideo) created.Add(baseVideo);
-    var i = 0;
-    foreach (var s in streams)
-    {
-        if (!s.IsValid()) continue;
-        i++;
-
-        var id = s.GetGuid();
-        if (!desiredIds.Add(id)) continue;
-        if (currentIds.Contains(id)) continue;
-
-        Video child = isEpisode
-            ? new Episode { Id = id }
-            : new Movie   { Id = id };
-
-       // child.Name = $"{item.Name} {s.GetName()}";
-        child.Name = $"{s.GetName()}";
-        child.IsVirtualItem = false;
-        child.ProviderIds = providerIds;
-        child.Path = s.Url;
-        child.RunTimeTicks = item.RunTimeTicks;
-      //  child.SortName = i;
-        
-        var locked = child.LockedFields?.ToList();
-    if (!locked.Contains(MetadataField.Name))
-        locked.Add(MetadataField.Name);
-    // if (!locked.Contains(MetadataField.SortName))
-    //    locked.Add(MetadataField.SortName);
-    child.LockedFields = locked.ToArray();
-        //child.IsRemote = true;
-        //child.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-        //child.PresentationUniqueKey = item.Id;
-        parent.AddChild(child);
-        await child.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-        created.Add(child);
-    }
-    
-    
-
-    var stale = current.Where(m => !desiredIds.Contains(m.Id)).ToList();
-    _log.LogInformation("DELETING {Count}", stale.Count);
-    foreach (var m in stale)
-        _library.DeleteItem(m, new DeleteOptions { DeleteFileLocation = false }, true);
-
-    if (created.Count > 0 || desiredIds.Count > 1)
-    {
-        var keep = current.Where(m => desiredIds.Contains(m.Id));
-        var merged = created.Concat(keep)
-                            .GroupBy(v => v.Id)
-                            .Select(g => g.First())
-                            .ToArray();
-
-        await MergeVersions(merged).ConfigureAwait(false);
-    }
-    
-    await _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
-                
-
-    return created;
-}
-  
 
     public Video? GetPrimaryVersion(List<Video> items)
     {
@@ -724,15 +724,15 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     {
         if (!items.Any()) return;
         var primaryVersion = items.FirstOrDefault(i => (i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId)) || i.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase));
-      //  foreach (var it in items)
-           //_log.LogInformation("Item path: {Path}", it.Path ?? "<null>");
+        //  foreach (var it in items)
+        //_log.LogInformation("Item path: {Path}", it.Path ?? "<null>");
 
-      //  _log.LogInformation("Merging {Count} versions, primary is {Primary}", items.Length, primaryVersion?.Id);
+        //  _log.LogInformation("Merging {Count} versions, primary is {Primary}", items.Length, primaryVersion?.Id);
         if (primaryVersion is null)
         {
             primaryVersion = items.First();
         }
-      // _log.LogInformation("Chosen primary version is {Primary} {Path}", primaryVersion.Id, primaryVersion.Path);
+        // _log.LogInformation("Chosen primary version is {Primary} {Path}", primaryVersion.Id, primaryVersion.Path);
         var alternateVersionsOfPrimary = primaryVersion
                 .LinkedAlternateVersions.Where(l => items.Any(i => i.Path == l.Path))
                 .ToList();
@@ -807,7 +807,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
         var name = cad.ActionName;
         return IsItemsActionName(name);
     }
-    
+
     public bool IsItemsActionName(string name)
     {
         return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)

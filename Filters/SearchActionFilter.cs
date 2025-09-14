@@ -65,12 +65,12 @@ namespace Gelato.Filters
                 return;
             }
 
-         if (!_manager.IsItemsAction(ctx))
-        {
-            await next();
-            return;
-        }
-         
+            if (!_manager.IsItemsAction(ctx))
+            {
+                await next();
+                return;
+            }
+
             var http = ctx.HttpContext;
 
             var hasSearch = http.Request.Query.Keys
@@ -96,11 +96,11 @@ namespace Gelato.Filters
             }
             else
             {
-               // if everything is requested. return wat we can
-              requested.Add(BaseItemKind.Movie);
-              requested.Add(BaseItemKind.Series);
-               // await next();
-               // return;
+                // if everything is requested. return wat we can
+                requested.Add(BaseItemKind.Movie);
+                requested.Add(BaseItemKind.Series);
+                // await next();
+                // return;
             }
 
             if (requested.Count == 0)
