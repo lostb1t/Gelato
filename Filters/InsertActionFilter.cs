@@ -99,7 +99,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         var meta = await _stremioProvider.GetMetaAsync(stremioMeta.Id, stremioMeta.Type).ConfigureAwait(false);
         if (meta is null)
         {
-            _log.LogWarning("stremio meta not found for {0} {1}", stremioId, mediaType);
+            _log.LogWarning("stremio meta not found for {0} {1}", stremioMeta.Id, stremioMeta.Type);
             await next();
             return;
         }
