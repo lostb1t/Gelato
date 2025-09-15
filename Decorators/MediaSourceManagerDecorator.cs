@@ -81,12 +81,6 @@ namespace Gelato.Decorators
             var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             sources = sources
             // .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(s =>
-            {
-                if (s.Name.Length > 4)
-                    s.Name = s.Name.Substring(4);
-                return s;
-            })
             .Where(s => sources.Count <= 1 ||
                         s.Path == null ||
                         !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
@@ -193,50 +187,6 @@ namespace Gelato.Decorators
             }
 
             return selected is null ? new List<MediaSourceInfo>() : new List<MediaSourceInfo> { selected };
-        }
-
-        public async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSourcesOld(
-            BaseItem item,
-            User user,
-            bool allowMediaProbe,
-            bool enablePathSubstitution,
-            CancellationToken cancellationToken)
-        {
-            // if (!IsExternal(item))
-            //   _log.LogInformation("playbackinfo calked  {MediaSourceId}", item.Id);
-            var ctx = _http.HttpContext;
-
-            if (ctx?.Items.TryGetValue("MediaSourceId", out var idObjj) == true)
-            {
-                _log.LogInformation("got id {MediaSourceId}", idObjj);
-            }
-
-            if (ctx != null && ctx.Items.TryGetValue("MediaSourceId", out var idObj) && idObj is string mediaSourceId)
-            {
-                //var mediaSources = GetStaticMediaSources(item, enablePathSubstitution, user);
-                //     _log.LogInformation("got iddddd {MediaSourceId}", mediaSourceId);
-                //selected = sources.Where(s => s.Id == mediaSourceId);
-                var sourceItem = _libraryManager.GetItemById(Guid.Parse(mediaSourceId));
-                var mediaSources = GetStaticMediaSources(sourceItem, enablePathSubstitution, user);
-                if (allowMediaProbe && !sourceItem.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase)
-                            && (sourceItem.MediaType == MediaType.Video && mediaSources[0].MediaStreams.All(i => i.Type != MediaStreamType.Video)))
-                // || (item.MediaType == MediaType.Audio && mediaSources[0].MediaStreams.All(i => i.Type != MediaStreamType.Audio))))
-                {
-                    // _log.LogInformation("Probing only selected media source {MediaSourceId}", mediaSourceId);
-                    await sourceItem.RefreshMetadata(
-                          new MetadataRefreshOptions(_directoryService)
-                          {
-                              EnableRemoteContentProbe = true,
-                              MetadataRefreshMode = MetadataRefreshMode.FullRefresh
-                          },
-                          cancellationToken).ConfigureAwait(false);
-
-                    //mediaSources = GetStaticMediaSources(item, enablePathSubstitution, user);
-                }
-            }
-
-
-            return await _inner.GetPlaybackMediaSources(item, user, false, enablePathSubstitution, cancellationToken);
         }
 
         public Task<MediaSourceInfo> GetMediaSource(

@@ -104,7 +104,7 @@ namespace Gelato.Tasks
                             cancellationToken.ThrowIfCancellationRequested();
                             try
                             {
-                                var item = await _manager.InsertMeta(root, meta, true, cancellationToken).ConfigureAwait(false);
+                                var (item, created) = await _manager.InsertMeta(root, meta, true, cancellationToken).ConfigureAwait(false);
 
 
                             }

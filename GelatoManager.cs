@@ -368,24 +368,25 @@ public class GelatoManager
     /// <param name="meta"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    public async Task<BaseItem?> InsertMeta(Folder parent, StremioMeta meta, bool refreshItem, CancellationToken ct)
+    public async Task<(BaseItem?, bool)> InsertMeta(Folder parent, StremioMeta meta, bool refreshItem, CancellationToken ct)
     {
         if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
         {
-            return null;
+            return (null, false);
         }
 
         var baseItem = _stremioProvider.IntoBaseItem(meta);
         if (baseItem is null || baseItem.ProviderIds is null || baseItem.ProviderIds.Count == 0)
         {
             _log.LogWarning("Gelato: Missing provider ids, skipping");
-            return null!;
+            return (null, false);
         }
 
-        var found = FindByStremioId(meta.Id) as Video;
+        //var found = FindByStremioId(meta.Id) as Video;
+        var found = FindByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
         if (found is not null)
         {
-            return found;
+            return (found, false);
         }
         //baseItem.IsDefault = true;
 
@@ -405,6 +406,8 @@ public class GelatoManager
         {
             baseItem = await CreateSeriesTreesAsync(parent, meta, ct);
         }
+        
+        _log.LogInformation($"inserted new media: {baseItem.Name}");
         if (refreshItem && baseItem is not null)
         {
             _provider.QueueRefresh(
@@ -417,7 +420,7 @@ public class GelatoManager
                                  },
                                   RefreshPriority.High);
         }
-        return baseItem as BaseItem;
+        return (baseItem as BaseItem, true);
     }
 
     public Video? FindByStremioId(string id)
@@ -458,10 +461,25 @@ public class GelatoManager
             Limit = 1,
             HasAnyProviderId = new Dictionary<string, string> { [providerKey] = providerValue }
         };
-
         return _library.GetItemList(q).OfType<Video>().FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
+        //return _library.GetItemList(q).OfType<Video>().FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
     }
 
+    public Video? FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind )
+    {
+      
+        var q = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { kind },
+            Recursive = true,
+            Limit = 1,
+            HasAnyProviderId = providerIds
+        };
+
+        return _library.GetItemList(q).OfType<Video>().FirstOrDefault();
+    }
+ 
+    
     public async Task SaveStreamAsStrm(Folder folder, StremioMeta meta, IEnumerable<StremioStream> streams, CancellationToken ct)
     {
         var i = 1;
@@ -569,7 +587,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
 
 
         var sort  = $"BB{i.ToString("D3")}";
-        var label = $"{sort} {s.GetName()}";
+        var label = $"{s.GetName()}";
 
         if (currentIds.Contains(id))
         {
@@ -689,85 +707,6 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
 }
     
     
-    public async Task MergeVersionsOld(Video[] items)
-    {
-        if (!items.Any()) return;
-        var primaryVersion = items.FirstOrDefault(i => i.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase));
-      //  foreach (var it in items)
-           //_log.LogInformation("Item path: {Path}", it.Path ?? "<null>");
-var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.ValidationOnly,
-            ReplaceAllImages = false,
-            ReplaceAllMetadata = false,
-            EnableRemoteContentProbe = false,
-            ForceSave = true
-        };
-      //  _log.LogInformation("Merging {Count} versions, primary is {Primary}", items.Length, primaryVersion?.Id);
-        if (primaryVersion is null)
-        {
-            _log.LogError($"no primary version found");
-            return;
-        }
-      // _log.LogInformation("Chosen primary version is {Primary} {Path}", primaryVersion.Id, primaryVersion.Path);
-        var alternateVersionsOfPrimary = primaryVersion
-                .LinkedAlternateVersions.Where(l => items.Any(i => i.Path == l.Path))
-                .ToList();
-
-        var alternateVersionsChanged = false;
-        foreach (var item in items.Where(i =>
-            !i.Id.Equals(primaryVersion.Id) &&
-            !alternateVersionsOfPrimary.Any(l => l.ItemId == i.Id)))
-        {
-            item.SetPrimaryVersionId(
-                primaryVersion.Id.ToString("N", CultureInfo.InvariantCulture)
-            );
-
-            await item.UpdateToRepositoryAsync(
-                    ItemUpdateType.MetadataEdit,
-                    CancellationToken.None
-                )
-                .ConfigureAwait(false);
-
-            AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
-                                            new LinkedChild
-                                            {
-                                                Path = item.Path,
-                                                ItemId = item.Id
-                                            });
-
-            foreach (var linkedItem in item.LinkedAlternateVersions)
-            {
-                AddToAlternateVersionsIfNotPresent(alternateVersionsOfPrimary,
-                                                linkedItem);
-            }
-
-            if (item.LinkedAlternateVersions.Length > 0)
-            {
-                item.LinkedAlternateVersions = [];
-                await item.UpdateToRepositoryAsync(
-                        ItemUpdateType.MetadataEdit,
-                        CancellationToken.None
-                    )
-                    .ConfigureAwait(false);
-                
-            }
-            item.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
-            alternateVersionsChanged = true;
-        }
-
-        //if (alternateVersionsChanged)
-        //{
-            primaryVersion.LinkedAlternateVersions = alternateVersionsOfPrimary.ToArray();
-            await primaryVersion
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                .ConfigureAwait(false);
-                        primaryVersion.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
-            //primaryVersion.RefreshLinkedAlternateVersions();
-        //}
-    }
-
     private void AddToAlternateVersionsIfNotPresent(List<LinkedChild> alternateVersions,
                                                         LinkedChild newVersion)
     {

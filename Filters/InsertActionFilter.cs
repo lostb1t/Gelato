@@ -105,10 +105,11 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         }
 
 
-        var baseItem = await _manager.InsertMeta(root, meta, false, CancellationToken.None);
+        var (baseItem, created) = await _manager.InsertMeta(root, meta, false, CancellationToken.None);
 
         if (baseItem is not null)
         {
+          if (created) {
             var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
                // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
@@ -122,9 +123,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
                     CancellationToken.None
                 )
                 .ConfigureAwait(false);
-            _log.LogInformation($"inserted new media: {baseItem.Name}");
-            
-            
+            }
             ReplaceGuid(ctx, baseItem.Id);
         }
         await next();
