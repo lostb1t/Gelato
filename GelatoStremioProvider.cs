@@ -257,6 +257,7 @@ namespace Gelato
             ;
             // item.Path = $"/media/test/{Id}";
             item.Name = meta.Name;
+            item.Name = $"AA000 {meta.Name}";
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
             //   if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
             if (!string.IsNullOrWhiteSpace(Id))
@@ -271,6 +272,10 @@ namespace Gelato
                 }
             }
 
+            var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
+            if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
+            item.LockedFields = locked.ToArray();
+
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
 
             // path is needed otherwise its set as placeholder and you cant play
@@ -279,7 +284,8 @@ namespace Gelato
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-
+            item.SortName = "AA000";
+            item.ForcedSortName = "AA000";
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
 

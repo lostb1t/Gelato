@@ -55,7 +55,7 @@ namespace Gelato.Filters
             _log = log;
         }
 
-        public int Order => throw new NotImplementedException();
+        public int Order => 1;
 
         public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
         {
