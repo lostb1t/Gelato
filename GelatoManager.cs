@@ -529,9 +529,133 @@ public class GelatoManager
         return providerIds;
     }
 
-
-
     public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
+    {
+        Episode? baseEp = item as Episode;
+        bool isEpisode = baseEp is not null;
+        var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
+        if (parent is null) return new List<Video>();
+
+        // Only handle our external items
+        if (!item.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase))
+            return new List<Video>();
+
+        var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
+
+        // Resolve streams for this item
+        var streams = await _stremioProvider.GetStreamsAsync(item).ConfigureAwait(false);
+
+        // Build "current" set: scope properly
+        var query = new InternalItemsQuery
+        {
+            ParentId = parent.Id,
+            IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
+            HasAnyProviderId = providerIds,
+            Recursive = false
+        };
+
+        var current = _library.GetItemList(query)
+            .OfType<Video>()
+            .ToList();
+
+        var currentById = current.ToDictionary(v => v.Id, v => v);
+        var currentIds = new HashSet<Guid>(current.Select(v => v.Id));
+        var desiredIds = new HashSet<Guid> { item.Id };
+
+        var created = new List<Video>();
+        if (item is Video baseVideo) created.Add(baseVideo);
+
+        var i = 0;
+        foreach (var s in streams)
+        {
+            if (!s.IsValid()) continue;
+            i++;
+
+            var id = s.GetGuid();
+            if (!desiredIds.Add(id)) continue; // already accounted for
+
+            var sort = $"BB{i:D3}";
+            var label = s.Name;
+
+            if (currentIds.Contains(id))
+            {
+                var existing = currentById[id];
+
+                // Temporarily unlock Name to update it
+                var locked = existing.LockedFields?.ToList() ?? new List<MetadataField>();
+                _ = locked.Remove(MetadataField.Name);
+                existing.LockedFields = locked.ToArray();
+                await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+
+                existing.Name = label;
+                existing.SortName = sort;
+                existing.ForcedSortName = sort;
+
+                if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
+                existing.LockedFields = locked.ToArray();
+
+                await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+                continue;
+            }
+
+            Video child;
+            if (isEpisode && baseEp is not null)
+            {
+                var ep = new Episode { Id = id };
+                ep.SeriesId = baseEp.SeriesId;
+                ep.SeriesName = baseEp.SeriesName;
+                ep.SeasonId = baseEp.SeasonId;
+                ep.SeasonName = baseEp.SeasonName;
+                ep.IndexNumber = baseEp.IndexNumber;                 // E number
+                ep.ParentIndexNumber = baseEp.ParentIndexNumber;     // S number
+                ep.PremiereDate = baseEp.PremiereDate;
+
+                child = ep;
+            }
+            else
+            {
+                child = new Movie { Id = id };
+            }
+
+            // Common fields
+            child.Name = label;
+            child.IsVirtualItem = true;
+            child.ProviderIds = providerIds;
+            child.Path = s.Url;
+            child.RunTimeTicks = item.RunTimeTicks;
+            child.SortName = sort;
+            child.ForcedSortName = sort;
+
+            var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
+            if (!lockedNew.Contains(MetadataField.Name)) lockedNew.Add(MetadataField.Name);
+            child.LockedFields = lockedNew.ToArray();
+
+            // Put it under the chosen parent (Season for episodes, Movie folder for movies)
+            parent.AddChild(child);
+            await child.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+
+            created.Add(child);
+        }
+
+        // Delete stale children (but don't touch the base item)
+        var stale = current.Where(m => !desiredIds.Contains(m.Id)).ToList();
+        foreach (var m in stale)
+        {
+            if (m.Id != item.Id)
+            {
+                _library.DeleteItem(m, new DeleteOptions { DeleteFileLocation = false }, true);
+            }
+        }
+
+        // Merge versions so clients see a single logical item
+        var keep = current.Where(m => desiredIds.Contains(m.Id));
+        var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
+        await MergeVersions(merged).ConfigureAwait(false);
+
+        return created;
+    }
+
+    public async Task<List<Video>> SyncStreamsOld(BaseItem item, CancellationToken ct)
     {
         var isEpisode = item.GetBaseItemKind() == BaseItemKind.Episode;
         var parent = isEpisode ? TryGetSeriesFolder() : TryGetMovieFolder();
@@ -567,9 +691,9 @@ public class GelatoManager
             var id = s.GetGuid();
             if (!desiredIds.Add(id)) continue;
 
-
             var sort = $"BB{i.ToString("D3")}";
-            var label = $"{sort} {s.GetName()}";
+            // var label = $"{sort} {s.GetName()}";
+            var label = $"{s.GetName()}";
 
             if (currentIds.Contains(id))
             {
@@ -624,28 +748,9 @@ public class GelatoManager
             }
         }
 
-        // merge
-        //if (created.Count > 0 || desiredIds.Count > 1)
-        //{
         var keep = current.Where(m => desiredIds.Contains(m.Id));
         var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
         await MergeVersions(merged).ConfigureAwait(false);
-        //}
-
-        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            //MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.ValidationOnly,
-            ReplaceAllImages = false,
-            ReplaceAllMetadata = false,
-            EnableRemoteContentProbe = false
-        };
-
-        // Prefer the instance method if you have the item already:
-        //  await item.RefreshMetadata(opts, CancellationToken.None)
-        //                      .ConfigureAwait(false);
-
-
 
         return created;
     }

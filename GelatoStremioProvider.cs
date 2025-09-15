@@ -257,7 +257,7 @@ namespace Gelato
             ;
             // item.Path = $"/media/test/{Id}";
             item.Name = meta.Name;
-            item.Name = $"AA000 {meta.Name}";
+            // item.Name = $"AA000 {meta.Name}";
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
             //   if (!string.IsNullOrWhiteSpace(meta.ImdbRating)) item.CommunityRating = (float)Convert.ToDouble(meta.ImdbRating);
             if (!string.IsNullOrWhiteSpace(Id))
