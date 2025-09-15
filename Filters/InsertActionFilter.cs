@@ -81,6 +81,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         var found = _manager.FindByStremioId(stremioMeta.Id) as Video;
         if (found is not null)
         {
+            _log.LogInformation("media already exist, do nothing");
             ReplaceGuid(ctx, found.Id);
             await next();
             return;
@@ -90,7 +91,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         var root = isSeries ? _manager.TryGetSeriesFolder() : _manager.TryGetMovieFolder();
         if (root is null)
         {
-            _log.LogWarning("Gelato: No {Type} folder configured", isSeries ? "Series" : "Movie");
+            _log.LogWarning("no {Type} folder configured", isSeries ? "Series" : "Movie");
             await next();
             return;
         }
@@ -98,12 +99,11 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         var meta = await _stremioProvider.GetMetaAsync(stremioMeta.Id, stremioMeta.Type).ConfigureAwait(false);
         if (meta is null)
         {
-            //_log.LogWarning("Gelato: Meta not found for {0} {1}", stremioId, mediaType);
+            _log.LogWarning("stremio meta not found for {0} {1}", stremioId, mediaType);
             await next();
             return;
         }
 
-        //BaseItem? baseItem = null;
 
         var baseItem = await _manager.InsertMeta(root, meta, false, CancellationToken.None);
 
@@ -111,8 +111,8 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         {
             var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
-                // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+               // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh, 
                 ImageRefreshMode = MetadataRefreshMode.None,
                 ForceSave = true
             };
@@ -122,15 +122,9 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
                     CancellationToken.None
                 )
                 .ConfigureAwait(false);
-            // _provider.QueueRefresh(
-            // baseItem.Id,
-            //              new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-            //              {
-            //                  MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            //                  ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-            //                  ForceSave = true
-            //              },
-            //               RefreshPriority.High);
+            _log.LogInformation($"inserted new media: {baseItem.Name}");
+            
+            
             ReplaceGuid(ctx, baseItem.Id);
         }
         await next();
@@ -182,7 +176,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                _log.LogInformation("Gelato: Replacing route {Key} {Old} → {New}", key, raw, value);
+                _log.LogInformation("replacing route {Key} {Old} → {New}", key, raw, value);
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }
