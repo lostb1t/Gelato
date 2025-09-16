@@ -77,6 +77,16 @@ public class GelatoManager
         _library = libraryManager;
         _fileSystem = fileSystem;
     }
+    
+    public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
+    {
+        _memoryCache.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
+    }
+
+public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
+{
+    return _memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
+}
 
     public void SaveStremioUri(Guid guid, StremioUri stremioUri)
     {
@@ -562,10 +572,8 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
 
-        // Resolve streams for this item
         var streams = await _stremioProvider.GetStreamsAsync(item).ConfigureAwait(false);
 
-        // Build "current" set: scope properly
         var query = new InternalItemsQuery
         {
             ParentId = parent.Id,
@@ -637,9 +645,8 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
                 child = new Movie { Id = id };
             }
 
-            // Common fields
             child.Name = label;
-            child.IsVirtualItem = true;
+            child.IsVirtualItem = false;
             child.ProviderIds = providerIds;
             child.Path = s.Url;
             child.RunTimeTicks = item.RunTimeTicks;

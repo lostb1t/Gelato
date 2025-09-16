@@ -11,6 +11,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Controller.Persistence;
@@ -31,6 +32,7 @@ namespace Gelato.Decorators
         private readonly Lazy<GelatoManager> _manager;
         private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
+    private readonly GelatoStremioProvider _stremio;
 
         public MediaSourceManagerDecorator(
             IMediaSourceManager inner,
@@ -38,7 +40,7 @@ namespace Gelato.Decorators
             ILogger<MediaSourceManagerDecorator> log,
             IHttpContextAccessor http,
               IDirectoryService directoryService,
-
+        GelatoStremioProvider stremioProvider,
             Lazy<GelatoManager> manager
 
             )
@@ -48,6 +50,7 @@ namespace Gelato.Decorators
             _http = http ?? throw new ArgumentNullException(nameof(http)); _manager = manager;
             _libraryManager = libraryManager;
             _directoryService = directoryService;
+            _stremio = stremioProvider;
         }
 
         public bool IsItemsActionName(string name)
@@ -63,6 +66,7 @@ namespace Gelato.Decorators
         bool enablePathSubstitution,
         User user = null)
         {
+                   _log.LogInformation("GetStaticMediaSources"); 
             if (!IsExternal(item))
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
 
@@ -110,8 +114,103 @@ namespace Gelato.Decorators
         {
             return _inner.GetMediaStreams(itemId);
         }
+        
+        public IReadOnlyList<MediaStream> AddSubtitleStreams(BaseItem item, List<MediaStream> mediaStreams)
+        {
 
-        public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query) => _inner.GetMediaStreams(query);
+         if (!IsExternal(item)) {
+            return mediaStreams;
+          }
+        
+         var manager = _manager.Value;
+        // var Id = item;
+         
+         var subtitles = manager.GetStremioSubtitlesCache(item.Id);
+         if (subtitles is null) {
+          subtitles = _stremio.GetSubtitlesAsync(item, null).GetAwaiter().GetResult();
+          manager.SetStremioSubtitlesCache(item.Id, subtitles);
+       }
+         
+
+         
+         var index = mediaStreams.Last().Index;
+         foreach (var s in subtitles)
+            {
+              
+              //  var exists = list.Any(ms =>
+              //      ms.Type == MediaStreamType.Subtitle &&
+              //      string.Equals(ms.Language, s.LanguageCode, StringComparison.OrdinalIgnoreCase) &&
+              //      string.Equals(ms.Path, s.Url, StringComparison.OrdinalIgnoreCase));
+
+              //  if (exists) continue;
+
+                mediaStreams.Add(new MediaStream
+                {
+                    Type = MediaStreamType.Subtitle,
+                    Index = index++,
+                    Language = s.LangCode,
+                 //   DisplayTitle = s.Title,                  // human label
+                   // Codec = GuessCodec(s.Url),               // "webvtt" / "subrip" / "ass"
+                    IsExternal = true,
+                  //  IsTextSubtitleStream = true,
+                    Path = s.Url,                            
+                    DeliveryMethod = SubtitleDeliveryMethod.External
+                   // IsForced = s.IsForced,
+                   // Default = s.IsDefault
+                });
+         }
+         
+         return mediaStreams;
+        }
+
+        public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query)
+        {
+          _log.LogInformation("NEDIASTREAMS");
+         var mediaStreams = _inner.GetMediaStreams(query).ToList();
+         var item = _libraryManager.GetItemById(query.ItemId);
+         if (!IsExternal(item)) {
+            return mediaStreams;
+          }
+        
+            var manager = _manager.Value;
+         
+         var subtitles = manager.GetStremioSubtitlesCache(query.ItemId);
+         if (subtitles is null) {
+         subtitles = _stremio.GetSubtitlesAsync(item, null).GetAwaiter().GetResult();
+          manager.SetStremioSubtitlesCache(query.ItemId, subtitles);
+       }
+         
+
+         
+         var index = mediaStreams.Last().Index;
+         foreach (var s in subtitles)
+            {
+              
+              //  var exists = list.Any(ms =>
+              //      ms.Type == MediaStreamType.Subtitle &&
+              //      string.Equals(ms.Language, s.LanguageCode, StringComparison.OrdinalIgnoreCase) &&
+              //      string.Equals(ms.Path, s.Url, StringComparison.OrdinalIgnoreCase));
+
+              //  if (exists) continue;
+
+                mediaStreams.Add(new MediaStream
+                {
+                    Type = MediaStreamType.Subtitle,
+                    Index = index++,
+                    Language = s.LangCode,
+                 //   DisplayTitle = s.Title,                  // human label
+                   // Codec = GuessCodec(s.Url),               // "webvtt" / "subrip" / "ass"
+                    IsExternal = true,
+                  //  IsTextSubtitleStream = true,
+                    Path = s.Url,                            
+                    DeliveryMethod = SubtitleDeliveryMethod.External
+                   // IsForced = s.IsForced,
+                   // Default = s.IsDefault
+                });
+         }
+         
+         return mediaStreams;
+        }
 
         public IReadOnlyList<MediaAttachment> GetMediaAttachments(Guid itemId) => _inner.GetMediaAttachments(itemId);
 
@@ -135,7 +234,7 @@ namespace Gelato.Decorators
             static bool NeedsProbe(BaseItem? i, MediaSourceInfo s) =>
                 i is not null
                 && i.MediaType == MediaType.Video
-                && !IsStremio(i)
+              //  && !IsStremio(i)
                 && (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
 
             MediaSourceInfo? PickFirst(BaseItem owner) =>
@@ -169,6 +268,7 @@ namespace Gelato.Decorators
                 return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
 
             var probeOwner = ResolveOwnerFor(selected, owner);
+              _log.LogInformation($"UHU {allowMediaProbe} : {NeedsProbe(probeOwner, selected)}");
 
             if (allowMediaProbe && NeedsProbe(probeOwner, selected))
             {
