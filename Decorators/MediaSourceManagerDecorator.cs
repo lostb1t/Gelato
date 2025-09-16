@@ -66,7 +66,6 @@ namespace Gelato.Decorators
         bool enablePathSubstitution,
         User user = null)
         {
-                   _log.LogInformation("GetStaticMediaSources"); 
             if (!IsExternal(item))
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
 
@@ -115,11 +114,11 @@ namespace Gelato.Decorators
             return _inner.GetMediaStreams(itemId);
         }
         
-        public IReadOnlyList<MediaStream> AddSubtitleStreams(BaseItem item, List<MediaStream> mediaStreams)
+        public void AddSubtitleStreams(BaseItem item, MediaSourceInfo source)
         {
 
          if (!IsExternal(item)) {
-            return mediaStreams;
+            return;
           }
         
          var manager = _manager.Value;
@@ -132,26 +131,21 @@ namespace Gelato.Decorators
        }
          
 
-         
-         var index = mediaStreams.Last().Index;
+         var streams = source.MediaStreams?.ToList() ?? new List<MediaStream>();
+         var index = streams.Last().Index;
          foreach (var s in subtitles)
             {
               
-              //  var exists = list.Any(ms =>
-              //      ms.Type == MediaStreamType.Subtitle &&
-              //      string.Equals(ms.Language, s.LanguageCode, StringComparison.OrdinalIgnoreCase) &&
-              //      string.Equals(ms.Path, s.Url, StringComparison.OrdinalIgnoreCase));
-
-              //  if (exists) continue;
-
-                mediaStreams.Add(new MediaStream
+                streams.Add(new MediaStream
                 {
                     Type = MediaStreamType.Subtitle,
                     Index = index++,
-                    Language = s.LangCode,
-                 //   DisplayTitle = s.Title,                  // human label
-                   // Codec = GuessCodec(s.Url),               // "webvtt" / "subrip" / "ass"
+                    //Language = s.LangCode,
+                      Language = s.Lang,
+                 //   Title = s.Title,                  
+                    Codec = GuessSubtitleCodec(s.Url),               // "webvtt" / "subrip" / "ass"
                     IsExternal = true,
+                      IsExternalUrl = true,
                   //  IsTextSubtitleStream = true,
                     Path = s.Url,                            
                     DeliveryMethod = SubtitleDeliveryMethod.External
@@ -159,57 +153,30 @@ namespace Gelato.Decorators
                    // Default = s.IsDefault
                 });
          }
-         
-         return mediaStreams;
+         source.MediaStreams = streams;
+         return;
         }
+        
+        public static string GuessSubtitleCodec(string? path)
+{
+    if (string.IsNullOrWhiteSpace(path))
+        return "subrip";
+
+    var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+
+    return ext switch
+    {
+        "srt"  => "subrip",    // SubRip (.srt)
+        "vtt"  => "webvtt",    // WebVTT (.vtt)
+        "ass"  => "ass",       // Advanced SubStation Alpha (.ass)
+        _      => "subrip"     // Default when unknown
+    };
+}
 
         public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query)
         {
-          _log.LogInformation("NEDIASTREAMS");
-         var mediaStreams = _inner.GetMediaStreams(query).ToList();
-         var item = _libraryManager.GetItemById(query.ItemId);
-         if (!IsExternal(item)) {
-            return mediaStreams;
-          }
-        
-            var manager = _manager.Value;
+         return _inner.GetMediaStreams(query).ToList();
          
-         var subtitles = manager.GetStremioSubtitlesCache(query.ItemId);
-         if (subtitles is null) {
-         subtitles = _stremio.GetSubtitlesAsync(item, null).GetAwaiter().GetResult();
-          manager.SetStremioSubtitlesCache(query.ItemId, subtitles);
-       }
-         
-
-         
-         var index = mediaStreams.Last().Index;
-         foreach (var s in subtitles)
-            {
-              
-              //  var exists = list.Any(ms =>
-              //      ms.Type == MediaStreamType.Subtitle &&
-              //      string.Equals(ms.Language, s.LanguageCode, StringComparison.OrdinalIgnoreCase) &&
-              //      string.Equals(ms.Path, s.Url, StringComparison.OrdinalIgnoreCase));
-
-              //  if (exists) continue;
-
-                mediaStreams.Add(new MediaStream
-                {
-                    Type = MediaStreamType.Subtitle,
-                    Index = index++,
-                    Language = s.LangCode,
-                 //   DisplayTitle = s.Title,                  // human label
-                   // Codec = GuessCodec(s.Url),               // "webvtt" / "subrip" / "ass"
-                    IsExternal = true,
-                  //  IsTextSubtitleStream = true,
-                    Path = s.Url,                            
-                    DeliveryMethod = SubtitleDeliveryMethod.External
-                   // IsForced = s.IsForced,
-                   // Default = s.IsDefault
-                });
-         }
-         
-         return mediaStreams;
         }
 
         public IReadOnlyList<MediaAttachment> GetMediaAttachments(Guid itemId) => _inner.GetMediaAttachments(itemId);
@@ -268,7 +235,6 @@ namespace Gelato.Decorators
                 return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
 
             var probeOwner = ResolveOwnerFor(selected, owner);
-              _log.LogInformation($"UHU {allowMediaProbe} : {NeedsProbe(probeOwner, selected)}");
 
             if (allowMediaProbe && NeedsProbe(probeOwner, selected))
             {
@@ -285,6 +251,8 @@ namespace Gelato.Decorators
                     ? refreshed.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? refreshed.FirstOrDefault()
                     : refreshed.FirstOrDefault();
             }
+            
+         //   AddSubtitleStreams(item, selected);
 
             return selected is null ? new List<MediaSourceInfo>() : new List<MediaSourceInfo> { selected };
         }
