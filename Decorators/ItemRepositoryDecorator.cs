@@ -75,7 +75,6 @@ namespace Gelato.Decorators
             var ctx = _http?.HttpContext;
             if (ctx != null && ctx.Items.TryGetValue("actionName", out var actionObj))
             {
-                Console.WriteLine($"Action Nameeee: {actionObj}");
                 var actionName = actionObj as string;
                 if (!string.IsNullOrEmpty(actionName) && IsItemsActionName(actionName))
                 {
