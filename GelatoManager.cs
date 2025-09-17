@@ -714,16 +714,6 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
         return;
     }
 
-    var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-    {
-        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-        ImageRefreshMode = MetadataRefreshMode.ValidationOnly,
-        ReplaceAllImages = false,
-        ReplaceAllMetadata = false,
-        EnableRemoteContentProbe = false,
-        ForceSave = true
-    };
-
     var inv = CultureInfo.InvariantCulture;
     var alternates = items.Where(i => !i.Id.Equals(primaryVersion.Id)).ToList();
     var replacementLinks = alternates
@@ -737,16 +727,12 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
 
         await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                .ConfigureAwait(false);
-
-       // v.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
     }
 
     primaryVersion.LinkedAlternateVersions = replacementLinks;
     primaryVersion.SetPrimaryVersionId(null);
     await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                        .ConfigureAwait(false);
-
-   // primaryVersion.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
 }
     
     

@@ -7,6 +7,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using Jellyfin.Data.Enums;
+using System;
+using System.Diagnostics;
 
 namespace Gelato.Common;
 
@@ -193,7 +195,23 @@ public static class Utils
     }
 }
 
+public sealed class TimedBlock : IDisposable
+{
+    private readonly Stopwatch _sw;
+    private readonly string _label;
 
+    public TimedBlock(string label)
+    {
+        _label = label;
+        _sw = Stopwatch.StartNew();
+    }
+
+    public void Dispose()
+    {
+        _sw.Stop();
+        Console.WriteLine($"{_label} took {_sw.ElapsedMilliseconds} ms");
+    }
+}
 
 public sealed class FileCache
 {

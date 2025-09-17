@@ -111,15 +111,25 @@ if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
 
   
 
-           var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-            sources = sources
-            // .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
-            .Where(s => sources.Count <= 1 ||
-                        s.Path == null ||
-                        !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-            sources[0].Type = MediaSourceType.Default;
-            return sources;
+           var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
+sources = sources
+    .Where(s => sources.Count <= 1 || s.Path == null || !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+    .Select((s, idx) =>
+    {
+        if (s.Protocol != MediaProtocol.File && !string.IsNullOrEmpty(s.Name))
+        {
+            var k = s.Name.IndexOf('-');
+            if (k >= 0 && k + 1 < s.Name.Length) s.Name = s.Name[(k + 1)..].Trim();
+        }
+        return (s, idx);
+    })
+    .OrderByDescending(t => t.s.Protocol == MediaProtocol.File)
+    .ThenBy(t => t.idx)
+    .Select(t => t.s)
+    .ToList();
+
+if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
+return sources;
 
         }
 
