@@ -36,10 +36,18 @@
             and be readable by Jellyfin. They should be empty.</span>
         </div>
 
-
         <div class="inputContainer">
           <input is="emby-input" type="number" id="txtCatalogMaxItems" label="Max items per catalog import:" />
         </div>
+  
+        <div class="inputContainer">
+          <input is="emby-input"
+                 type="checkbox"
+                 id="chkEnableSubs"
+                 label="Enable remote subtitles from addons" />
+                 <span>Currently breaks untill https://github.com/jellyfin/jellyfin/pull/14809 is merged.</span>
+               
+               </div>
 
         <br />
         <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block">
@@ -58,6 +66,7 @@
         const txtMoviePath = document.querySelector('#txtMoviePath');
         const txtSeriesPath = document.querySelector('#txtSeriesPath');
         const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
+        const chkEnableSubs = document.querySelector('#chkEnableSubs');
 
         async function loadConfig() {
           Dashboard.showLoadingMsg();
@@ -67,6 +76,7 @@
             txtMoviePath.value = cfg.MoviePath || "";
             txtSeriesPath.value = cfg.SeriesPath || "";
             txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
+            chkEnableSubs.checked = cfg.EnableSubs || false;
           } catch (e) {
             console.error(e);
           } finally {
@@ -83,7 +93,7 @@
             cfg.MoviePath = (txtMoviePath.value || "").trim() || null;
             cfg.SeriesPath = (txtSeriesPath.value || "").trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
-
+            cfg.EnableSubs = (txtUrl.checked || false);
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {

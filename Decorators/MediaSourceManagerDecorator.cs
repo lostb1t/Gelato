@@ -130,7 +130,6 @@ namespace Gelato.Decorators
           manager.SetStremioSubtitlesCache(item.Id, subtitles);
        }
          
-
          var streams = source.MediaStreams?.ToList() ?? new List<MediaStream>();
          var index = streams.Last().Index;
          foreach (var s in subtitles)
@@ -140,37 +139,31 @@ namespace Gelato.Decorators
                 {
                     Type = MediaStreamType.Subtitle,
                     Index = index++,
-                    //Language = s.LangCode,
-                      Language = s.Lang,
-                 //   Title = s.Title,                  
+                    Language = s.Lang,
                     Codec = GuessSubtitleCodec(s.Url),               // "webvtt" / "subrip" / "ass"
                     IsExternal = true,
-                      IsExternalUrl = true,
-                  //  IsTextSubtitleStream = true,
-                    Path = s.Url,                            
+                    IsExternalUrl = true,
+                    Path = s.Url,
                     DeliveryMethod = SubtitleDeliveryMethod.External
-                   // IsForced = s.IsForced,
-                   // Default = s.IsDefault
                 });
          }
          source.MediaStreams = streams;
          return;
         }
         
-        public static string GuessSubtitleCodec(string? path)
+        public string GuessSubtitleCodec(string? urlOrPath)
 {
-    if (string.IsNullOrWhiteSpace(path))
+    if (string.IsNullOrWhiteSpace(urlOrPath))
         return "subrip";
 
-    var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
+    var s = urlOrPath.ToLowerInvariant();
 
-    return ext switch
-    {
-        "srt"  => "subrip",    // SubRip (.srt)
-        "vtt"  => "webvtt",    // WebVTT (.vtt)
-        "ass"  => "ass",       // Advanced SubStation Alpha (.ass)
-        _      => "subrip"     // Default when unknown
-    };
+    if (s.Contains(".vtt")) return "webvtt";
+    if (s.Contains(".srt")) return "subrip";
+    if (s.Contains(".ass") || s.Contains(".ssa")) return "ass";
+    if (s.Contains(".subf2m")) return "subrip";
+    _log.LogWarning($"unkown subtitle format for {s}");
+    return "subrip";
 }
 
         public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query)
@@ -252,7 +245,9 @@ namespace Gelato.Decorators
                     : refreshed.FirstOrDefault();
             }
             
-         //   AddSubtitleStreams(item, selected);
+            if (GelatoPlugin.Instance!.Configuration.EnableSubs) {
+           AddSubtitleStreams(item, selected);
+         }
 
             return selected is null ? new List<MediaSourceInfo>() : new List<MediaSourceInfo> { selected };
         }

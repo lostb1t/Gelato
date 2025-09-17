@@ -1,4 +1,3 @@
-//using Jellyfin.Database.Implementations.Entities.Libraries;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
@@ -12,9 +11,9 @@ namespace Gelato.Configuration
         public string? MoviePath { get; set; }
         public string? SeriesPath { get; set; }
         public int CatalogMaxItems { get; set; } = 250;
-        //public bool? ImportItemsFromCatalogs { get; set; } = false;
-
         public string Url { get; set; } = "";
+        public bool EnableSubs { get; set; } = false;
+
 
         public string GetBaseUrl()
         {
