@@ -32,14 +32,16 @@ namespace Gelato.Decorators
 
         public bool IsItemsActionName(string name)
         {
+            //Console.Write($"{name}\n");
             return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetNextUp", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetLatestMedia", StringComparison.OrdinalIgnoreCase) 
+                || string.Equals(name, "GetLatestMedia", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetLatestMediaLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetResumeItemsLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetRecommendedPrograms", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "GetEpisodes", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
         }
 

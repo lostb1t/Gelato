@@ -150,7 +150,7 @@ namespace Gelato
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
         }
-        
+
         public async Task<List<StremioSubtitle>> GetSubtitlesAsync(BaseItem item, string? fileName)
         {
             var uri = StremioUri.FromString(item.GetProviderId("stremio"));
@@ -269,7 +269,7 @@ namespace Gelato
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
             }
-            
+
             //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
             //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
             //item.LockedFields = locked.ToArray();
@@ -320,7 +320,7 @@ namespace Gelato
 
     public class StremioCatalog
     {
-       [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
+        [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
@@ -350,25 +350,25 @@ namespace Gelato
     {
         public List<StremioMeta>? Metas { get; set; }
     }
-    
-    public struct StremioSubtitle
-{
-    public string Id { get; set; }
-    public string Url { get; set; }
-    public string? Lang { get; set; }
-    public int? SubId { get; set; }
-    public bool? AiTranslated { get; set; }
-    public bool? FromTrusted { get; set; }
-    public int? UploaderId { get; set; }
-    public string? LangCode { get; set; }
-    public string? Title { get; set; }
-    public string? Moviehash { get; set; }
-}
 
-public struct StremioSubtitleResponse
-{
-    public List<StremioSubtitle> Subtitles { get; set; }
-}
+    public struct StremioSubtitle
+    {
+        public string Id { get; set; }
+        public string Url { get; set; }
+        public string? Lang { get; set; }
+        public int? SubId { get; set; }
+        public bool? AiTranslated { get; set; }
+        public bool? FromTrusted { get; set; }
+        public int? UploaderId { get; set; }
+        public string? LangCode { get; set; }
+        public string? Title { get; set; }
+        public string? Moviehash { get; set; }
+    }
+
+    public struct StremioSubtitleResponse
+    {
+        public List<StremioSubtitle> Subtitles { get; set; }
+    }
 
     public class StremioMetaResponse
     {
@@ -618,28 +618,28 @@ public struct StremioSubtitleResponse
         Tv,
         Events
     }
-    
-    public class SafeStringEnumConverter<T> : JsonConverter<T> where T : struct, Enum
-{
-    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-    {
-        if (reader.TokenType == JsonTokenType.String)
-        {
-            var s = reader.GetString();
-            if (Enum.TryParse<T>(s, true, out var value)) return value;
-            if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
-        }
-        if (reader.TokenType == JsonTokenType.Number)
-        {
-            if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
-        }
-        reader.Skip();
-        if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
-        return default;
-    }
 
-    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToString());
-}
+    public class SafeStringEnumConverter<T> : JsonConverter<T> where T : struct, Enum
+    {
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                var s = reader.GetString();
+                if (Enum.TryParse<T>(s, true, out var value)) return value;
+                if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
+            }
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
+            }
+            reader.Skip();
+            if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
+            return default;
+        }
+
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+            => writer.WriteStringValue(value.ToString());
+    }
 
 }

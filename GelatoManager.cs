@@ -77,16 +77,16 @@ public class GelatoManager
         _library = libraryManager;
         _fileSystem = fileSystem;
     }
-    
+
     public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
     {
         _memoryCache.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
     }
 
-public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
-{
-    return _memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
-}
+    public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
+    {
+        return _memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
+    }
 
     public void SaveStremioUri(Guid guid, StremioUri stremioUri)
     {
@@ -97,16 +97,16 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
     {
         return _memoryCache.TryGetValue($"uri:{guid}", out var value) ? value as StremioUri : null;
     }
-    
+
     public void SetStreamSync(Guid guid)
     {
         _memoryCache.Set($"streamsync:{guid}", guid, TimeSpan.FromMinutes(3600));
     }
 
     public bool HasStreamSync(Guid guid)
-{
-    return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
-}
+    {
+        return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
+    }
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
     {
@@ -416,7 +416,7 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         {
             baseItem = await CreateSeriesTreesAsync(parent, meta, ct);
         }
-        
+
         _log.LogInformation($"inserted new media: {baseItem.Name}");
         if (refreshItem && baseItem is not null)
         {
@@ -475,9 +475,9 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         //return _library.GetItemList(q).OfType<Video>().FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
     }
 
-    public Video? FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind )
+    public Video? FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
     {
-      
+
         var q = new InternalItemsQuery
         {
             IncludeItemTypes = new[] { kind },
@@ -488,8 +488,8 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
 
         return _library.GetItemList(q).OfType<Video>().FirstOrDefault();
     }
- 
-    
+
+
     public async Task SaveStreamAsStrm(Folder folder, StremioMeta meta, IEnumerable<StremioStream> streams, CancellationToken ct)
     {
         var i = 1;
@@ -556,10 +556,10 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         providerIds.Add("stremio", $"stremio://{meta.Type}/{Id}");
         return providerIds;
     }
- 
 
 
-public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
+
+    public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     {
         Episode? baseEp = item as Episode;
         bool isEpisode = baseEp is not null;
@@ -688,58 +688,58 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     }
 
     public async Task MergeVersions(Video[] items)
-{
-    if (items == null || items.Length < 2)
     {
-        _log.LogWarning("MergeVersions called with insufficient items.");
-        return;
+        if (items == null || items.Length < 2)
+        {
+            _log.LogWarning("MergeVersions called with insufficient items.");
+            return;
+        }
+
+        var primaryVersion = items.FirstOrDefault(
+            i => i.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true);
+
+        if (primaryVersion == null)
+        {
+            _log.LogError("MergeVersions: No item with a path starting with 'stremio' found. Merge aborted.");
+            return;
+        }
+
+        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+        {
+            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.ValidationOnly,
+            ReplaceAllImages = false,
+            ReplaceAllMetadata = false,
+            EnableRemoteContentProbe = false,
+            ForceSave = true
+        };
+
+        var inv = CultureInfo.InvariantCulture;
+        var alternates = items.Where(i => !i.Id.Equals(primaryVersion.Id)).ToList();
+        var replacementLinks = alternates
+            .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
+            .ToArray();
+
+        foreach (var v in alternates)
+        {
+            v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
+            v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+
+            await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                   .ConfigureAwait(false);
+
+            // v.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
+        }
+
+        primaryVersion.LinkedAlternateVersions = replacementLinks;
+        primaryVersion.SetPrimaryVersionId(null);
+        await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                           .ConfigureAwait(false);
+
+        // primaryVersion.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
     }
 
-    var primaryVersion = items.FirstOrDefault(
-        i => i.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true);
 
-    if (primaryVersion == null)
-    {
-        _log.LogError("MergeVersions: No item with a path starting with 'stremio' found. Merge aborted.");
-        return;
-    }
-
-    var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-    {
-        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-        ImageRefreshMode = MetadataRefreshMode.ValidationOnly,
-        ReplaceAllImages = false,
-        ReplaceAllMetadata = false,
-        EnableRemoteContentProbe = false,
-        ForceSave = true
-    };
-
-    var inv = CultureInfo.InvariantCulture;
-    var alternates = items.Where(i => !i.Id.Equals(primaryVersion.Id)).ToList();
-    var replacementLinks = alternates
-        .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
-        .ToArray();
-
-    foreach (var v in alternates)
-    {
-        v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
-        v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-
-        await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-               .ConfigureAwait(false);
-
-       // v.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
-    }
-
-    primaryVersion.LinkedAlternateVersions = replacementLinks;
-    primaryVersion.SetPrimaryVersionId(null);
-    await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                       .ConfigureAwait(false);
-
-   // primaryVersion.RefreshMetadata(opts, CancellationToken.None).GetAwaiter().GetResult();
-}
-    
-    
     private void AddToAlternateVersionsIfNotPresent(List<LinkedChild> alternateVersions,
                                                         LinkedChild newVersion)
     {
@@ -761,7 +761,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
         var name = cad.ActionName;
         return IsItemsActionName(name);
     }
-    
+
     public bool IsItemsActionName(string name)
     {
         return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)

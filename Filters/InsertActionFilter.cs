@@ -109,20 +109,21 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
         if (baseItem is not null)
         {
-          if (created) {
-            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            if (created)
             {
-               // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh, 
-                ImageRefreshMode = MetadataRefreshMode.None,
-                ForceSave = true
-            };
-            await _provider.RefreshFullItem(baseItem, options, CancellationToken.None);
-            await baseItem.UpdateToRepositoryAsync(
-                    ItemUpdateType.MetadataEdit,
-                    CancellationToken.None
-                )
-                .ConfigureAwait(false);
+                var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                {
+                    // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ImageRefreshMode = MetadataRefreshMode.None,
+                    ForceSave = true
+                };
+                await _provider.RefreshFullItem(baseItem, options, CancellationToken.None);
+                await baseItem.UpdateToRepositoryAsync(
+                        ItemUpdateType.MetadataEdit,
+                        CancellationToken.None
+                    )
+                    .ConfigureAwait(false);
             }
             ReplaceGuid(ctx, baseItem.Id);
         }

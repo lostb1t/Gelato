@@ -32,7 +32,7 @@ namespace Gelato.Decorators
         private readonly Lazy<GelatoManager> _manager;
         private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
-    private readonly GelatoStremioProvider _stremio;
+        private readonly GelatoStremioProvider _stremio;
 
         public MediaSourceManagerDecorator(
             IMediaSourceManager inner,
@@ -113,28 +113,30 @@ namespace Gelato.Decorators
         {
             return _inner.GetMediaStreams(itemId);
         }
-        
+
         public void AddSubtitleStreams(BaseItem item, MediaSourceInfo source)
         {
 
-         if (!IsExternal(item)) {
-            return;
-          }
-        
-         var manager = _manager.Value;
-        // var Id = item;
-         
-         var subtitles = manager.GetStremioSubtitlesCache(item.Id);
-         if (subtitles is null) {
-          subtitles = _stremio.GetSubtitlesAsync(item, null).GetAwaiter().GetResult();
-          manager.SetStremioSubtitlesCache(item.Id, subtitles);
-       }
-         
-         var streams = source.MediaStreams?.ToList() ?? new List<MediaStream>();
-         var index = streams.Last().Index;
-         foreach (var s in subtitles)
+            if (!IsExternal(item))
             {
-              
+                return;
+            }
+
+            var manager = _manager.Value;
+            // var Id = item;
+
+            var subtitles = manager.GetStremioSubtitlesCache(item.Id);
+            if (subtitles is null)
+            {
+                subtitles = _stremio.GetSubtitlesAsync(item, null).GetAwaiter().GetResult();
+                manager.SetStremioSubtitlesCache(item.Id, subtitles);
+            }
+
+            var streams = source.MediaStreams?.ToList() ?? new List<MediaStream>();
+            var index = streams.Last().Index;
+            foreach (var s in subtitles)
+            {
+
                 streams.Add(new MediaStream
                 {
                     Type = MediaStreamType.Subtitle,
@@ -146,30 +148,30 @@ namespace Gelato.Decorators
                     Path = s.Url,
                     DeliveryMethod = SubtitleDeliveryMethod.External
                 });
-         }
-         source.MediaStreams = streams;
-         return;
+            }
+            source.MediaStreams = streams;
+            return;
         }
-        
+
         public string GuessSubtitleCodec(string? urlOrPath)
-{
-    if (string.IsNullOrWhiteSpace(urlOrPath))
-        return "subrip";
+        {
+            if (string.IsNullOrWhiteSpace(urlOrPath))
+                return "subrip";
 
-    var s = urlOrPath.ToLowerInvariant();
+            var s = urlOrPath.ToLowerInvariant();
 
-    if (s.Contains(".vtt")) return "webvtt";
-    if (s.Contains(".srt")) return "subrip";
-    if (s.Contains(".ass") || s.Contains(".ssa")) return "ass";
-    if (s.Contains(".subf2m")) return "subrip";
-    _log.LogWarning($"unkown subtitle format for {s}");
-    return "subrip";
-}
+            if (s.Contains(".vtt")) return "webvtt";
+            if (s.Contains(".srt")) return "subrip";
+            if (s.Contains(".ass") || s.Contains(".ssa")) return "ass";
+            if (s.Contains(".subf2m")) return "subrip";
+            _log.LogWarning($"unkown subtitle format for {s}");
+            return "subrip";
+        }
 
         public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query)
         {
-         return _inner.GetMediaStreams(query).ToList();
-         
+            return _inner.GetMediaStreams(query).ToList();
+
         }
 
         public IReadOnlyList<MediaAttachment> GetMediaAttachments(Guid itemId) => _inner.GetMediaAttachments(itemId);
@@ -194,7 +196,7 @@ namespace Gelato.Decorators
             static bool NeedsProbe(BaseItem? i, MediaSourceInfo s) =>
                 i is not null
                 && i.MediaType == MediaType.Video
-              //  && !IsStremio(i)
+                //  && !IsStremio(i)
                 && (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
 
             MediaSourceInfo? PickFirst(BaseItem owner) =>
@@ -244,10 +246,11 @@ namespace Gelato.Decorators
                     ? refreshed.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? refreshed.FirstOrDefault()
                     : refreshed.FirstOrDefault();
             }
-            
-            if (GelatoPlugin.Instance!.Configuration.EnableSubs) {
-           AddSubtitleStreams(item, selected);
-         }
+
+            if (GelatoPlugin.Instance!.Configuration.EnableSubs)
+            {
+                AddSubtitleStreams(item, selected);
+            }
 
             return selected is null ? new List<MediaSourceInfo>() : new List<MediaSourceInfo> { selected };
         }
