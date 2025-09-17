@@ -27,7 +27,7 @@ namespace Gelato
         private readonly ILibraryManager _library;
 
         public GelatoStremioProvider(
-                  ILibraryManager library,
+            ILibraryManager library,
             IHttpClientFactory http,
             ILogger<GelatoStremioProvider> log,
             MediaBrowser.Controller.Persistence.IItemRepository repo)
@@ -104,10 +104,10 @@ namespace Gelato
             }
 
             if (MovieSearchCatalog == null)
-                _log.LogWarning("Gelato: manifest at {Url} has no search-capable movie catalog", url);
+                _log.LogWarning("manifest at {Url} has no search-capable movie catalog", url);
 
             if (SeriesSearchCatalog == null)
-                _log.LogWarning("Gelato: manifest at {Url} has no search-capable series catalog", url);
+                _log.LogWarning("manifest at {Url} has no search-capable series catalog", url);
 
             return m;
         }
@@ -132,12 +132,8 @@ namespace Gelato
             return r?.Meta;
         }
 
-        public async Task<List<StremioStream>> GetStreamsAsync(BaseItem item)
+        public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
         {
-            //var (mediaType, Id) = ResolveKey(entity);
-            // _log.LogInformation("Gelato: GetStreamsAsync {Type} {Id}", mediaType, Id);
-            var uri = StremioUri.FromString(item.GetProviderId("stremio"));
-            //(mediaType is null || string.IsNullOrWhiteSpace(Id)) return new();
             var url = BuildUrl(new[] { "stream", uri.MediaType.ToString().ToLower(), uri.ExternalId });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
@@ -145,15 +141,13 @@ namespace Gelato
 
         public async Task<List<StremioStream>> GetStreamsAsync(string Id, StremioMediaType mediaType)
         {
-            // _log.LogInformation("Gelato: GetStreamsAsync {Type} {Id}", mediaType, Id);
             var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), Id });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
         }
-
-        public async Task<List<StremioSubtitle>> GetSubtitlesAsync(BaseItem item, string? fileName)
+        
+        public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName)
         {
-            var uri = StremioUri.FromString(item.GetProviderId("stremio"));
             var url = BuildUrl(new[] { "subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId });
             var r = await GetJsonAsync<StremioSubtitleResponse>(url);
             return r.Subtitles;
@@ -251,7 +245,7 @@ namespace Gelato
                 //    };
                 //    break;
                 default:
-                    _log.LogWarning("Gelato: unsupported type {type}", meta.Type);
+                    _log.LogWarning("unsupported type {type}", meta.Type);
                     return null;
             }
             ;
@@ -269,7 +263,7 @@ namespace Gelato
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
             }
-
+            
             //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
             //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
             //item.LockedFields = locked.ToArray();
@@ -320,7 +314,7 @@ namespace Gelato
 
     public class StremioCatalog
     {
-        [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
+       [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
@@ -350,25 +344,25 @@ namespace Gelato
     {
         public List<StremioMeta>? Metas { get; set; }
     }
-
+    
     public struct StremioSubtitle
-    {
-        public string Id { get; set; }
-        public string Url { get; set; }
-        public string? Lang { get; set; }
-        public int? SubId { get; set; }
-        public bool? AiTranslated { get; set; }
-        public bool? FromTrusted { get; set; }
-        public int? UploaderId { get; set; }
-        public string? LangCode { get; set; }
-        public string? Title { get; set; }
-        public string? Moviehash { get; set; }
-    }
+{
+    public string Id { get; set; }
+    public string Url { get; set; }
+    public string? Lang { get; set; }
+    public int? SubId { get; set; }
+    public bool? AiTranslated { get; set; }
+    public bool? FromTrusted { get; set; }
+    public int? UploaderId { get; set; }
+    public string? LangCode { get; set; }
+    public string? Title { get; set; }
+    public string? Moviehash { get; set; }
+}
 
-    public struct StremioSubtitleResponse
-    {
-        public List<StremioSubtitle> Subtitles { get; set; }
-    }
+public struct StremioSubtitleResponse
+{
+    public List<StremioSubtitle> Subtitles { get; set; }
+}
 
     public class StremioMetaResponse
     {
@@ -618,28 +612,28 @@ namespace Gelato
         Tv,
         Events
     }
-
+    
     public class SafeStringEnumConverter<T> : JsonConverter<T> where T : struct, Enum
+{
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        if (reader.TokenType == JsonTokenType.String)
         {
-            if (reader.TokenType == JsonTokenType.String)
-            {
-                var s = reader.GetString();
-                if (Enum.TryParse<T>(s, true, out var value)) return value;
-                if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
-            }
-            if (reader.TokenType == JsonTokenType.Number)
-            {
-                if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
-            }
-            reader.Skip();
-            if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
-            return default;
+            var s = reader.GetString();
+            if (Enum.TryParse<T>(s, true, out var value)) return value;
+            if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
         }
-
-        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
-            => writer.WriteStringValue(value.ToString());
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
+        }
+        reader.Skip();
+        if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
+        return default;
     }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.ToString());
+}
 
 }
