@@ -2,6 +2,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
+using Jellyfin.Data.Enums;
+using System;
+using System.Diagnostics;
 
 namespace Gelato.Common;
 
@@ -43,6 +50,48 @@ public sealed class StremioUri
 
         return null;
     }
+    
+    public static StremioUri? FromBaseItem(BaseItem item)
+{
+    if (item is null) throw new ArgumentNullException(nameof(item));
+
+    var kind = item.GetBaseItemKind();
+    var mediaType = kind switch
+    {
+        BaseItemKind.Movie => StremioMediaType.Movie,
+        BaseItemKind.Series or BaseItemKind.Episode => StremioMediaType.Series,
+        _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}")
+    };
+
+    var stremioId = item.GetProviderId("stremio");
+    if (!string.IsNullOrWhiteSpace(stremioId))
+        return StremioUri.FromString(stremioId);
+
+    if (kind == BaseItemKind.Movie)
+    {
+        var imdb = item.GetProviderId(MetadataProvider.Imdb);
+        return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Movie, imdb);
+    }
+
+    if (kind == BaseItemKind.Series)
+    {
+        var imdb = item.GetProviderId(MetadataProvider.Imdb);
+        return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Series, imdb);
+    }
+
+    if (kind == BaseItemKind.Episode)
+    {
+        var ep = (MediaBrowser.Controller.Entities.TV.Episode)item;
+        var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
+        if (string.IsNullOrWhiteSpace(seriesImdb) || ep.ParentIndexNumber is null || ep.IndexNumber is null)
+            return null;
+
+        var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
+        return new StremioUri(StremioMediaType.Series, ext);
+    }
+
+    return null;
+}
 
     public static StremioUri Parse(string id)
     {
@@ -146,7 +195,23 @@ public static class Utils
     }
 }
 
+public sealed class TimedBlock : IDisposable
+{
+    private readonly Stopwatch _sw;
+    private readonly string _label;
 
+    public TimedBlock(string label)
+    {
+        _label = label;
+        _sw = Stopwatch.StartNew();
+    }
+
+    public void Dispose()
+    {
+        _sw.Stop();
+        Console.WriteLine($"{_label} took {_sw.ElapsedMilliseconds} ms");
+    }
+}
 
 public sealed class FileCache
 {
