@@ -13,7 +13,7 @@ namespace Gelato.Configuration
         public int CatalogMaxItems { get; set; } = 250;
         public string Url { get; set; } = "";
         public bool EnableSubs { get; set; } = false;
-
+        public bool EnableMixed { get; set; } = true;
 
         public string GetBaseUrl()
         {

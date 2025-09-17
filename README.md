@@ -36,8 +36,6 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 - Only **AIOStreams** is supported
 - **P2P streams are not yet supported**
-- If an item already exists in your library as a local file, the plugin will skip it
-  (this behavior may change in the future)
 
 ---
 
@@ -50,10 +48,10 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - [x] Import media from Stremio catalogs (scheduled task)
 - [ ] Enable deletion of Stremio media items
 - [ ] Enable downloads of Stremio media items
-- [ ] Add support for subtitle addons
+- [x] Add support for subtitle addons
 - [ ] Create collections from Stremio catalogs (scheduled task)
 - [ ] Add more settings (e.g. cache TTL, stream naming options)
-- [ ] Combine static (local) and dynamic (Stremio) streams
+- [x] Combine static (local) and dynamic (Stremio) streams
 - [ ] Look more into the possibility of add to different libraries
 
 ### FAQ
@@ -62,6 +60,5 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - You should have at least one search enabled catalog. I suggest the tmdb addon.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - stream cache is 3600 min. Can be cleared by restarting the server
-- If a search result already exists in your library the plugin does nothing. This might change in the future.
 - bump up probing and analyse to your liking
   JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"

@@ -67,10 +67,11 @@ namespace Gelato.Decorators
         bool enablePathSubstitution,
         User user = null)
         {
-            //if (!IsExternal(item))
+          
+          
 
            // var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+if (!GelatoPlugin.Instance!.Configuration.EnableMixed || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
 {
               return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }

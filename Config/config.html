@@ -48,7 +48,15 @@
                  <span>Currently breaks untill https://github.com/jellyfin/jellyfin/pull/14809 is merged.</span>
                
                </div>
-
+        <div class="inputContainer">
+          <input is="emby-input"
+                 type="checkbox"
+                 id="chkEnableMixed"
+                 label="Enable stremio results and local files" />
+                 <span>If enabled, stremio streams and local sources are merged</span>
+               
+               </div>
+               
         <br />
         <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block">
           <span>Save</span>
@@ -67,7 +75,7 @@
         const txtSeriesPath = document.querySelector('#txtSeriesPath');
         const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
         const chkEnableSubs = document.querySelector('#chkEnableSubs');
-
+        const chkEnableMixsd = document.querySelector('#chkEnableMixed');
         async function loadConfig() {
           Dashboard.showLoadingMsg();
           try {
@@ -77,6 +85,7 @@
             txtSeriesPath.value = cfg.SeriesPath || "";
             txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
             chkEnableSubs.checked = cfg.EnableSubs || false;
+            chkEnableMixed.checked = cfg.EnableMixed || false;
           } catch (e) {
             console.error(e);
           } finally {
@@ -93,7 +102,8 @@
             cfg.MoviePath = (txtMoviePath.value || "").trim() || null;
             cfg.SeriesPath = (txtSeriesPath.value || "").trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
-            cfg.EnableSubs = (txtUrl.checked || false);
+            cfg.EnableSubs = (chkEnableSubs.checked || false);
+            cfg.EnableMixed = (chkEnableMixed.checked || true);
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {
