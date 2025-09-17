@@ -697,7 +697,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
 
     var primaryVersion = items.FirstOrDefault(
         i => i.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true);
-    _log.LogInformation($"{primaryVersion.Path}");
+
     if (primaryVersion == null)
     {
         _log.LogError("MergeVersions: No item with a path starting with 'stremio' found. Merge aborted.");

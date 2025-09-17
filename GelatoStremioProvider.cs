@@ -270,9 +270,9 @@ namespace Gelato
                 }
             }
             
-            var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
-            if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
-            item.LockedFields = locked.ToArray();
+            //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
+            //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
+            //item.LockedFields = locked.ToArray();
 
             item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
 
