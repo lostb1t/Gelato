@@ -1,4 +1,3 @@
-#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -8,6 +7,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
+using Jellyfin.Database.Implementations.Entities;
 using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators
@@ -48,23 +48,15 @@ namespace Gelato.Decorators
         public BaseItem RetrieveItem(Guid id) => _inner.RetrieveItem(id);
         public QueryResult<BaseItem> GetItems(InternalItemsQuery filter)
         {
-            var all = GetItemList(filter);
-
-            var working = all;
-
-            var start = Math.Max(filter.StartIndex ?? 0, 0);
-            var limit = filter.Limit ?? working.Count;
-            if (limit < 0) limit = 0;
-
-            var page = (limit == 0)
-                ? Array.Empty<BaseItem>()
-                : working.Skip(start).Take(limit).ToArray();
-
-            return new QueryResult<BaseItem>
-            {
-                TotalRecordCount = working.Count,
-                Items = page
-            };
+          // Console.Write("yo");
+          var result = _inner.GetItems(filter);
+           
+           //result.Items = result.Items.Where(i => i is not Video v || v.PrimaryVersionId == null).ToList(); 
+          return result;
+  
+          
+  
+          
         }
 
         public IReadOnlyList<Guid> GetItemIdsList(InternalItemsQuery filter)
@@ -73,7 +65,7 @@ namespace Gelato.Decorators
         public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
         {
             var list = _inner.GetItemList(filter);
-           // return list;
+            //return list;
 
             var ctx = _http?.HttpContext;
             if (ctx != null && ctx.Items.TryGetValue("actionName", out var actionObj))
@@ -89,9 +81,11 @@ namespace Gelato.Decorators
             return list;
         }
 
-        // public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
-        //     => _inner.GetItemList(filter);
-
+        
+        
+        //public bool GetIsPlayed(User user, Guid id, bool recursive)
+        //    => _inner.GetIsPlayed(user, id, recursive);
+        
         public IReadOnlyList<BaseItem> GetLatestItemList(InternalItemsQuery filter, CollectionType collectionType)
             => _inner.GetLatestItemList(filter, collectionType);
 

@@ -621,7 +621,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
                 await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
 
                 existing.Name = label;
-                existing.SortName = sort;
+              //  existing.SortName = sort;
                 existing.ForcedSortName = sort;
 
                 if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
@@ -655,14 +655,13 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
             child.ProviderIds = providerIds;
             child.Path = s.Url;
             child.RunTimeTicks = item.RunTimeTicks;
-            child.SortName = sort;
+           // child.SortName = sort;
             child.ForcedSortName = sort;
 
             var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
             if (!lockedNew.Contains(MetadataField.Name)) lockedNew.Add(MetadataField.Name);
             child.LockedFields = lockedNew.ToArray();
 
-            // Put it under the chosen parent (Season for episodes, Movie folder for movies)
             parent.AddChild(child);
             await child.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
 
@@ -679,11 +678,8 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
             }
         }
 
-        // Merge versions so clients see a single logical item
         var keep = current.Where(m => desiredIds.Contains(m.Id));
         var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
-        //await MergeVersions(merged).ConfigureAwait(false);
-
         return merged.ToList();
     }
 
@@ -922,6 +918,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
                 };
                 seasonItem.SetProviderId("stremio", seasonItem.Path);
                 seriesItem.AddChild(seasonItem);
+                        await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
                 //_provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
             }
 
@@ -970,17 +967,34 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
                 epItem.SetProviderId("stremio", epItem.Path);
                 seasonItem.AddChild(epItem);
+                                        await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
                 //    _provider.QueueRefresh(epItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High); 
 
                 //            _provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
                 //     await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-                //await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+               // await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
                 //await seriesItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
 
 
                 // _repo.SaveItems(new BaseItem[] { epItem }, ct);
             }
         }
+        
+        
+
+var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+                {
+                    // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
+                    MetadataRefreshMode = MetadataRefreshMode.None,    // Skip online lookups
+    ImageRefreshMode    = MetadataRefreshMode.None,    // Skip image fetches
+    ReplaceAllImages    = false,
+    ReplaceAllMetadata  = false,
+    ForceSave           = true
+                };
+
+// Refresh just the parent show so children are re-scanned
+await _provider.RefreshFullItem(seriesItem, options, CancellationToken.None);
+                        await seriesItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
 
 
         // _log.LogInformation($"Gelato: done sync series");
