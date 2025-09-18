@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Primitives;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
+using Gelato.Common;
 
 namespace Gelato.Filters;
 
@@ -59,6 +61,10 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
     {
+      
+     var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
+
+       // _log.LogInformation("Requested URL: {Url}", fullUrl); 
         if (!IsItemsAction(ctx))
         {
             await next();
@@ -104,8 +110,8 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
             return;
         }
 
-
-        var (baseItem, created) = await _manager.InsertMeta(root, meta, false, CancellationToken.None);
+              using (new TimedBlock("Process data")) {
+        var (baseItem, created) = await _manager.InsertMeta(root, meta, true, CancellationToken.None);
 
         if (baseItem is not null)
         {
@@ -118,15 +124,19 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
                     ImageRefreshMode = MetadataRefreshMode.None,
                     ForceSave = true
                 };
-                await _provider.RefreshFullItem(baseItem, options, CancellationToken.None);
-                await baseItem.UpdateToRepositoryAsync(
-                        ItemUpdateType.MetadataEdit,
-                        CancellationToken.None
-                    )
-                    .ConfigureAwait(false);
+               // await _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
+
+               //await _provider.RefreshFullItem(baseItem, options, CancellationToken.None);
+               // await baseItem.UpdateToRepositoryAsync(
+               //         ItemUpdateType.MetadataEdit,
+               //         CancellationToken.None
+               //     )
+                //    .ConfigureAwait(false);
+              //}
             }
             ReplaceGuid(ctx, baseItem.Id);
         }
+      }
         await next();
     }
 

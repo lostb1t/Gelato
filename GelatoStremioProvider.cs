@@ -276,8 +276,8 @@ namespace Gelato
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            item.SortName = $"AA000 {meta.Name}";
-            item.ForcedSortName = item.SortName;
+            item.ForcedSortName = $"AA000 {meta.Name}";
+            //item.ForcedSortName = item.SortName;
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
 

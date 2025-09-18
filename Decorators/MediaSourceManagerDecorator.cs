@@ -68,7 +68,7 @@ namespace Gelato.Decorators
         User user = null)
         {
           
-          
+        //  _log.LogInformation("CALLED");
 
            // var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
 if (!GelatoPlugin.Instance!.Configuration.EnableMixed || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))

@@ -128,14 +128,27 @@ namespace Gelato.Filters
 
             if (requested.Contains(BaseItemKind.Movie))
             {
+                var movieFolder = _manager.TryGetMovieFolder(); 
+                if (movieFolder is not null) {
                 var movies = await _provider.SearchAsync(q, StremioMediaType.Movie);
                 metas.AddRange(movies);
+                } else {
+                  _log.LogWarning("no movie folder found, skipping search");
+                }
             }
 
+            
             if (requested.Contains(BaseItemKind.Series))
             {
+              var seriesFolder = _manager.TryGetSeriesFolder();
+
+
+                            if (seriesFolder is not null) {
                 var series = await _provider.SearchAsync(q, StremioMediaType.Series);
                 metas.AddRange(series);
+                      } else {
+                  _log.LogWarning("no series folder found, skipping search");
+                }
             }
 
             var options = new DtoOptions();
