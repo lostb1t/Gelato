@@ -77,7 +77,7 @@
         const txtSeriesPath = document.querySelector('#txtSeriesPath');
         const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
         const chkEnableSubs = document.querySelector('#chkEnableSubs');
-        const chkEnableMixsd = document.querySelector('#chkEnableMixed');
+        const chkEnableMixed = document.querySelector('#chkEnableMixed');
         async function loadConfig() {
           Dashboard.showLoadingMsg();
           try {
@@ -87,7 +87,7 @@
             txtSeriesPath.value = cfg.SeriesPath || "";
             txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
             chkEnableSubs.checked = cfg.EnableSubs || false;
-            chkEnableMixed.checked = cfg.EnableMixed || false;
+            chkEnableMixed.checked = cfg.EnableMixed || true;
           } catch (e) {
             console.error(e);
           } finally {
