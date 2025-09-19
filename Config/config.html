@@ -87,7 +87,7 @@
             txtSeriesPath.value = cfg.SeriesPath || "";
             txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
             chkEnableSubs.checked = cfg.EnableSubs || false;
-            chkEnableMixed.checked = cfg.EnableMixed || true;
+            chkEnableMixed.checked = cfg.EnableMixed ?? true;
           } catch (e) {
             console.error(e);
           } finally {
@@ -105,7 +105,7 @@
             cfg.SeriesPath = (txtSeriesPath.value || "").trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
             cfg.EnableSubs = (chkEnableSubs.checked || false);
-            cfg.EnableMixed = (chkEnableMixed.checked || true);
+            cfg.EnableMixed = !!chkEnableMixed.checked;
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {
