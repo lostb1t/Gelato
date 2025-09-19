@@ -9,6 +9,8 @@
 
 Bring the power of Stremio addons directly into Jellyfin. This plugin replaces Jellyfin’s default search with Stremio-powered results and can automatically import entire catalogs into your library through scheduled tasks — seamlessly injecting them into Jellyfin’s database so they behave like native items.
 
+NOTICE: ONLY SUPPORTS 10.11
+
 ### Features
 - **Unified Search** – Jellyfin search now pulls results from Stremio addons
 - **Catalogs** – Import items from stremio catalogs into your library with scheduled tasks
