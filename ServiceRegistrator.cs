@@ -32,7 +32,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
     new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
         //  services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
-
+        services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
         services.Remove(original);
 

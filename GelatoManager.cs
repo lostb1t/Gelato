@@ -902,7 +902,10 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
             seriesItem = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
             if (seriesItem.Id == Guid.Empty) seriesItem.Id = Guid.NewGuid();
             // seriesItem.Path =  "stremio://{meta.Type}/{Id}";;
+              //providerIds.Add("stremio", $"stremio://{meta.Type}/{Id}"); 
             seriesItem.PresentationUniqueKey = seriesItem.CreatePresentationUniqueKey();
+           // seriesItem.IsVirtualItem = true;
+           // seriesItem.Path = null;
             seriesRootFolder.AddChild(seriesItem);
             //         _provider.QueueRefresh(seriesItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
         }
@@ -927,12 +930,14 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
                     //  ParentId = seriesItem.Id,
                     SeriesId = seriesItem.Id,
                     SeriesName = seriesItem.Name,
-                    Path = seasonPath,
+                   Path = seasonPath,
+                   // IsVirtualItem = false,
+                    //Path = null;
                     SeriesPresentationUniqueKey = seriesItem.GetPresentationUniqueKey()
                 };
-                seasonItem.SetProviderId("stremio", seasonItem.Path);
+                seasonItem.SetProviderId("stremio", seasonPath);
                 seriesItem.AddChild(seasonItem);
-                        await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+                await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
                 //_provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
             }
 
