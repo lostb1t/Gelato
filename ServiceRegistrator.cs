@@ -46,18 +46,18 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             return ActivatorUtilities.CreateInstance<MediaSourceManagerDecorator>(sp, inner);
         });
 
-        //var original_repo = services.First(sd => sd.ServiceType == typeof(IItemRepository));
-       // services.Remove(original_repo);
+        var original_repo = services.First(sd => sd.ServiceType == typeof(IItemRepository));
+        services.Remove(original_repo);
 
-       // services.AddSingleton<IItemRepository>(sp =>
-        //{
-       //     IItemRepository inner =
-      //          original_repo.ImplementationInstance as IItemRepository
-       //         ?? (IItemRepository)(original_repo.ImplementationFactory?.Invoke(sp)
-       //             ?? ActivatorUtilities.CreateInstance(sp, original_repo.ImplementationType!));
+        services.AddSingleton<IItemRepository>(sp =>
+        {
+            IItemRepository inner =
+                original_repo.ImplementationInstance as IItemRepository
+                ?? (IItemRepository)(original_repo.ImplementationFactory?.Invoke(sp)
+                    ?? ActivatorUtilities.CreateInstance(sp, original_repo.ImplementationType!));
 
-        //    return ActivatorUtilities.CreateInstance<ItemRepositoryDecorator>(sp, inner);
-        //});
+            return ActivatorUtilities.CreateInstance<ItemRepositoryDecorator>(sp, inner);
+        });
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {

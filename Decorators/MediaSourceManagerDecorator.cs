@@ -68,7 +68,7 @@ namespace Gelato.Decorators
         User user = null)
         {
           
-        //  _log.LogInformation("CALLED");
+
 
            // var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
 if (!GelatoPlugin.Instance!.Configuration.EnableMixed || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
@@ -82,12 +82,12 @@ if (!GelatoPlugin.Instance!.Configuration.EnableMixed || item.GetBaseItemKind() 
 
             if (ctx != null && ctx.Items.TryGetValue("actionName", out var actionName) && IsItemsActionName(actionName as string))
     {
-
+     //_log.LogInformation($"CALLED {item.GetBaseItemKind()}");
         if (!string.IsNullOrWhiteSpace(imdb) && !manager.HasStreamSync(imdb))
         {
             var s = manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
 
-            
+            //     _log.LogInformation($"HO {item.GetBaseItemKind()}");
             manager.SetStreamSync(imdb);
 
             var query = new InternalItemsQuery

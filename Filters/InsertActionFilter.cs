@@ -111,29 +111,11 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         }
 
               using (new TimedBlock("Process data")) {
-        var (baseItem, created) = await _manager.InsertMeta(root, meta, true, CancellationToken.None);
+        var (baseItem, created) = await _manager.InsertMeta(root, meta, false, true, CancellationToken.None);
 
         if (baseItem is not null)
         {
-            if (created)
-            {
-                var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-                {
-                    // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                    ImageRefreshMode = MetadataRefreshMode.None,
-                    ForceSave = true
-                };
-               // await _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-
-               //await _provider.RefreshFullItem(baseItem, options, CancellationToken.None);
-               // await baseItem.UpdateToRepositoryAsync(
-               //         ItemUpdateType.MetadataEdit,
-               //         CancellationToken.None
-               //     )
-                //    .ConfigureAwait(false);
-              //}
-            }
+          
             ReplaceGuid(ctx, baseItem.Id);
         }
       }

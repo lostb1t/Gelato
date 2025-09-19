@@ -46,42 +46,42 @@ namespace Gelato.Decorators
         }
 
         public BaseItem RetrieveItem(Guid id) => _inner.RetrieveItem(id);
-        public QueryResult<BaseItem> GetItems(InternalItemsQuery filter)
-        {
-          // Console.Write("yo");
-          var result = _inner.GetItems(filter);
-           
-           //result.Items = result.Items.Where(i => i is not Video v || v.PrimaryVersionId == null).ToList(); 
-          return result;
-  
-          
-  
-          
-        }
+        private const string AltTag = "Alternate";
 
+private bool ShouldExcludeAlternate()
+{
+    var ctx = _http?.HttpContext;
+    if (ctx == null) return false;
+
+    return ctx.Items.TryGetValue("actionName", out var actionObj)
+        && actionObj is string actionName
+        && !string.IsNullOrEmpty(actionName)
+        && IsItemsActionName(actionName);
+}
+
+private void ApplyAlternateFilter(InternalItemsQuery filter)
+{
+    if (!ShouldExcludeAlternate()) return;
+
+    var tags = filter.ExcludeTags ?? Array.Empty<string>();
+    if (!tags.Contains(AltTag, StringComparer.OrdinalIgnoreCase))
+        filter.ExcludeTags = tags.Append(AltTag).ToArray();
+}
+
+public QueryResult<BaseItem> GetItems(InternalItemsQuery filter)
+{
+    ApplyAlternateFilter(filter);
+    return _inner.GetItems(filter);
+}
+
+public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
+{
+    ApplyAlternateFilter(filter);
+    return _inner.GetItemList(filter);
+}
+       
         public IReadOnlyList<Guid> GetItemIdsList(InternalItemsQuery filter)
-            => _inner.GetItemIdsList(filter);
-
-        public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
-        {
-            var list = _inner.GetItemList(filter);
-            //return list;
-
-            var ctx = _http?.HttpContext;
-            if (ctx != null && ctx.Items.TryGetValue("actionName", out var actionObj))
-            {
-                var actionName = actionObj as string;
-                if (!string.IsNullOrEmpty(actionName) && IsItemsActionName(actionName))
-                {
-                    list = list.Where(i => i is not Video v || v.PrimaryVersionId == null)
-                               .ToList();
-                }
-            }
-
-            return list;
-        }
-
-        
+            => _inner.GetItemIdsList(filter); 
         
         //public bool GetIsPlayed(User user, Guid id, bool recursive)
         //    => _inner.GetIsPlayed(user, id, recursive);

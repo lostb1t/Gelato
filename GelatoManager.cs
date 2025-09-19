@@ -378,7 +378,7 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
     /// <param name="meta"></param>
     /// <param name="ct"></param>
     /// <returns></returns>
-    public async Task<(BaseItem?, bool)> InsertMeta(Folder parent, StremioMeta meta, bool refreshItem, CancellationToken ct)
+    public async Task<(BaseItem?, bool)> InsertMeta(Folder parent, StremioMeta meta, bool refreshItem, bool queueRefreshItem, CancellationToken ct)
     {
         if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
         {
@@ -401,11 +401,13 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         //baseItem.IsDefault = true;
 
         var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-            ForceSave = true
-        };
+                                 {
+                                     MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                                     ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                                     ReplaceAllImages = false,
+                                     ReplaceAllMetadata = true,
+                                     ForceSave = true
+                                 };
 
         if (meta.Type == StremioMediaType.Movie)
         {
@@ -418,17 +420,16 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         }
         
         _log.LogInformation($"inserted new media: {baseItem.Name}");
-        if (refreshItem && baseItem is not null)
+        if (baseItem is not null)
         {
+          if (queueRefreshItem) {
             _provider.QueueRefresh(
                     baseItem.Id,
-                                 new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-                                 {
-                                     MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                                     ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                                     ForceSave = true
-                                 },
+                      options,
                                   RefreshPriority.High);
+          } else if (refreshItem) {
+             await _provider.RefreshFullItem(baseItem, options, ct);
+            }
         }
         return (baseItem as BaseItem, true);
     }
@@ -623,6 +624,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
                 existing.Name = label;
               //  existing.SortName = sort;
                 existing.ForcedSortName = sort;
+               // existing.SetProviderId("altver", 1);
 
                 if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
                 existing.LockedFields = locked.ToArray();
@@ -657,6 +659,7 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
             child.RunTimeTicks = item.RunTimeTicks;
            // child.SortName = sort;
             child.ForcedSortName = sort;
+            //child.SetProviderId("altver", 1);
 
             var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
             if (!lockedNew.Contains(MetadataField.Name)) lockedNew.Add(MetadataField.Name);
@@ -721,12 +724,23 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
         v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
         v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
 
+      //  _log.LogInformation($"{v.Id} {v.Tags.Count()}");
+        //v.SetProviderId("altver", "1");
+        //v.OwnerId = primaryVersion.Id;
+        v.Tags = v.Tags
+    .Append("Alternate")
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
         await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                .ConfigureAwait(false);
     }
 
     primaryVersion.LinkedAlternateVersions = replacementLinks;
     primaryVersion.SetPrimaryVersionId(null);
+    primaryVersion.Tags = primaryVersion.Tags
+    .Where(t => !string.Equals(t, "Alternate", StringComparison.OrdinalIgnoreCase))
+    .ToArray();
+  //  primaryVersion.OwnerId = Guid.Empty;
     await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                        .ConfigureAwait(false);
 }
@@ -961,13 +975,13 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
                     SeasonName = seasonItem.Name,
                     Path = epPath,
                     SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
-
+                    //ExternalId = null
                 };
 
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
                 epItem.SetProviderId("stremio", epItem.Path);
                 seasonItem.AddChild(epItem);
-                                        await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+                await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
                 //    _provider.QueueRefresh(epItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High); 
 
                 //            _provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
@@ -984,7 +998,6 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
 
 var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                 {
-                    // MetadataRefreshMode = MetadataRefreshMode.ValidationOnly,
                     MetadataRefreshMode = MetadataRefreshMode.None,    // Skip online lookups
     ImageRefreshMode    = MetadataRefreshMode.None,    // Skip image fetches
     ReplaceAllImages    = false,

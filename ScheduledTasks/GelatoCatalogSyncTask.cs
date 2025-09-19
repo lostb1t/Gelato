@@ -104,7 +104,7 @@ namespace Gelato.Tasks
                             cancellationToken.ThrowIfCancellationRequested();
                             try
                             {
-                                var (item, created) = await _manager.InsertMeta(root, meta, true, cancellationToken).ConfigureAwait(false);
+                                var (item, created) = await _manager.InsertMeta(root, meta, true, false, cancellationToken).ConfigureAwait(false);
 
 
                             }
@@ -134,7 +134,7 @@ namespace Gelato.Tasks
 
                 }
             }
-            //_library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
+           // _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
             _log.LogInformation("[Gelato] Catalog sync completed");
         }
     }
