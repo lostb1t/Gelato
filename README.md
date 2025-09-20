@@ -53,8 +53,7 @@ NOTICE: ONLY SUPPORTS 10.11
 - [x] Add support for subtitle addons
 - [ ] Create collections from Stremio catalogs (scheduled task)
 - [ ] Add more settings (e.g. cache TTL, stream naming options)
-- [x] Combine static (local) and dynamic (Stremio) streams
-- [ ] Look more into the possibility of add to different libraries
+- [x] Mixed library support (local files and streams)
 
 ### FAQ
 
