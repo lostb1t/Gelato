@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Gelato.Common;
-using Gelato.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
+using Gelato.Configuration;
+using System.Text.Json.Serialization;
+using Gelato.Common;
 
 namespace Gelato
 {
@@ -57,7 +57,9 @@ namespace Gelato
             var parts = segments.Select(s => s == null ? "" : Uri.EscapeDataString(s)).ToArray();
             var path = string.Join("/", parts);
             var extrasPart = (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
-            return $"{baseUrl}/{path}{extrasPart}.json";
+            var url = $"{baseUrl}/{path}{extrasPart}.json";
+            url = url.Replace("%3A", ":").Replace("%3a", ":");                             // Console.Write(url);
+            return url;
         }
 
         private async Task<T?> GetJsonAsync<T>(string url)
@@ -145,7 +147,7 @@ namespace Gelato
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
         }
-
+        
         public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName)
         {
             var url = BuildUrl(new[] { "subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId });
@@ -263,11 +265,11 @@ namespace Gelato
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
             }
-
+            
             //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
             //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
             //item.LockedFields = locked.ToArray();
-
+            
             var stremioUri = new StremioUri(meta.Type, Id);
             item.SetProviderId("stremio", stremioUri.ToString());
 
@@ -315,7 +317,7 @@ namespace Gelato
 
     public class StremioCatalog
     {
-        [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
+       [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
@@ -345,25 +347,25 @@ namespace Gelato
     {
         public List<StremioMeta>? Metas { get; set; }
     }
-
+    
     public struct StremioSubtitle
-    {
-        public string Id { get; set; }
-        public string Url { get; set; }
-        public string? Lang { get; set; }
-        public int? SubId { get; set; }
-        public bool? AiTranslated { get; set; }
-        public bool? FromTrusted { get; set; }
-        public int? UploaderId { get; set; }
-        public string? LangCode { get; set; }
-        public string? Title { get; set; }
-        public string? Moviehash { get; set; }
-    }
+{
+    public string Id { get; set; }
+    public string Url { get; set; }
+    public string? Lang { get; set; }
+    public int? SubId { get; set; }
+    public bool? AiTranslated { get; set; }
+    public bool? FromTrusted { get; set; }
+    public int? UploaderId { get; set; }
+    public string? LangCode { get; set; }
+    public string? Title { get; set; }
+    public string? Moviehash { get; set; }
+}
 
-    public struct StremioSubtitleResponse
-    {
-        public List<StremioSubtitle> Subtitles { get; set; }
-    }
+public struct StremioSubtitleResponse
+{
+    public List<StremioSubtitle> Subtitles { get; set; }
+}
 
     public class StremioMetaResponse
     {
@@ -394,7 +396,6 @@ namespace Gelato
         public string? ImdbId { get; set; }
         public DateTime? Released { get; set; }
         public string? Status { get; set; }
-        public List<string>? Writer { get; set; }
         public string? Year { get; set; }
         public string? Slug { get; set; }
         public List<StremioTrailerStream>? TrailerStreams { get; set; }
@@ -613,28 +614,28 @@ namespace Gelato
         Tv,
         Events
     }
-
+    
     public class SafeStringEnumConverter<T> : JsonConverter<T> where T : struct, Enum
+{
+    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        if (reader.TokenType == JsonTokenType.String)
         {
-            if (reader.TokenType == JsonTokenType.String)
-            {
-                var s = reader.GetString();
-                if (Enum.TryParse<T>(s, true, out var value)) return value;
-                if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
-            }
-            if (reader.TokenType == JsonTokenType.Number)
-            {
-                if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
-            }
-            reader.Skip();
-            if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
-            return default;
+            var s = reader.GetString();
+            if (Enum.TryParse<T>(s, true, out var value)) return value;
+            if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
         }
-
-        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
-            => writer.WriteStringValue(value.ToString());
+        if (reader.TokenType == JsonTokenType.Number)
+        {
+            if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
+        }
+        reader.Skip();
+        if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
+        return default;
     }
+
+    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+        => writer.WriteStringValue(value.ToString());
+}
 
 }
