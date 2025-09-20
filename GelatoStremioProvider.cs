@@ -575,7 +575,8 @@ public struct StremioSubtitleResponse
 
         public bool IsValid()
         {
-            var size = BehaviorHints?.VideoSize?.ToString();
+            //var size = BehaviorHints?.VideoSize?.ToString();
+            //var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
             var filename = BehaviorHints?.Filename;
             return !string.IsNullOrWhiteSpace(filename)
                // && !string.IsNullOrWhiteSpace(size)
