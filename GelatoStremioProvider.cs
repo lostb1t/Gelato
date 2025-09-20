@@ -577,8 +577,8 @@ public struct StremioSubtitleResponse
         {
             var size = BehaviorHints?.VideoSize?.ToString();
             var filename = BehaviorHints?.Filename;
-            return !string.IsNullOrWhiteSpace(size)
-                && !string.IsNullOrWhiteSpace(filename)
+            return !string.IsNullOrWhiteSpace(filename)
+               // && !string.IsNullOrWhiteSpace(size)
                 && !string.IsNullOrWhiteSpace(GetName())
                 && !string.IsNullOrWhiteSpace(Url);
         }
