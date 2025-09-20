@@ -794,6 +794,15 @@ if (!providerIds.ContainsKey("stremio"))
             return true;
         return false;
     }
+    
+    public bool IsStremio(BaseItem item)
+    {
+
+        var stremioId = item.GetProviderId("stremio");
+        if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
+          return true;
+        return false;
+    }
 
     public bool TryGetRouteGuidString(ActionContext ctx, out string value)
     {

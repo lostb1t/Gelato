@@ -110,15 +110,32 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
             return;
         }
 
-              using (new TimedBlock("Process data")) {
-        var (baseItem, created) = await _manager.InsertMeta(root, meta, false, true, CancellationToken.None);
+        //using (new TimedBlock("Process data")) {
+      
+       BaseItem? baseItem;
 
-        if (baseItem is not null)
-        {
-          
-            ReplaceGuid(ctx, baseItem.Id);
-        }
-      }
+try
+{
+    (baseItem, _) = await _manager.InsertMeta(
+        root,
+        meta,
+        false,
+        true,
+        CancellationToken.None);
+}
+catch (Exception)
+{
+    // Fallback when the UI triggers this endpoint twice and causes a duplicate
+    var tempItem = _stremioProvider.IntoBaseItem(meta);
+    baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+}
+
+if (baseItem is not null)
+{
+    ReplaceGuid(ctx, baseItem.Id);
+}
+      
+     // }
         await next();
     }
 

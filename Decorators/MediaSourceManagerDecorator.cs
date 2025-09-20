@@ -68,15 +68,15 @@ namespace Gelato.Decorators
         User user = null)
         {
           
-
+            var manager = _manager.Value;
 
            // var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-if (!GelatoPlugin.Instance!.Configuration.EnableMixed || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(item)) || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
 {
               return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }
 
-            var manager = _manager.Value;
+
             var ctx = _http.HttpContext;
             var imdb = item.GetProviderId(MetadataProvider.Imdb);
 
