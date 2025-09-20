@@ -567,18 +567,18 @@ public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
         if (parent is null) return new List<Video>();
 
-        // Only handle our external items
-        //if (!item.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase))
-        //    return new List<Video>();
-
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null){
           _log.LogError($"unable to build stremio uri for {item.Name}");
           return new List<Video>();
         }
+        // item could be a local file whixh doest have the stremio marker
         var streams = await _stremioProvider.GetStreamsAsync(uri).ConfigureAwait(false);
-
+if (!providerIds.ContainsKey("stremio"))
+{
+    providerIds["stremio"] = uri.ToString();
+}
         var query = new InternalItemsQuery
         {
             ParentId = parent.Id,
