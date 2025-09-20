@@ -69,8 +69,8 @@ namespace Gelato.Tasks
 
     var items = _library.GetItemList(query)
         .OfType<Video>()
-          .Where(v => !v.IsFileProtocol)     
-      //  .Where(v => v.ProviderIds.TryGetValue("stremio", out var id) && !string.IsNullOrWhiteSpace(id) && !v.IsFileProtocol)
+      //    .Where(v => !v.IsFileProtocol)     
+        .Where(v => v.ProviderIds.TryGetValue("stremio", out var id) && !string.IsNullOrWhiteSpace(id) && !v.IsFileProtocol)
         .ToArray();
 
     int total = items.Length;

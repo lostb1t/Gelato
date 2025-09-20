@@ -1,7 +1,7 @@
-using System;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
+using System;
 
 namespace Gelato.Configuration
 {
@@ -10,7 +10,7 @@ namespace Gelato.Configuration
 
         public string? MoviePath { get; set; }
         public string? SeriesPath { get; set; }
-        public int CatalogMaxItems { get; set; } = 250;
+        public int CatalogMaxItems { get; set; } = 100;
         public string Url { get; set; } = "";
         public bool EnableSubs { get; set; } = false;
         public bool EnableMixed { get; set; } = true;
