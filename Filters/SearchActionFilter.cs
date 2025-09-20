@@ -6,11 +6,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Mvc.Controllers;
+using Gelato.Common;
+// using Gelato.Common;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -21,9 +19,10 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Querying;
-// using Gelato.Common;
-using Jellyfin.Data.Enums;
-using Gelato.Common;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters
 {
@@ -128,34 +127,42 @@ namespace Gelato.Filters
 
             if (requested.Contains(BaseItemKind.Movie))
             {
-                var movieFolder = _manager.TryGetMovieFolder(); 
-                if (movieFolder is not null) {
-                var movies = await _provider.SearchAsync(q, StremioMediaType.Movie);
-                metas.AddRange(movies);
-                } else {
-                  _log.LogWarning("no movie folder found, skipping search");
-                  if (requested.Count() == 1) {
-                    await next();
-                return;
-                  }
+                var movieFolder = _manager.TryGetMovieFolder();
+                if (movieFolder is not null)
+                {
+                    var movies = await _provider.SearchAsync(q, StremioMediaType.Movie);
+                    metas.AddRange(movies);
+                }
+                else
+                {
+                    _log.LogWarning("no movie folder found, skipping search");
+                    if (requested.Count() == 1)
+                    {
+                        await next();
+                        return;
+                    }
                 }
             }
 
-            
+
             if (requested.Contains(BaseItemKind.Series))
             {
-              var seriesFolder = _manager.TryGetSeriesFolder();
+                var seriesFolder = _manager.TryGetSeriesFolder();
 
 
-                if (seriesFolder is not null) {
-                var series = await _provider.SearchAsync(q, StremioMediaType.Series);
-                metas.AddRange(series);
-                      } else {
-                  _log.LogWarning("no series folder found, skipping search");
-                  if (requested.Count() == 1) {
-                    await next();
-                return;
-                  }
+                if (seriesFolder is not null)
+                {
+                    var series = await _provider.SearchAsync(q, StremioMediaType.Series);
+                    metas.AddRange(series);
+                }
+                else
+                {
+                    _log.LogWarning("no series folder found, skipping search");
+                    if (requested.Count() == 1)
+                    {
+                        await next();
+                        return;
+                    }
                 }
             }
 

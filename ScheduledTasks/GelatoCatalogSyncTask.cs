@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Model.Tasks;
-using Microsoft.Extensions.Logging;
 using Gelato;
 using Gelato.Common;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Tasks
 {
@@ -134,7 +134,7 @@ namespace Gelato.Tasks
 
                 }
             }
-           // _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
+            // _library.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None);
             _log.LogInformation("[Gelato] Catalog sync completed");
         }
     }

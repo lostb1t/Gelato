@@ -1,14 +1,14 @@
+using System;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
-using Jellyfin.Data.Enums;
-using System;
-using System.Diagnostics;
+using MediaBrowser.Model.Entities;
 
 namespace Gelato.Common;
 
@@ -50,48 +50,48 @@ public sealed class StremioUri
 
         return null;
     }
-    
+
     public static StremioUri? FromBaseItem(BaseItem item)
-{
-    if (item is null) throw new ArgumentNullException(nameof(item));
-
-    var kind = item.GetBaseItemKind();
-    var mediaType = kind switch
     {
-        BaseItemKind.Movie => StremioMediaType.Movie,
-        BaseItemKind.Series or BaseItemKind.Episode => StremioMediaType.Series,
-        _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}")
-    };
+        if (item is null) throw new ArgumentNullException(nameof(item));
 
-    var stremioId = item.GetProviderId("stremio");
-    if (!string.IsNullOrWhiteSpace(stremioId))
-        return StremioUri.FromString(stremioId);
+        var kind = item.GetBaseItemKind();
+        var mediaType = kind switch
+        {
+            BaseItemKind.Movie => StremioMediaType.Movie,
+            BaseItemKind.Series or BaseItemKind.Episode => StremioMediaType.Series,
+            _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}")
+        };
 
-    if (kind == BaseItemKind.Movie)
-    {
-        var imdb = item.GetProviderId(MetadataProvider.Imdb);
-        return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Movie, imdb);
+        var stremioId = item.GetProviderId("stremio");
+        if (!string.IsNullOrWhiteSpace(stremioId))
+            return StremioUri.FromString(stremioId);
+
+        if (kind == BaseItemKind.Movie)
+        {
+            var imdb = item.GetProviderId(MetadataProvider.Imdb);
+            return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Movie, imdb);
+        }
+
+        if (kind == BaseItemKind.Series)
+        {
+            var imdb = item.GetProviderId(MetadataProvider.Imdb);
+            return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Series, imdb);
+        }
+
+        if (kind == BaseItemKind.Episode)
+        {
+            var ep = (MediaBrowser.Controller.Entities.TV.Episode)item;
+            var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
+            if (string.IsNullOrWhiteSpace(seriesImdb) || ep.ParentIndexNumber is null || ep.IndexNumber is null)
+                return null;
+
+            var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
+            return new StremioUri(StremioMediaType.Series, ext);
+        }
+
+        return null;
     }
-
-    if (kind == BaseItemKind.Series)
-    {
-        var imdb = item.GetProviderId(MetadataProvider.Imdb);
-        return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Series, imdb);
-    }
-
-    if (kind == BaseItemKind.Episode)
-    {
-        var ep = (MediaBrowser.Controller.Entities.TV.Episode)item;
-        var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
-        if (string.IsNullOrWhiteSpace(seriesImdb) || ep.ParentIndexNumber is null || ep.IndexNumber is null)
-            return null;
-
-        var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
-        return new StremioUri(StremioMediaType.Series, ext);
-    }
-
-    return null;
-}
 
     public static StremioUri Parse(string id)
     {

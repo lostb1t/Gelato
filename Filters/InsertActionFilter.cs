@@ -1,19 +1,19 @@
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Logging;
+using Gelato.Common;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using MediaBrowser.Controller.Dto;
-using Jellyfin.Data.Enums;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Primitives;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
-using Gelato.Common;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 
 namespace Gelato.Filters;
 
@@ -61,10 +61,10 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
     {
-      
-     var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
 
-       // _log.LogInformation("Requested URL: {Url}", fullUrl); 
+        var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
+
+        // _log.LogInformation("Requested URL: {Url}", fullUrl); 
         if (!IsItemsAction(ctx))
         {
             await next();
@@ -111,51 +111,45 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         }
 
         //using (new TimedBlock("Process data")) {
-      
-       BaseItem? baseItem = null;
 
-try
-{
-    (baseItem, _) = await _manager.InsertMeta(
-        root,
-        meta,
-        false,
-        true,
-        CancellationToken.None);
-}
-catch (Exception)
-{
-  // Create a readable string from the dictionary
-  
-    // Fallback when the UI triggers this endpoint twice and causes a duplicate
-    var tempItem = _stremioProvider.IntoBaseItem(meta);
-var ids = string.Join(", ",
-    tempItem.ProviderIds.Select(kv => $"{kv.Key}:{kv.Value}"));
-_log.LogInformation("Retrying FindByProviderIds with ProviderIds: {ProviderIds}", ids);
+        BaseItem? baseItem = null;
 
-    //baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
-var timeout = TimeSpan.FromSeconds(10);
-var interval = TimeSpan.FromSeconds(1);
-var start = DateTime.UtcNow;
+        try
+        {
+            (baseItem, _) = await _manager.InsertMeta(
+                root,
+                meta,
+                false,
+                true,
+                CancellationToken.None);
+        }
+        catch (Exception)
+        {
 
-while (DateTime.UtcNow - start < timeout)
-{
-    baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
-    if (baseItem != null)
-        break;
+            // Fallback when the UI triggers this endpoint twice and causes a duplicate
+            var tempItem = _stremioProvider.IntoBaseItem(meta);
+            var timeout = TimeSpan.FromSeconds(10);
+            var interval = TimeSpan.FromSeconds(1);
+            var start = DateTime.UtcNow;
 
-    await Task.Delay(interval);
-}
+            while (DateTime.UtcNow - start < timeout)
+            {
+                baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+                if (baseItem != null)
+                    break;
 
- 
-  }
+                await Task.Delay(interval);
+            }
 
-if (baseItem is not null)
-{
-    ReplaceGuid(ctx, baseItem.Id);
-}
-      
-     // }
+
+        }
+
+        if (baseItem is not null)
+        {
+            ReplaceGuid(ctx, baseItem.Id);
+        }
+
+        // }
         await next();
     }
 

@@ -1,7 +1,7 @@
+using System;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
-using System;
 
 namespace Gelato.Configuration
 {

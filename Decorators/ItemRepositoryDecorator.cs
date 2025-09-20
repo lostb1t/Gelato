@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
-using Jellyfin.Database.Implementations.Entities;
 using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators
@@ -37,7 +37,7 @@ namespace Gelato.Decorators
                 || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetNextUp", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetLatestMedia", StringComparison.OrdinalIgnoreCase) 
+                || string.Equals(name, "GetLatestMedia", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetLatestMediaLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetResumeItemsLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetRecommendedPrograms", StringComparison.OrdinalIgnoreCase)
@@ -48,44 +48,44 @@ namespace Gelato.Decorators
         public BaseItem RetrieveItem(Guid id) => _inner.RetrieveItem(id);
         private const string AltTag = "Alternate";
 
-private bool ShouldExcludeAlternate()
-{
-    var ctx = _http?.HttpContext;
-    if (ctx == null) return false;
+        private bool ShouldExcludeAlternate()
+        {
+            var ctx = _http?.HttpContext;
+            if (ctx == null) return false;
 
-    return ctx.Items.TryGetValue("actionName", out var actionObj)
-        && actionObj is string actionName
-        && !string.IsNullOrEmpty(actionName)
-        && IsItemsActionName(actionName);
-}
+            return ctx.Items.TryGetValue("actionName", out var actionObj)
+                && actionObj is string actionName
+                && !string.IsNullOrEmpty(actionName)
+                && IsItemsActionName(actionName);
+        }
 
-private void ApplyAlternateFilter(InternalItemsQuery filter)
-{
-    if (!ShouldExcludeAlternate()) return;
+        private void ApplyAlternateFilter(InternalItemsQuery filter)
+        {
+            if (!ShouldExcludeAlternate()) return;
 
-    var tags = filter.ExcludeTags ?? Array.Empty<string>();
-    if (!tags.Contains(AltTag, StringComparer.OrdinalIgnoreCase))
-        filter.ExcludeTags = tags.Append(AltTag).ToArray();
-}
+            var tags = filter.ExcludeTags ?? Array.Empty<string>();
+            if (!tags.Contains(AltTag, StringComparer.OrdinalIgnoreCase))
+                filter.ExcludeTags = tags.Append(AltTag).ToArray();
+        }
 
-public QueryResult<BaseItem> GetItems(InternalItemsQuery filter)
-{
-    ApplyAlternateFilter(filter);
-    return _inner.GetItems(filter);
-}
+        public QueryResult<BaseItem> GetItems(InternalItemsQuery filter)
+        {
+            ApplyAlternateFilter(filter);
+            return _inner.GetItems(filter);
+        }
 
-public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
-{
-    ApplyAlternateFilter(filter);
-    return _inner.GetItemList(filter);
-}
-       
+        public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
+        {
+            ApplyAlternateFilter(filter);
+            return _inner.GetItemList(filter);
+        }
+
         public IReadOnlyList<Guid> GetItemIdsList(InternalItemsQuery filter)
-            => _inner.GetItemIdsList(filter); 
-        
+            => _inner.GetItemIdsList(filter);
+
         //public bool GetIsPlayed(User user, Guid id, bool recursive)
         //    => _inner.GetIsPlayed(user, id, recursive);
-        
+
         public IReadOnlyList<BaseItem> GetLatestItemList(InternalItemsQuery filter, CollectionType collectionType)
             => _inner.GetLatestItemList(filter, collectionType);
 

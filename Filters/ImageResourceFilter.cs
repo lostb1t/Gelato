@@ -4,14 +4,14 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Mvc;
-using MediaBrowser.Model.Dto;
-using MediaBrowser.Model.Querying;
-using Microsoft.AspNetCore.Mvc.Controllers;
 
 namespace Gelato.Filters;
 

@@ -1,11 +1,11 @@
 
 using MediaBrowser.Controller.Library;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Logging;
-using Microsoft.AspNetCore.Mvc.Controllers;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.Logging;
 // using Jellyfin.Api.Controllers;
 namespace Gelato.Filters;
 
@@ -41,16 +41,16 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             return;
         }
 
-       // var principal = ctx.HttpContext.User;
-       // userIdObj ??= ctx.HttpContext.User.Claims.FirstOrDefault(claim => claim.Type.Equals("Jellyfin-UserId", StringComparison.OrdinalIgnoreCase))?.Value;
+        // var principal = ctx.HttpContext.User;
+        // userIdObj ??= ctx.HttpContext.User.Claims.FirstOrDefault(claim => claim.Type.Equals("Jellyfin-UserId", StringComparison.OrdinalIgnoreCase))?.Value;
 
-    //    var user = userIdObj switch
-     //   {
-      //      string strUserId => _userManager.GetUserById(Guid.Parse(strUserId)),
-       //     Guid guidUserId => _userManager.GetUserById(guidUserId),
-       //     _ => null
-       // };
-       // _log.LogInformation($" DeleteResourceFilter invoked by {principal.Identity?.Name}");
+        //    var user = userIdObj switch
+        //   {
+        //      string strUserId => _userManager.GetUserById(Guid.Parse(strUserId)),
+        //     Guid guidUserId => _userManager.GetUserById(guidUserId),
+        //     _ => null
+        // };
+        // _log.LogInformation($" DeleteResourceFilter invoked by {principal.Identity?.Name}");
         // var claimsPrincipal = ctx.HttpContext.User;
         // var userIdStr = claimsPrincipal.Claims.FirstOrDefault(c => c.Type == "UserId")?.Value;
         // _log.LogInformation($"[Gelato] UserId claim: {userIdStr}");
