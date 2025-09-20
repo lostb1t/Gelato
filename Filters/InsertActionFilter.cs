@@ -112,7 +112,7 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
         //using (new TimedBlock("Process data")) {
       
-       BaseItem? baseItem;
+       BaseItem? baseItem = null;
 
 try
 {
@@ -125,10 +125,30 @@ try
 }
 catch (Exception)
 {
+  // Create a readable string from the dictionary
+  
     // Fallback when the UI triggers this endpoint twice and causes a duplicate
     var tempItem = _stremioProvider.IntoBaseItem(meta);
+var ids = string.Join(", ",
+    tempItem.ProviderIds.Select(kv => $"{kv.Key}:{kv.Value}"));
+_log.LogInformation("Retrying FindByProviderIds with ProviderIds: {ProviderIds}", ids);
+
+    //baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+var timeout = TimeSpan.FromSeconds(10);
+var interval = TimeSpan.FromSeconds(1);
+var start = DateTime.UtcNow;
+
+while (DateTime.UtcNow - start < timeout)
+{
     baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+    if (baseItem != null)
+        break;
+
+    await Task.Delay(interval);
 }
+
+ 
+  }
 
 if (baseItem is not null)
 {

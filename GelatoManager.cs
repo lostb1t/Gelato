@@ -939,9 +939,7 @@ if (!providerIds.ContainsKey("stremio"))
                     //  ParentId = seriesItem.Id,
                     SeriesId = seriesItem.Id,
                     SeriesName = seriesItem.Name,
-                   Path = seasonPath,
-                   // IsVirtualItem = false,
-                    //Path = null;
+                    Path = seasonPath,
                     SeriesPresentationUniqueKey = seriesItem.GetPresentationUniqueKey()
                 };
                 seasonItem.SetProviderId("stremio", seasonPath);
@@ -980,16 +978,14 @@ if (!providerIds.ContainsKey("stremio"))
                 {
                     Id = Guid.NewGuid(),
                     Name = epMeta.Name,
-                    IndexNumber = epMeta.Number,
+                    IndexNumber = epMeta.Episode,
                     ParentIndexNumber = epMeta.Season,
-                    //  ParentId = seasonItem.Id,
                     SeasonId = seasonItem.Id,
                     SeriesId = seriesItem.Id,
                     SeriesName = seriesItem.Name,
                     SeasonName = seasonItem.Name,
                     Path = epPath,
                     SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
-                    //ExternalId = null
                 };
 
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();

@@ -110,7 +110,6 @@ namespace Gelato.Filters
                     Items = Array.Empty<BaseItemDto>(),
                     TotalRecordCount = 0
                 });
-                await next();
                 return;
             }
 

@@ -267,11 +267,12 @@ namespace Gelato
             //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
             //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
             //item.LockedFields = locked.ToArray();
-
-            item.SetProviderId("stremio", $"stremio://{meta.Type}/{Id}");
+            
+            var stremioUri = new StremioUri(meta.Type, Id);
+            item.SetProviderId("stremio", stremioUri.ToString());
 
             // path is needed otherwise its set as placeholder and you cant play
-            item.Path = $"stremio://{meta.Type}/{Id}".ToLower();
+            item.Path = stremioUri.ToString();
             item.IsVirtualItem = false;
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
