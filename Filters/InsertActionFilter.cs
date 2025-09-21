@@ -62,9 +62,9 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
     public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
     {
       
-     var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
+  //   var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
 
-       // _log.LogInformation("Requested URL: {Url}", fullUrl); 
+  //  _log.LogInformation("Requested URL: {Url}", fullUrl); 
         if (!IsItemsAction(ctx))
         {
             await next();
@@ -156,30 +156,6 @@ if (baseItem is not null)
         await next();
     }
 
-    public void StartSeriesRefreshDettached(Folder series)
-    {
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                using var ct = new CancellationTokenSource();
-                var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-                {
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                    ForceSave = true
-                };
-                await series.RefreshMetadata(options, CancellationToken.None);
-                //ValidateChildren
-                //await _seriesManager.CreateSeriesTreesAsync(root, meta, false, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                //_log.LogError(ex, "Gelato: background refresh failed for {Name}", root.Name);
-            }
-        });
-    }
-
     private bool IsItemsAction(ResourceExecutingContext ctx)
     {
         if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
@@ -193,7 +169,6 @@ if (baseItem is not null)
 
     }
 
-
     private void ReplaceGuid(ResourceExecutingContext ctx, Guid value)
     {
         // Replace route values
@@ -206,22 +181,6 @@ if (baseItem is not null)
                 ctx.RouteData.Values[key] = value.ToString();
             }
         }
-
-        // Replace query string "ids"
-        // var request = ctx.HttpContext.Request;
-        // var parsed = QueryHelpers.ParseQuery(request.QueryString.Value ?? "");
-
-        // if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
-        // {
-        //     _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
-
-        //     var dict = new Dictionary<string, StringValues>(parsed)
-        //     {
-        //         ["ids"] = new StringValues(value.ToString())
-        //     };
-
-        //     ctx.HttpContext.Request.QueryString = QueryString.Create(dict);
-        // }
 
         // mutation for query is not allowed so we set it like this aswell.
         ctx.HttpContext.Items["GuidResolved"] = value;

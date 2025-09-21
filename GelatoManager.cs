@@ -24,7 +24,7 @@ using MediaBrowser.Model.Entities;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using MediaBrowser.Controller.Providers;          // MetadataRefreshOptions, MetadataRefreshMode, DirectoryService
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -119,6 +119,11 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         // _log.LogInformation("Retrieving StremioMeta for {Guid}", guid);
         return _memoryCache.TryGetValue($"meta:{guid}", out var value) ? value as StremioMeta : null;
     }
+    
+    public void RemoveStremioMeta(Guid guid)
+    {
+        _memoryCache.Remove($"meta:{guid}");
+    }
 
     public static void SeedFolder(string path)
     {
@@ -146,30 +151,6 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
             File.Delete(file);
         }
     }
-
-    // public Folder? TryGetMovieLibrary(PluginConfiguration cfg)
-    // {
-    //     if (cfg.MovieLibraryId is Guid id)
-    //         return _library.GetItemById(id) as Folder;
-    //     return null;
-    // }
-
-    // public static Folder? TryGetMovieFolder(this PluginConfiguration cfg, ILibraryManager library)
-    // {
-    //     // var lib = TryGetMovieLibrary(cfg, library);
-    //     // if (cfg.MovieFolderId is Guid id)
-    //     // {
-    //     //     return library.GetItemList(new InternalItemsQuery
-    //     //     {
-    //     //         ParentId = id
-    //     //     })
-    //     //         .OfType<Folder>()
-    //     //         .FirstOrDefault();
-    //     // }
-    //     if (cfg.MovieFolderId is Guid id)
-    //         return library.GetItemById(id) as Folder;
-    //     return null;
-    // }
 
     public Folder? TryGetMovieFolder()
     {
@@ -205,72 +186,6 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
             .OfType<Folder>()
             .FirstOrDefault();
     }
-
-
-    //     public void CreateStremioFolder(Folder parent)
-    //     {
-    //        // EnsureLib(parent);
-    //         // SeedFolder();
-    //         ///var pathInfo = new MediaPathInfo(path);
-    //        // _library.AddMediaPath(folder.Name, pathInfo);
-
-    //         // return TryGetMovieFolder()
-    //          var stremioFolder = new Folder
-    //         {
-    //              Name = "movies",
-    //              Id = _library.GetNewItemId("movies", typeof(Folder)),
-    //              // LocationType = LocationType.Virtual,
-    //              IsVirtualItem = true,
-    //              ParentId = parent.Id,
-    //              Path = path
-    //              // Path = "stremio://"
-    //          };
-    //         stremioFolder.PresentationUniqueKey = stremioFolder.CreatePresentationUniqueKey();
-    //         // // stremioFolder.SetParentId((Guid)cfg.MovieLibraryId);
-    //         // //library.CreateItem(stremioFolder);
-    //         // _library.CreateItem(stremioFolder, parent);
-    //         // parent.AddChild(stremioFolder);
-    //         // return stremioFolder;
-    //     }
-
-    // public Folder CreateVirtualFolder(Folder parent, string Name)
-    //     {
-    //        // EnsureLib(parent);
-    //        //  SeedFolder();
-    //         ///var pathInfo = new MediaPathInfo(path);
-    //        // _library.AddMediaPath(folder.Name, pathInfo);
-
-    //         // return TryGetMovieFolder()
-    //          var folder = new Folder
-    //         {
-    //              Name = Name,
-    //              Id = Guid.NewGuid(),
-    //              // LocationType = LocationType.Virtual,
-    //              IsVirtualItem = true,
-    //              ParentId = parent.Id,
-    //              Path = path
-    //              // Path = "stremio://"
-    //          };
-    //         folder.PresentationUniqueKey = folder.CreatePresentationUniqueKey();
-    //         // // stremioFolder.SetParentId((Guid)cfg.MovieLibraryId);
-    //         // //library.CreateItem(stremioFolder);
-    //         // _library.CreateItem(stremioFolder, parent);
-    //         parent.AddChild(folder);
-    //         //_library.AddMediaPath();
-    //         //_library.AddVirtualFolder("MoviesExternal", )
-    //         return folder;
-    //     }
-    // public static Folder? GetStremioFolder(this PluginConfiguration cfg, ILibraryManager library)
-    // {
-    //     // return library.GetItemList(new InternalItemsQuery
-    //     // {
-    //     //     ParentId = parent.Id
-    //     // })
-    //     //     .OfType<Folder>()
-    //     //     .FirstOrDefault(x => x.Name == "Stremio");
-    // }
-
-
 
     public async Task<string?> SaveStrmAsync(
     string path,
@@ -910,21 +825,14 @@ if (!providerIds.ContainsKey("stremio"))
         {
             seriesItem = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
             if (seriesItem.Id == Guid.Empty) seriesItem.Id = Guid.NewGuid();
-            // seriesItem.Path =  "stremio://{meta.Type}/{Id}";;
-              //providerIds.Add("stremio", $"stremio://{meta.Type}/{Id}"); 
             seriesItem.PresentationUniqueKey = seriesItem.CreatePresentationUniqueKey();
-           // seriesItem.IsVirtualItem = true;
-           // seriesItem.Path = null;
             seriesRootFolder.AddChild(seriesItem);
-            //         _provider.QueueRefresh(seriesItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
         }
-
-        //_log.LogInformation($"syncing series {seriesItem.Name}");
 
         foreach (var seasonGroup in groups)
         {
             ct.ThrowIfCancellationRequested();
-            var seasonIndex = seasonGroup.Key;
+            var seasonIndex = seasonGroup.Key;  
             var seasonPath = $"{seriesItem.Path}:{seasonIndex}";
 
             var seasonItem = _library.FindByPath(seasonPath, true) as Season;
@@ -936,7 +844,6 @@ if (!providerIds.ContainsKey("stremio"))
                     Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
                     IndexNumber = seasonIndex,
-                    //  ParentId = seriesItem.Id,
                     SeriesId = seriesItem.Id,
                     SeriesName = seriesItem.Name,
                     Path = seasonPath,
@@ -959,21 +866,17 @@ if (!providerIds.ContainsKey("stremio"))
 
             var desiredIds = new HashSet<Guid>();
 
-            // _log.LogInformation($"Gelato: syncing {existing.Count()}");
-
             foreach (var epMeta in seasonGroup)
             {
                 ct.ThrowIfCancellationRequested();
 
-                // _log.LogInformation($"Gelato: syncing series episode {seriesItem.Name} S{epMeta.Season:D2}E{epMeta.Episode:D2} {epMeta.Name}");
                 var epPath = $"{seasonItem.Path}:{epMeta.Number}";
 
                 if (existing.GetValueOrDefault(epPath) is not null)
                 {
-                    // _log.LogInformation($"Gelato: episode already exists, skipping");
                     continue;
                 }
-                // _log.LogInformation($"Gelato: creating series episode {seriesItem.Name} S{epMeta.Season:D2}E{epMeta.Number:D2} {epMeta.Name}");
+
                 var epItem = new Episode
                 {
                     Id = Guid.NewGuid(),
@@ -992,15 +895,6 @@ if (!providerIds.ContainsKey("stremio"))
                 epItem.SetProviderId("stremio", epItem.Path);
                 seasonItem.AddChild(epItem);
                 await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-                //    _provider.QueueRefresh(epItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High); 
-
-                //            _provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
-                //     await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-               // await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-                //await seriesItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-
-
-                // _repo.SaveItems(new BaseItem[] { epItem }, ct);
             }
         }
         
@@ -1008,8 +902,8 @@ if (!providerIds.ContainsKey("stremio"))
 
 var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
                 {
-                    MetadataRefreshMode = MetadataRefreshMode.None,    // Skip online lookups
-    ImageRefreshMode    = MetadataRefreshMode.None,    // Skip image fetches
+                    MetadataRefreshMode = MetadataRefreshMode.None,
+    ImageRefreshMode    = MetadataRefreshMode.None,
     ReplaceAllImages    = false,
     ReplaceAllMetadata  = false,
     ForceSave           = true

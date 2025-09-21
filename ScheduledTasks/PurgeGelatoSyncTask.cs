@@ -40,8 +40,8 @@ namespace Gelato.Tasks
 
         public string Name => "Gelato: WARNING purge all items";
         public string Key => "PurgeGelatoSyncTask";
-        public string Description => "Removes all stremio items ";
-        public string Category => "Gelato";
+        public string Description => "Removes all stremio items (local items are kept)";
+        public string Category => "Maintenance";
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
