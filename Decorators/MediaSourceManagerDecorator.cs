@@ -53,6 +53,19 @@ namespace Gelato.Decorators
             _directoryService = directoryService;
             _stremio = stremioProvider;
         }
+        
+        private static bool IsSingleItemList(HttpContext? ctx, Guid expectedId)
+        {
+            if (ctx?.Request?.Query is null) return false;
+            var q = ctx.Request.Query;
+            if (!q.TryGetValue("ids", out var idsRaw)) return false;
+
+            var ids = idsRaw
+                .SelectMany(v => v.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .ToArray();
+
+            return ids.Length == 1;
+        }
 
         public bool IsItemsActionName(string name)
         {
@@ -61,8 +74,98 @@ namespace Gelato.Decorators
                 || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
         }
-
+        
+        public bool IsList(string name)
+        {
+            return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
+        }
+        
         public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
+            BaseItem item,
+            bool enablePathSubstitution,
+            User user = null)
+        {
+            var manager = _manager.Value;
+            _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
+
+            if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(item)) ||
+                item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+            {
+                _log.LogDebug("GetStaticMediaSources not marked for streams");
+                return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+            }
+
+            var ctx = _http?.HttpContext;
+            var uri = StremioUri.FromBaseItem(item);
+
+            string? actionName = null;
+            if (ctx?.Items.TryGetValue("actionName", out var actionObj) == true)
+                actionName = actionObj as string;
+
+            var isItemsAction = IsItemsActionName(actionName ?? string.Empty);
+            var isListAction = IsList(actionName ?? string.Empty);
+
+            var allowSync =
+                isItemsAction &&
+                (!isListAction || IsSingleItemList(ctx, item.Id));
+
+            if (!allowSync)
+            {
+                _log.LogDebug("GetStaticMediaSources not a sync-eligible call. action={Action} list={IsList} uri={Uri}",
+                    actionName, isListAction, uri?.ToString());
+            }
+            else if (uri is not null && !manager.HasStreamSync(uri.ToString()))
+            {
+                _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
+
+                manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
+                manager.SetStreamSync(uri.ToString());
+
+                var query = new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                    HasAnyProviderId = item.ProviderIds,
+                    Recursive = true
+                };
+
+                var items = _libraryManager.GetItemList(query)
+                    .OfType<Video>()
+                    .ToArray();
+
+                if (items.Length > 1)
+                    manager.MergeVersions(items).GetAwaiter().GetResult();
+
+                item = _libraryManager.GetItemById(item.Id);
+            }
+
+            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
+
+            sources = sources
+                .Where(s => sources.Count <= 1 || s.Path == null || !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+                .Select((s, idx) =>
+                {
+                    if (s.Protocol != MediaProtocol.File && !string.IsNullOrEmpty(s.Name))
+                    {
+                        var k = s.Name.IndexOf('-');
+                        if (k >= 0 && k + 1 < s.Name.Length) s.Name = s.Name[(k + 1)..].Trim();
+                    }
+                    return (s, idx);
+                })
+                .OrderByDescending(t => t.s.Protocol == MediaProtocol.File)
+                .ThenBy(t => t.idx)
+                .Select(t => t.s)
+                .ToList();
+
+            if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
+
+            _log.LogDebug("GetStaticMediaSources finished for {Id} uri={Uri} action={Action}",
+                item.Id, uri?.ToString(), actionName);
+
+            return sources;
+          }
+
+        public IReadOnlyList<MediaSourceInfo> GetStaticMediaSourcesOld(
         BaseItem item,
         bool enablePathSubstitution,
         User user = null)
@@ -85,6 +188,7 @@ if (ctx?.Items.TryGetValue("actionName", out var actionObj) == true)
 {
     actionName = actionObj as string;
 }
+
             if (IsItemsActionName(actionName as string))
     {
       
