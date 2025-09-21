@@ -48,12 +48,12 @@ NOTICE: ONLY SUPPORTS 10.11
 - [x] Use Stremio streams as media sources
 - [x] Support search result images
 - [x] Import media from Stremio catalogs (scheduled task)
+- [x] Mixed library support (local files and streams)
+- [x] Add support for subtitle addons
 - [ ] Enable deletion of Stremio media items
 - [ ] Enable downloads of Stremio media items
-- [x] Add support for subtitle addons
 - [ ] Create collections from Stremio catalogs (scheduled task)
 - [ ] Add more settings (e.g. cache TTL, stream naming options)
-- [x] Mixed library support (local files and streams)
 
 ### FAQ
 
