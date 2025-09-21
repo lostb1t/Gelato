@@ -76,16 +76,22 @@ if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(ite
               return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }
 
-            var ctx = _http.HttpContext;
+            var ctx = _http?.HttpContext;
            // var imdb = item.GetProviderId(MetadataProvider.Imdb);
             var uri = StremioUri.FromBaseItem(item);
-            if (ctx != null && ctx.Items.TryGetValue("actionName", out var actionName) && IsItemsActionName(actionName as string))
+string? actionName = null;
+
+if (ctx?.Items.TryGetValue("actionName", out var actionObj) == true)
+{
+    actionName = actionObj as string;
+}
+            if (IsItemsActionName(actionName as string))
     {
       
         if (uri is not null && !manager.HasStreamSync(uri.ToString()))
         {
             var s = manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
-
+                         _log.LogDebug($"GetStaticMediaSources refreshing streams");
             manager.SetStreamSync(uri.ToString());
 
             var query = new InternalItemsQuery
@@ -106,8 +112,6 @@ if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(ite
         }
     }
 
-  
-
            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
 sources = sources
     .Where(s => sources.Count <= 1 || s.Path == null || !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
@@ -127,7 +131,7 @@ sources = sources
 
 if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
 
- _log.LogDebug($"GetStaticMediaSources finished for {item.Id}");
+ _log.LogDebug($"GetStaticMediaSources finished for {item.Id} uri: {uri?.ToString()} actionName: {actionName}");
 return sources;
 
         }
