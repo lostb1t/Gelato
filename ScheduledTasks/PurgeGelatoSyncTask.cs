@@ -97,7 +97,7 @@ namespace Gelato.Tasks
     }
 DeleteEmptyStremioContainers();
     progress?.Report(100.0);
-    _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
+    await _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
     _log.LogInformation("purge completed");
 }
     

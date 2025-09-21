@@ -110,6 +110,8 @@ if (ctx?.Items.TryGetValue("actionName", out var actionObj) == true)
             item = _libraryManager.GetItemById(item.Id);
             
         }
+    } else {
+       _log.LogDebug($"GetStaticMediaSources not a stream action actionName: {actionName}");
     }
 
            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();

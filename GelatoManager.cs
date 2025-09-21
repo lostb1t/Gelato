@@ -227,66 +227,6 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
                (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    public async Task<BaseItem?> WaitForMediaAsync(
-        Dictionary<string, string> providerIds,
-        TimeSpan timeout,
-        CancellationToken ct)
-    {
-        var stop = DateTime.UtcNow + timeout;
-
-        while (DateTime.UtcNow < stop)
-        {
-            var rootQ = new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Series },
-                Recursive = true,
-                Limit = 1,
-                HasAnyProviderId = providerIds
-            };
-
-            var root = _library.GetItemList(rootQ).FirstOrDefault();
-
-            if (root != null && await IsReadyAsync(root, ct).ConfigureAwait(false))
-                return root;
-
-            await Task.Delay(300, ct).ConfigureAwait(false);
-        }
-
-        return null;
-    }
-
-    private async Task<bool> IsReadyAsync(BaseItem root, CancellationToken ct)
-    {
-        // Must have a primary image before we consider it "ready"
-        if (!root.HasImage(ImageType.Primary))
-            return false;
-
-        // Movies: done
-        if (root is MediaBrowser.Controller.Entities.Movies.Movie)
-            return true;
-
-        // Series: require at least one season (no episode checks)
-        if (root is MediaBrowser.Controller.Entities.TV.Series series)
-        {
-            var seasonsQ = new InternalItemsQuery
-            {
-                ParentId = series.Id,
-                IncludeItemTypes = new[] { BaseItemKind.Season },
-                Recursive = false,
-                Limit = 1
-            };
-
-            var anySeason = _library.GetItemList(seasonsQ).FirstOrDefault();
-            if (anySeason is not null && !anySeason.HasImage(ImageType.Primary))
-            {
-                return false;
-            }
-            return anySeason is not null;
-        }
-
-        return true;
-    }
-
     /// <summary>
     /// Inserts metadata into the library. Skip if exists
     /// </summary>

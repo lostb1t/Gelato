@@ -40,8 +40,8 @@ namespace Gelato.Decorators
         {
             //Console.Write($"{name}\n");
             return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
+              //  || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
+              //  || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetNextUp", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetLatestMedia", StringComparison.OrdinalIgnoreCase) 
                 || string.Equals(name, "GetLatestMediaLegacy", StringComparison.OrdinalIgnoreCase)
