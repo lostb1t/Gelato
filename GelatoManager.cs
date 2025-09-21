@@ -311,6 +311,7 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         var found = FindByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
         if (found is not null)
         {
+                       _log.LogDebug($"InsertMeta: found existing item: {found.Id}");
             return (found, false);
         }
         //baseItem.IsDefault = true;
@@ -337,6 +338,7 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         _log.LogInformation($"inserted new media: {baseItem.Name}");
         if (baseItem is not null)
         {
+          _log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");
           if (queueRefreshItem) {
             _provider.QueueRefresh(
                     baseItem.Id,
@@ -477,6 +479,7 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
 
 public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     {
+        _log.LogDebug($"SyncStreams for {item.Id}");
         Episode? baseEp = item as Episode;
         bool isEpisode = baseEp is not null;
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
@@ -598,6 +601,8 @@ if (!providerIds.ContainsKey("stremio"))
 
         var keep = current.Where(m => desiredIds.Contains(m.Id));
         var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
+        
+        _log.LogDebug($"SyncStreams finished for {item.Id}");
         return merged.ToList();
     }
 

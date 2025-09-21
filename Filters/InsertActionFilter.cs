@@ -131,13 +131,15 @@ catch (Exception)
 var timeout  = TimeSpan.FromSeconds(10);
 var interval = TimeSpan.FromSeconds(1);
 var start    = DateTime.UtcNow;
-
+          _log.LogDebug($"Exceptiom during insert. Assuming race condition. Waiting for insert");
 while (DateTime.UtcNow - start < timeout)
 {
+  _log.LogDebug($"waiting");
 
     baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
     if (baseItem != null)
     {
+        _log.LogDebug($"found");
         break;
     }
 
@@ -161,7 +163,6 @@ if (baseItem is not null)
         if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
             return false;
 
-        // _log.LogInformation("Gelato: Action = {Action}", cad.ActionName);
         return string.Equals(cad.ActionName, "GetItems", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItem", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)

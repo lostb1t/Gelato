@@ -68,10 +68,11 @@ namespace Gelato.Decorators
         User user = null)
         {
             var manager = _manager.Value;
-
+           _log.LogDebug($"GetStaticMediaSources {item.Id}");
            // var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
 if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(item)) || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
 {
+                         _log.LogDebug($"GetStaticMediaSources not marked for streams");
               return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }
 
@@ -85,7 +86,6 @@ if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(ite
         {
             var s = manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
 
-           // _log.LogInformation($"HO {item.GetBaseItemKind()}");
             manager.SetStreamSync(uri.ToString());
 
             var query = new InternalItemsQuery
@@ -102,9 +102,7 @@ if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(ite
             if (items.Length > 1)
                 manager.MergeVersions(items).GetAwaiter().GetResult();
             item = _libraryManager.GetItemById(item.Id);
-          // item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-           //            .GetAwaiter().GetResult();
-           // _libraryManager.UpdateItemAsync(item, ItemUpdateType.MetadataEdit, CancellationToken.None).GetAwaiter().GetResult();
+            
         }
     }
 
@@ -128,6 +126,8 @@ sources = sources
     .ToList();
 
 if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
+
+ _log.LogDebug($"GetStaticMediaSources finished for {item.Id}");
 return sources;
 
         }
