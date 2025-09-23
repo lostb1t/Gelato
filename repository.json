@@ -190,62 +190,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-09-15T15:54:59Z",
         "version": "0.4.2.0"
-      },
-      {
-        "changelog": "New release",
-        "checksum": "ba51903eb8320a9a9436525a887efde9",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.3.0.0/gelato_0.3.0.0.zip",
-        "targetAbi": "10.10.7.0",
-        "timestamp": "2025-09-14T13:18:01Z",
-        "version": "0.3.0.0"
-      },
-      {
-        "changelog": "New release",
-        "checksum": "d90952b2b88ae2604874c940fcdfef8c",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.2.12.0/gelato_0.2.11.0.zip",
-        "targetAbi": "10.10.7.0",
-        "timestamp": "2025-09-11T13:51:46Z",
-        "version": "0.2.11.0"
-      },
-      {
-        "changelog": "New release",
-        "checksum": "fa19a9c11b635b1ea7f10120ba98abe8",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.2.10.0/gelato_0.2.10.0.zip",
-        "targetAbi": "10.10.7.0",
-        "timestamp": "2025-09-10T19:20:06Z",
-        "version": "0.2.10.0"
-      },
-      {
-        "changelog": "New release",
-        "checksum": "174ecb5c6bc7c52c4df96b907239c4ff",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.2.9.0/gelato_0.2.9.0.zip",
-        "targetAbi": "10.10.7.0",
-        "timestamp": "2025-09-10T18:06:41Z",
-        "version": "0.2.9.0"
-      },
-      {
-        "changelog": "New release",
-        "checksum": "7c7145f7b73f5a07ccd50f1513a6cd87",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.2.8.0/gelato_0.2.8.0.zip",
-        "targetAbi": "10.10.7.0",
-        "timestamp": "2025-09-10T10:51:30Z",
-        "version": "0.2.8.0"
-      },
-      {
-        "changelog": "New release",
-        "checksum": "9d6280055f37b1f2d5c037e2d062ed58",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.2.7.0/gelato_0.2.7.0.zip",
-        "targetAbi": "10.10.7.0",
-        "timestamp": "2025-09-09T17:51:06Z",
-        "version": "0.2.7.0"
-      },
-      {
-        "changelog": "New release",
-        "checksum": "7275441f0bb78d6833453e0bb5c1a211",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.2.6.0/gelato_0.2.6.0.zip",
-        "targetAbi": "10.10.7.0",
-        "timestamp": "2025-09-08T17:35:46Z",
-        "version": "0.2.6.0"
       }
     ]
   }
