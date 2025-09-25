@@ -5,8 +5,6 @@
     <AssemblyName>Gelato</AssemblyName>
     <RootNamespace>Gelato</RootNamespace>
         <ImplicitUsings>enable</ImplicitUsings>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <!-- <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies> -->
   </PropertyGroup>
 
   <ItemGroup>
