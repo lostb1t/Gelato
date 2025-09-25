@@ -14,9 +14,9 @@
     <PackageReference Include="Jellyfin.Controller" Version="10.*-*" />
     <PackageReference Include="Jellyfin.Common" Version="10.*-*" /> -->
 
-    <PackageReference Include="Jellyfin.Model" Version="10.11.0-rc6" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.0-rc6" />
-    <PackageReference Include="Jellyfin.Common" Version="10.11.0-rc6" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.*-*" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.*-*" />
+    <PackageReference Include="Jellyfin.Common" Version="10.11.*-*" />
   </ItemGroup>
 
     <ItemGroup>
