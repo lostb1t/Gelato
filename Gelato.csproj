@@ -2,28 +2,25 @@
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <LangVersion>latest</LangVersion>
     <AssemblyName>Gelato</AssemblyName>
     <RootNamespace>Gelato</RootNamespace>
-  <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
-
+        <ImplicitUsings>enable</ImplicitUsings>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <!-- <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies> -->
   </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Model" Version="10.*-*" />
+    <!-- <PackageReference Include="Jellyfin.Model" Version="10.*-*" />
     <PackageReference Include="Jellyfin.Controller" Version="10.*-*" />
-    <PackageReference Include="Jellyfin.Common" Version="10.*-*" />
+    <PackageReference Include="Jellyfin.Common" Version="10.*-*" /> -->
+
+    <PackageReference Include="Jellyfin.Model" Version="10.11.0-rc6" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.0-rc6" />
+    <PackageReference Include="Jellyfin.Common" Version="10.11.0-rc6" />
   </ItemGroup>
 
     <ItemGroup>
       <EmbeddedResource Include="Config\config.html" />
     </ItemGroup>
-
-  <!-- <ItemGroup>
-    <Reference Include="Jellyfin.Api">
-      <HintPath>Vendor\Jellyfin.Api.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup> -->
 
 </Project>

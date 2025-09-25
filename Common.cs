@@ -9,6 +9,9 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
+using System.Threading.Tasks;
+using System.Threading;
+using System.IO;
 
 namespace Gelato.Common;
 

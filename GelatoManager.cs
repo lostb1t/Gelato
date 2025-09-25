@@ -3,6 +3,7 @@
 #pragma warning disable SA1615
 #pragma warning disable CS0165
 
+using System.Collections.Generic;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;

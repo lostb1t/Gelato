@@ -5,6 +5,9 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+
 
 namespace Gelato;
 

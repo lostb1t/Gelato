@@ -4,6 +4,7 @@
 #pragma warning disable CS0165
 
 // using Jellyfin.Api.Controllers;
+using System.Threading.Tasks;
 using Gelato.Controllers;
 // using Jellyfin.Api.Extensions;
 using Jellyfin.Extensions;
