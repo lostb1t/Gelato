@@ -10,7 +10,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-//using MediaBrowser.Model.Dto;
+using MediaBrowser.Controller.Dto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -47,18 +47,18 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         });
 
         
-        //var original_repo = services.First(sd => sd.ServiceType == typeof(IItemRepository));
-        //services.Remove(original_repo);
+        //var originalDto = services.First(sd => sd.ServiceType == typeof(IDtoService));
+       // services.Remove(originalDto);
 
-        //services.AddSingleton<IItemRepository>(sp =>
-        //{
-        //    IItemRepository inner =
-        //        original_repo.ImplementationInstance as IItemRepository
-        //        ?? (IItemRepository)(original_repo.ImplementationFactory?.Invoke(sp)
-        //            ?? ActivatorUtilities.CreateInstance(sp, original_repo.ImplementationType!));
+       // services.AddSingleton<IDtoService>(sp =>
+       // {
+      //      IDtoService inner =
+       //         originalDto.ImplementationInstance as IDtoService
+       //         ?? (IDtoService)(originalDto.ImplementationFactory?.Invoke(sp)
+       //             ?? ActivatorUtilities.CreateInstance(sp, originalDto.ImplementationType!));
 //
-       //     return ActivatorUtilities.CreateInstance<ItemRepositoryDecorator>(sp, inner);
-        //});
+ //           return ActivatorUtilities.CreateInstance<DtoServiceDecorator>(sp, inner);
+ //       });
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {

@@ -159,9 +159,13 @@ namespace Gelato.Decorators
 
             if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
 
+            if (sources.Count == 1 && manager.IsStremio(item)) {
+           item.IsVirtualItem = true;
+           item.Path = null;
+          }
             _log.LogDebug("GetStaticMediaSources finished for {Id} uri={Uri} action={Action}",
                 item.Id, uri?.ToString(), actionName);
-
+         
             return sources;
           }
 

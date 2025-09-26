@@ -279,13 +279,15 @@ public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
         _log.LogInformation($"inserted new media: {baseItem.Name}");
         if (baseItem is not null)
         {
-          _log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");
+
           if (queueRefreshItem) {
+                      _log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");
             _provider.QueueRefresh(
                     baseItem.Id,
                       options,
                                   RefreshPriority.High);
           } else if (refreshItem) {
+            _log.LogDebug($"InsertMeta: refresh for: {baseItem.Id}");
              await _provider.RefreshFullItem(baseItem, options, ct);
             }
         }
