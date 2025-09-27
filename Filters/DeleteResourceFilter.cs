@@ -11,11 +11,8 @@ using Microsoft.Extensions.Logging;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using Microsoft.AspNetCore.Mvc;
-// using Jellyfin.Api.Controllers;
+
 namespace Gelato.Filters;
-
-// using Microsoft.AspNetCore.Mvc.Filters;
-
 
 public sealed class DeleteResourceFilter : IAsyncActionFilter
 {
@@ -57,13 +54,11 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
 
         var principal = ctx.HttpContext.User;
         var userIdStr = ctx.HttpContext.User.Claims.FirstOrDefault(c => c.Type == "UserId" || c.Type == "Jellyfin-UserId")?.Value;
-        _log.LogInformation($"[Gelato] UserId claim: {userIdStr}");
 
         User? user = null;
         if (Guid.TryParse(userIdStr, out var userId))
         {
             user = _userManager.GetUserById(userId);
-            Console.WriteLine($"[Gelato] Current user: {user.Username}");
         }
 
         if (user is not null)
@@ -75,7 +70,7 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
                 {
                     if (_manager.CanDelete(item, user))
                     {
-                        _log.LogInformation($"[Gelato] Deleting {item.Name}");
+                        _log.LogInformation($"deleting {item.Name}");
                         _library.DeleteItem(
                             item,
                             new DeleteOptions { DeleteFileLocation = false },
