@@ -63,10 +63,10 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
 
     public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
     {
-      
-  //   var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
 
-  //  _log.LogInformation("Requested URL: {Url}", fullUrl); 
+        //   var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
+
+        //  _log.LogInformation("Requested URL: {Url}", fullUrl);
         if (!IsItemsAction(ctx))
         {
             await next();
@@ -113,50 +113,50 @@ public class InsertActionFilter : IAsyncResourceFilter, IOrderedFilter
         }
 
         //using (new TimedBlock("Process data")) {
-      
-       BaseItem? baseItem = null;
 
-try
-{
-    (baseItem, _) = await _manager.InsertMeta(
-        root,
-        meta,
-        false,
-        true,
-        CancellationToken.None);
-}
-catch (Exception)
-{
+        BaseItem? baseItem = null;
 
-    // Fallback when the UI triggers this endpoint twice and causes a duplicate
-    var tempItem = _stremioProvider.IntoBaseItem(meta);   
-var timeout  = TimeSpan.FromSeconds(10);
-var interval = TimeSpan.FromSeconds(1);
-var start    = DateTime.UtcNow;
-          _log.LogDebug($"Exceptiom during insert. Assuming race condition. Waiting for insert");
-while (DateTime.UtcNow - start < timeout)
-{
-  _log.LogDebug($"waiting");
+        try
+        {
+            (baseItem, _) = await _manager.InsertMeta(
+                root,
+                meta,
+                false,
+                true,
+                CancellationToken.None);
+        }
+        catch (Exception)
+        {
 
-    baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
-    if (baseItem != null)
-    {
-        _log.LogDebug($"found");
-        break;
-    }
+            // Fallback when the UI triggers this endpoint twice and causes a duplicate
+            var tempItem = _stremioProvider.IntoBaseItem(meta);
+            var timeout = TimeSpan.FromSeconds(10);
+            var interval = TimeSpan.FromSeconds(1);
+            var start = DateTime.UtcNow;
+            _log.LogDebug($"Exceptiom during insert. Assuming race condition. Waiting for insert");
+            while (DateTime.UtcNow - start < timeout)
+            {
+                _log.LogDebug($"waiting");
 
-    await Task.Delay(interval);
-}
+                baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+                if (baseItem != null)
+                {
+                    _log.LogDebug($"found");
+                    break;
+                }
 
- 
-  }
+                await Task.Delay(interval);
+            }
 
-if (baseItem is not null)
-{
-    ReplaceGuid(ctx, baseItem.Id);
-}
-      
-     // }
+
+        }
+
+        if (baseItem is not null)
+        {
+            ReplaceGuid(ctx, baseItem.Id);
+        }
+
+        // }
         await next();
     }
 

@@ -26,13 +26,14 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         //services.AddSingleton<SourceActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
-        // services.AddSingleton<DeleteResourceFilter>();
+        services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<GelatoManager>();
         services.AddSingleton(sp =>
-    new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
+            new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
         //  services.AddSingleton<IMediaSourceProvider, GelatoSourceProvider>();
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
+
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
         services.Remove(original);
 
@@ -46,19 +47,19 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             return ActivatorUtilities.CreateInstance<MediaSourceManagerDecorator>(sp, inner);
         });
 
-        
-        //var originalDto = services.First(sd => sd.ServiceType == typeof(IDtoService));
-       // services.Remove(originalDto);
 
-       // services.AddSingleton<IDtoService>(sp =>
-       // {
-      //      IDtoService inner =
-       //         originalDto.ImplementationInstance as IDtoService
-       //         ?? (IDtoService)(originalDto.ImplementationFactory?.Invoke(sp)
-       //             ?? ActivatorUtilities.CreateInstance(sp, originalDto.ImplementationType!));
-//
- //           return ActivatorUtilities.CreateInstance<DtoServiceDecorator>(sp, inner);
- //       });
+        var originalDto = services.First(sd => sd.ServiceType == typeof(IDtoService));
+        services.Remove(originalDto);
+
+        services.AddSingleton<IDtoService>(sp =>
+        {
+            IDtoService inner =
+               originalDto.ImplementationInstance as IDtoService
+               ?? (IDtoService)(originalDto.ImplementationFactory?.Invoke(sp)
+                   ?? ActivatorUtilities.CreateInstance(sp, originalDto.ImplementationType!));
+
+            return ActivatorUtilities.CreateInstance<DtoServiceDecorator>(sp, inner);
+        });
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
@@ -67,7 +68,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<PlaybackInfoFilter>(order: 2);
             //o.Filters.AddService<SourceActionFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
-            // o.Filters.AddService<DeleteResourceFilter>();
+            o.Filters.AddService<DeleteResourceFilter>();
         });
     }
 }

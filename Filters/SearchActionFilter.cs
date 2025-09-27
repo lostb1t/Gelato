@@ -181,7 +181,7 @@ namespace Gelato.Filters
                 
                // make them "unplayable" so user is forced to details
                baseItem.Path = null;
-               baseItem.IsVirtualItem = false;
+               baseItem.IsVirtualItem = true;
                
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.FromString(stremioKey);
