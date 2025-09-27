@@ -5,7 +5,13 @@
 <div align="center">
   <h1><b>Gelato</b></h1>
   <p><i>Jellyfin Stremio Integration Plugin</i></p>
+
+  <a href="https://discord.gg/t8mt5xbUk">
+    <img src="https://img.shields.io/badge/Talk%20on-Discord-brightgreen">
+  </a>
+
 </div>
+
 
 Bring the power of Stremio addons directly into Jellyfin. This plugin replaces Jellyfin’s default search with Stremio-powered results and can automatically import entire catalogs into your library through scheduled tasks — seamlessly injecting them into Jellyfin’s database so they behave like native items.
 
