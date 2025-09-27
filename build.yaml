@@ -1,7 +1,7 @@
 ---
 name: "Gelato"
 guid: "94EA4E14-8163-4989-96FE-0A2094BC2D6A"
-version: "0.7.6.0"
+version: "0.7.7.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "lstb1t"
