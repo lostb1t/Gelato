@@ -27,6 +27,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
+        services.AddSingleton<DownloadFilter>();
         services.AddSingleton<GelatoManager>();
         services.AddSingleton(sp =>
             new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
@@ -69,6 +70,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             //o.Filters.AddService<SourceActionFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
+            o.Filters.AddService<DownloadFilter>();
         });
     }
 }

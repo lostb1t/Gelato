@@ -70,6 +70,9 @@ namespace Gelato.Decorators
             {
                 dto.CanDelete = true;
             }
+            if (manager.IsStremio(dto)) {
+              dto.CanDownload = true;
+          }
         }
     }
 }
