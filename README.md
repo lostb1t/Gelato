@@ -13,15 +13,14 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
     <img src="https://img.shields.io/badge/Talk%20on-Discord-brightgreen">
   </a>
 
-
-NOTICE: ONLY SUPPORTS 10.11
-
 ### Features
 - **Unified Search** – Jellyfin search now pulls results from Stremio addons
 - **Catalogs** – Import items from stremio catalogs into your library with scheduled tasks
 - **Realtime Streaming** – Streams are resolved on demand and play instantly
 - **Database Integration** – Stremio items appear like native Jellyfin items
 - **More Content, Less Hassle** – Expand Jellyfin with community-driven Stremio catalogs
+
+NOTICE: ONLY SUPPORTS 10.11
 
 ## Usage
 
