@@ -110,7 +110,10 @@ namespace Gelato.Tasks
                             }
                             catch (Exception ex)
                             {
-                                _log.LogWarning(ex, "insert meta failed for {Id}", meta.Id);
+  _log.LogError("Insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+        meta?.Id,
+        ex.Message,
+        ex.StackTrace);
                             }
                             processed++;
                             done++;

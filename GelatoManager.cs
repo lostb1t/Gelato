@@ -269,10 +269,10 @@ public class GelatoManager
             baseItem = await CreateSeriesTreesAsync(parent, meta, ct);
         }
 
-        _log.LogInformation($"inserted new media: {baseItem.Name}");
+
         if (baseItem is not null)
         {
-
+            _log.LogInformation($"inserted new media: {baseItem.Name}");
             if (queueRefreshItem)
             {
                 _log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");
@@ -763,20 +763,24 @@ public class GelatoManager
            StremioMeta seriesMeta,
            CancellationToken ct)
     {
-        if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
+        if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path)){
+             _log.LogWarning($"seriesRootFolder null or empty for {seriesMeta.Id}");
             return null;
-
+}
         var providerIds = seriesMeta.GetProviderIds();
-        if (providerIds is null || providerIds.Count == 0)
+        if (providerIds is null || providerIds.Count == 0){
+             _log.LogWarning($"no providers found for {seriesMeta.Id}");
             return null;
-
+}
         var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode)
             .GroupBy(e => e.Season)
             .ToList();
-        if (groups.Count == 0)
+        if (groups.Count == 0) {
+             _log.LogWarning($"no episodes found for {seriesMeta.Id}");
             return null;
+          }
 
         //var seriesStremioUri = StremioUri.LoadFromString(stremioKey);
         var seriesItem = _library.GetItemList(new InternalItemsQuery
@@ -864,8 +868,6 @@ public class GelatoManager
                 await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
             }
         }
-
-
 
         var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
         {
