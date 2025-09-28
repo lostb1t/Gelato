@@ -158,11 +158,10 @@ namespace Gelato.Decorators
                 .ToList();
 
             if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
+            
             // mark unplayable
-            if (allowSync && sources.Count == 1 && sources[0].Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+            if (allowSync && sources.Count == 1 && sources[0].Path is not null && sources[0].Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
             {
-                _log.LogInformation("GetStaticMediaSources NO SOURCES");
-
                 item.IsVirtualItem = true;
                 item.Path = null;
             }
@@ -270,8 +269,6 @@ namespace Gelato.Decorators
         bool enablePathSubstitution,
         CancellationToken ct)
         {
-            //if (!item.MediaType == MediaType.Video
-            //if (!IsExternal(item))
             if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
                 return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct);
 
@@ -338,6 +335,11 @@ namespace Gelato.Decorators
             if (GelatoPlugin.Instance!.Configuration.EnableSubs)
             {
                 AddSubtitleStreams(item, selected);
+            }
+            
+            if (item.RunTimeTicks is null && selected.RunTimeTicks is not null) {
+              item.RunTimeTicks = selected.RunTimeTicks;
+              await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
             }
 
             return selected is null ? new List<MediaSourceInfo>() : new List<MediaSourceInfo> { selected };
