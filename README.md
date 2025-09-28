@@ -56,6 +56,7 @@ NOTICE: ONLY SUPPORTS 10.11
 - [x] Add support for subtitle addons
 - [x] Enable deletion of Stremio media items
 - [x] Enable downloads of Stremio media items
+- [ ] Implement p2p
 - [ ] Create collections from Stremio catalogs (scheduled task)
 - [ ] Add more settings (e.g. cache TTL, stream naming options)
 
