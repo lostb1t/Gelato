@@ -5,7 +5,7 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
 
     <PackageId>Jellyfin.CodeAnalysis</PackageId>
-    <Version>10.11.0-rc6</Version> <!-- must match what your build wants -->
+    <Version>10.11.0-rc7</Version>
     <Authors>Fake</Authors>
     <Description>Empty placeholder package to satisfy NuGet restore.</Description>
     <PackageType>Analyzer</PackageType>
