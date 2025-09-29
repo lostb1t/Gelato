@@ -425,6 +425,7 @@ public class GelatoManager
         if (parent is null) return new List<Video>();
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
+        providerIds.Remove("TmdbCollection");
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null)
         {
@@ -559,7 +560,6 @@ public class GelatoManager
             return;
         }
 
-
         // try to get a persistsnt value
         var primaryVersion =
         items.FirstOrDefault(i => i.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true)
@@ -583,24 +583,14 @@ public class GelatoManager
         {
             v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
             v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-
-            //  _log.LogInformation($"{v.Id} {v.Tags.Count()}");
-            //v.SetProviderId("altver", "1");
-            //v.OwnerId = primaryVersion.Id;
-            // v.Tags = v.Tags
-            // .Append("Alternate")
-            // .Distinct(StringComparer.OrdinalIgnoreCase)
-            // .ToArray();
+            
             await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                    .ConfigureAwait(false);
         }
 
         primaryVersion.LinkedAlternateVersions = replacementLinks;
         primaryVersion.SetPrimaryVersionId(null);
-        // primaryVersion.Tags = primaryVersion.Tags
-        //.Where(t => !string.Equals(t, "Alternate", StringComparison.OrdinalIgnoreCase))
-        //.ToArray();
-        //  primaryVersion.OwnerId = Guid.Empty;
+        
         await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                            .ConfigureAwait(false);
     }
