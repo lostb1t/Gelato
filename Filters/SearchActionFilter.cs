@@ -180,8 +180,9 @@ namespace Gelato.Filters
                     continue;
                 
                // make them "unplayable" so user is forced to details
-               baseItem.Path = null;
-               baseItem.IsVirtualItem = true;
+               // uch.. infuse doesnt like empty paths
+                //baseItem.Path = null;
+                baseItem.IsVirtualItem = true;
                
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.FromString(stremioKey);

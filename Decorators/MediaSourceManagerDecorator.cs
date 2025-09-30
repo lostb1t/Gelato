@@ -72,6 +72,7 @@ namespace Gelato.Decorators
             return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -263,6 +264,90 @@ namespace Gelato.Decorators
         public IReadOnlyList<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query) => _inner.GetMediaAttachments(query);
 
         public async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSources(
+    BaseItem item,
+    User user,
+    bool allowMediaProbe,
+    bool enablePathSubstitution,
+    CancellationToken ct)
+{
+    if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+        return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
+
+    var manager = _manager.Value;
+    var ctx = _http.HttpContext;
+
+    static bool NeedsProbe(MediaSourceInfo s) =>
+        (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
+
+    BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
+        Guid.TryParse(s.Id, out var g) ? (_libraryManager.GetItemById(g) ?? fallback) : fallback;
+
+   // var sources = await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
+    var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
+    string? mediaSourceId =
+        ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true && idObj is string idStr ? idStr
+        : manager.IsStremioPlaceholder(item) && sources.Count > 0 ? sources.First().Id
+        : null;
+
+    _log.LogDebug("GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}", item.Id, mediaSourceId);
+
+    var selected =
+        (!string.IsNullOrEmpty(mediaSourceId)
+            ? sources.FirstOrDefault(s => string.Equals(s.Id, mediaSourceId, StringComparison.OrdinalIgnoreCase))
+            : sources.FirstOrDefault())
+        ?? sources.FirstOrDefault();
+
+    if (selected is null)
+        return sources;
+
+    var owner = ResolveOwnerFor(selected, item);
+    if (owner.Id != item.Id)
+    {                
+      sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
+        //sources = await _inner.GetPlaybackMediaSources(owner, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
+
+        selected = !string.IsNullOrEmpty(selected.Id)
+            ? sources.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? sources.FirstOrDefault()
+            : sources.FirstOrDefault();
+    }
+
+    if (selected is null)
+        return sources;
+
+       // _log.LogDebug("Togo {ItemId} ={MediaSourceId}", allowMediaProbe, NeedsProbe(selected));
+    
+    if (NeedsProbe(selected))
+    {
+        await owner.RefreshMetadata(
+            new MetadataRefreshOptions(_directoryService)
+            {
+                EnableRemoteContentProbe = true,
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh
+            },
+            ct).ConfigureAwait(false);
+
+        var refreshed = GetStaticMediaSources(owner, enablePathSubstitution, user);
+        selected = !string.IsNullOrEmpty(selected.Id)
+            ? refreshed.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? refreshed.FirstOrDefault()
+            : refreshed.FirstOrDefault();
+
+        if (selected is null)
+            return refreshed;
+    }
+
+    if (GelatoPlugin.Instance!.Configuration.EnableSubs)
+        AddSubtitleStreams(item, selected);
+
+    if (item.RunTimeTicks is null && selected?.RunTimeTicks is not null)
+    {
+        item.RunTimeTicks = selected.RunTimeTicks;
+        await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+    }
+
+    return selected is null ? Array.Empty<MediaSourceInfo>() : new[] { selected };
+}
+        
+        public async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSourcesOld(
         BaseItem item,
         User user,
         bool allowMediaProbe,
@@ -272,18 +357,17 @@ namespace Gelato.Decorators
             if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
                 return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct);
 
+                         var manager = _manager.Value;
+            
             var sources = await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct);
             var ctx = _http.HttpContext;
 
             //static bool IsStremio(BaseItem? i) =>
             //   i?.Path != null && i.Path.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase);
 
-            static bool NeedsProbe(BaseItem? i, MediaSourceInfo s) =>
-                i is not null
-                && i.MediaType == MediaType.Video
-                //  && !IsStremio(i)
-                && (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
 
+static bool NeedsProbe(MediaSourceInfo s) =>
+                (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
             //MediaSourceInfo? PickFirst(BaseItem owner) =>
             //     GetStaticMediaSources(owner, enablePathSubstitution, user).FirstOrDefault();
 
@@ -291,8 +375,11 @@ namespace Gelato.Decorators
                 => Guid.TryParse(s.Id, out var g) ? (_libraryManager.GetItemById(g) ?? fallback) : fallback;
 
             string? mediaSourceId =
-                ctx is not null && ctx.Items.TryGetValue("MediaSourceId", out var idObj) && idObj is string idStr
-                    ? idStr : null;
+    ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true && idObj is string idStr ? idStr
+    : manager.IsStremioPlaceholder(item) && sources.Count > 0 ? sources.First().Id
+    : null;
+            
+            _log.LogDebug("GetPlaybackMediaSources {Id} mediaSource {mediaSourceId}", item.Id, mediaSourceId);
 
             MediaSourceInfo? selected;
             BaseItem owner;
@@ -313,10 +400,10 @@ namespace Gelato.Decorators
 
             if (selected is null)
                 return sources;
-
+            _log.LogDebug("YOGO", item.Id, mediaSourceId);
             var probeOwner = ResolveOwnerFor(selected, owner);
 
-            if (allowMediaProbe && NeedsProbe(probeOwner, selected))
+            if (allowMediaProbe && NeedsProbe(selected))
             {
                 await probeOwner.RefreshMetadata(
                     new MetadataRefreshOptions(_directoryService)

@@ -23,9 +23,9 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
         // always save action name
         if (ctx.ActionDescriptor is ControllerActionDescriptor cad)
         {
-
             ctx.HttpContext.Items["actionName"] = cad.ActionName;
         }
+
         // Already captured on this request? bail.
         if (ctx.HttpContext.Items.ContainsKey(Key))
         {

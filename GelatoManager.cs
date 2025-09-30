@@ -134,18 +134,6 @@ public class GelatoManager
         await fs.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
     }
 
-    public void DeleteStrmFiles(string folderPath)
-    {
-        if (!Directory.Exists(folderPath))
-            return;
-
-        var strmFiles = Directory.GetFiles(folderPath, "*.strm", SearchOption.TopDirectoryOnly);
-        foreach (var file in strmFiles)
-        {
-            File.Delete(file);
-        }
-    }
-
     public Folder? TryGetMovieFolder()
     {
         var cfg = GelatoPlugin.Instance!.Configuration;
@@ -179,40 +167,6 @@ public class GelatoManager
         })
             .OfType<Folder>()
             .FirstOrDefault();
-    }
-
-    public async Task<string?> SaveStrmAsync(
-    string path,
-    string url,
-    bool overwrite = true,
-    CancellationToken ct = default)
-    {
-        if (!IsValidUrl(url))
-        {
-            _log.LogWarning("Skipping STRM creation: invalid URL '{Url}' at {Path}", url, path);
-            return null;
-        }
-
-        var target = Path.ChangeExtension(path, ".strm");
-        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-
-        var tmp = target + ".tmp";
-        var data = Encoding.UTF8.GetBytes(url.Trim() + "\n");
-
-        await using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true))
-        {
-            await fs.WriteAsync(data, 0, data.Length, ct);
-            await fs.FlushAsync(ct);
-        }
-
-        if (File.Exists(target))
-        {
-            if (!overwrite) return target;
-            File.Delete(target);
-        }
-
-        File.Move(tmp, target);
-        return target;
     }
 
     private static bool IsValidUrl(string? url)
@@ -289,6 +243,27 @@ public class GelatoManager
         }
         return (baseItem as BaseItem, true);
     }
+    
+    public async Task<BaseItem?> WaitForInsert(StremioMeta meta) {
+            var tempItem = _stremioProvider.IntoBaseItem(meta);
+            var timeout = TimeSpan.FromSeconds(10);
+            var interval = TimeSpan.FromSeconds(1);
+            var start = DateTime.UtcNow;
+        BaseItem? baseItem = null;
+            _log.LogDebug("Insert threw; assuming race. Waiting for item to materialize.");
+            while (DateTime.UtcNow - start < timeout)
+            {
+                baseItem = FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+                if (baseItem != null)
+                {
+                    _log.LogDebug("Found item after race.");
+                    break;
+                }
+
+                await Task.Delay(interval).ConfigureAwait(false);
+            }
+            return baseItem;
+        }
 
     public Video? FindByStremioId(string id)
     {
@@ -346,24 +321,6 @@ public class GelatoManager
         return _library.GetItemList(q).OfType<BaseItem>().FirstOrDefault();
     }
 
-
-    public async Task SaveStreamAsStrm(Folder folder, StremioMeta meta, IEnumerable<StremioStream> streams, CancellationToken ct)
-    {
-        var i = 1;
-        foreach (var s in streams)
-        {
-            var r = await SaveStrmAsync(
-                  $"{folder.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}",
-                s.Url
-            );
-            if (r is null)
-            {
-                Console.WriteLine(JsonSerializer.Serialize(s));
-            }
-            i++;
-        }
-    }
-
     public void QueueParentRefresh(BaseItem item)
     {
         var parent = item.GetParent();
@@ -413,8 +370,6 @@ public class GelatoManager
         providerIds.Add("stremio", $"stremio://{meta.Type}/{Id}");
         return providerIds;
     }
-
-
 
     public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     {
@@ -551,6 +506,11 @@ public class GelatoManager
     {
         return items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
     }
+    
+    public bool IsStremioPlaceholder(BaseItem item)
+{
+    return item.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true;
+}
 
     public async Task MergeVersions(Video[] items)
     {

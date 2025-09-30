@@ -105,8 +105,6 @@ namespace Gelato.Tasks
                             try
                             {
                                 var (item, created) = await _manager.InsertMeta(root, meta, true, false, cancellationToken).ConfigureAwait(false);
-
-
                             }
                             catch (Exception ex)
                             {

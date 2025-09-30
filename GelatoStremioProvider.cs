@@ -214,18 +214,12 @@ namespace Gelato
 
             var Id = meta.Id;
 
-            // imdb is better
-            if (!string.IsNullOrWhiteSpace(meta.ImdbId))
-            {
-                Id = meta.ImdbId;
-            }
-
             switch (meta.Type)
             {
                 case StremioMediaType.Series:
                     item = new Series
                     {
-                        Id = _library.GetNewItemId(Id, typeof(Series)),
+                        Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)),
                         // Path = $"stremio://series/{Id}"
                     };
                     break;
@@ -233,8 +227,7 @@ namespace Gelato
                 case StremioMediaType.Movie:
                     item = new Movie
                     {
-                        Id = _library.GetNewItemId(Id, typeof(Movie)),
-                        RunTimeTicks = Utils.ParseToTicks(meta.Runtime)
+                        Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)),
                     };
 
                     break;
@@ -252,6 +245,7 @@ namespace Gelato
             }
             ;
 
+            if (!string.IsNullOrWhiteSpace(meta.Runtime)) item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             item.Name = meta.Name;
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
             if (!string.IsNullOrWhiteSpace(Id))
@@ -266,11 +260,16 @@ namespace Gelato
                 }
             }
             
+            if (!string.IsNullOrWhiteSpace(meta.ImdbId))
+            {
+               item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
+            }
+            
             //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
             //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
             //item.LockedFields = locked.ToArray();
             
-            var stremioUri = new StremioUri(meta.Type, Id);
+            var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
             item.SetProviderId("stremio", stremioUri.ToString());
 
             // path is needed otherwise its set as placeholder and you cant play
@@ -405,7 +404,8 @@ public struct StremioSubtitleResponse
         public int? Season { get; set; }
         public int? Number { get; set; }
         public DateTime? FirstAired { get; set; }
-
+        public Guid? Guid { get; set; }
+        
         public Dictionary<string, string> GetProviderIds()
         {
             var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
