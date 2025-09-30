@@ -120,6 +120,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 
         try
         {
+            // keep search id. Fewer redirects and some clients actually check the search id against the detail id...
             meta.Guid = guid;
             (baseItem, _) = await _manager.InsertMeta(
                 root,
