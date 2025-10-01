@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.8.2.0...0.9.0.0",
+        "checksum": "e6b14cbefd642f8c4d167c6123e2be43",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.9.0.0/gelato_0.9.0.0.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-10-01T12:13:52Z",
+        "version": "0.9.0.0"
+      },
+      {
         "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.8.1.0...0.8.2.0",
         "checksum": "26e2802d10573a40eb4d657d308f6a00",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.8.2.0/gelato_0.8.2.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-09-19T09:15:21Z",
         "version": "0.6.0.0"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n## What's Changed\n### 🚀 Features\n* feat: enable mixed libraries by @lostb1t in https://github.com/lostb1t/Gelato/pull/12\n\n## New Contributors\n* @lostb1t made their first contribution in https://github.com/lostb1t/Gelato/pull/12\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.4.6.0...0.5.0.0",
-        "checksum": "8438956e1e652687cd4c3be112ee9d44",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.5.0.0/gelato_0.5.0.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-09-17T18:08:46Z",
-        "version": "0.5.0.0"
       }
     ]
   }
