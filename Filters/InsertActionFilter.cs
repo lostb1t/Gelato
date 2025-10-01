@@ -85,15 +85,11 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Already exists?
-        if (_manager.FindByStremioId(stremioMeta.Id) is Video existing)
+        var item = _stremioProvider.IntoBaseItem(stremioMeta);
+        if (_manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind()) is Video existing)
         {
             _log.LogInformation("Media already exists; redirecting to canonical id {Id}", existing.Id);
             ReplaceGuid(ctx, existing.Id);
-           // if (TryBuildRedirect(ctx, out var url))
-            //{
-           //     ctx.Result = new LocalRedirectResult(url);
-           //     return;
-           // }
             await next();
             return;
         }
@@ -140,7 +136,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             _log.LogDebug("Insert threw; assuming race. Waiting for item to materialize.");
             while (DateTime.UtcNow - start < timeout)
             {
-                baseItem = _manager.FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+                baseItem = _manager.GetByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
                 if (baseItem != null)
                 {
                     _log.LogDebug("Found item after race.");

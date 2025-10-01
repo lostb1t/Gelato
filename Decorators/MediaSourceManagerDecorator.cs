@@ -122,17 +122,8 @@ namespace Gelato.Decorators
 
                 manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
                 manager.SetStreamSync(uri.ToString());
-
-                var query = new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                    HasAnyProviderId = item.ProviderIds,
-                    Recursive = true
-                };
-
-                var items = _libraryManager.GetItemList(query)
-                    .OfType<Video>()
-                    .ToArray();
+                
+                var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind()).OfType<Video>().ToArray();
 
                 if (items.Length > 1)
                     manager.MergeVersions(items).GetAwaiter().GetResult();
@@ -160,12 +151,6 @@ namespace Gelato.Decorators
 
             if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
             
-            // mark unplayable
-            if (allowSync && sources.Count == 1 && sources[0].Path is not null && sources[0].Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
-            {
-                item.IsVirtualItem = true;
-                item.Path = null;
-            }
 
             _log.LogDebug("GetStaticMediaSources finished for {Id} uri={Uri} action={Action}",
                 item.Id, uri?.ToString(), actionName);

@@ -244,9 +244,8 @@ namespace Gelato
                     return null;
             }
             ;
-
-            if (!string.IsNullOrWhiteSpace(meta.Runtime)) item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             item.Name = meta.Name;
+            if (!string.IsNullOrWhiteSpace(meta.Runtime)) item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
             if (!string.IsNullOrWhiteSpace(Id))
             {

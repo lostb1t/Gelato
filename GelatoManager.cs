@@ -196,7 +196,7 @@ public class GelatoManager
         }
 
         //var found = FindByStremioId(meta.Id) as Video;
-        var found = FindByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
+        var found = GetByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
         if (found is not null)
         {
             _log.LogDebug($"InsertMeta: found existing item: {found.Id}");
@@ -253,7 +253,7 @@ public class GelatoManager
             _log.LogDebug("Insert threw; assuming race. Waiting for item to materialize.");
             while (DateTime.UtcNow - start < timeout)
             {
-                baseItem = FindByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+                baseItem = GetByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
                 if (baseItem != null)
                 {
                     _log.LogDebug("Found item after race.");
@@ -265,61 +265,23 @@ public class GelatoManager
             return baseItem;
         }
 
-    public Video? FindByStremioId(string id)
+
+    public IEnumerable<BaseItem> FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
     {
-        if (string.IsNullOrWhiteSpace(id))
-            return null;
-
-        var lastSlash = id.LastIndexOf('/');
-        var ext = lastSlash >= 0 ? id[(lastSlash + 1)..] : id;
-
-        string providerKey;
-        string providerValue;
-
-        if (ext.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
-        {
-            providerKey = MetadataProvider.Tmdb.ToString();
-            providerValue = ext.Substring("tmdb:".Length);
-        }
-        else if (ext.StartsWith("imdb:", StringComparison.OrdinalIgnoreCase))
-        {
-            providerKey = MetadataProvider.Imdb.ToString();
-            providerValue = ext.Substring("imdb:".Length);
-        }
-        else if (ext.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
-        {
-            providerKey = MetadataProvider.Imdb.ToString();
-            providerValue = ext;
-        }
-        else
-        {
-            return null;
-        }
-
-        var q = new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Series },
-            Recursive = true,
-            Limit = 1,
-            HasAnyProviderId = new Dictionary<string, string> { [providerKey] = providerValue }
-        };
-        return _library.GetItemList(q).OfType<Video>().FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
-        //return _library.GetItemList(q).OfType<Video>().FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
-    }
-
-    public BaseItem? FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
-    {
-
+        providerIds.Remove(MetadataProvider.TmdbCollection.ToString());
         var q = new InternalItemsQuery
         {
             IncludeItemTypes = new[] { kind },
             Recursive = true,
-            Limit = 1,
             HasAnyProviderId = providerIds
         };
 
-        return _library.GetItemList(q).OfType<BaseItem>().FirstOrDefault();
+        return _library.GetItemList(q).OfType<BaseItem>();
     }
+
+    public BaseItem? GetByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind) {
+      return FindByProviderIds(providerIds, kind).FirstOrDefault();
+  }
 
     public void QueueParentRefresh(BaseItem item)
     {
@@ -340,37 +302,6 @@ public class GelatoManager
         _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
     }
 
-    // public BaseItem ApplyStream(BaseItem item, StremioMeta meta, StremioStream stream, Folder parent)
-    // {
-    //     item.ShortcutPath = stream.Url;
-    //     item.IsShortcut = true;
-    //     item.Path = $"{parent.Path}/{meta.Year} ({meta.Year})/{item.Name} ({meta.Year}) - {i} {s.Name}.strm";
-    //     // item.Path = $"{root.Path}/{meta.Name} ({meta.Year})/{meta.Name} ({meta.Year}) - {i} {s.Name}.strm";
-    //     return item;
-    // }
-
-    public Dictionary<string, string> GetProviderIds(StremioMeta meta)
-    {
-        var providerIds = new Dictionary<string, string>();
-        var Id = meta.Id;
-        if (!string.IsNullOrWhiteSpace(Id))
-        {
-            if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
-            {
-
-            }
-            if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
-            {
-                providerIds.Add(MetadataProvider.Imdb.ToString(), Id);
-            }
-        }
-        //item.IsRemote = true;
-
-        providerIds.Add(MetadataProvider.Imdb.ToString(), Id);
-        providerIds.Add("stremio", $"stremio://{meta.Type}/{Id}");
-        return providerIds;
-    }
-
     public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
@@ -380,7 +311,8 @@ public class GelatoManager
         if (parent is null) return new List<Video>();
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
-        providerIds.Remove("TmdbCollection");
+        providerIds.Remove(MetadataProvider.TmdbCollection.ToString());
+        //Console.WriteLine(string.Join(", ", providerIds.Select(kvp => $"{kvp.Key}={kvp.Value}")));
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null)
         {
@@ -393,6 +325,7 @@ public class GelatoManager
         {
             providerIds["stremio"] = uri.ToString();
         }
+
         var query = new InternalItemsQuery
         {
             ParentId = parent.Id,
@@ -733,18 +666,12 @@ public class GelatoManager
           }
 
         //var seriesStremioUri = StremioUri.LoadFromString(stremioKey);
-        var seriesItem = _library.GetItemList(new InternalItemsQuery
-        {
-            ParentId = seriesRootFolder.Id,
-            HasAnyProviderId = GetProviderIds(seriesMeta),
-            Recursive = false
-        })
-            .OfType<Series>()
-            .FirstOrDefault();
-        // var seriesItem = _library.FindByPath(seriesPath, true) as Series;
+        var tmpSeries = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
+        var seriesItem = (Series)GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind());
         if (seriesItem is null)
         {
-            seriesItem = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
+            seriesItem = tmpSeries;
+           // seriesItem = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
             if (seriesItem.Id == Guid.Empty) seriesItem.Id = Guid.NewGuid();
             seriesItem.PresentationUniqueKey = seriesItem.CreatePresentationUniqueKey();
             seriesRootFolder.AddChild(seriesItem);

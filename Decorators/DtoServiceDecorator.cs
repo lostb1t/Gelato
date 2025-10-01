@@ -71,8 +71,18 @@ namespace Gelato.Decorators
                 dto.CanDelete = true;
             }
             if (manager.IsStremio(dto)) {
+
               dto.CanDownload = true;
+                // mark unplayable
+            if (dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+            {
+               //Console.Write($"CLINT {dto.MediaSources?.Length}");
+               dto.LocationType = LocationType.Virtual;
+               dto.Path = null;
+            }
           }
+          
+        //  Console.Write($"CLINT {dto.MediaSources?.Length}");
         }
     }
 }
