@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Globalization;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -398,7 +399,8 @@ public struct StremioSubtitleResponse
         public string? ImdbId { get; set; }
         public DateTime? Released { get; set; }
         public string? Status { get; set; }
-        public string? Year { get; set; }
+        [JsonConverter(typeof(NullableIntLenientConverter))]
+        public int? Year { get; set; }
         public string? Slug { get; set; }
         public List<StremioTrailerStream>? TrailerStreams { get; set; }
         public StremioAppExtras? App_Extras { get; set; }
@@ -436,8 +438,8 @@ public struct StremioSubtitleResponse
         public int? GetYear()
         {
 
-            if (int.TryParse(Year, out var y) && y is > 1800 and < 2200)
-                return y;
+            if (Year is not null)
+                return Year;
 
             if (Released is DateTime dt)
                 return dt.Year;
@@ -640,6 +642,38 @@ public struct StremioSubtitleResponse
 
     public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
         => writer.WriteStringValue(value.ToString());
+}
+
+public sealed class NullableIntLenientConverter : JsonConverter<int?>
+{
+    public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    {
+        if (r.TokenType == JsonTokenType.Number)
+            return r.TryGetInt32(out var i) ? i : (int?)null;
+
+        if (r.TokenType == JsonTokenType.String)
+        {
+            var s = r.GetString();
+            if (string.IsNullOrWhiteSpace(s))
+                return null;
+
+            return int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
+                ? v
+                : (int?)null;
+        }
+
+        if (r.TokenType == JsonTokenType.Null)
+            return null;
+
+        return null;
+    }
+
+public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o)
+    {
+        if (v.HasValue) w.WriteNumberValue(v.Value);
+        else w.WriteNullValue();
+    }
+
 }
 
 }

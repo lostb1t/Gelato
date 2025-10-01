@@ -292,6 +292,25 @@ public class GelatoManager
     return GetByProviderIds(item.ProviderIds, item.GetBaseItemKind());
   }
 
+    public void QueueParentRefresh(BaseItem item)
+    {
+        var parent = item.GetParent();
+        if (parent == null) return;
+
+        _log.LogInformation("Gelato: queueing refresh for parent {Name}", parent.Name);
+
+        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+        {
+            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            ReplaceAllImages = false,
+            ReplaceAllMetadata = false,
+            EnableRemoteContentProbe = false
+        };
+
+        _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
+    }
+
     public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
@@ -648,7 +667,7 @@ public class GelatoManager
 }
         var providerIds = seriesMeta.GetProviderIds();
         if (providerIds is null || providerIds.Count == 0){
-             _log.LogWarning($"no providers found for {seriesMeta.Id}");
+             _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
             return null;
 }
         var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
