@@ -86,7 +86,13 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 
         // Already exists?
         var item = _stremioProvider.IntoBaseItem(stremioMeta);
-        if (_manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind()) is Video existing)
+        var q = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { item.GetBaseItemKind() },
+            HasAnyProviderId = item.ProviderIds,
+            Recursive = true,
+        };
+        if (_library.GetItemList(q).OfType<BaseItem>().FirstOrDefault() is BaseItem existing)
         {
             _log.LogInformation("Media already exists; redirecting to canonical id {Id}", existing.Id);
             ReplaceGuid(ctx, existing.Id);

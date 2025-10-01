@@ -269,11 +269,15 @@ public class GelatoManager
     public IEnumerable<BaseItem> FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
     {
         providerIds.Remove(MetadataProvider.TmdbCollection.ToString());
+        
         var q = new InternalItemsQuery
         {
             IncludeItemTypes = new[] { kind },
             Recursive = true,
-            HasAnyProviderId = providerIds
+            HasAnyProviderId = providerIds,
+            GroupByPresentationUniqueKey = false,
+            GroupBySeriesPresentationUniqueKey = false,
+            CollapseBoxSetItems = false
         };
 
         return _library.GetItemList(q).OfType<BaseItem>();
@@ -281,6 +285,11 @@ public class GelatoManager
 
     public BaseItem? GetByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind) {
       return FindByProviderIds(providerIds, kind).FirstOrDefault();
+  }
+  
+  public BaseItem? GetExisting(StremioMeta meta) {
+    var item = _stremioProvider.IntoBaseItem(meta);
+    return GetByProviderIds(item.ProviderIds, item.GetBaseItemKind());
   }
 
     public void QueueParentRefresh(BaseItem item)
@@ -311,27 +320,31 @@ public class GelatoManager
         if (parent is null) return new List<Video>();
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
-        providerIds.Remove(MetadataProvider.TmdbCollection.ToString());
-        //Console.WriteLine(string.Join(", ", providerIds.Select(kvp => $"{kvp.Key}={kvp.Value}")));
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null)
         {
             _log.LogError($"unable to build stremio uri for {item.Name}");
             return new List<Video>();
         }
-        // item could be a local file whixh doest have the stremio marker
+
         var streams = await _stremioProvider.GetStreamsAsync(uri).ConfigureAwait(false);
+        
+        // item could be a local file which does not have the stremio marker
         if (!providerIds.ContainsKey("stremio"))
         {
-            providerIds["stremio"] = uri.ToString();
+            providerIds["Stremio"] = uri.ExternalId;
         }
-
+        //Console.WriteLine(string.Join(", ", providerIds.Select(kvp => $"{kvp.Key}={kvp.Value}")));
         var query = new InternalItemsQuery
         {
             ParentId = parent.Id,
             IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
-            HasAnyProviderId = providerIds,
-            Recursive = false
+            HasAnyProviderId = new() { { "Stremio", providerIds["Stremio"] } },
+// HasAnyProviderId = providerIds,
+            Recursive = false,
+            GroupByPresentationUniqueKey = false,
+            GroupBySeriesPresentationUniqueKey = false,
+            CollapseBoxSetItems = false
         };
 
         var current = _library.GetItemList(query)
@@ -424,6 +437,8 @@ public class GelatoManager
         {
             if (m.Id != item.Id)
             {
+                _log.LogDebug($"deleting {m.Name}");
+                Console.WriteLine(string.Join(", ", m.ProviderIds.Select(kvp => $"{kvp.Key}={kvp.Value}")));
                 _library.DeleteItem(m, new DeleteOptions { DeleteFileLocation = false }, true);
             }
         }
@@ -554,7 +569,7 @@ public class GelatoManager
     public bool IsStremio(BaseItem item)
     {
 
-        var stremioId = item.GetProviderId("stremio");
+        var stremioId = item.GetProviderId("Stremio");
         if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
             return true;
         return false;
@@ -563,7 +578,7 @@ public class GelatoManager
     public bool IsStremio(BaseItemDto dto)
     {
         // var IsRemote = dto.MediaSources?.Any(ms => ms.IsRemote) == true;
-        var stremioId = dto.GetProviderId("stremio");
+        var stremioId = dto.GetProviderId("Stremio");
         if (!string.IsNullOrWhiteSpace(stremioId) && dto.LocationType == LocationType.Remote)
             return true;
         return false;
@@ -697,7 +712,7 @@ public class GelatoManager
                     Path = seasonPath,
                     SeriesPresentationUniqueKey = seriesItem.GetPresentationUniqueKey()
                 };
-                seasonItem.SetProviderId("stremio", seasonPath);
+                seasonItem.SetProviderId("Stremio", $"{seriesItem.GetProviderId("Stremio")}:{seasonIndex}");
                 seriesItem.AddChild(seasonItem);
                 await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
                 //_provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
@@ -740,7 +755,8 @@ public class GelatoManager
                 };
 
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
-                epItem.SetProviderId("stremio", epItem.Path);
+                //epItem.SetProviderId("Stremio", epItem.Path);
+                epItem.SetProviderId("Stremio", $"{seasonItem.GetProviderId("Stremio")}:{epMeta.Number}");
                 seasonItem.AddChild(epItem);
                 await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
             }

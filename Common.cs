@@ -66,9 +66,9 @@ public sealed class StremioUri
             _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}")
         };
 
-        var stremioId = item.GetProviderId("stremio");
-        if (!string.IsNullOrWhiteSpace(stremioId))
-            return StremioUri.FromString(stremioId);
+       var stremioId = item.GetProviderId("Stremio");
+       if (!string.IsNullOrWhiteSpace(stremioId))
+         return new StremioUri(mediaType, stremioId);
 
         if (kind == BaseItemKind.Movie)
         {

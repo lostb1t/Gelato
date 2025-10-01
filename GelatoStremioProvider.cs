@@ -247,6 +247,8 @@ namespace Gelato
             item.Name = meta.Name;
             if (!string.IsNullOrWhiteSpace(meta.Runtime)) item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
+            
+            // do this only for show and movie. cause the parent imdb is used for season abd episodes
             if (!string.IsNullOrWhiteSpace(Id))
             {
                 if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
@@ -259,9 +261,11 @@ namespace Gelato
                 }
             }
             
+
             if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             {
                item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
+               item.SetProviderId("Stremio", meta.ImdbId);
             }
             
             //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
@@ -269,7 +273,7 @@ namespace Gelato
             //item.LockedFields = locked.ToArray();
             
             var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
-            item.SetProviderId("stremio", stremioUri.ToString());
+            item.SetProviderId("Stremio", stremioUri.ExternalId);
 
             // path is needed otherwise its set as placeholder and you cant play
             item.Path = stremioUri.ToString();

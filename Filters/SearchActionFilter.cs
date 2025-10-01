@@ -175,9 +175,9 @@ namespace Gelato.Filters
                 var baseItem = _provider.IntoBaseItem(s);
                 if (baseItem is null) continue;
 
-                var stremioKey = baseItem.GetProviderId("stremio");
-                if (string.IsNullOrWhiteSpace(stremioKey) || !seen.Add(stremioKey))
-                    continue;
+                //var stremioKey = baseItem.GetProviderId("Stremio");
+                //if (string.IsNullOrWhiteSpace(stremioKey) || !seen.Add(stremioKey))
+                //    continue;
                 
                // make them "unplayable" so user is forced to details
                // uch.. infuse doesnt like empty paths and virtual items
@@ -185,7 +185,7 @@ namespace Gelato.Filters
                 //baseItem.IsVirtualItem = true;
                
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
-                var stremioUri = StremioUri.FromString(stremioKey);
+                var stremioUri = StremioUri.FromBaseItem(baseItem);
                 dto.Id = stremioUri.ToGuid();
                 _manager.SaveStremioMeta(dto.Id, s);
                 // _log.LogInformation($"Gelato: Search found {stremioUri.ToString()}, {stremioUri.ToCompactString()}");
