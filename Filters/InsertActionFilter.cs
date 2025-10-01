@@ -157,12 +157,12 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         {
             ReplaceGuid(ctx, baseItem.Id);
 
-            if (TryBuildRedirect(ctx, out var url))
-            {
+           // if (TryBuildRedirect(ctx, out var url))
+           // {
              //  _log.LogInformation($"REDIRECT {url}.");
              //  ctx.Result = new LocalRedirectResult(url);
              //  return;
-            }
+           // }
         }
 
         await next();
@@ -185,13 +185,15 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 
     private void ReplaceGuid(ActionExecutingContext ctx, Guid value)
     {
+                     //  _log.LogInformation("called");
         var rd = ctx.RouteData.Values;
         foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
         {
             if (rd.TryGetValue(key, out var raw) && raw is not null)
             {
-                _log.LogInformation("Replacing route {Key} {Old} → {New}", key, raw, value);
+                _log.LogDebug("Replacing route {Key} {Old} → {New}", key, raw, value);
                 rd[key] = value.ToString();
+                ctx.ActionArguments[key] = value;
             }
         }
 
