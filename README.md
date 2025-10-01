@@ -66,5 +66,6 @@ NOTICE: ONLY SUPPORTS 10.11
 - You should have at least one search enabled catalog. I suggest the tmdb addon.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - stream cache is 3600 min. Can be cleared by restarting the server
+- if databasd issues you can purge all stremio items with the gelato purge task
 - bump up probing and analyse to your liking
   JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
