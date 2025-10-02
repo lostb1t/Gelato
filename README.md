@@ -38,9 +38,7 @@ NOTICE: ONLY SUPPORTS 10.11
 
 4. Add the configured base paths to the Jellyfin library of your choice.
 
-5. Search for a title not already in your library, select a result, and start streaming.
-
-6. Run or schedule the catalog import tasks.
+5. Profit! Now Search for a title not already in your library, select a result, and start streaming. Or run the catalog import task to populate your db.
 
 ## Notes
 
