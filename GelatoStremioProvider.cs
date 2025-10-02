@@ -59,7 +59,8 @@ namespace Gelato
             var path = string.Join("/", parts);
             var extrasPart = (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
             var url = $"{baseUrl}/{path}{extrasPart}.json";
-            url = url.Replace("%3A", ":").Replace("%3a", ":");                             // Console.Write(url);
+            url = url.Replace("%3A", ":").Replace("%3a", ":");
+            Console.Write(url);
             return url;
         }
 
@@ -282,7 +283,7 @@ namespace Gelato
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            item.ForcedSortName = $"AA000 {meta.Name}";
+            //item.ForcedSortName = $"AA000 {meta.Name}";
             //item.ForcedSortName = item.SortName;
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);

@@ -665,11 +665,11 @@ public class GelatoManager
              _log.LogWarning($"seriesRootFolder null or empty for {seriesMeta.Id}");
             return null;
 }
-        var providerIds = seriesMeta.GetProviderIds();
-        if (providerIds is null || providerIds.Count == 0){
-             _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
-            return null;
-}
+        //var providerIds = seriesMeta.GetProviderIds();
+        //if (providerIds is null || providerIds.Count == 0){
+        //     _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
+        //    return null;
+//}
         var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode)
@@ -682,6 +682,11 @@ public class GelatoManager
 
         //var seriesStremioUri = StremioUri.LoadFromString(stremioKey);
         var tmpSeries = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
+        
+        if (tmpSeries.ProviderIds is null || tmpSeries.ProviderIds.Count == 0){
+             _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
+            return null;
+        }
         var seriesItem = (Series)GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind());
         if (seriesItem is null)
         {
