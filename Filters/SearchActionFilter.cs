@@ -120,9 +120,7 @@ namespace Gelato.Filters
                 int.TryParse(limitVal, out var lim) && lim > 0) limit = lim;
 
             var q = http.Request.Query.First(kv => string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)).Value.ToString();
-            _log.LogInformation("intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit}",
-                          q, string.Join(",", requested.Select(r => r.ToString())), start, limit);
-
+           
             var metas = new List<StremioMeta>(256);
 
             if (requested.Contains(BaseItemKind.Movie))
@@ -165,6 +163,9 @@ namespace Gelato.Filters
                     }
                 }
             }
+            
+            _log.LogInformation("intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
+                          q, string.Join(",", requested.Select(r => r.ToString())), start, limit, metas.Count());
 
             var options = new DtoOptions();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -174,10 +175,6 @@ namespace Gelato.Filters
             {
                 var baseItem = _provider.IntoBaseItem(s);
                 if (baseItem is null) continue;
-
-                //var stremioKey = baseItem.GetProviderId("Stremio");
-                //if (string.IsNullOrWhiteSpace(stremioKey) || !seen.Add(stremioKey))
-                //    continue;
                 
                // make them "unplayable" so user is forced to details
                // uch.. infuse doesnt like empty paths and virtual items
@@ -187,11 +184,9 @@ namespace Gelato.Filters
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.FromBaseItem(baseItem);
                 dto.Id = stremioUri.ToGuid();
-                _manager.SaveStremioMeta(dto.Id, s);
-                // _log.LogInformation($"Gelato: Search found {stremioUri.ToString()}, {stremioUri.ToCompactString()}");
-
-                // dto.Id = GuidCodec.EncodeString(StremioId.ToCompactId(stremioKey));
                 dtos.Add(dto);
+                
+                _manager.SaveStremioMeta(dto.Id, s);
             }
 
             var paged = dtos.Skip(start).Take(limit).ToArray();

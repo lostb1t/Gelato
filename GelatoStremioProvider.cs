@@ -95,24 +95,39 @@ namespace Gelato
             _manifest = m;
 
             if (m?.Catalogs != null)
-            {
-                MovieSearchCatalog = m.Catalogs.FirstOrDefault(c =>
-                    c.Type == StremioMediaType.Movie &&
-                    c.Extra != null &&
-                    c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
+{
+    MovieSearchCatalog = m.Catalogs
+        .Where(c =>
+            c.Type == StremioMediaType.Movie &&
+            c.Extra?.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)) == true)
+        .OrderByDescending(c => c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true)
+        .FirstOrDefault();
 
-                SeriesSearchCatalog = m.Catalogs.FirstOrDefault(c =>
-                    c.Type == StremioMediaType.Series &&
-                    c.Extra != null &&
-                    c.Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)));
-            }
+    SeriesSearchCatalog = m.Catalogs
+        .Where(c =>
+            c.Type == StremioMediaType.Series &&
+            c.Extra?.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)) == true)
+        .OrderByDescending(c => c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true)
+        .FirstOrDefault();
+}
 
             if (MovieSearchCatalog == null)
-                _log.LogWarning("manifest at {Url} has no search-capable movie catalog", url);
+{
+    _log.LogWarning("manifest has no search-capable movie catalog", url);
+}
+else if (!(MovieSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) ?? false))
+{
+    _log.LogWarning("manifest uses non-tmdb movie search catalog: {Id}", MovieSearchCatalog.Id);
+}
 
-            if (SeriesSearchCatalog == null)
-                _log.LogWarning("manifest at {Url} has no search-capable series catalog", url);
-
+if (SeriesSearchCatalog == null)
+{
+    _log.LogWarning("manifest has no search-capable series catalog", url);
+}
+else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) ?? false))
+{
+    _log.LogWarning("manifest uses non-tmdb series search catalog: {Id}", SeriesSearchCatalog.Id);
+}
             return m;
         }
 
