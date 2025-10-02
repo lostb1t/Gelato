@@ -60,7 +60,7 @@ namespace Gelato
             var extrasPart = (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
             var url = $"{baseUrl}/{path}{extrasPart}.json";
             url = url.Replace("%3A", ":").Replace("%3a", ":");
-            Console.Write(url);
+           // Console.Write(url);
             return url;
         }
 
