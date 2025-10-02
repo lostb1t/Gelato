@@ -27,16 +27,20 @@ NOTICE: ONLY SUPPORTS 10.11
 1. Install the plugin:
    `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json`
 
-2. Configure the plugin under **Plugins → Gelato**.
-   **Note:** Only **AIOStreams** is supported. AIOStreams bundles all your favorite addons into one.
-   You can create a manifest via a public instance, for example:
+2. Setup an aiostreams manifest. You can selfhost or use an public instance, for example:
    `https://aiostreams.elfhosted.com/stremio/configure`
+    
+   At minimum you need a addon with search catalogs and meta. I suggest using the default TMDB addon for this.
+   p2p isnt supported so you need an debrid addon for streams.
 
-3. Add the configured base paths to the Jellyfin library of your choice.
+3. Configure the plugin under **Plugins → Gelato**.
+   **Note:** Only **AIOStreams** is supported.
 
-4. Search for a title not already in your library, select a result, and start streaming.
+4. Add the configured base paths to the Jellyfin library of your choice.
 
-5. Run or schedule the catalog import tasks.
+5. Search for a title not already in your library, select a result, and start streaming.
+
+6. Run or schedule the catalog import tasks.
 
 ## Notes
 
