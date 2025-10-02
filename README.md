@@ -29,7 +29,7 @@ NOTICE: ONLY SUPPORTS 10.11
 
 2. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: `https://aiostreams.elfhosted.com/stremio/configure`
     
-   At minimum you need a addon with search catalogs and meta data resource. I suggest using the default TMDB addon for this.
+   At minimum you need an addon with search catalogs and meta data resources. I suggest using the default TMDB addon for this.
    p2p isnt supported so you need an debrid addon for streams.
 
 3. Configure the plugin under **Plugins → Gelato**.
