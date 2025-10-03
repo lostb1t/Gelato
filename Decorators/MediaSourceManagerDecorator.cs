@@ -141,6 +141,9 @@ namespace Gelato.Decorators
                     {
                         var k = s.Name.IndexOf('-');
                         if (k >= 0 && k + 1 < s.Name.Length) s.Name = s.Name[(k + 1)..].Trim();
+                       // if (s.OriginalTitle is not null) {
+                        //  s.Name = s.OriginalTitle;
+                        //}
                     }
                     return (s, idx);
                 })
@@ -150,7 +153,6 @@ namespace Gelato.Decorators
                 .ToList();
 
             if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
-            
 
             _log.LogDebug("GetStaticMediaSources finished for {Id} uri={Uri} action={Action}",
                 item.Id, uri?.ToString(), actionName);

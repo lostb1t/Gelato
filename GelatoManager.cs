@@ -380,11 +380,8 @@ public class GelatoManager
                 _ = locked.Remove(MetadataField.Name);
                 existing.LockedFields = locked.ToArray();
                 await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-
+              
                 existing.Name = label;
-                //  existing.SortName = sort;
-                existing.ForcedSortName = sort;
-                // existing.SetProviderId("altver", 1);
 
                 if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
                 existing.LockedFields = locked.ToArray();
@@ -413,12 +410,13 @@ public class GelatoManager
             }
 
             child.Name = label;
+            //child.OriginalTitle = label;
             child.IsVirtualItem = false;
             child.ProviderIds = providerIds;
             child.Path = s.Url;
             child.RunTimeTicks = item.RunTimeTicks;
             // child.SortName = sort;
-            child.ForcedSortName = sort;
+            //child.ForcedSortName = sort;
             //child.SetProviderId("altver", 1);
 
             var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
@@ -480,6 +478,8 @@ public class GelatoManager
             _log.LogError("MergeVersions: No item with a path starting with 'stremio' found. Merge aborted.");
             return;
         }
+        
+        _log.LogDebug($"selected {primaryVersion.Name} {primaryVersion.Id} as primary version");
 
         var inv = CultureInfo.InvariantCulture;
         var alternates = items.Where(i => !i.Id.Equals(primaryVersion.Id)).ToList();
@@ -571,15 +571,6 @@ public class GelatoManager
 
         var stremioId = item.GetProviderId("Stremio");
         if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
-            return true;
-        return false;
-    }
-
-    public bool IsStremio(BaseItemDto dto)
-    {
-        // var IsRemote = dto.MediaSources?.Any(ms => ms.IsRemote) == true;
-        var stremioId = dto.GetProviderId("Stremio");
-        if (!string.IsNullOrWhiteSpace(stremioId) && dto.LocationType == LocationType.Remote)
             return true;
         return false;
     }

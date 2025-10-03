@@ -298,7 +298,8 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            //item.ForcedSortName = $"AA000 {meta.Name}";
+            //item.OriginalTitle = meta.Name
+ //item.ForcedSortName = $"AA000 {meta.Name}";
             //item.ForcedSortName = item.SortName;
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);

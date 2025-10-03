@@ -5,6 +5,7 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using Jellyfin.Data.Enums;
 
 namespace Gelato.Decorators
 {
@@ -57,6 +58,13 @@ namespace Gelato.Decorators
             Patch(dto, item, user, owner: null, options);
             return dto;
         }
+        
+        // not bulletproof but providerids are often not avaiable
+        static bool IsStremio(BaseItemDto dto)
+{
+    return dto.LocationType == LocationType.Remote
+        && (dto.Type == BaseItemKind.Movie || dto.Type == BaseItemKind.Episode);
+}
 
         private void Patch(
             BaseItemDto dto,
@@ -65,24 +73,27 @@ namespace Gelato.Decorators
             BaseItem? owner,
             DtoOptions options)
         {
+          
             var manager = _manager.Value;
-            if (item is not null && user is not null && manager.IsStremio(dto) && manager.CanDelete(item, user))
+            if (item is not null && user is not null && IsStremio(dto) && manager.CanDelete(item, user))
             {
                 dto.CanDelete = true;
             }
-            if (manager.IsStremio(dto)) {
+            if (IsStremio(dto)) {
 
               dto.CanDownload = true;
-                // mark unplayable
+
+
+              int dashIndex = dto.Name.IndexOf('-');
+              dto.Name = (dashIndex >= 0 ? dto.Name[..dashIndex] : dto.Name).Trim();
+            // mark unplayable
             if (dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
             {
-               //Console.Write($"CLINT {dto.MediaSources?.Length}");
                dto.LocationType = LocationType.Virtual;
                dto.Path = null;
             }
           }
           
-        //  Console.Write($"CLINT {dto.MediaSources?.Length}");
         }
     }
 }
