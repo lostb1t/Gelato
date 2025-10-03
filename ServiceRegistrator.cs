@@ -35,6 +35,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
         services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
 
+          services.AddSingleton<IScheduledTask, PurgeGelatoStreamsTask>();
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
         services.Remove(original);
 

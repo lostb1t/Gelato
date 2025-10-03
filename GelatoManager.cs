@@ -44,7 +44,7 @@ public class GelatoManager
     private readonly IDtoService _dtoService;
     private readonly IFileSystem _fileSystem;
     private readonly IProviderManager _provider;
-    private readonly IMemoryCache _memoryCache;
+    private IMemoryCache _memoryCache;
 
 
     public GelatoManager(
@@ -92,14 +92,16 @@ public class GelatoManager
         return _memoryCache.TryGetValue($"uri:{guid}", out var value) ? value as StremioUri : null;
     }
 
-    public void SetStreamSync(string key)
+    public void SetStreamSync(Guid guid)
     {
-        _memoryCache.Set($"streamsync:{key}", key, TimeSpan.FromMinutes(3600));
+        _memoryCache.Set($"streamsync:{guid}", guid, TimeSpan.FromMinutes(3600));
     }
+    
+    
 
-    public bool HasStreamSync(string key)
+    public bool HasStreamSync(Guid guid)
     {
-        return _memoryCache.TryGetValue($"streamsync:{key}", out _);
+        return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
     }
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
@@ -117,6 +119,13 @@ public class GelatoManager
     public void RemoveStremioMeta(Guid guid)
     {
         _memoryCache.Remove($"meta:{guid}");
+    }
+    
+
+    public void ClearCache()
+    {
+        _memoryCache.Dispose();
+        _memoryCache = new MemoryCache(new MemoryCacheOptions());
     }
 
     public static void SeedFolder(string path)

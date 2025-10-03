@@ -116,12 +116,12 @@ namespace Gelato.Decorators
                 _log.LogDebug("GetStaticMediaSources not a sync-eligible call. action={Action} list={IsList} uri={Uri}",
                     actionName, isListAction, uri?.ToString());
             }
-            else if (uri is not null && !manager.HasStreamSync(uri.ToString()))
+            else if (uri is not null && !manager.HasStreamSync(item.Id))
             {
                 _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
 
                 manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
-                manager.SetStreamSync(uri.ToString());
+                manager.SetStreamSync(item.Id);
                 
                 var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind()).OfType<Video>().ToArray();
 
