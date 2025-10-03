@@ -217,6 +217,7 @@ namespace Gelato.Decorators
                     Codec = GuessSubtitleCodec(s.Url),               // "webvtt" / "subrip" / "ass"
                     IsExternal = true,
                     IsExternalUrl = true,
+                    SupportsExternalStream = true,
                     Path = s.Url,
                     DeliveryMethod = SubtitleDeliveryMethod.External
                 });
@@ -232,8 +233,8 @@ namespace Gelato.Decorators
 
             var s = urlOrPath.ToLowerInvariant();
 
-            if (s.Contains(".vtt")) return "webvtt";
-            if (s.Contains(".srt")) return "subrip";
+            if (s.Contains(".vtt")) return "vtt";
+            if (s.Contains(".srt")) return "srt";
             if (s.Contains(".ass") || s.Contains(".ssa")) return "ass";
             if (s.Contains(".subf2m")) return "subrip";
             _log.LogWarning($"unkown subtitle format for {s}");

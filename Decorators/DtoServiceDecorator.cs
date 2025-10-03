@@ -59,12 +59,17 @@ namespace Gelato.Decorators
             return dto;
         }
         
-        // not bulletproof but providerids are often not avaiable
+        // Not bulletproof, but providerIds are often not available
         static bool IsStremio(BaseItemDto dto)
-{
-    return dto.LocationType == LocationType.Remote
-        && (dto.Type == BaseItemKind.Movie || dto.Type == BaseItemKind.Episode);
-}
+        {
+            return dto.LocationType == LocationType.Remote
+                && (
+                    dto.Type == BaseItemKind.Movie
+                    || dto.Type == BaseItemKind.Episode
+                    || dto.Type == BaseItemKind.Series
+                    || dto.Type == BaseItemKind.Season
+                );
+        }
 
         private void Patch(
             BaseItemDto dto,
@@ -73,7 +78,6 @@ namespace Gelato.Decorators
             BaseItem? owner,
             DtoOptions options)
         {
-          
             var manager = _manager.Value;
             if (item is not null && user is not null && IsStremio(dto) && manager.CanDelete(item, user))
             {
