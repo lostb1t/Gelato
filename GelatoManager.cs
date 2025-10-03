@@ -377,8 +377,8 @@ public class GelatoManager
             var id = s.GetGuid();
             if (!desiredIds.Add(id)) continue; // already accounted for
 
-            var sort = $"BB{i:D3}";
-            var label = $"{item.Name} - {s.Name}";
+            //var sort = $"BB{i:D3}";
+            var label = $"{i}:::{item.Name}:::{s.Name}";
 
             if (currentIds.Contains(id))
             {

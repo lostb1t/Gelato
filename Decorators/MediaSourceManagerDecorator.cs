@@ -135,20 +135,16 @@ namespace Gelato.Decorators
 
             sources = sources
                 .Where(s => sources.Count <= 1 || s.Path == null || !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(s => s.Protocol == MediaProtocol.File)
+                .ThenBy(s => s.Name)
                 .Select((s, idx) =>
                 {
                     if (s.Protocol != MediaProtocol.File && !string.IsNullOrEmpty(s.Name))
                     {
-                        var k = s.Name.IndexOf('-');
-                        if (k >= 0 && k + 1 < s.Name.Length) s.Name = s.Name[(k + 1)..].Trim();
-                       // if (s.OriginalTitle is not null) {
-                        //  s.Name = s.OriginalTitle;
-                        //}
+                      s.Name = s.Name.Split(":::").Last();
                     }
                     return (s, idx);
                 })
-                .OrderByDescending(t => t.s.Protocol == MediaProtocol.File)
-                .ThenBy(t => t.idx)
                 .Select(t => t.s)
                 .ToList();
 

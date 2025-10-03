@@ -87,9 +87,9 @@ namespace Gelato.Decorators
 
               dto.CanDownload = true;
 
-
-              int dashIndex = dto.Name.IndexOf('-');
-              dto.Name = (dashIndex >= 0 ? dto.Name[..dashIndex] : dto.Name).Trim();
+              //int dashIndex = dto.Name.IndexOf('-');
+              var parts = dto.Name.Split(":::");
+              dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
             // mark unplayable
             if (dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
             {
