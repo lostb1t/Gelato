@@ -343,13 +343,12 @@ public class GelatoManager
         {
             providerIds["Stremio"] = uri.ExternalId;
         }
-        //Console.WriteLine(string.Join(", ", providerIds.Select(kvp => $"{kvp.Key}={kvp.Value}")));
+
         var query = new InternalItemsQuery
         {
             ParentId = parent.Id,
             IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
             HasAnyProviderId = new() { { "Stremio", providerIds["Stremio"] } },
-// HasAnyProviderId = providerIds,
             Recursive = false,
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,
@@ -358,16 +357,19 @@ public class GelatoManager
 
         var current = _library.GetItemList(query)
     .OfType<Video>()
-    .Where(v => !v.IsFileProtocol)
+    .Where(v => !v.IsFileProtocol && !IsStremioPlaceholder(v))
     .ToList();
 
         var currentById = current.ToDictionary(v => v.Id, v => v);
         var currentIds = new HashSet<Guid>(current.Select(v => v.Id));
-        var desiredIds = new HashSet<Guid> { item.Id };
+        var desiredIds = new HashSet<Guid> { };
 
         var created = new List<Video>();
         if (item is Video baseVideo) created.Add(baseVideo);
 
+        var parts = item.Name.Split(":::");
+        var name = parts.Length > 1 ? parts[1] : item.Name;
+        
         var i = 0;
         foreach (var s in streams)
         {
@@ -377,9 +379,8 @@ public class GelatoManager
             var id = s.GetGuid();
             if (!desiredIds.Add(id)) continue; // already accounted for
 
-            //var sort = $"BB{i:D3}";
-            var label = $"{i}:::{item.Name}:::{s.Name}";
-
+            var label = $"{i:D3}:::{name}:::{s.Name}";
+            
             if (currentIds.Contains(id))
             {
                 var existing = currentById[id];
@@ -419,14 +420,10 @@ public class GelatoManager
             }
 
             child.Name = label;
-            //child.OriginalTitle = label;
             child.IsVirtualItem = false;
             child.ProviderIds = providerIds;
             child.Path = s.Url;
             child.RunTimeTicks = item.RunTimeTicks;
-            // child.SortName = sort;
-            //child.ForcedSortName = sort;
-            //child.SetProviderId("altver", 1);
 
             var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
             if (!lockedNew.Contains(MetadataField.Name)) lockedNew.Add(MetadataField.Name);

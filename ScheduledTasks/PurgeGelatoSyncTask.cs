@@ -95,7 +95,8 @@ namespace Gelato.Tasks
         var pct = Math.Min(100.0, ((double)done / total) * 100.0);
         progress?.Report(pct);
     }
-DeleteEmptyStremioContainers();
+    DeleteEmptyStremioContainers();
+    _manager.ClearCache();
     progress?.Report(100.0);
     await _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
     _log.LogInformation("purge completed");
