@@ -204,18 +204,18 @@ namespace Gelato.Decorators
             var index = streams.Last().Index;
             foreach (var s in subtitles)
             {
-
+                index++;
                 streams.Add(new MediaStream
                 {
                     Type = MediaStreamType.Subtitle,
-                    Index = index++,
+                    Index = index,
                     Language = s.Lang,
                     Codec = GuessSubtitleCodec(s.Url),               // "webvtt" / "subrip" / "ass"
                     IsExternal = true,
                     IsExternalUrl = true,
                     SupportsExternalStream = true,
                     Path = s.Url,
-                    DeliveryMethod = SubtitleDeliveryMethod.External
+                   // DeliveryMethod = SubtitleDeliveryMethod.External
                 });
             }
             source.MediaStreams = streams;

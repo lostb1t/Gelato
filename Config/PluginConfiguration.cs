@@ -10,6 +10,7 @@ namespace Gelato.Configuration
 
         public string? MoviePath { get; set; }
         public string? SeriesPath { get; set; }
+        public int StreamTTL { get; set; } = 3600;
         public int CatalogMaxItems { get; set; } = 100;
         public string Url { get; set; } = "";
         public bool EnableSubs { get; set; } = false;

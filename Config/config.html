@@ -39,27 +39,26 @@
         <div class="inputContainer">
           <input is="emby-input" type="number" id="txtCatalogMaxItems" label="Max items per catalog import:" />
         </div>
-  
+
         <div class="inputContainer">
-          <input is="emby-input"
-                 type="checkbox"
-                 id="chkEnableSubs"
-                 label="Enable remote subtitles from addons" />
-                 <span>Currently breaks untill https://github.com/jellyfin/jellyfin/pull/14809 is merged.</span>
-               
-               </div>
+          <input is="emby-input" type="number" id="txtStreamTTL" label="TTL for streams in seconds" />
+        </div>
+
         <div class="inputContainer">
-          <input is="emby-input"
-                 type="checkbox"
-                 id="chkEnableMixed"
-                 label="Enable stremio results and local files" />
-                 <span>If enabled, stremio streams and local sources are merged</span>
-               </div>          
-        <br />   
-        Want to support me? Use my torbox referral code <a target="_blank" href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">abe1a9d9-53c9-449a-9d85-ab3dfb5d188d</a>
+          <input is="emby-input" type="checkbox" id="chkEnableSubs" label="Enable remote subtitles from addons" />
+          <span>Currently breaks untill https://github.com/jellyfin/jellyfin/pull/14809 is merged.</span>
+
+        </div>
+        <div class="inputContainer">
+          <input is="emby-input" type="checkbox" id="chkEnableMixed" label="Enable stremio results and local files" />
+          <span>If enabled, stremio streams and local sources are merged</span>
+        </div>
         <br />
-                <br />
-  
+        Want to support me? Use my torbox referral code <a target="_blank"
+          href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">abe1a9d9-53c9-449a-9d85-ab3dfb5d188d</a>
+        <br />
+        <br />
+
         <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block">
           <span>Save</span>
         </button>
@@ -76,6 +75,7 @@
         const txtMoviePath = document.querySelector('#txtMoviePath');
         const txtSeriesPath = document.querySelector('#txtSeriesPath');
         const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
+        const txtStreamTTL = document.querySelector('#txtStreamTTL');
         const chkEnableSubs = document.querySelector('#chkEnableSubs');
         const chkEnableMixed = document.querySelector('#chkEnableMixed');
         async function loadConfig() {
@@ -86,6 +86,7 @@
             txtMoviePath.value = cfg.MoviePath || "";
             txtSeriesPath.value = cfg.SeriesPath || "";
             txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
+            txtStreamTTL.value = cfg.StreamTTL || 3600;
             chkEnableSubs.checked = cfg.EnableSubs || false;
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
           } catch (e) {
@@ -104,6 +105,7 @@
             cfg.MoviePath = (txtMoviePath.value || "").trim() || null;
             cfg.SeriesPath = (txtSeriesPath.value || "").trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
+            cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
             cfg.EnableSubs = (chkEnableSubs.checked || false);
             cfg.EnableMixed = !!chkEnableMixed.checked;
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
