@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.9.9.0...0.9.10.0",
+        "checksum": "352df841d25e46c6d4124d9c58fb015a",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.9.10.0/gelato_0.9.10.0.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-10-04T08:20:32Z",
+        "version": "0.9.10.0"
+      },
+      {
         "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.9.8.0...0.9.9.0",
         "checksum": "8a77029a6e31d74dd007de0e94b0bcd1",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.9.9.0/gelato_0.9.9.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-09-20T15:28:40Z",
         "version": "0.6.10.0"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.6.8.0...0.6.9.0",
-        "checksum": "77502ea156028dc461c52b8268b23256",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.6.9.0/gelato_0.6.9.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-09-20T10:07:07Z",
-        "version": "0.6.9.0"
       }
     ]
   }
