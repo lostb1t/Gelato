@@ -87,17 +87,16 @@ namespace Gelato.Decorators
 
               dto.CanDownload = true;
 
-              //int dashIndex = dto.Name.IndexOf('-');
+              // clean name
               var parts = dto.Name.Split(":::");
               dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
+            
             // mark unplayable
             if (dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
             {
                dto.LocationType = LocationType.Virtual;
                dto.Path = null;
             }
-          }
-          
-        }
+          }}
     }
 }

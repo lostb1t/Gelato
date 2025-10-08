@@ -210,12 +210,14 @@ namespace Gelato.Decorators
                     Type = MediaStreamType.Subtitle,
                     Index = index,
                     Language = s.Lang,
-                    Codec = GuessSubtitleCodec(s.Url),               // "webvtt" / "subrip" / "ass"
+                    Codec = GuessSubtitleCodec(s.Url),
+                    // important
                     IsExternal = true,
-                    IsExternalUrl = true,
+                    //IsExternalUrl = true,
                     SupportsExternalStream = true,
                     Path = s.Url,
-                   // DeliveryMethod = SubtitleDeliveryMethod.External
+                   // DeliveryUrl = "yo",
+                    DeliveryMethod = SubtitleDeliveryMethod.External
                 });
             }
             source.MediaStreams = streams;
