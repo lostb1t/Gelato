@@ -394,7 +394,7 @@ public struct StremioSubtitleResponse
 
     public class StremioMeta
     {
-        public string Id { get; set; } = "";
+        public string? Id { get; set; }
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Name { get; set; } = "";
@@ -488,6 +488,15 @@ public struct StremioSubtitleResponse
                 return null;
             }
             return new DateTime(year.Value, 1, 1);
+        }
+        
+        public bool IsValid()
+        {
+           if (Id is not null && !Id.Contains("error")) {
+             return true;
+           }
+             
+           return false;
         }
     }
 

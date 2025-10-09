@@ -191,7 +191,13 @@ public class GelatoManager
     /// <param name="ct"></param>
     /// <returns></returns>
     public async Task<(BaseItem?, bool)> InsertMeta(Folder parent, StremioMeta meta, bool refreshItem, bool queueRefreshItem, CancellationToken ct)
-    {
+    {                   
+        if (!meta.IsValid())
+        {
+            _log.LogError("meta is not valid, skipping");
+            return (null, false);
+        }
+  
         if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
         {
             return (null, false);
