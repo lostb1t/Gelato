@@ -70,3 +70,8 @@ NOTICE: ONLY SUPPORTS 10.11
 - stream cache is 3600 min. Can be cleared by restarting the server
 - bump up probing and analyse to your liking
   JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
+
+### Support
+
+Want to support me? Use my torbox referral code <a target="_blank"
+          href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">abe1a9d9-53c9-449a-9d85-ab3dfb5d188d</a>
