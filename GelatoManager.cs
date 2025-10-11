@@ -214,7 +214,7 @@ public class GelatoManager
         var found = GetByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
         if (found is not null)
         {
-            _log.LogDebug($"InsertMeta: found existing item: {found.Id}");
+            _log.LogDebug($"found existing item: {found.Id} for {baseItem.Name}");
             return (found, false);
         }
         //baseItem.IsDefault = true;
@@ -223,7 +223,7 @@ public class GelatoManager
         {
             MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
             ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-            ReplaceAllImages = false,
+            ReplaceAllImages = true,
             ReplaceAllMetadata = true,
             ForceSave = true
         };
@@ -457,7 +457,7 @@ public class GelatoManager
 
         var keep = current.Where(m => desiredIds.Contains(m.Id));
         var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
-
+        SetStreamSync(item.Id);
         _log.LogDebug($"SyncStreams finished for {item.Id}");
         return merged.ToList();
     }

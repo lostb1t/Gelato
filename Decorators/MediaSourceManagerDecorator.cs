@@ -121,7 +121,6 @@ namespace Gelato.Decorators
                 _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
 
                 manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
-                manager.SetStreamSync(item.Id);
                 
                 var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind()).OfType<Video>().ToArray();
 

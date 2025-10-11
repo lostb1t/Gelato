@@ -236,7 +236,8 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
                 case StremioMediaType.Series:
                     item = new Series
                     {
-                        Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)),
+                       Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)),
+                      //  Id = meta.Guid ?? new Guid($"series{Id}"),
                         // Path = $"stremio://series/{Id}"
                     };
                     break;

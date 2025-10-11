@@ -66,7 +66,11 @@ public sealed class DownloadFilter : IAsyncActionFilter
 
         if (user is not null)
         {
-            var item = _library.GetItemById<BaseItem>(guid, user);
+var mediaSourceId =
+    Guid.TryParse(ctx.HttpContext.Items["MediaSourceId"] as string, out var parsed)
+        ? parsed
+        : guid;
+            var item = _library.GetItemById<BaseItem>(mediaSourceId, user);
             if (item is not null)
             {
                 if (_manager.IsStremio(item))
