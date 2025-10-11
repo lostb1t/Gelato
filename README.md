@@ -30,7 +30,7 @@ NOTICE: ONLY SUPPORTS 10.11
    
    p2p is not supported so you need an debrid addon for streams.
 
-2. Install the plugin in Jellyfin:
+2. Make sure you are running Jellyfin 10.11 and install the plugin in Jellyfin:
    `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json`
 
 3. Configure the plugin under **Plugins → Gelato**.
