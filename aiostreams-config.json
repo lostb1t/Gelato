@@ -1,0 +1,327 @@
+{
+  "services": [
+    {
+      "id": "realdebrid",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "alldebrid",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "premiumize",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "debridlink",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "torbox",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "offcloud",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "putio",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "easynews",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "easydebrid",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "debrider",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "pikpak",
+      "enabled": false,
+      "credentials": {}
+    },
+    {
+      "id": "seedr",
+      "enabled": false,
+      "credentials": {}
+    }
+  ],
+  "presets": [
+    {
+      "type": "tmdb-addon",
+      "instanceId": "088",
+      "enabled": true,
+      "options": {
+        "name": "The Movie Database",
+        "timeout": 10000,
+        "resources": [
+          "catalog",
+          "meta"
+        ],
+        "Enable Adult Content": false,
+        "hideEpisodeThumbnails": false,
+        "provideImdbId": true,
+        "language": "en-US"
+      }
+    },
+    {
+      "type": "comet",
+      "instanceId": "168",
+      "enabled": true,
+      "options": {
+        "name": "Comet",
+        "timeout": 5000,
+        "resources": [
+          "stream"
+        ],
+        "includeP2P": false,
+        "removeTrash": true,
+        "mediaTypes": []
+      }
+    }
+  ],
+  "formatter": {
+    "id": "gdrive",
+    "definition": {
+      "name": "",
+      "description": ""
+    }
+  },
+  "preferredQualities": [
+    "BluRay REMUX",
+    "BluRay",
+    "WEB-DL",
+    "WEBRip",
+    "HDRip",
+    "HC HD-Rip",
+    "DVDRip",
+    "HDTV",
+    "CAM",
+    "TS",
+    "TC",
+    "SCR",
+    "Unknown"
+  ],
+  "preferredResolutions": [
+    "2160p",
+    "1440p",
+    "1080p",
+    "720p",
+    "576p",
+    "480p",
+    "360p",
+    "240p",
+    "144p",
+    "Unknown"
+  ],
+  "excludedQualities": [
+    "CAM",
+    "SCR",
+    "TS",
+    "TC"
+  ],
+  "excludedVisualTags": [
+    "3D"
+  ],
+  "sortCriteria": {
+    "global": [
+      {
+        "key": "cached",
+        "direction": "desc"
+      },
+      {
+        "key": "library",
+        "direction": "desc"
+      },
+      {
+        "key": "resolution",
+        "direction": "desc"
+      },
+      {
+        "key": "size",
+        "direction": "desc"
+      }
+    ]
+  },
+  "deduplicator": {
+    "enabled": true,
+    "keys": [
+      "filename",
+      "infoHash"
+    ],
+    "multiGroupBehaviour": "aggressive",
+    "cached": "single_result",
+    "uncached": "per_service",
+    "p2p": "single_result"
+  },
+  "proxy": {
+    "id": "mediaflow",
+    "proxiedServices": [],
+    "proxiedAddons": []
+  },
+  "catalogModifications": [
+    {
+      "id": "088e3b0.tmdb.top",
+      "name": "Popular",
+      "type": "movie",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.top",
+      "name": "Popular",
+      "type": "series",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.year",
+      "name": "Year",
+      "type": "movie",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.year",
+      "name": "Year",
+      "type": "series",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.language",
+      "name": "Language",
+      "type": "movie",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.language",
+      "name": "Language",
+      "type": "series",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.trending",
+      "name": "Trending",
+      "type": "movie",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.trending",
+      "name": "Trending",
+      "type": "series",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": true,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.search",
+      "name": "Search",
+      "type": "movie",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": false,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    },
+    {
+      "id": "088e3b0.tmdb.search",
+      "name": "Search",
+      "type": "series",
+      "enabled": true,
+      "shuffle": false,
+      "rpdb": false,
+      "hideable": false,
+      "searchable": false,
+      "addonName": "The Movie Database"
+    }
+  ],
+  "autoPlay": {
+    "attributes": [
+      "service",
+      "proxied",
+      "resolution",
+      "quality",
+      "encode",
+      "audioTags",
+      "visualTags",
+      "languages",
+      "releaseGroup"
+    ],
+    "enabled": false
+  },
+  "statistics": {
+    "statsToShow": [
+      "addon",
+      "filter"
+    ]
+  },
+  "hideErrorsForResources": [],
+  "precacheNextEpisode": true,
+  "hideErrors": true,
+  "excludeUncachedFromAddons": [],
+  "excludeUncachedFromServices": [],
+  "excludeUncachedFromStreamTypes": [],
+  "excludeCachedFromAddons": [],
+  "excludeCachedFromServices": [],
+  "excludeCachedFromStreamTypes": [],
+  "preferredEncodes": [],
+  "preferredStreamTypes": [],
+  "preferredVisualTags": [],
+  "preferredAudioTags": [],
+  "resultLimits": {
+    "global": 15
+  },
+  "requiredQualities": [],
+  "includedQualities": []
+}
