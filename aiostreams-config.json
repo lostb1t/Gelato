@@ -22,7 +22,7 @@
     },
     {
       "id": "torbox",
-      "enabled": false,
+      "enabled": true,
       "credentials": {}
     },
     {
@@ -80,12 +80,48 @@
       }
     },
     {
+      "type": "stremthruTorz",
+      "instanceId": "2b5",
+      "enabled": true,
+      "options": {
+        "name": "StremThru Torz",
+        "timeout": 6000,
+        "resources": [
+          "stream"
+        ],
+        "mediaTypes": [],
+        "includeP2P": false,
+        "useMultipleInstances": false
+      }
+    },
+    {
+      "type": "mediafusion",
+      "instanceId": "327",
+      "enabled": true,
+      "options": {
+        "name": "MediaFusion",
+        "timeout": 6000,
+        "resources": [
+          "stream",
+          "catalog",
+          "meta"
+        ],
+        "useCachedResultsOnly": true,
+        "enableWatchlistCatalogs": false,
+        "downloadViaBrowser": false,
+        "contributorStreams": false,
+        "certificationLevelsFilter": [],
+        "nudityFilter": [],
+        "mediaTypes": []
+      }
+    },
+    {
       "type": "comet",
       "instanceId": "168",
       "enabled": true,
       "options": {
         "name": "Comet",
-        "timeout": 5000,
+        "timeout": 6000,
         "resources": [
           "stream"
         ],
