@@ -234,8 +234,11 @@ namespace Gelato.Decorators
             if (s.Contains(".srt")) return "srt";
             if (s.Contains(".ass") || s.Contains(".ssa")) return "ass";
             if (s.Contains(".subf2m")) return "subrip";
-            _log.LogWarning($"unkown subtitle format for {s}");
-            return "subrip";
+            if (s.Contains("subs") && s.Contains(".strem.io"))
+              return "srt"; // Stremio proxies are always normalized to .srt
+            
+            _log.LogWarning($"unkown subtitle format for {s}, defaulting to srt");
+            return "srt";
         }
 
         public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query)
