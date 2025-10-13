@@ -194,7 +194,7 @@ public class GelatoManager
     {                   
         if (!meta.IsValid())
         {
-            _log.LogWarning("meta is not valid, skipping");
+            _log.LogError("meta is not valid, skipping");
             return (null, false);
         }
   
@@ -749,7 +749,7 @@ public class GelatoManager
                 {
                     continue;
                 }
-
+                _log.LogInformation($"insert episode id: {epPath}");
                 var epItem = new Episode
                 {
                     Id = Guid.NewGuid(),

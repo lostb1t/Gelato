@@ -105,14 +105,11 @@ namespace Gelato.Tasks
     
     private void DeleteEmptyStremioContainers()
 {
-                _log.LogInformation("YOGGOFOFF");
     var seasons = _library.GetItemList(new InternalItemsQuery
     {
         IncludeItemTypes = new[] { BaseItemKind.Season },
         Recursive = true
     }).OfType<Season>()
-    //   .Where(s => s.ProviderIds.TryGetValue("stremio", out var pid) && !string.IsNullOrWhiteSpace(pid))
-   //   .Where(s => s.ProviderIds.TryGetValue("stremio", out var pid) && !string.IsNullOrWhiteSpace(pid))
       .ToArray();
 
     foreach (var season in seasons)
@@ -121,6 +118,7 @@ namespace Gelato.Tasks
         {
             IncludeItemTypes = new[] { BaseItemKind.Episode },
             ParentId = season.Id,
+            IsVirtualItem = false  
         }).Any();
 
         if (!hasEpisodes)
@@ -128,7 +126,7 @@ namespace Gelato.Tasks
             try
             {
                 _library.DeleteItem(season, new DeleteOptions { DeleteFileLocation = false }, true);
-                _log.LogInformation("Deleted empty Stremio season {Name}", season.Name);
+                _log.LogInformation("deleted empty season {Name}", season.Name);
             }
             catch (Exception ex)
             {
@@ -142,7 +140,6 @@ namespace Gelato.Tasks
         IncludeItemTypes = new[] { BaseItemKind.Series },
         Recursive = true
     }).OfType<Series>()
-    //  .Where(s => s.ProviderIds.TryGetValue("stremio", out var pid) && !string.IsNullOrWhiteSpace(pid))
       .ToArray();
 
     foreach (var series in seriesList)
@@ -151,6 +148,7 @@ namespace Gelato.Tasks
         {
             IncludeItemTypes = new[] { BaseItemKind.Episode },
             AncestorIds = new[] { series.Id },
+            IsVirtualItem = false  
         }).Any();
 
         if (!hasEpisodes)
@@ -158,7 +156,7 @@ namespace Gelato.Tasks
             try
             {
                 _library.DeleteItem(series, new DeleteOptions { DeleteFileLocation = false }, true);
-                _log.LogInformation("Deleted empty Stremio series {Name}", series.Name);
+                _log.LogInformation("deleted empty series {Name}", series.Name);
             }
             catch (Exception ex)
             {
