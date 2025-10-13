@@ -65,6 +65,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
+                var req = ctx.HttpContext.Request;
+        _log.LogInformation("GELATTOTOOOOO: Requested path = {Path}{Query}", req.Path, req.QueryString);
         if (!IsItemsAction(ctx))
         {
             await next();
@@ -152,7 +154,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
                 await Task.Delay(interval).ConfigureAwait(false);
             }
         }
-      
+
         if (baseItem is not null)
         {
             ReplaceGuid(ctx, baseItem.Id);
@@ -179,7 +181,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             || string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase)
            // || string.Equals(cad.ActionName, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
-           // || string.Equals(cad.ActionName, "GetItemSegments", StringComparison.OrdinalIgnoreCase) 
+           // || string.Equals(cad.ActionName, "GetItemSegments", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetPlaybackInfo", StringComparison.OrdinalIgnoreCase);
     }
 

@@ -30,7 +30,7 @@ namespace Gelato.Decorators
             BaseItem? owner = null)
         {
             var dto = _inner.GetBaseItemDto(item, options, user, owner);
-            Patch(dto, item, user, owner, options);
+            Patch(dto, item, user, owner, options, false);
             return dto;
         }
 
@@ -43,7 +43,7 @@ namespace Gelato.Decorators
             var list = _inner.GetBaseItemDtos(items, options, user, owner);
             for (int i = 0; i < list.Count; i++)
             {
-                Patch(list[i], item: null, user, owner, options);
+                Patch(list[i], item: null, user, owner, options, true);
             }
             return list;
         }
@@ -55,10 +55,10 @@ namespace Gelato.Decorators
             User? user = null)
         {
             var dto = _inner.GetItemByNameDto(item, options, taggedItems, user);
-            Patch(dto, item, user, owner: null, options);
+            Patch(dto, item, user, owner: null, options, false);
             return dto;
         }
-        
+
         // Not bulletproof, but providerIds are often not available
         static bool IsStremio(BaseItemDto dto)
         {
@@ -76,7 +76,8 @@ namespace Gelato.Decorators
             BaseItem? item,
             User? user,
             BaseItem? owner,
-            DtoOptions options)
+            DtoOptions options,
+            bool IsList)
         {
             var manager = _manager.Value;
             if (item is not null && user is not null && IsStremio(dto) && manager.CanDelete(item, user))
@@ -90,9 +91,9 @@ namespace Gelato.Decorators
               // clean name
               var parts = dto.Name.Split(":::");
               dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
-            
+
             // mark unplayable
-            if (dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+            if (!IsList && dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
             {
                dto.LocationType = LocationType.Virtual;
                dto.Path = null;
