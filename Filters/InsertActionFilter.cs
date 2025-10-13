@@ -65,8 +65,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
-                var req = ctx.HttpContext.Request;
-        _log.LogInformation("GELATTOTOOOOO: Requested path = {Path}{Query}", req.Path, req.QueryString);
+        //         var req = ctx.HttpContext.Request;
+        // _log.LogInformation("GELATTOTOOOOO: Requested path = {Path}{Query}", req.Path, req.QueryString);
         if (!IsItemsAction(ctx))
         {
             await next();
