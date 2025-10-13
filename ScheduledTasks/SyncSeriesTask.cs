@@ -22,7 +22,7 @@ namespace Gelato.Tasks
         private readonly ILogger<SyncRunningSeriesTask> _log;
         private readonly IFileSystem _fs;
         private readonly GelatoManager _manager;
-                private readonly GelatoStremioProvider _stremio;
+        private readonly GelatoStremioProvider _stremio;
 
         public SyncRunningSeriesTask(
             ILibraryManager library,
@@ -45,8 +45,8 @@ namespace Gelato.Tasks
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
-return new[]
-        {
+            return new[]
+                    {
             new TaskTriggerInfo
             {
                 Type = TaskTriggerInfoType.IntervalTrigger,
@@ -57,8 +57,8 @@ return new[]
 
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
-  
-var seriesFolder = _manager.TryGetSeriesFolder();
+
+            var seriesFolder = _manager.TryGetSeriesFolder();
             var seriesItems = _library.GetItemList(new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Series },
@@ -74,8 +74,21 @@ var seriesFolder = _manager.TryGetSeriesFolder();
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    _log.LogDebug("SyncRunningSeries: creating series trees for {Name} ({Id})", series.Name, series.Id);
-                    var meta = await _stremio.GetMetaAsync(series.GetProviderId("Imdb"), StremioMediaType.Series).ConfigureAwait(false);
+                    _log.LogDebug("SyncRunningSeries: syncing series trees for {Name} ({Id})", series.Name, series.Id);
+
+                    // var imdbId = series.GetProviderId("Imdb");
+                    // if (imdbId is null)
+                    // {
+                    //     _log.LogWarning("SyncRunningSeries: skipping {Name} ({Id}) - no IMDB id", series.Name, series.Id);
+                    //     continue;
+                    // }
+
+                    var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
+                    if (meta is null)
+                    {
+                        _log.LogWarning("SyncRunningSeries: skipping {Name} ({Id}) - no metadata found", series.Name, series.Id);
+                        continue;
+                    }
                     await _manager.SyncSeriesTreesAsync(seriesFolder, meta, cancellationToken);
                     processed++;
                 }
@@ -88,6 +101,6 @@ var seriesFolder = _manager.TryGetSeriesFolder();
             _log.LogInformation("SyncRunningSeries completed. Processed {Processed}/{Total} series.", processed, seriesItems.Count);
         }
 
-      
+
     }
 }

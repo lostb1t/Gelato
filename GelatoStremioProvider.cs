@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Gelato.Configuration;
 using System.Text.Json.Serialization;
 using Gelato.Common;
+using Jellyfin.Data.Enums;
 
 namespace Gelato
 {
@@ -60,7 +61,7 @@ namespace Gelato
             var extrasPart = (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
             var url = $"{baseUrl}/{path}{extrasPart}.json";
             url = url.Replace("%3A", ":").Replace("%3a", ":");
-           // Console.Write(url);
+            // Console.Write(url);
             return url;
         }
 
@@ -95,39 +96,39 @@ namespace Gelato
             _manifest = m;
 
             if (m?.Catalogs != null)
-{
-    MovieSearchCatalog = m.Catalogs
-        .Where(c =>
-            c.Type == StremioMediaType.Movie &&
-            c.Extra?.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)) == true)
-        .OrderByDescending(c => c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true)
-        .FirstOrDefault();
+            {
+                MovieSearchCatalog = m.Catalogs
+                    .Where(c =>
+                        c.Type == StremioMediaType.Movie &&
+                        c.Extra?.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)) == true)
+                    .OrderByDescending(c => c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true)
+                    .FirstOrDefault();
 
-    SeriesSearchCatalog = m.Catalogs
-        .Where(c =>
-            c.Type == StremioMediaType.Series &&
-            c.Extra?.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)) == true)
-        .OrderByDescending(c => c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true)
-        .FirstOrDefault();
-}
+                SeriesSearchCatalog = m.Catalogs
+                    .Where(c =>
+                        c.Type == StremioMediaType.Series &&
+                        c.Extra?.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)) == true)
+                    .OrderByDescending(c => c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true)
+                    .FirstOrDefault();
+            }
 
             if (MovieSearchCatalog == null)
-{
-    _log.LogWarning("manifest has no search-capable movie catalog", url);
-}
-else if (!(MovieSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) ?? false))
-{
-    _log.LogWarning("manifest uses non-tmdb movie search catalog: {Id}", MovieSearchCatalog.Id);
-}
+            {
+                _log.LogWarning("manifest has no search-capable movie catalog", url);
+            }
+            else if (!(MovieSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) ?? false))
+            {
+                _log.LogWarning("manifest uses non-tmdb movie search catalog: {Id}", MovieSearchCatalog.Id);
+            }
 
-if (SeriesSearchCatalog == null)
-{
-    _log.LogWarning("manifest has no search-capable series catalog", url);
-}
-else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) ?? false))
-{
-    _log.LogWarning("manifest uses non-tmdb series search catalog: {Id}", SeriesSearchCatalog.Id);
-}
+            if (SeriesSearchCatalog == null)
+            {
+                _log.LogWarning("manifest has no search-capable series catalog", url);
+            }
+            else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) ?? false))
+            {
+                _log.LogWarning("manifest uses non-tmdb series search catalog: {Id}", SeriesSearchCatalog.Id);
+            }
             return m;
         }
 
@@ -151,6 +152,27 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
             return r?.Meta;
         }
 
+        public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
+        {
+            var id = item.GetProviderId("Imdb");
+            if (id is null)
+            {
+                _log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
+                // return null;
+                id = item.GetProviderId("Tmdb");
+                if (id is null)
+                {
+                    _log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
+                    return null;
+                }
+                id = $"tmdb:{id}";
+            }
+            ;
+            var url = BuildUrl(new string[] { "meta", BaseItemKindInto(item.GetBaseItemKind()).ToString().ToLower(), id });
+            var r = await GetJsonAsync<StremioMetaResponse>(url);
+            return r?.Meta;
+        }
+
         public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
         {
             var url = BuildUrl(new[] { "stream", uri.MediaType.ToString().ToLower(), uri.ExternalId });
@@ -164,7 +186,7 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
             return r?.Streams ?? new();
         }
-        
+
         public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName)
         {
             var url = BuildUrl(new[] { "subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId });
@@ -236,8 +258,8 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
                 case StremioMediaType.Series:
                     item = new Series
                     {
-                       Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)),
-                      //  Id = meta.Guid ?? new Guid($"series{Id}"),
+                        Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)),
+                        //  Id = meta.Guid ?? new Guid($"series{Id}"),
                         // Path = $"stremio://series/{Id}"
                     };
                     break;
@@ -265,7 +287,7 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
             item.Name = meta.Name;
             if (!string.IsNullOrWhiteSpace(meta.Runtime)) item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             if (!string.IsNullOrWhiteSpace(meta.Description)) item.Overview = meta.Description;
-            
+
             // do this only for show and movie. cause the parent imdb is used for season abd episodes
             if (!string.IsNullOrWhiteSpace(Id))
             {
@@ -278,18 +300,18 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
             }
-            
+
 
             if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             {
-               item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
-               item.SetProviderId("Stremio", meta.ImdbId);
+                item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
+                item.SetProviderId("Stremio", meta.ImdbId);
             }
-            
+
             //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
             //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
             //item.LockedFields = locked.ToArray();
-            
+
             var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
             item.SetProviderId("Stremio", stremioUri.ExternalId);
 
@@ -300,7 +322,7 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
             //item.OriginalTitle = meta.Name
- //item.ForcedSortName = $"AA000 {meta.Name}";
+            //item.ForcedSortName = $"AA000 {meta.Name}";
             //item.ForcedSortName = item.SortName;
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
@@ -318,6 +340,17 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
             return item;
         }
 
+        public static StremioMediaType BaseItemKindInto(BaseItemKind kind)
+        {
+            return kind switch
+            {
+                BaseItemKind.Movie => StremioMediaType.Movie,
+                BaseItemKind.Series => StremioMediaType.Series,
+                BaseItemKind.Season => StremioMediaType.Series,
+                BaseItemKind.Episode => StremioMediaType.Series,
+                _ => StremioMediaType.Unknown
+            };
+        }
 
     }
 
@@ -338,7 +371,7 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
 
     public class StremioCatalog
     {
-       [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
+        [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
@@ -368,25 +401,25 @@ else if (!(SeriesSearchCatalog.Id?.EndsWith(".tmdb.search", StringComparison.Ord
     {
         public List<StremioMeta>? Metas { get; set; }
     }
-    
-    public struct StremioSubtitle
-{
-    public string Id { get; set; }
-    public string Url { get; set; }
-    public string? Lang { get; set; }
-    public int? SubId { get; set; }
-    public bool? AiTranslated { get; set; }
-    public bool? FromTrusted { get; set; }
-    public int? UploaderId { get; set; }
-    public string? LangCode { get; set; }
-    public string? Title { get; set; }
-    public string? Moviehash { get; set; }
-}
 
-public struct StremioSubtitleResponse
-{
-    public List<StremioSubtitle> Subtitles { get; set; }
-}
+    public struct StremioSubtitle
+    {
+        public string Id { get; set; }
+        public string Url { get; set; }
+        public string? Lang { get; set; }
+        public int? SubId { get; set; }
+        public bool? AiTranslated { get; set; }
+        public bool? FromTrusted { get; set; }
+        public int? UploaderId { get; set; }
+        public string? LangCode { get; set; }
+        public string? Title { get; set; }
+        public string? Moviehash { get; set; }
+    }
+
+    public struct StremioSubtitleResponse
+    {
+        public List<StremioSubtitle> Subtitles { get; set; }
+    }
 
     public class StremioMetaResponse
     {
@@ -428,7 +461,7 @@ public struct StremioSubtitleResponse
         public int? Number { get; set; }
         public DateTime? FirstAired { get; set; }
         public Guid? Guid { get; set; }
-        
+
         public Dictionary<string, string> GetProviderIds()
         {
             var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -490,14 +523,15 @@ public struct StremioSubtitleResponse
             }
             return new DateTime(year.Value, 1, 1);
         }
-        
+
         public bool IsValid()
         {
-           if (Id is not null && !Id.Contains("error")) {
-             return true;
-           }
-             
-           return false;
+            if (Id is not null && !Id.Contains("error"))
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 
@@ -611,7 +645,7 @@ public struct StremioSubtitleResponse
             //var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
             var filename = BehaviorHints?.Filename;
             return !string.IsNullOrWhiteSpace(filename)
-               // && !string.IsNullOrWhiteSpace(size)
+                // && !string.IsNullOrWhiteSpace(size)
                 && !string.IsNullOrWhiteSpace(GetName())
                 && !string.IsNullOrWhiteSpace(Url);
         }
@@ -647,60 +681,60 @@ public struct StremioSubtitleResponse
         Tv,
         Events
     }
-    
+
     public class SafeStringEnumConverter<T> : JsonConverter<T> where T : struct, Enum
-{
-    public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonTokenType.String)
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            var s = reader.GetString();
-            if (Enum.TryParse<T>(s, true, out var value)) return value;
-            if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                var s = reader.GetString();
+                if (Enum.TryParse<T>(s, true, out var value)) return value;
+                if (Enum.TryParse<T>("Unknown", true, out var fallback)) return fallback;
+            }
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
+            }
+            reader.Skip();
+            if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
+            return default;
         }
-        if (reader.TokenType == JsonTokenType.Number)
-        {
-            if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i)) return (T)Enum.ToObject(typeof(T), i);
-        }
-        reader.Skip();
-        if (Enum.TryParse<T>("Unknown", true, out var fb)) return fb;
-        return default;
+
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+            => writer.WriteStringValue(value.ToString());
     }
 
-    public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
-        => writer.WriteStringValue(value.ToString());
-}
-
-public sealed class NullableIntLenientConverter : JsonConverter<int?>
-{
-    public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    public sealed class NullableIntLenientConverter : JsonConverter<int?>
     {
-        if (r.TokenType == JsonTokenType.Number)
-            return r.TryGetInt32(out var i) ? i : (int?)null;
-
-        if (r.TokenType == JsonTokenType.String)
+        public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
         {
-            var s = r.GetString();
-            if (string.IsNullOrWhiteSpace(s))
+            if (r.TokenType == JsonTokenType.Number)
+                return r.TryGetInt32(out var i) ? i : (int?)null;
+
+            if (r.TokenType == JsonTokenType.String)
+            {
+                var s = r.GetString();
+                if (string.IsNullOrWhiteSpace(s))
+                    return null;
+
+                return int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
+                    ? v
+                    : (int?)null;
+            }
+
+            if (r.TokenType == JsonTokenType.Null)
                 return null;
 
-            return int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
-                ? v
-                : (int?)null;
+            return null;
         }
 
-        if (r.TokenType == JsonTokenType.Null)
-            return null;
+        public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o)
+        {
+            if (v.HasValue) w.WriteNumberValue(v.Value);
+            else w.WriteNullValue();
+        }
 
-        return null;
     }
-
-public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o)
-    {
-        if (v.HasValue) w.WriteNumberValue(v.Value);
-        else w.WriteNullValue();
-    }
-
-}
 
 }

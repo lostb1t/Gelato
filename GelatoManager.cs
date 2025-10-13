@@ -96,8 +96,6 @@ public class GelatoManager
     {
         _memoryCache.Set($"streamsync:{guid}", guid, TimeSpan.FromMinutes(3600));
     }
-    
-    
 
     public bool HasStreamSync(Guid guid)
     {
@@ -120,7 +118,7 @@ public class GelatoManager
     {
         _memoryCache.Remove($"meta:{guid}");
     }
-    
+
 
     public void ClearCache()
     {
@@ -191,13 +189,13 @@ public class GelatoManager
     /// <param name="ct"></param>
     /// <returns></returns>
     public async Task<(BaseItem?, bool)> InsertMeta(Folder parent, StremioMeta meta, bool refreshItem, bool queueRefreshItem, CancellationToken ct)
-    {                   
+    {
         if (!meta.IsValid())
         {
             _log.LogError("meta is not valid, skipping");
             return (null, false);
         }
-  
+
         if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
         {
             return (null, false);
@@ -258,33 +256,34 @@ public class GelatoManager
         }
         return (baseItem as BaseItem, true);
     }
-    
-    public async Task<BaseItem?> WaitForInsert(StremioMeta meta) {
-            var tempItem = _stremioProvider.IntoBaseItem(meta);
-            var timeout = TimeSpan.FromSeconds(10);
-            var interval = TimeSpan.FromSeconds(1);
-            var start = DateTime.UtcNow;
-        BaseItem? baseItem = null;
-            _log.LogDebug("Insert threw; assuming race. Waiting for item to materialize.");
-            while (DateTime.UtcNow - start < timeout)
-            {
-                baseItem = GetByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
-                if (baseItem != null)
-                {
-                    _log.LogDebug("Found item after race.");
-                    break;
-                }
 
-                await Task.Delay(interval).ConfigureAwait(false);
+    public async Task<BaseItem?> WaitForInsert(StremioMeta meta)
+    {
+        var tempItem = _stremioProvider.IntoBaseItem(meta);
+        var timeout = TimeSpan.FromSeconds(10);
+        var interval = TimeSpan.FromSeconds(1);
+        var start = DateTime.UtcNow;
+        BaseItem? baseItem = null;
+        _log.LogDebug("Insert threw; assuming race. Waiting for item to materialize.");
+        while (DateTime.UtcNow - start < timeout)
+        {
+            baseItem = GetByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
+            if (baseItem != null)
+            {
+                _log.LogDebug("Found item after race.");
+                break;
             }
-            return baseItem;
+
+            await Task.Delay(interval).ConfigureAwait(false);
         }
+        return baseItem;
+    }
 
 
     public IEnumerable<BaseItem> FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
     {
         providerIds.Remove(MetadataProvider.TmdbCollection.ToString());
-        
+
         var q = new InternalItemsQuery
         {
             IncludeItemTypes = new[] { kind },
@@ -298,14 +297,16 @@ public class GelatoManager
         return _library.GetItemList(q).OfType<BaseItem>();
     }
 
-    public BaseItem? GetByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind) {
-      return FindByProviderIds(providerIds, kind).FirstOrDefault();
-  }
-  
-  public BaseItem? GetExisting(StremioMeta meta) {
-    var item = _stremioProvider.IntoBaseItem(meta);
-    return GetByProviderIds(item.ProviderIds, item.GetBaseItemKind());
-  }
+    public BaseItem? GetByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
+    {
+        return FindByProviderIds(providerIds, kind).FirstOrDefault();
+    }
+
+    public BaseItem? GetExisting(StremioMeta meta)
+    {
+        var item = _stremioProvider.IntoBaseItem(meta);
+        return GetByProviderIds(item.ProviderIds, item.GetBaseItemKind());
+    }
 
     public void QueueParentRefresh(BaseItem item)
     {
@@ -343,7 +344,7 @@ public class GelatoManager
         }
 
         var streams = await _stremioProvider.GetStreamsAsync(uri).ConfigureAwait(false);
-        
+
         // item could be a local file which does not have the stremio marker
         if (!providerIds.ContainsKey("stremio"))
         {
@@ -375,13 +376,14 @@ public class GelatoManager
 
         var parts = item.Name.Split(":::");
         var name = parts.Length > 1 ? parts[1] : item.Name;
-        
+
         var i = 0;
         foreach (var s in streams)
         {
-            if (!s.IsValid()) {
-              _log.LogWarning($"invalid stream, skipping {s.Name}");
-              continue;
+            if (!s.IsValid())
+            {
+                _log.LogWarning($"invalid stream, skipping {s.Name}");
+                continue;
             }
             i++;
 
@@ -389,7 +391,7 @@ public class GelatoManager
             if (!desiredIds.Add(id)) continue; // already accounted for
 
             var label = $"{i:D3}:::{name}:::{s.Name}";
-            
+
             if (currentIds.Contains(id))
             {
                 var existing = currentById[id];
@@ -399,7 +401,7 @@ public class GelatoManager
                 _ = locked.Remove(MetadataField.Name);
                 existing.LockedFields = locked.ToArray();
                 await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-              
+
                 existing.Name = label;
 
                 if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
@@ -466,11 +468,11 @@ public class GelatoManager
     {
         return items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
     }
-    
+
     public bool IsStremioPlaceholder(BaseItem item)
-{
-    return item.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true;
-}
+    {
+        return item.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true;
+    }
 
     public async Task MergeVersions(Video[] items)
     {
@@ -492,7 +494,7 @@ public class GelatoManager
             _log.LogError("MergeVersions: No item with a path starting with 'stremio' found. Merge aborted.");
             return;
         }
-        
+
         _log.LogDebug($"selected {primaryVersion.Name} {primaryVersion.Id} as primary version");
 
         var inv = CultureInfo.InvariantCulture;
@@ -505,14 +507,14 @@ public class GelatoManager
         {
             v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
             v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-            
+
             await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                    .ConfigureAwait(false);
         }
 
         primaryVersion.LinkedAlternateVersions = replacementLinks;
         primaryVersion.SetPrimaryVersionId(null);
-        
+
         await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                            .ConfigureAwait(false);
     }
@@ -666,32 +668,43 @@ public class GelatoManager
            StremioMeta seriesMeta,
            CancellationToken ct)
     {
-        if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path)){
-             _log.LogWarning($"seriesRootFolder null or empty for {seriesMeta.Id}");
+        if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
+        {
+            _log.LogWarning($"seriesRootFolder null or empty for {seriesMeta.Id}");
             return null;
-}
+        }
+
         //var providerIds = seriesMeta.GetProviderIds();
         //if (providerIds is null || providerIds.Count == 0){
         //     _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
         //    return null;
-//}
+        //}
         var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode)
             .GroupBy(e => e.Season)
             .ToList();
-        if (groups.Count == 0) {
-             _log.LogWarning($"no episodes found for {seriesMeta.Id}");
+        if (groups.Count == 0)
+        {
+            _log.LogWarning($"no episodes found for {seriesMeta.Id}");
             return null;
-          }
+        }
 
         //var seriesStremioUri = StremioUri.LoadFromString(stremioKey);
         var tmpSeries = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
-        
-        if (tmpSeries.ProviderIds is null || tmpSeries.ProviderIds.Count == 0){
-             _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
+
+        if (tmpSeries.ProviderIds is null || tmpSeries.ProviderIds.Count == 0)
+        {
+            _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
             return null;
         }
+
+        // if (tmpSeries.GetProviderId("Imdb") is null)
+        // {
+        //     _log.LogWarning($"no imdb ID found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
+        //     return null;
+        // }
+
         var seriesItem = (Series)GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind());
         if (seriesItem is null)
         {
