@@ -235,7 +235,7 @@ public class GelatoManager
 
         if (meta.Type == StremioMediaType.Series)
         {
-            baseItem = await CreateSeriesTreesAsync(parent, meta, ct);
+            baseItem = await SyncSeriesTreesAsync(parent, meta, ct);
         }
 
 
@@ -661,7 +661,7 @@ public class GelatoManager
         }
     }
 
-    public async Task<BaseItem?> CreateSeriesTreesAsync(
+    public async Task<BaseItem?> SyncSeriesTreesAsync(
            Folder seriesRootFolder,
            StremioMeta seriesMeta,
            CancellationToken ct)
@@ -696,7 +696,6 @@ public class GelatoManager
         if (seriesItem is null)
         {
             seriesItem = tmpSeries;
-           // seriesItem = (Series)_stremioProvider.IntoBaseItem(seriesMeta);
             if (seriesItem.Id == Guid.Empty) seriesItem.Id = Guid.NewGuid();
             seriesItem.PresentationUniqueKey = seriesItem.CreatePresentationUniqueKey();
             seriesRootFolder.AddChild(seriesItem);
