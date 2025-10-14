@@ -56,7 +56,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
         }
 
         var stremioMeta = _manager.GetStremioMeta(guid);
-        if (stremioMeta is null && stremioMeta.Poster is not null)
+        if (stremioMeta is null || stremioMeta.Poster is null)
         {
             await next();
             return;
