@@ -3,43 +3,39 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Gelato.Filters;
 
 /// <summary>
-/// Captures media source index for playback request and ave it for later reuse.
+/// Captures media source id for playback request and save it for later reuse.
+/// Looks for both "MediaSourceId" and "RouteMediaSourceId", stores as "MediaSourceId".
 /// </summary>
 public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
 {
     public int Order { get; set; } = 3;
-    private const string Key = "MediaSourceId";
+
+    private const string ItemsKey = "MediaSourceId";
+    private static readonly string[] InputKeys = new[] { "MediaSourceId", "RouteMediaSourceId" };
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
-
-        // always save action name
         if (ctx.ActionDescriptor is ControllerActionDescriptor cad)
-        {
             ctx.HttpContext.Items["actionName"] = cad.ActionName;
-        }
 
-        // Already captured on this request? bail.
-        if (ctx.HttpContext.Items.ContainsKey(Key))
+        if (ctx.HttpContext.Items.ContainsKey(ItemsKey))
         {
             await next();
             return;
         }
 
         if (TryFromArgs(ctx.ActionArguments, out var id) ||
+            TryFromRoute(ctx, out id) ||
             TryFromQuery(ctx.HttpContext.Request, out id))
         {
             if (!string.IsNullOrWhiteSpace(id))
-            {
-                ctx.HttpContext.Items[Key] = id!;
-            }
+                ctx.HttpContext.Items[ItemsKey] = id!;
         }
 
         await next();
@@ -51,11 +47,14 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
         {
             if (kv.Value is null) continue;
 
-            if (kv.Key.Equals(Key, System.StringComparison.OrdinalIgnoreCase)
-                && kv.Value is string s && !string.IsNullOrWhiteSpace(s))
+            foreach (var key in InputKeys)
             {
-                id = s;
-                return true;
+                if (kv.Key.Equals(key, System.StringComparison.OrdinalIgnoreCase)
+                    && kv.Value is string s && !string.IsNullOrWhiteSpace(s))
+                {
+                    id = s;
+                    return true;
+                }
             }
         }
 
@@ -64,8 +63,27 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
             var v = kv.Value;
             if (v is null) continue;
 
-            var prop = v.GetType().GetProperty(Key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
-            if (prop?.GetValue(v) is string s && !string.IsNullOrWhiteSpace(s))
+            var type = v.GetType();
+            foreach (var key in InputKeys)
+            {
+                var prop = type.GetProperty(key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                if (prop?.GetValue(v) is string s && !string.IsNullOrWhiteSpace(s))
+                {
+                    id = s;
+                    return true;
+                }
+            }
+        }
+
+        id = null;
+        return false;
+    }
+
+    private static bool TryFromRoute(ActionExecutingContext ctx, out string? id)
+    {
+        foreach (var key in InputKeys)
+        {
+            if (ctx.RouteData.Values.TryGetValue(key, out var val) && val is string s && !string.IsNullOrWhiteSpace(s))
             {
                 id = s;
                 return true;
@@ -78,11 +96,14 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
 
     private static bool TryFromQuery(HttpRequest req, out string? id)
     {
-        var val = req.Query[Key];
-        if (!string.IsNullOrWhiteSpace(val))
+        foreach (var key in InputKeys)
         {
-            id = val.ToString();
-            return true;
+            var val = req.Query[key];
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                id = val.ToString();
+                return true;
+            }
         }
 
         id = null;

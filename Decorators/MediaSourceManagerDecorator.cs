@@ -73,6 +73,7 @@ namespace Gelato.Decorators
                 || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "GetSubtitleWithTicks", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
         }
 
@@ -149,8 +150,8 @@ namespace Gelato.Decorators
 
             if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
 
-            _log.LogDebug("GetStaticMediaSources finished for {Id} uri={Uri} action={Action}",
-                item.Id, uri?.ToString(), actionName);
+            _log.LogDebug("GetStaticMediaSources finished for {Id} uri={Uri} action={Action} count={Count}",
+                item.Id, uri?.ToString(), actionName, sources.Count());
 
             return sources;
         }
@@ -169,8 +170,6 @@ namespace Gelato.Decorators
             _inner.AddParts(providers);
         }
 
-        // public void AddParts(IEnumerable<IMediaSourceProvider> providers) => _inner.AddParts(providers);
-
         public IReadOnlyList<MediaStream> GetMediaStreams(Guid itemId)
         {
             return _inner.GetMediaStreams(itemId);
@@ -178,13 +177,7 @@ namespace Gelato.Decorators
 
         public void AddSubtitleStreams(BaseItem item, MediaSourceInfo source)
         {
-
-            //if (!IsExternal(item)) {
-            //   return;
-            // }
-
             var manager = _manager.Value;
-            // var Id = item;
 
             var subtitles = manager.GetStremioSubtitlesCache(item.Id);
             if (subtitles is null)
@@ -219,6 +212,7 @@ namespace Gelato.Decorators
                     DeliveryMethod = SubtitleDeliveryMethod.External
                 });
             }
+            _log.LogDebug($"AddSubtitleStreams: loaded {streams.Count()} subtitles");
             source.MediaStreams = streams;
             return;
         }
@@ -292,8 +286,6 @@ namespace Gelato.Decorators
     if (owner.Id != item.Id)
     {                
       sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
-        //sources = await _inner.GetPlaybackMediaSources(owner, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
-
         selected = !string.IsNullOrEmpty(selected.Id)
             ? sources.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? sources.FirstOrDefault()
             : sources.FirstOrDefault();
@@ -301,8 +293,6 @@ namespace Gelato.Decorators
 
     if (selected is null)
         return sources;
-
-       // _log.LogDebug("Togo {ItemId} ={MediaSourceId}", allowMediaProbe, NeedsProbe(selected));
     
     if (NeedsProbe(selected))
     {
@@ -339,6 +329,7 @@ namespace Gelato.Decorators
             BaseItem item,
             string mediaSourceId,
             string? liveStreamId,
+              
             bool enablePathSubstitution,
             CancellationToken cancellationToken)
             => _inner.GetMediaSource(item, mediaSourceId, liveStreamId, enablePathSubstitution, cancellationToken);
