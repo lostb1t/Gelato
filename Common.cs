@@ -67,19 +67,20 @@ public sealed class StremioUri
         };
 
        var stremioId = item.GetProviderId("Stremio");
+       StremioUri? uri = null;
        if (!string.IsNullOrWhiteSpace(stremioId))
-         return new StremioUri(mediaType, stremioId);
+         uri = new StremioUri(mediaType, stremioId);
 
         if (kind == BaseItemKind.Movie)
         {
             var imdb = item.GetProviderId(MetadataProvider.Imdb);
-            return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Movie, imdb);
+            return string.IsNullOrWhiteSpace(imdb) ? uri : new StremioUri(StremioMediaType.Movie, imdb);
         }
 
         if (kind == BaseItemKind.Series)
         {
             var imdb = item.GetProviderId(MetadataProvider.Imdb);
-            return string.IsNullOrWhiteSpace(imdb) ? null : new StremioUri(StremioMediaType.Series, imdb);
+            return string.IsNullOrWhiteSpace(imdb) ? uri : new StremioUri(StremioMediaType.Series, imdb);
         }
 
         if (kind == BaseItemKind.Episode)
@@ -87,7 +88,7 @@ public sealed class StremioUri
             var ep = (MediaBrowser.Controller.Entities.TV.Episode)item;
             var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
             if (string.IsNullOrWhiteSpace(seriesImdb) || ep.ParentIndexNumber is null || ep.IndexNumber is null)
-                return null;
+                return uri;
 
             var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
             return new StremioUri(StremioMediaType.Series, ext);
