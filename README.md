@@ -26,7 +26,7 @@ NOTICE: ONLY SUPPORTS 10.11
 
 1. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: `https://aiostreams.elfhosted.com/stremio/configure`
     
-   At minimum you need the tmdb addon enabled for search and a debrid/scraper addon (comet for example).
+   At minimum you need the tmdb addon enabled (make sure to enable the option "Provide IMDB IDs") for search and a debrid/scraper addon (comet for example).
    Alternative you can import the [starter config](aiostreams-config.json). The only thing you need to set are your debrid providers under services after importing the config.
    
    p2p is not supported so you need an debrid addon for streams.
