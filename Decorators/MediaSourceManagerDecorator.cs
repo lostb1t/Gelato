@@ -90,12 +90,15 @@ namespace Gelato.Decorators
         {
             var manager = _manager.Value;
             _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
-
-            if ((!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsStremio(item)) ||
-                item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+       
+            // a file can be added after stremio has been inserted. if thats the case we just filter out stremio
+            if (!GelatoPlugin.Instance!.Configuration.EnableMixed)
             {
-                _log.LogDebug("GetStaticMediaSources not marked for streams");
-                return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+                var srcs = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+                var hasFile = srcs.Where(v => v.Protocol == MediaProtocol.File).Any();
+                if (hasFile) {
+                  return srcs.Where(v => v.Protocol == MediaProtocol.File).ToArray();
+                }
             }
 
             var ctx = _http?.HttpContext;
