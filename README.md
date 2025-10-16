@@ -67,6 +67,7 @@ NOTICE: ONLY SUPPORTS 10.11
 
 - You need to restart the server after editing the manifest/config in aiostreams.
 - You should have at least one search enabled catalog. I suggest the tmdb addon.
+- if something borked or you want to start over, you can use the purge task under scheduled tasks.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - stream cache is 3600 min. Can be cleared by restarting the server
