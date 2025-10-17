@@ -40,13 +40,13 @@ NOTICE: ONLY SUPPORTS 10.11
 
 4. Add the configured base paths to the Jellyfin library of your choice.
 
-4.5 Optional but recommended. Lower the probe and analyze size: ex:
+5. Optional but recommended. Lower the probe and analyze size: ex:
 ```
 JELLYFIN_FFmpeg__probesize="50M"
 JELLYFIN_FFmpeg__analyzeduration="5M"
 ```
 
-5. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
+6. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
 
 ## Notes
 
