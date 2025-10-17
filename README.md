@@ -21,7 +21,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - **Act as an proxy** - Streams are proxied through Jellyfin, so debrid sees everything as a single IP.
 - **More Content, Less Hassle** – Expand Jellyfin with community-driven Stremio catalogs
 
-NOTICE: ONLY SUPPORTS 10.11
+**NOTICE: ONLY SUPPORTS JELLYFIN 10.11**
 
 ## Usage
 
