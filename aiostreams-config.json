@@ -2,7 +2,7 @@
   "services": [
     {
       "id": "realdebrid",
-      "enabled": true,
+      "enabled": false,
       "credentials": {}
     },
     {
