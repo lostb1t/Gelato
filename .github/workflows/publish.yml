@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
+    if: github.event_name == 'release'
     steps:
       - name: Download Artifact
         uses: actions/download-artifact@v5
@@ -40,6 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - upload
+    if: github.event_name == 'release'
     steps:
       - name: Jellyfin plugin repo
         uses: Kevinjil/jellyfin-plugin-repo-action@v0.4.3

@@ -4,11 +4,14 @@ on:
   push:
     branches:
       - master
+      - main
+      - fix-unreleased
     paths-ignore:
       - "**/*.md"
   pull_request:
     branches:
       - master
+      - main
     paths-ignore:
       - "**/*.md"
   workflow_dispatch:
