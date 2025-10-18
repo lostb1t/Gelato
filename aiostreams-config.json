@@ -82,7 +82,7 @@
     {
       "type": "stremthruTorz",
       "instanceId": "2b5",
-      "enabled": false,
+      "enabled": true,
       "options": {
         "name": "StremThru Torz",
         "timeout": 6000,
@@ -97,7 +97,7 @@
     {
       "type": "mediafusion",
       "instanceId": "327",
-      "enabled": false,
+      "enabled": true,
       "options": {
         "name": "MediaFusion",
         "timeout": 6000,
