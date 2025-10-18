@@ -53,6 +53,10 @@
           <input is="emby-input" type="checkbox" id="chkEnableMixed" label="Enable stremio results and local files" />
           <span>If enabled, stremio streams and local sources are merged</span>
         </div>
+        <div class="inputContainer">
+          <input is="emby-input" type="checkbox" id="chkFilterUnreleased" label="Filter unreleased items" />
+          <span>If enabled, only items that have been released will be shown in search results and catalog imports</span>
+        </div>
         <br />
         Want to support me? Use my torbox referral code <a target="_blank"
           href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">abe1a9d9-53c9-449a-9d85-ab3dfb5d188d</a>
@@ -78,6 +82,7 @@
         const txtStreamTTL = document.querySelector('#txtStreamTTL');
         const chkEnableSubs = document.querySelector('#chkEnableSubs');
         const chkEnableMixed = document.querySelector('#chkEnableMixed');
+        const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
         async function loadConfig() {
           Dashboard.showLoadingMsg();
           try {
@@ -89,6 +94,7 @@
             txtStreamTTL.value = cfg.StreamTTL || 3600;
             chkEnableSubs.checked = cfg.EnableSubs || false;
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
+            chkFilterUnreleased.checked = cfg.FilterUnreleased ?? true;
           } catch (e) {
             console.error(e);
           } finally {
@@ -108,6 +114,7 @@
             cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
             cfg.EnableSubs = (chkEnableSubs.checked || false);
             cfg.EnableMixed = !!chkEnableMixed.checked;
+            cfg.FilterUnreleased = chkFilterUnreleased.checked ?? true;
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {

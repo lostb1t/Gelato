@@ -121,6 +121,9 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
+        // Note: We do NOT filter unreleased items here because the user has explicitly
+        // selected this item from search results to add to their library.
+
        BaseItem? baseItem = null;
 
 await _lock.RunQueuedAsync(guid, async ct =>

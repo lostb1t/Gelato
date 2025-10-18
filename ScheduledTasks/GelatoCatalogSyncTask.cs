@@ -91,10 +91,13 @@ namespace Gelato.Tasks
                         if (page is null || page.Count == 0)
                             break;
 
+                        var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
+
                         foreach (var _meta in page)
                         {
                             ct.ThrowIfCancellationRequested();
 
+                            // Note: page items are already filtered by GetCatalogMetasAsync
                             var meta = _meta;
                             if (cat.Type == StremioMediaType.Series && _meta.Videos is null)
                             {
@@ -102,6 +105,14 @@ namespace Gelato.Tasks
                                 if (meta is null)
                                 {
                                     _log.LogWarning("Stremio meta not found for {Id} {Type}", _meta.Id, _meta.Type);
+                                    continue;
+                                }
+
+                                // Re-check release status for the detailed meta fetched via GetMetaAsync
+                                // (since it bypasses GetCatalogMetasAsync filtering)
+                                if (filterUnreleased && !meta.IsReleased())
+                                {
+                                    _log.LogDebug("Skipping unreleased series: {Name} ({Id})", meta.Name, meta.Id);
                                     continue;
                                 }
                             }

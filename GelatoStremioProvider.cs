@@ -205,7 +205,16 @@ namespace Gelato
             if (skip is > 0) extras.Add($"skip={skip}");
             var url = BuildUrl(new[] { "catalog", mediaType.ToString().ToLower(), id }, extras);
             var r = await GetJsonAsync<StremioCatalogResponse>(url);
-            return r?.Metas ?? new();
+            var metas = r?.Metas ?? new List<StremioMeta>();
+
+            // Filter out unreleased items if enabled (applies to ALL catalogs/addons)
+            var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
+            if (filterUnreleased)
+            {
+                metas = metas.Where(m => m.IsReleased()).ToList();
+            }
+
+            return metas;
         }
 
         public async Task<IReadOnlyList<StremioMeta>> SearchAsync(
@@ -531,6 +540,35 @@ namespace Gelato
                 return true;
             }
 
+            return false;
+        }
+
+        public bool IsReleased()
+        {
+            var now = DateTime.UtcNow;
+
+            // Check Released date first (most specific)
+            if (Released.HasValue)
+            {
+                return Released.Value <= now;
+            }
+
+            // Check FirstAired for TV episodes
+            if (FirstAired.HasValue)
+            {
+                return FirstAired.Value <= now;
+            }
+
+            // Fall back to year-based check
+            var year = GetYear();
+            if (year.HasValue)
+            {
+                // If the year is in the past, consider it released
+                // If it's current year, we can't be sure, so we'll allow it
+                return year.Value <= now.Year;
+            }
+
+            // If we have no release information, assume it's not released
             return false;
         }
     }
