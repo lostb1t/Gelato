@@ -12,6 +12,7 @@ using MediaBrowser.Model.Entities;
 using System.Threading.Tasks;
 using System.Threading;
 using System.IO;
+using System.Collections.Concurrent;
 
 namespace Gelato.Common;
 
@@ -217,85 +218,74 @@ public sealed class TimedBlock : IDisposable
     }
 }
 
-public sealed class FileCache
+public sealed class KeyLock
 {
-    private readonly string _basePath;
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        WriteIndented = false,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-    };
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _queues = new();
+    private readonly ConcurrentDictionary<Guid, Lazy<Task>> _inflight = new();
 
-    private sealed class Envelope<T>
+    public Task RunSingleFlightAsync(Guid key, Func<CancellationToken, Task> action, CancellationToken ct = default)
     {
-        public T? Value { get; set; }
-        public DateTimeOffset? ExpiresAt { get; set; }
+        var lazy = _inflight.GetOrAdd(key, _ => new Lazy<Task>(() => Once(key, action, ct), LazyThreadSafetyMode.ExecutionAndPublication));
+        return lazy.Value;
     }
 
-    public FileCache(string basePath)
+    public Task<T> RunSingleFlightAsync<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
     {
-        _basePath = basePath ?? throw new ArgumentNullException(nameof(basePath));
-        Directory.CreateDirectory(_basePath);
+        var lazy = _inflight.GetOrAdd(key, _ => new Lazy<Task>(() => Once(key, action, ct), LazyThreadSafetyMode.ExecutionAndPublication));
+        return (Task<T>)lazy.Value;
     }
 
-    public async Task SetAsync<T>(string key, T value, CancellationToken ct = default)
+    public async Task RunQueuedAsync(Guid key, Func<CancellationToken, Task> action, CancellationToken ct = default)
     {
-        var path = PathFor(key);
-        await using var fs = File.Create(path);
-        var envelope = new Envelope<T>
+        var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        await sem.WaitAsync(ct).ConfigureAwait(false);
+        try { await action(ct).ConfigureAwait(false); }
+        finally { ReleaseAndMaybeRemove(key, sem); }
+    }
+
+    public async Task<T> RunQueuedAsync<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
+    {
+        var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        await sem.WaitAsync(ct).ConfigureAwait(false);
+        try { return await action(ct).ConfigureAwait(false); }
+        finally { ReleaseAndMaybeRemove(key, sem); }
+    }
+
+    public async Task<bool> TryRunQueuedAsync(Guid key, Func<CancellationToken, Task> action, CancellationToken ct = default)
+    {
+        var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false)) return false;
+        try { await action(ct).ConfigureAwait(false); return true; }
+        finally { ReleaseAndMaybeRemove(key, sem); }
+    }
+
+    public async Task<(bool ran, T result)> TryRunQueuedAsync<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
+    {
+        var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false)) return (false, default!);
+        try { return (true, await action(ct).ConfigureAwait(false)); }
+        finally { ReleaseAndMaybeRemove(key, sem); }
+    }
+
+    private async Task Once(Guid key, Func<CancellationToken, Task> action, CancellationToken ct)
+    {
+        try { await action(ct).ConfigureAwait(false); }
+        finally { _inflight.TryRemove(key, out _); }
+    }
+
+    private async Task<T> Once<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct)
+    {
+        try { return await action(ct).ConfigureAwait(false); }
+        finally { _inflight.TryRemove(key, out _); }
+    }
+
+    private void ReleaseAndMaybeRemove(Guid key, SemaphoreSlim sem)
+    {
+        sem.Release();
+        if (sem.CurrentCount == 1 && sem.Wait(0))
         {
-            Value = value,
-            // ExpiresAt = ttl.HasValue ? DateTimeOffset.UtcNow.Add(ttl.Value) : null
-        };
-        await JsonSerializer.SerializeAsync(fs, envelope, JsonOpts, ct).ConfigureAwait(false);
-    }
-
-    public async Task<T?> GetAsync<T>(string key, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(key))
-            return default;
-
-        var path = PathFor(key);
-        if (!File.Exists(path))
-            return default;
-
-        try
-        {
-            await using var fs = File.OpenRead(path);
-            var envelope = await JsonSerializer
-                .DeserializeAsync<Envelope<T>>(fs, JsonOpts, ct)
-                .ConfigureAwait(false);
-
-            if (envelope is null)
-                return default;
-
-            if (envelope.ExpiresAt.HasValue && envelope.ExpiresAt.Value <= DateTimeOffset.UtcNow)
-            {
-                try { File.Delete(path); } catch { /* ignore */ }
-                return default;
-            }
-
-            return envelope.Value;
+            sem.Release();
+            _queues.TryRemove(key, out _);
         }
-        catch
-        {
-            try { File.Delete(path); } catch { /* ignore */ }
-            return default;
-        }
-    }
-
-    public void Remove(string key)
-    {
-        var path = PathFor(key);
-        try { if (File.Exists(path)) File.Delete(path); } catch { }
-    }
-
-    private string PathFor(string key)
-    {
-        using var sha = SHA256.Create();
-        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(key));
-        var sb = new StringBuilder(hash.Length * 2);
-        foreach (var b in hash) sb.Append(b.ToString("x2"));
-        return Path.Combine(_basePath, sb.ToString() + ".json");
     }
 }

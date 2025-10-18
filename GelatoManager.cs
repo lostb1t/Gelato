@@ -257,29 +257,6 @@ public class GelatoManager
         return (baseItem as BaseItem, true);
     }
 
-    public async Task<BaseItem?> WaitForInsert(StremioMeta meta)
-    {
-        var tempItem = _stremioProvider.IntoBaseItem(meta);
-        var timeout = TimeSpan.FromSeconds(10);
-        var interval = TimeSpan.FromSeconds(1);
-        var start = DateTime.UtcNow;
-        BaseItem? baseItem = null;
-        _log.LogDebug("Insert threw; assuming race. Waiting for item to materialize.");
-        while (DateTime.UtcNow - start < timeout)
-        {
-            baseItem = GetByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
-            if (baseItem != null)
-            {
-                _log.LogDebug("Found item after race.");
-                break;
-            }
-
-            await Task.Delay(interval).ConfigureAwait(false);
-        }
-        return baseItem;
-    }
-
-
     public IEnumerable<BaseItem> FindByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
     {
         providerIds.Remove(MetadataProvider.TmdbCollection.ToString());

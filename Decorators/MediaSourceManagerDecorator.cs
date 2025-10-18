@@ -34,6 +34,7 @@ namespace Gelato.Decorators
         private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
         private readonly GelatoStremioProvider _stremio;
+        private readonly KeyLock _lock = new();
 
         public MediaSourceManagerDecorator(
             IMediaSourceManager inner,
@@ -122,15 +123,22 @@ namespace Gelato.Decorators
             }
             else if (uri is not null && !manager.HasStreamSync(item.Id))
             {
-                _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
 
-                manager.SyncStreams(item, CancellationToken.None).GetAwaiter().GetResult();
-                
-                var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind()).OfType<Video>().ToArray();
 
-                if (items.Length > 1)
-                    manager.MergeVersions(items).GetAwaiter().GetResult();
 
+                // bug in webui that calls the detail page twice. So thats why theres a lock
+              _lock.RunSingleFlightAsync(item.Id, async ct =>
+{
+                    _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
+    await manager.SyncStreams(item, ct).ConfigureAwait(false);
+
+    var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind())
+                       .OfType<Video>()
+                       .ToArray();
+
+    if (items.Length > 1)
+        await manager.MergeVersions(items).ConfigureAwait(false);
+}).GetAwaiter().GetResult();
                 item = _libraryManager.GetItemById(item.Id);
             }
 

@@ -32,6 +32,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
     private readonly IFileSystem _fileSystem;
     private readonly ILibraryMonitor _libraryMonitor;
     private readonly LinkGenerator _links;
+    private readonly KeyLock _lock = new();
 
     public int Order { get; set; } = 1;
 
@@ -120,40 +121,19 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
-        BaseItem? baseItem = null;
+       BaseItem? baseItem = null;
 
-        try
-        {
-            // keep search id. Fewer redirects and some clients actually check the search id against the detail id...
-            meta.Guid = guid;
-            (baseItem, _) = await _manager.InsertMeta(
-                root,
-                meta,
-                false,
-                true,
-                CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
-            // Fallback: likely a race; wait briefly for the item to appear
-            var tempItem = _stremioProvider.IntoBaseItem(meta);
-            var timeout = TimeSpan.FromSeconds(10);
-            var interval = TimeSpan.FromSeconds(1);
-            var start = DateTime.UtcNow;
+await _lock.RunQueuedAsync(guid, async ct =>
+{
+    meta.Guid = guid;
 
-            _log.LogDebug("Insert threw; assuming race. Waiting for item to materialize.");
-            while (DateTime.UtcNow - start < timeout)
-            {
-                baseItem = _manager.GetByProviderIds(tempItem.ProviderIds, tempItem.GetBaseItemKind());
-                if (baseItem != null)
-                {
-                    _log.LogDebug("Found item after race.");
-                    break;
-                }
-
-                await Task.Delay(interval).ConfigureAwait(false);
-            }
-        }
+    (baseItem, _) = await _manager.InsertMeta(
+        root,
+        meta,
+        false,
+        true,
+        ct).ConfigureAwait(false);
+});
 
         if (baseItem is not null)
         {

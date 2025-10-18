@@ -23,7 +23,6 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<GelatoStremioProvider>();
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
-        //services.AddSingleton<RedirectActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();

@@ -1,0 +1,213 @@
+#pragma warning disable SA1611, SA1591, SA1615, CS0165
+
+using System;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+
+//using MonoTorrent.Connections.Encryption;
+using MonoTorrent;
+using MonoTorrent.Client;
+using MonoTorrent.Streaming;
+
+namespace Gelato;
+
+[ApiController]
+[Route("gelato")]
+public class GelatoApiController : ControllerBase
+{
+    private readonly ILogger<GelatoApiController> _log;
+    private readonly ILoggerFactory _loggerFactory;
+
+    public GelatoApiController(ILoggerFactory loggerFactory)
+    {
+        _loggerFactory = loggerFactory;
+        _log = loggerFactory.CreateLogger<GelatoApiController>();
+    }
+
+    [HttpPost("stream")]
+    public IActionResult Stream()
+    {
+        return NotFound();
+    }
+}
+
+public static class TorrentStream
+{
+    public static async Task Main(string[] args)
+    {
+        string downloadPath = Path.Combine(Path.GetTempPath(), "MonoTorrentStreaming");
+        Directory.CreateDirectory(downloadPath);
+
+        try
+        {
+            var settings = new EngineSettingsBuilder
+            {
+                //AllowedEncryption     = EncryptionType.All, // was EncryptionTypes
+                MaximumConnections    = 60,
+                MaximumDownloadRate   = 0,                  // unlimited
+                MaximumUploadRate     = 100 * 1024,         // 100 KB/s
+                // Optional: pick a fixed listen port
+                // ListenEndPoints = new[] { new IPEndPoint(IPAddress.Any, 55123) },
+            }.ToSettings();
+
+            using var engine = new ClientEngine(settings);
+
+            Console.Write("Enter path to .torrent file or magnet link: ");
+            string input = (Console.ReadLine() ?? "").Trim();
+
+            TorrentManager manager;
+            if (input.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+            {
+                var magnet = MagnetLink.Parse(input);
+                manager = await engine.AddStreamingAsync(magnet, downloadPath);
+            }
+            else
+            {
+                // You can also pre-load the .torrent: var tor = await Torrent.LoadAsync(input);
+                manager = await engine.AddStreamingAsync(input, downloadPath);
+            }
+
+            await manager.StartAsync();
+
+            if (!manager.HasMetadata)
+            {
+                Console.WriteLine("Downloading torrent metadata...");
+                while (!manager.HasMetadata)
+                    await Task.Delay(300);
+                Console.WriteLine("Metadata download complete.");
+            }
+
+            // List files
+            Console.WriteLine("\nAvailable files:");
+            for (int i = 0; i < manager.Files.Count; i++)
+                Console.WriteLine($"{i + 1}. {manager.Files[i].Path} ({FormatSize(manager.Files[i].Length)})");
+
+            Console.Write("\nEnter the number of the file to stream: ");
+            if (!int.TryParse(Console.ReadLine(), out int fileIndex) || fileIndex < 1 || fileIndex > manager.Files.Count)
+            {
+                Console.WriteLine("Invalid selection. Exiting.");
+                return;
+            }
+
+            var selectedFile = manager.Files[fileIndex - 1];
+
+            Console.WriteLine($"\nStreaming: {selectedFile.Path}");
+            await using var stream = await manager.StreamProvider.CreateStreamAsync(selectedFile);
+
+            Console.WriteLine($"Stream length: {FormatSize(stream.Length)}");
+            Console.WriteLine($"Stream can seek: {stream.CanSeek}");
+
+            _ = Task.Run(async () => await TrackStreamProgressAsync(manager, stream, selectedFile));
+
+            await SimulateStreamingAsync(stream);
+
+            Console.WriteLine("\nStreaming complete. Press any key to exit...");
+            Console.ReadKey();
+
+            await manager.StopAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex}");
+        }
+    }
+
+    private static async Task TrackStreamProgressAsync(TorrentManager manager, Stream stream, ITorrentManagerFile file)
+    {
+        long prev = 0;
+
+        while (true)
+        {
+            double dl = manager.Progress;
+            double sp = stream.Length == 0 ? 0 : (double)stream.Position / stream.Length * 100.0;
+
+            long delta = stream.Position - prev;
+            prev = stream.Position;
+            double streamRateKBs = delta / 1024.0;
+
+            // NOTE: in 3.x, avoid PeerManager.ConnectedPeers (gone). Use these instead.
+            int openConnections = manager.OpenConnections; // current active connections
+            long bufferBytes = EstimateBufferedBytes(manager, file, stream.Position);
+
+            Console.Clear();
+            Console.WriteLine($"File: {file.Path}");
+            Console.WriteLine($"Total Download Progress: {dl:F2}%");
+            Console.WriteLine($"Stream Position: {FormatSize(stream.Position)} / {FormatSize(stream.Length)} ({sp:F2}%)");
+            Console.WriteLine($"Download Speed: {manager.Monitor.DownloadRate / 1024.0:F2} KB/s");
+            Console.WriteLine($"Stream Rate: {streamRateKBs:F2} KB/s");
+            Console.WriteLine($"Buffer Size: {FormatSize(bufferBytes)}");
+            Console.WriteLine($"Open Connections: {openConnections}");
+            Console.WriteLine("\nStreaming simulation in progress...  (Ctrl+C to exit)");
+
+            await Task.Delay(1000);
+        }
+    }
+
+    private static long EstimateBufferedBytes(TorrentManager manager, ITorrentManagerFile file, long streamPos)
+    {
+        if (manager.Torrent == null)
+            return 0;
+
+        int pieceLen = manager.Torrent.PieceLength;
+        long fileStart = (long)file.StartPieceIndex * pieceLen;
+        long currentPieceStart = fileStart + (streamPos / pieceLen) * pieceLen;
+
+        long buffered = 0;
+        for (int i = file.StartPieceIndex; i <= file.EndPieceIndex; i++)
+        {
+            long pieceStart = (long)i * pieceLen;
+            if (pieceStart >= currentPieceStart && manager.Bitfield[i])
+                buffered += pieceLen;
+            else if (pieceStart >= currentPieceStart)
+                break;
+        }
+        return buffered;
+    }
+
+    private static async Task SimulateStreamingAsync(Stream stream)
+    {
+        byte[] buf = new byte[16 * 1024];
+        long total = 0;
+
+        try
+        {
+            while (total < stream.Length)
+            {
+                int n = await stream.ReadAsync(buf, 0, buf.Length);
+                if (n == 0)
+                {
+                    await Task.Delay(250);
+                    continue;
+                }
+
+                total += n;
+                await Task.Delay(100);
+
+                // periodically simulate a seek
+                if (total > 5 * 1024 * 1024 && total % (50 * 1024 * 1024) < buf.Length)
+                {
+                    long newPos = Math.Min(stream.Position + 10 * 1024 * 1024, Math.Max(0, stream.Length - 1));
+                    stream.Position = newPos;
+                    Console.WriteLine($"\nSimulating seek to {FormatSize(newPos)}");
+                }
+            }
+        }
+        catch (EndOfStreamException) { }
+        catch (OperationCanceledException) { }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1) { order++; len /= 1024; }
+        return $"{len:0.##} {sizes[order]}";
+    }
+}
