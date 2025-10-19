@@ -1,0 +1,277 @@
+#pragma warning disable SA1611, SA1591, SA1615, CS0165
+
+using System;
+using System.Buffers;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
+using MonoTorrent;
+using MonoTorrent.Client;
+using MonoTorrent.Streaming;
+
+namespace Gelato;
+
+[ApiController]
+[Route("gelato")]
+public class GelatoApiController : ControllerBase
+{
+    private readonly ILogger<GelatoApiController> _log;
+    private readonly TorrentEngineHost _engine;
+
+    public GelatoApiController(ILogger<GelatoApiController> log, TorrentEngineHost engine)
+    {
+        _log = log;
+        _engine = engine;
+    }
+
+    [HttpGet("stream")]
+    public async Task<IActionResult> Stream(
+        [FromQuery] string ih,
+        [FromQuery] int? fileIdx,
+        [FromQuery] string? filename,
+        [FromQuery] string? trackers)
+    {
+        if (string.IsNullOrWhiteSpace(ih))
+            return BadRequest("Missing ?ih=<infohash>");
+
+        var ct = HttpContext.RequestAborted;
+
+        var (manager, _) = await _engine.GetOrAddByInfoHashAsync(ih, trackers, ct);
+
+        if (!manager.HasMetadata)
+        {
+            while (!manager.HasMetadata && !ct.IsCancellationRequested)
+                await Task.Delay(150, ct);
+            if (!manager.HasMetadata)
+                return StatusCode(503, "Metadata not yet available.");
+        }
+
+        ITorrentManagerFile selected;
+        if (fileIdx.HasValue && fileIdx.Value >= 0 && fileIdx.Value < manager.Files.Count)
+        {
+            selected = manager.Files[fileIdx.Value];
+        }
+        else if (!string.IsNullOrWhiteSpace(filename))
+        {
+            selected = manager.Files.FirstOrDefault(x =>
+                         x.Path.EndsWith(filename, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(Path.GetFileName(x.Path), filename, StringComparison.OrdinalIgnoreCase))
+                       ?? PickHeuristic(manager);
+        }
+        else
+        {
+            selected = PickHeuristic(manager);
+        }
+
+        await manager.StartAsync();
+
+        await using var stream = await manager.StreamProvider.CreateStreamAsync(selected, ct);
+
+        var contentType = GuessContentType(selected.Path);
+        var rangeHeader = HttpContext.Request.Headers.Range.ToString();
+
+        if (TryParseRange(rangeHeader, stream.Length, out var start, out var end))
+        {
+            var length = end - start + 1;
+            HttpContext.Response.StatusCode = 206;
+            HttpContext.Response.Headers["Accept-Ranges"] = "bytes";
+            HttpContext.Response.Headers["Content-Range"] = $"bytes {start}-{end}/{stream.Length}";
+            HttpContext.Response.ContentType = contentType;
+            HttpContext.Response.ContentLength = length;
+            stream.Position = start;
+            await CopyExactlyAsync(stream, HttpContext.Response.Body, length, ct);
+        }
+        else
+        {
+            HttpContext.Response.StatusCode = 200;
+            HttpContext.Response.Headers["Accept-Ranges"] = "bytes";
+            HttpContext.Response.ContentType = contentType;
+            HttpContext.Response.ContentLength = stream.Length;
+            stream.Position = 0;
+            await stream.CopyToAsync(HttpContext.Response.Body, 64 * 1024, ct);
+        }
+
+        await HttpContext.Response.Body.FlushAsync(ct);
+        return new EmptyResult();
+    }
+
+    private static ITorrentManagerFile PickHeuristic(TorrentManager manager)
+    {
+        static bool LikelyVideo(ITorrentManagerFile f)
+        {
+            var name = Path.GetFileName(f.Path);
+            var ext = Path.GetExtension(name).ToLowerInvariant();
+            if (name.Contains("sample", StringComparison.OrdinalIgnoreCase)) return false;
+            if (ext is ".srt" or ".ass" or ".ssa" or ".sub" or ".idx" or ".nfo" or ".txt" or ".jpg" or ".jpeg" or ".png" or ".gif") return false;
+            if (ext is ".mkv" or ".mp4" or ".m4v" or ".avi" or ".mov" or ".wmv" or ".ts" or ".m2ts") return true;
+            return false;
+        }
+
+        return manager.Files
+            .OrderByDescending(LikelyVideo)
+            .ThenByDescending(f => f.Length)
+            .First();
+    }
+
+    private static bool TryParseRange(string header, long fullLength, out long start, out long end)
+    {
+        start = 0; end = fullLength - 1;
+        if (string.IsNullOrWhiteSpace(header)) return false;
+        var m = Regex.Match(header, @"bytes=(\d*)-(\d*)");
+        if (!m.Success) return false;
+
+        var s = m.Groups[1].Value;
+        var e = m.Groups[2].Value;
+
+        if (string.IsNullOrEmpty(s) && string.IsNullOrEmpty(e)) return false;
+
+        if (!string.IsNullOrEmpty(s) && long.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ss))
+            start = Math.Clamp(ss, 0, fullLength - 1);
+
+        if (!string.IsNullOrEmpty(e) && long.TryParse(e, NumberStyles.Integer, CultureInfo.InvariantCulture, out var ee))
+            end = Math.Clamp(ee, 0, fullLength - 1);
+
+        if (!string.IsNullOrEmpty(s) && string.IsNullOrEmpty(e))
+            end = fullLength - 1;
+
+        if (string.IsNullOrEmpty(s) && !string.IsNullOrEmpty(e))
+        {
+            var tail = Math.Clamp(long.Parse(e, CultureInfo.InvariantCulture), 0, fullLength);
+            start = Math.Clamp(fullLength - tail, 0, fullLength - 1);
+            end = fullLength - 1;
+        }
+
+        if (end < start) return false;
+        return true;
+    }
+
+    private static async Task CopyExactlyAsync(Stream src, Stream dst, long bytes, CancellationToken ct)
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+        try
+        {
+            long remaining = bytes;
+            while (remaining > 0)
+            {
+                var toRead = (int)Math.Min(buffer.Length, remaining);
+                var n = await src.ReadAsync(buffer.AsMemory(0, toRead), ct);
+                if (n == 0) break;
+                await dst.WriteAsync(buffer.AsMemory(0, n), ct);
+                remaining -= n;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
+
+    private static string GuessContentType(string path)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext == ".mp4") return "video/mp4";
+        if (ext == ".mkv") return "video/x-matroska";
+        if (ext == ".webm") return "video/webm";
+        if (ext == ".ts" || ext == ".m2ts") return "video/mp2t";
+        if (ext == ".avi") return "video/x-msvideo";
+        if (ext == ".mov") return "video/quicktime";
+        if (ext == ".mp3") return "audio/mpeg";
+        if (ext == ".flac") return "audio/flac";
+        return "application/octet-stream";
+    }
+}
+
+public sealed class TorrentEngineHost
+{
+    private readonly ClientEngine _engine;
+    private readonly ConcurrentDictionary<string, TorrentManager> _managers = new();
+    private readonly string _downloadPath;
+    private readonly ILogger<TorrentEngineHost> _log;
+
+    public TorrentEngineHost(ILogger<TorrentEngineHost> log)
+    {
+        _log = log;
+        _downloadPath = Path.Combine(Path.GetTempPath(), "MonoTorrentStreaming");
+        Directory.CreateDirectory(_downloadPath);
+
+        var settings = new EngineSettingsBuilder
+        {
+            MaximumConnections = 80,
+            MaximumDownloadRate = 0,
+            MaximumUploadRate = 0
+        }.ToSettings();
+
+        _engine = new ClientEngine(settings);
+    }
+
+    public async Task<(TorrentManager manager, string basePath)> GetOrAddByInfoHashAsync(string ih, string? trackers, CancellationToken ct)
+    {
+        var infoHashes = TryParseInfoHashes(ih, out var key);
+        if (infoHashes is null)
+            throw new ArgumentException("Invalid infohash. Expect 40-hex (v1), base32, or 64-hex (v2).", nameof(ih));
+
+        if (_managers.TryGetValue(key, out var existing))
+            return (existing, _downloadPath);
+
+        var announce = ParseTrackers(trackers) ?? DefaultTrackers();
+        var magnet = new MagnetLink(infoHashes.Value, name: null, announce: announce.Select(u => new Uri(u)));
+
+        var manager = await _engine.AddStreamingAsync(magnet, _downloadPath);
+        await manager.StartAsync();
+
+        _managers.TryAdd(key, manager);
+        return (manager, _downloadPath);
+    }
+
+    private static InfoHashes? TryParseInfoHashes(string s, out string key)
+    {
+        s = s.Trim();
+
+        if (Regex.IsMatch(s, "^[A-Fa-f0-9]{40}$"))
+        {
+            var v1 = InfoHash.FromHex(s);
+            key = v1.ToHex();
+            return new InfoHashes(v1);
+        }
+
+        if (Regex.IsMatch(s, "^[A-Z2-7=]+$", RegexOptions.IgnoreCase))
+        {
+            var v1 = InfoHash.FromBase32(s);
+            key = v1.ToHex();
+            return new InfoHashes(v1);
+        }
+
+        if (Regex.IsMatch(s, "^[A-Fa-f0-9]{64}$"))
+        {
+            var v2 = InfoHash.FromHex(s);
+            key = v2.ToHex();
+            return new InfoHashes(v2: v2);
+        }
+
+        key = s;
+        return null;
+    }
+
+    private static string[] ParseTrackers(string? trackers)
+    {
+        if (string.IsNullOrWhiteSpace(trackers))
+            return null;
+        return trackers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static string[] DefaultTrackers() => new[]
+    {
+        "udp://tracker.opentrackr.org:1337/announce",
+        "udp://open.stealth.si:80/announce",
+        "udp://tracker.torrent.eu.org:451/announce",
+        "udp://explodie.org:6969/announce",
+        "udp://tracker.openbittorrent.com:6969/announce",
+    };
+}

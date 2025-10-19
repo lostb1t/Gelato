@@ -208,14 +208,12 @@ public class GelatoManager
             return (null, false);
         }
 
-        //var found = FindByStremioId(meta.Id) as Video;
         var found = GetByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
         if (found is not null)
         {
             _log.LogDebug($"found existing item: {found.Id} for {baseItem.Name}");
             return (found, false);
         }
-        //baseItem.IsDefault = true;
 
         var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
         {
