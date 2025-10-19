@@ -547,10 +547,15 @@ namespace Gelato
         {
             var now = DateTime.UtcNow;
 
+            // For movies, add 30-day buffer to account for theatrical -> home release delay
+            // For TV shows, no buffer needed (they release directly for home viewing)
+            var bufferDays = Type == StremioMediaType.Movie ? 30 : 0;
+
             // Check Released date first (most specific)
             if (Released.HasValue)
             {
-                return Released.Value <= now;
+                var homeReleaseDate = Released.Value.AddDays(bufferDays);
+                return homeReleaseDate <= now;
             }
 
             // Check FirstAired for TV episodes
@@ -563,9 +568,9 @@ namespace Gelato
             var year = GetYear();
             if (year.HasValue)
             {
-                // If the year is in the past, consider it released
-                // If it's current year, we can't be sure, so we'll allow it
-                return year.Value <= now.Year;
+                // For year-only dates, assume mid-year release + buffer
+                var estimatedRelease = new DateTime(year.Value, 6, 1).AddDays(bufferDays);
+                return estimatedRelease <= now;
             }
 
             // If we have no release information, assume it's not released
