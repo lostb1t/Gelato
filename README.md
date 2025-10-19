@@ -32,10 +32,9 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
    
    p2p is not supported so you need an debrid addon for streams.
 
-2. Make sure you are running Jellyfin 10.11 and add the plugin repo in Jellyfin under Plugins -> Manage Repositories:
-   `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json`
+2. Make sure you are running Jellyfin 10.11 and add `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json` to your plugin repositories.
 
-3. Configure the plugin under **Plugins → Gelato**.
+3. Install and configure the plugin.
    **Note:** Only **AIOStreams** is supported.
 
 4. Add the configured base paths to the Jellyfin library of your choice.
