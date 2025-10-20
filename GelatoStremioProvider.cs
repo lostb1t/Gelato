@@ -80,7 +80,7 @@ namespace Gelato
             }
             catch (Exception ex)
             {
-                _log.LogWarning(ex, "External fetch failed: {Url}", url);
+                _log.LogError(ex, "External fetch failed: {Url}", url);
                 return default;
             }
         }
