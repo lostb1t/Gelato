@@ -149,7 +149,19 @@ namespace Gelato
         {
             var url = BuildUrl(new[] { "meta", mediaType.ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioMetaResponse>(url);
-            return r?.Meta;
+            var meta = r?.Meta;
+
+            // Filter unreleased episodes from the Videos list
+            if (meta?.Videos != null)
+            {
+                var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
+                if (filterUnreleased)
+                {
+                    meta.Videos = meta.Videos.Where(v => v.IsReleased()).ToList();
+                }
+            }
+
+            return meta;
         }
 
         public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
@@ -170,7 +182,19 @@ namespace Gelato
             ;
             var url = BuildUrl(new string[] { "meta", BaseItemKindInto(item.GetBaseItemKind()).ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioMetaResponse>(url);
-            return r?.Meta;
+            var meta = r?.Meta;
+
+            // Filter unreleased episodes from the Videos list
+            if (meta?.Videos != null)
+            {
+                var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
+                if (filterUnreleased)
+                {
+                    meta.Videos = meta.Videos.Where(v => v.IsReleased()).ToList();
+                }
+            }
+
+            return meta;
         }
 
         public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
