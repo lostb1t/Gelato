@@ -75,8 +75,8 @@ JELLYFIN_FFmpeg__analyzeduration="5M"
 - if something borked or you want to start over, you can use the purge task under scheduled tasks.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
-- stream cache is 3600 min. Can be cleared by restarting the server
-- bump up probing and analyse to your liking
+- Stream cache can be cleared by restarting the server
+- bump down probing and analyse to your liking for faster playback
   JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
 
 ### Support
