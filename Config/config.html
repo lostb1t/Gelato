@@ -57,6 +57,10 @@
           <input is="emby-input" type="checkbox" id="chkFilterUnreleased" label="Filter unreleased items" />
           <span>If enabled, only items that have been released will be shown in search results and catalog imports</span>
         </div>
+        <div class="inputContainer">
+          <input is="emby-input" type="number" id="txtBufferDays" label="Release buffer days for movies:" />
+          <span>Number of days to wait after theatrical release before showing movies (accounts for home release delay). Default: 30 days. Set to 0 for no buffer.</span>
+        </div>
         <br />
         Want to support me? Use my torbox referral code <a target="_blank"
           href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">abe1a9d9-53c9-449a-9d85-ab3dfb5d188d</a>
@@ -83,6 +87,7 @@
         const chkEnableSubs = document.querySelector('#chkEnableSubs');
         const chkEnableMixed = document.querySelector('#chkEnableMixed');
         const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
+        const txtBufferDays = document.querySelector('#txtBufferDays');
         async function loadConfig() {
           Dashboard.showLoadingMsg();
           try {
@@ -95,6 +100,7 @@
             chkEnableSubs.checked = cfg.EnableSubs || false;
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
             chkFilterUnreleased.checked = cfg.FilterUnreleased ?? true;
+            txtBufferDays.value = cfg.BufferDays ?? 30;
           } catch (e) {
             console.error(e);
           } finally {
@@ -115,6 +121,7 @@
             cfg.EnableSubs = (chkEnableSubs.checked || false);
             cfg.EnableMixed = !!chkEnableMixed.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked ?? true;
+            cfg.BufferDays = parseInt(txtBufferDays.value) ?? 30;
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {

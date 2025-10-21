@@ -149,19 +149,7 @@ namespace Gelato
         {
             var url = BuildUrl(new[] { "meta", mediaType.ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioMetaResponse>(url);
-            var meta = r?.Meta;
-
-            // Filter unreleased episodes from the Videos list
-            if (meta?.Videos != null)
-            {
-                var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
-                if (filterUnreleased)
-                {
-                    meta.Videos = meta.Videos.Where(v => v.IsReleased()).ToList();
-                }
-            }
-
-            return meta;
+            return r?.Meta;
         }
 
         public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
@@ -182,19 +170,7 @@ namespace Gelato
             ;
             var url = BuildUrl(new string[] { "meta", BaseItemKindInto(item.GetBaseItemKind()).ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioMetaResponse>(url);
-            var meta = r?.Meta;
-
-            // Filter unreleased episodes from the Videos list
-            if (meta?.Videos != null)
-            {
-                var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
-                if (filterUnreleased)
-                {
-                    meta.Videos = meta.Videos.Where(v => v.IsReleased()).ToList();
-                }
-            }
-
-            return meta;
+            return r?.Meta;
         }
 
         public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
@@ -567,13 +543,9 @@ namespace Gelato
             return false;
         }
 
-        public bool IsReleased()
+        public bool IsReleased(int bufferDays = 0)
         {
             var now = DateTime.UtcNow;
-
-            // For movies, add 30-day buffer to account for theatrical -> home release delay
-            // For TV shows, no buffer needed (they release directly for home viewing)
-            var bufferDays = Type == StremioMediaType.Movie ? 30 : 0;
 
             // Check Released date first (most specific)
             if (Released.HasValue)
