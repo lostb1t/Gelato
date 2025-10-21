@@ -25,7 +25,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 ## Usage
 **STEP ONE**
-1. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: `https://aiostreams.elfhosted.com/stremio/configure`
+1. Setup an aiostreams manifest. You can selfhost or use a public instance, for example: `https://aiostreams.elfhosted.com/stremio/configure`
    **Note:** Only **AIOStreams** is supported.
       
    In the AIOstreams settings you need to enable 
@@ -40,26 +40,28 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 **STEP TWO**
 - Make sure you are running Jellyfin 10.11.
   
-  Add `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json` as a source  to your plugin repositories.  Refresh the page
+  Add `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json` as a source to your plugin repositories.  Refresh the page
 
-- Install the plugin, **then restart Jellyfin**
+- Install the Gelato plugin, **then restart Jellyfin**
 
 **STEP THREE**
 - Create new library folders for Movies and Shows on your machine/server. These folders should have permissions that jellyfin can access, usually 1000:1000
 
-- Create new Movie and Shows libraries in jellyfin that point to these empty folders. choose TMDB as metadata downloader for both libraries as TVDB addon may cause wierd behavior.
+- Create new Movie and Shows libraries in jellyfin that point to these empty folders. Choose TMDB as metadata downloader for both libraries as TVDB addon may cause weird behavior.
 
 **STEP 4**
 Configure Gelato Plugin
 
-- Input the resulting URL from AIOstreams (which will pop up after savinng the aiostreams config and clicking on the Install button) to the Stremio URL section
+- Input the resulting URL from AIOstreams (which will pop up after saving the aiostreams config and clicking on the Install button) to the Stremio URL section.
 
 - Add the configured paths to the Movie and Shows Jellyfin libraries created for Gelato in Step Three to the Base Path section of the plugin settings of your choice.
+
+- Untick the setting 'Enable Stremio Results and Local Files' if you have an existing library in jellyfin and do not want Gelato to return other catalog results for those existing files
 
 Save the plugin settings and then restart Jellyfin. (Mandatory)
 
 
-5. Optional but recommended. Lower the probe and analyze size by setting the following environment variables: ex:
+5. **Optional but recommended. Lower the probe and analyze size by setting the following environment variables**: ex:
 ```
 JELLYFIN_FFmpeg__probesize="50M"
 JELLYFIN_FFmpeg__analyzeduration="5M"
@@ -71,7 +73,7 @@ JELLYFIN_FFmpeg__analyzeduration="5M"
 
 - Only **AIOStreams** is supported
 - **P2P streams are not yet supported**
-
+- 
 ---
 
 ## Roadmap
