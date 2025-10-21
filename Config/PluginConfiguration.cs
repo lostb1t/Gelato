@@ -15,6 +15,8 @@ namespace Gelato.Configuration
         public string Url { get; set; } = "";
         public bool EnableSubs { get; set; } = false;
         public bool EnableMixed { get; set; } = true;
+        public bool FilterUnreleased { get; set; } = true;
+        public int FilterUnreleasedBufferDays { get; set; } = 30;
 
         public string GetBaseUrl()
         {

@@ -533,6 +533,36 @@ namespace Gelato
 
             return false;
         }
+
+        public bool IsReleased(int bufferDays = 0)
+        {
+            var now = DateTime.UtcNow;
+
+            // Check Released date first (most specific)
+            if (Released.HasValue)
+            {
+                var homeReleaseDate = Released.Value.AddDays(bufferDays);
+                return homeReleaseDate <= now;
+            }
+
+            // Check FirstAired for TV episodes
+            if (FirstAired.HasValue)
+            {
+                return FirstAired.Value <= now;
+            }
+
+            // Fall back to year-based check
+            var year = GetYear();
+            if (year.HasValue)
+            {
+                // For year-only dates, assume mid-year release + buffer
+                var estimatedRelease = new DateTime(year.Value, 6, 1).AddDays(bufferDays);
+                return estimatedRelease <= now;
+            }
+
+            // If we have no release information, assume it's not released
+            return false;
+        }
     }
 
     public class StremioTrailer

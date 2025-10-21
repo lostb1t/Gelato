@@ -654,7 +654,16 @@ public class GelatoManager
         //     _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
         //    return null;
         //}
-        var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
+
+        // Filter unreleased episodes from the Videos list (no buffer for TV episodes)
+        var videos = seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>();
+        var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
+        if (filterUnreleased)
+        {
+            videos = videos.Where(v => v.IsReleased(0));
+        }
+
+        var groups = videos
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode)
             .GroupBy(e => e.Season)

@@ -91,9 +91,19 @@ namespace Gelato.Tasks
                         if (page is null || page.Count == 0)
                             break;
 
+                        var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
+                        var bufferDays = GelatoPlugin.Instance?.Configuration.FilterUnreleasedBufferDays ?? 30;
+
                         foreach (var _meta in page)
                         {
                             ct.ThrowIfCancellationRequested();
+
+                            // Filter unreleased items from catalog
+                            if (filterUnreleased && !_meta.IsReleased(cat.Type == StremioMediaType.Movie ? bufferDays : 0))
+                            {
+                                _log.LogDebug("Skipping unreleased item: {Name} ({Id})", _meta.Name, _meta.Id);
+                                continue;
+                            }
 
                             var meta = _meta;
                             if (cat.Type == StremioMediaType.Series && _meta.Videos is null)
@@ -102,6 +112,13 @@ namespace Gelato.Tasks
                                 if (meta is null)
                                 {
                                     _log.LogWarning("Stremio meta not found for {Id} {Type}", _meta.Id, _meta.Type);
+                                    continue;
+                                }
+
+                                // Re-check release status for the detailed meta (no buffer for TV series)
+                                if (filterUnreleased && !meta.IsReleased(0))
+                                {
+                                    _log.LogDebug("Skipping unreleased series: {Name} ({Id})", meta.Name, meta.Id);
                                     continue;
                                 }
                             }
