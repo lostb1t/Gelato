@@ -39,7 +39,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 4. Add the configured base paths to the Jellyfin library of your choice.
 
-5. **Important** Lower the probe and analyze size by setting the following environment variables: ex:
+5. **IMPORTANT**: Lower the probe and analyze size by setting the following environment variables: ex:
 ```
 JELLYFIN_FFmpeg__probesize="50M"
 JELLYFIN_FFmpeg__analyzeduration="5M"
