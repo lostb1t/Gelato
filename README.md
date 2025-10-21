@@ -24,20 +24,40 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 **NOTICE: ONLY SUPPORTS JELLYFIN 10.11**
 
 ## Usage
-
+**STEP ONE**
 1. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: `https://aiostreams.elfhosted.com/stremio/configure`
-    
-   At minimum you need the tmdb addon enabled for search and a addon that provides streams (comet for example).
-   Alternative you can import the [starter config](aiostreams-config.json). Remember to enable your debrid providers under services after importing the config.
-   
-   **p2p is not supported atm**
-
-2. Make sure you are running Jellyfin 10.11 and add `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json` to your plugin repositories.
-
-3. Install and configure the plugin.
    **Note:** Only **AIOStreams** is supported.
+      
+   In the AIOstreams settings you need to enable 
+   a. Add a Debrid provider (input your debrid token.) **Mandatory**
+   b. A search addon  (the TMDB addon is recommended)  NB: NOT the TMDB collections addon.
+   c. Another addon that provides the actual streams. e.g Comet, Mediafusion etc
 
-4. Add the configured base paths to the Jellyfin library of your choice.
+   Alternatively you can import the [starter config](aiostreams-config.json). Remember to enable your debrid providers under services after importing the config.
+   
+   **p2p is not supported at this time**
+
+**STEP TWO**
+- Make sure you are running Jellyfin 10.11.
+  
+  Add `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json` as a source  to your plugin repositories.  Refresh the page
+
+- Install the plugin, **then restart Jellyfin**
+
+**STEP THREE**
+- Create new library folders for Movies and Shows on your machine/server. These folders should have permissions that jellyfin can access, usually 1000:1000
+
+- Create new Movie and Shows libraries in jellyfin that point to these empty folders. choose TMDB as metadata downloader for both libraries as TVDB addon may cause wierd behavior.
+
+**STEP 4**
+Configure Gelato Plugin
+
+- Input the resulting URL from AIOstreams (which will pop up after savinng the aiostreams config and clicking on the Install button) to the Stremio URL section
+
+- Add the configured paths to the Movie and Shows Jellyfin libraries created for Gelato in Step Three to the Base Path section of the plugin settings of your choice.
+
+Save the plugin settings and then restart Jellyfin. (Mandatory)
+
 
 5. Optional but recommended. Lower the probe and analyze size by setting the following environment variables: ex:
 ```
