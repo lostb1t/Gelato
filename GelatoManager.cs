@@ -655,13 +655,12 @@ public class GelatoManager
         //    return null;
         //}
 
-        // Filter unreleased episodes from the Videos list
+        // Filter unreleased episodes from the Videos list (no buffer for TV episodes)
         var videos = seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>();
         var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
         if (filterUnreleased)
         {
-            var bufferDays = GelatoPlugin.Instance?.Configuration.BufferDays ?? 30;
-            videos = videos.Where(v => v.IsReleased(bufferDays));
+            videos = videos.Where(v => v.IsReleased(0));
         }
 
         var groups = videos

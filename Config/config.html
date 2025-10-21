@@ -100,7 +100,7 @@
             chkEnableSubs.checked = cfg.EnableSubs || false;
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
             chkFilterUnreleased.checked = cfg.FilterUnreleased ?? true;
-            txtBufferDays.value = cfg.BufferDays ?? 30;
+            txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 30;
           } catch (e) {
             console.error(e);
           } finally {
@@ -121,7 +121,7 @@
             cfg.EnableSubs = (chkEnableSubs.checked || false);
             cfg.EnableMixed = !!chkEnableMixed.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked ?? true;
-            cfg.BufferDays = parseInt(txtBufferDays.value) ?? 30;
+            cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) ?? 30;
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {

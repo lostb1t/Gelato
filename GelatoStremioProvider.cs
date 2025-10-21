@@ -205,16 +205,7 @@ namespace Gelato
             if (skip is > 0) extras.Add($"skip={skip}");
             var url = BuildUrl(new[] { "catalog", mediaType.ToString().ToLower(), id }, extras);
             var r = await GetJsonAsync<StremioCatalogResponse>(url);
-            var metas = r?.Metas ?? new List<StremioMeta>();
-
-            // Filter out unreleased items if enabled (applies to ALL catalogs/addons)
-            var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
-            if (filterUnreleased)
-            {
-                metas = metas.Where(m => m.IsReleased()).ToList();
-            }
-
-            return metas;
+            return r?.Metas ?? new();
         }
 
         public async Task<IReadOnlyList<StremioMeta>> SearchAsync(
