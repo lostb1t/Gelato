@@ -91,7 +91,11 @@ namespace Gelato.Decorators
         {
             var manager = _manager.Value;
             _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
-       
+       if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+            {
+                return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
+            }
+
             // a file can be added after stremio has been inserted. if thats the case we just filter out stremio
             if (!GelatoPlugin.Instance!.Configuration.EnableMixed)
             {
