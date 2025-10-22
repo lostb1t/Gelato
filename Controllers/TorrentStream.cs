@@ -156,10 +156,12 @@ public sealed class GelatoApiController : ControllerBase
     }
 
     private static string[]? ParseTrackers(string? trackers)
-        => string.IsNullOrWhiteSpace(trackers)
-            ? null
-            : trackers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
+    => string.IsNullOrWhiteSpace(trackers)
+        ? null
+        : Uri
+            .UnescapeDataString(trackers)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+  
     private static string[] DefaultTrackers() => new[]
     {
         "udp://tracker.opentrackr.org:1337/announce",

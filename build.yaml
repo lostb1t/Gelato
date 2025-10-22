@@ -1,13 +1,25 @@
 ---
 name: "Gelato"
 guid: "94EA4E14-8163-4989-96FE-0A2094BC2D6A"
-version: "0.10.0.0"
+version: "0.10.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 owner: "lstb1t"
 artifacts:
   - "Gelato.dll"
-  # - "Jellyfin.Api.dll"
+  - "Mono.Nat.dll"
+  - "MonoTorrent.BEncoding.dll"
+  - "MonoTorrent.Client.dll"
+  - "MonoTorrent.Connections.dll"
+  - "MonoTorrent.Dht.dll"
+  - "MonoTorrent.dll"
+  - "MonoTorrent.Factories.dll"
+  - "MonoTorrent.Messages.dll"
+  - "MonoTorrent.PiecePicking.dll"
+  - "MonoTorrent.PieceWriter.dll"
+  - "MonoTorrent.PortForwarding.dll"
+  - "MonoTorrent.Trackers.dll"
+  - "ReusableTasks.dll"
 overview: "Stream external media."
 description: >
   Stream external media.
