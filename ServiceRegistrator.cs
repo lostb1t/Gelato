@@ -30,11 +30,7 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<GelatoManager>();
         services.AddSingleton(sp =>
             new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
-
-        //services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
-        //services.AddSingleton<IScheduledTask, GelatoCatalogItemsSyncTask>();
-        //services.AddSingleton<IScheduledTask, SyncRunningSeriesTask>();
-         // services.AddSingleton<IScheduledTask, PurgeGelatoStreamsTask>();
+        //services.AddSingleton<TorrentEngineHost>();
       
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
         services.Remove(original);

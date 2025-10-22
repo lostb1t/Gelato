@@ -223,7 +223,11 @@ namespace Gelato
                 _ => null
             };
 
-            if (catalog == null) return Array.Empty<StremioMeta>();
+            if (catalog == null) 
+            {
+              _log.LogError("SearchAsync: {mediaType} has no search catalog", mediaType);
+              return Array.Empty<StremioMeta>();
+            };
 
             return await GetCatalogMetasAsync(catalog.Id, mediaType, query, skip);
         }
@@ -533,8 +537,8 @@ namespace Gelato
 
             return false;
         }
-
-        public bool IsReleased(int bufferDays = 0)
+        
+public bool IsReleased(int bufferDays = 0)
         {
             var now = DateTime.UtcNow;
 
@@ -626,6 +630,9 @@ namespace Gelato
         public string? Quality { get; set; }
         public string? Subtitle { get; set; }
         public string? Audio { get; set; }
+        public string? InfoHash { get; set; }
+        public int? FileIdx { get; set; }
+        public List<string>? Sources { get; set; }
         public StremioBehaviorHints? BehaviorHints { get; set; }
 
         public string GetName()
@@ -677,9 +684,20 @@ namespace Gelato
             return !string.IsNullOrWhiteSpace(filename)
                 // && !string.IsNullOrWhiteSpace(size)
                 && !string.IsNullOrWhiteSpace(GetName())
-                && !string.IsNullOrWhiteSpace(Url);
+                && (!string.IsNullOrWhiteSpace(Url) || !string.IsNullOrWhiteSpace(InfoHash));
+        }
+        
+        public bool IsFile()
+        {
+            return !string.IsNullOrWhiteSpace(Url);
+        }
+        
+        public bool IsTorrent()
+        {
+            return !string.IsNullOrWhiteSpace(InfoHash);
         }
 
+        
 
     }
 

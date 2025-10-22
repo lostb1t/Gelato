@@ -47,25 +47,46 @@
         <div class="inputContainer">
           <input is="emby-input" type="checkbox" id="chkEnableSubs" label="Enable remote subtitles from addons" />
           <span>Currently breaks untill https://github.com/jellyfin/jellyfin/pull/14809 is merged.</span>
-
         </div>
+
         <div class="inputContainer">
           <input is="emby-input" type="checkbox" id="chkEnableMixed" label="Enable stremio results and local files" />
           <span>If enabled, stremio streams and local sources are merged</span>
         </div>
+
         <div class="inputContainer">
           <input is="emby-input" type="checkbox" id="chkFilterUnreleased" label="Filter unreleased items" />
           <span>If enabled, only items that have been released will be shown in search results and catalog imports</span>
         </div>
+
         <div class="inputContainer">
           <input is="emby-input" type="number" id="txtBufferDays" label="Release buffer days for movies:" />
           <span>Number of days to wait after theatrical release before showing movies (accounts for home release delay). Default: 30 days. Set to 0 for no buffer.</span>
         </div>
+
+        <hr class="solid">
+        <div class="sectionTitleContainer">
+          <h3 class="sectionTitle">P2P streaming</h3>
+        </div>
+
+        <div class="inputContainer">
+          <input is="emby-input" type="checkbox" id="chkP2PEnabled" label="Enable P2P engine" />
+          <span>Turn on P2P streaming.</span>
+        </div>
+
+        <div class="inputContainer">
+          <input is="emby-input" type="number" id="txtP2PDLSpeed" label="Max download speed (kB/s, 0 = unlimited)" />
+        </div>
+
+        <div class="inputContainer">
+          <input is="emby-input" type="number" id="txtP2PULSpeed" label="Max upload speed (kB/s, 0 = unlimited)" />
+        </div>
+
         <br />
-        Want to support me? Use my torbox referral code <a target="_blank"
+        Want to support me? Use my torbox referral code
+        <a target="_blank"
           href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">abe1a9d9-53c9-449a-9d85-ab3dfb5d188d</a>
-        <br />
-        <br />
+        <br /><br />
 
         <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block">
           <span>Save</span>
@@ -75,7 +96,7 @@
 
     <script type="text/javascript">
       (function () {
-        const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A"; // your plugin GUID
+        const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A";
         const page = document.querySelector('#externalmediaConfigurationPage');
         const form = document.querySelector('#externalmediaForm');
 
@@ -88,6 +109,17 @@
         const chkEnableMixed = document.querySelector('#chkEnableMixed');
         const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
         const txtBufferDays = document.querySelector('#txtBufferDays');
+
+        const chkP2PEnabled = document.querySelector('#chkP2PEnabled');
+        const txtP2PDLSpeed = document.querySelector('#txtP2PDLSpeed');
+        const txtP2PULSpeed = document.querySelector('#txtP2PULSpeed');
+
+        function toggleP2PFields() {
+          const disabled = !chkP2PEnabled.checked;
+          txtP2PDLSpeed.disabled = disabled;
+          txtP2PULSpeed.disabled = disabled;
+        }
+
         async function loadConfig() {
           Dashboard.showLoadingMsg();
           try {
@@ -99,8 +131,13 @@
             txtStreamTTL.value = cfg.StreamTTL || 3600;
             chkEnableSubs.checked = cfg.EnableSubs || false;
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
-            chkFilterUnreleased.checked = cfg.FilterUnreleased ?? true;
+            chkFilterUnreleased.checked = cfg.FilterUnreleased ?? false;
             txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 30;
+
+            chkP2PEnabled.checked = cfg.P2PEnabled ?? true;
+            txtP2PDLSpeed.value = (cfg.P2PDLSpeed ?? 0).toString();
+            txtP2PULSpeed.value = (cfg.P2PULSpeed ?? 0).toString();
+            toggleP2PFields();
           } catch (e) {
             console.error(e);
           } finally {
@@ -118,10 +155,15 @@
             cfg.SeriesPath = (txtSeriesPath.value || "").trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
             cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
-            cfg.EnableSubs = (chkEnableSubs.checked || false);
+            cfg.EnableSubs = !!chkEnableSubs.checked;
             cfg.EnableMixed = !!chkEnableMixed.checked;
-            cfg.FilterUnreleased = chkFilterUnreleased.checked ?? true;
+            cfg.FilterUnreleased = chkFilterUnreleased.checked ?? false;
             cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) ?? 30;
+
+            cfg.P2PEnabled = !!chkP2PEnabled.checked;
+            cfg.P2PDLSpeed = parseInt(txtP2PDLSpeed.value) || 0;
+            cfg.P2PULSpeed = parseInt(txtP2PULSpeed.value) || 0;
+
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {
@@ -133,6 +175,7 @@
 
         function init() {
           form.addEventListener("submit", saveConfig);
+          chkP2PEnabled.addEventListener("change", toggleP2PFields);
           loadConfig();
         }
 

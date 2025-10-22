@@ -123,9 +123,6 @@ namespace Gelato.Decorators
             }
             else if (uri is not null && !manager.HasStreamSync(item.Id))
             {
-
-
-
                 // bug in webui that calls the detail page twice. So thats why theres a lock
               _lock.RunSingleFlightAsync(item.Id, async ct =>
 {

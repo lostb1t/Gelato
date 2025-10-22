@@ -28,6 +28,14 @@ using Microsoft.Extensions.Primitives;
 using Microsoft.Extensions.Caching.Memory;
 using MediaBrowser.Model.Dto;
 using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Common.Configuration;
+using Jellyfin.Extensions;
+using MediaBrowser.Common.Net;
+using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Model.Plugins;
+//using Jellyfin.Networking.Configuration;
+//using Jellyfin.Server.Extensions;
 
 namespace Gelato;
 
@@ -45,6 +53,7 @@ public class GelatoManager
     private readonly IFileSystem _fileSystem;
     private readonly IProviderManager _provider;
     private IMemoryCache _memoryCache;
+    private readonly IServerConfigurationManager _serverConfig;
 
 
     public GelatoManager(
@@ -57,6 +66,7 @@ public class GelatoManager
         IItemRepository repo,
         IFileSystem fileSystem,
         IMemoryCache memoryCache,
+          IServerConfigurationManager serverConfig,
         ILibraryManager libraryManager)
     {
         _loggerFactory = loggerFactory;
@@ -65,12 +75,19 @@ public class GelatoManager
         _provider = provider;
         _stremioProvider = stremioProvider;
         _dtoService = dtoService;
+        _serverConfig = serverConfig;
         _config = config;
         _repo = repo;
         _user = userManager;
         _library = libraryManager;
         _fileSystem = fileSystem;
     }
+    
+    public int GetHttpPort()
+{
+    var networkConfig = _serverConfig.GetNetworkConfiguration();
+    return networkConfig.InternalHttpPort;
+}
 
     public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
     {
@@ -360,13 +377,24 @@ public class GelatoManager
                 _log.LogWarning($"invalid stream, skipping {s.Name}");
                 continue;
             }
+            
+            if (!GelatoPlugin.Instance!.Configuration.P2PEnabled && s.IsTorrent())
+            {
+                _log.LogDebug($"P2P stream, skipping {s.Name}");
+                continue;
+            }
             i++;
 
             var id = s.GetGuid();
             if (!desiredIds.Add(id)) continue; // already accounted for
 
             var label = $"{i:D3}:::{name}:::{s.Name}";
-
+var path = s.IsFile()
+    ? s.Url
+    : $"http://127.0.0.1:{GetHttpPort()}/gelato/stream?ih={s.InfoHash}"
+        + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
+        + (s.Sources is { Count: > 0 } ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}" : "");
+            
             if (currentIds.Contains(id))
             {
                 var existing = currentById[id];
@@ -378,6 +406,7 @@ public class GelatoManager
                 await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
 
                 existing.Name = label;
+                existing.Path = path;
 
                 if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
                 existing.LockedFields = locked.ToArray();
@@ -408,7 +437,7 @@ public class GelatoManager
             child.Name = label;
             child.IsVirtualItem = false;
             child.ProviderIds = providerIds;
-            child.Path = s.Url;
+            child.Path = path;
             child.RunTimeTicks = item.RunTimeTicks;
 
             var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
@@ -654,16 +683,7 @@ public class GelatoManager
         //     _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
         //    return null;
         //}
-
-        // Filter unreleased episodes from the Videos list (no buffer for TV episodes)
-        var videos = seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>();
-        var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
-        if (filterUnreleased)
-        {
-            videos = videos.Where(v => v.IsReleased(0));
-        }
-
-        var groups = videos
+        var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode)
             .GroupBy(e => e.Season)
