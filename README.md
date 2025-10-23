@@ -39,13 +39,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 4. Add the configured base paths to the Jellyfin library of your choice.
 
-5. **IMPORTANT**: Lower the probe and analyze size by setting the following environment variables: ex:
-```
-JELLYFIN_FFmpeg__probesize="50M"
-JELLYFIN_FFmpeg__analyzeduration="5M"
-```
-
-6. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
+5. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
 
 ## Notes
 
@@ -76,8 +70,6 @@ JELLYFIN_FFmpeg__analyzeduration="5M"
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - Stream cache can be cleared by restarting the server
-- bump down probing and analyse to your liking for faster playback
-  JELLYFIN_FFmpeg__probesize="50M" JELLYFIN_FFmpeg__analyzeduration="5M"
 
 ### Support
 
