@@ -17,7 +17,7 @@ namespace Gelato.Configuration
         public bool EnableMixed { get; set; } = true;
         public bool FilterUnreleased { get; set; } = false;
         public int FilterUnreleasedBufferDays { get; set; } = 30;
-        public bool P2PEnabled { get; set; } = true;
+        public bool P2PEnabled { get; set; } = false;
         public int P2PDLSpeed { get; set; } = 0;
         public int P2PULSpeed { get; set; } = 0;
 

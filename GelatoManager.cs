@@ -463,7 +463,6 @@ var path = s.IsFile()
 
         var keep = current.Where(m => desiredIds.Contains(m.Id));
         var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
-        SetStreamSync(item.Id);
         _log.LogDebug($"SyncStreams finished for {item.Id}");
         return merged.ToList();
     }

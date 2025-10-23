@@ -120,19 +120,24 @@ namespace Gelato.Decorators
                 isItemsAction &&
                 (!isListAction || IsSingleItemList(ctx, item.Id));
 
+            
+var video = item as Video;
+Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
+    ? id
+    : item.Id;
             if (!allowSync)
             {
                 _log.LogDebug("GetStaticMediaSources not a sync-eligible call. action={Action} list={IsList} uri={Uri}",
                     actionName, isListAction, uri?.ToString());
             }
-            else if (uri is not null && !manager.HasStreamSync(item.Id))
+            else if (uri is not null && !manager.HasStreamSync(cacheKey))
             {
                 // bug in webui that calls the detail page twice. So thats why theres a lock
               _lock.RunSingleFlightAsync(item.Id, async ct =>
 {
                     _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
     await manager.SyncStreams(item, ct).ConfigureAwait(false);
-
+      manager.SetStreamSync(cacheKey);
     var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind())
                        .OfType<Video>()
                        .ToArray();

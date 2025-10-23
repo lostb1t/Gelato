@@ -85,7 +85,6 @@ public async Task<IActionResult> Stream(
               ?? PickHeuristic(manager)
             : PickHeuristic(manager));
 
-    // Use a CancellationTokenSource to stop the timer
     var timerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
     var timer = new System.Threading.Timer(_ =>
     {
