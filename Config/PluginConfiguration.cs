@@ -21,7 +21,7 @@ namespace Gelato.Configuration
         public int P2PDLSpeed { get; set; } = 0;
         public int P2PULSpeed { get; set; } = 0;
         public string FFmpegAnalyzeDuration { get; set; } = "5M";
-        public string FFmpegProbeSize { get; set; } = "50M";
+        public string FFmpegProbeSize { get; set; } = "25M";
         
         public string GetBaseUrl()
         {

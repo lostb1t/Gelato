@@ -89,7 +89,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
-        var probe   = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize       ?? "50M";
+        var probe   = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize       ?? "25M";
 
         // These are the exact keys read by Jellyfin when building ffmpeg/ffprobe args
         _config["FFmpeg:probesize"]       = probe;

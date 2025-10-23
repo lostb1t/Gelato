@@ -66,6 +66,21 @@
 
         <hr class="solid">
         <div class="sectionTitleContainer">
+          <h3 class="sectionTitle">FFmpeg (probe & analyze)</h3>
+        </div>
+
+        <div class="inputContainer">
+          <input is="emby-input" type="text" id="txtFFmpegAnalyzeDuration" label="FFmpeg analyzeduration:" />
+          <span>Max analyze duration passed to FFmpeg (e.g., <code>5M</code>, <code>2M</code>, or microseconds). Default: <code>5M</code>.</span>
+        </div>
+
+        <div class="inputContainer">
+          <input is="emby-input" type="text" id="txtFFmpegProbeSize" label="FFmpeg probesize:" />
+          <span>Max probe size passed to FFmpeg (e.g., <code>25M</code>, <code>10M</code>, or bytes). Default: <code>25M</code>.</span>
+        </div>
+
+        <hr class="solid">
+        <div class="sectionTitleContainer">
           <h3 class="sectionTitle">P2P streaming (BETA)</h3>
         </div>
 
@@ -110,6 +125,9 @@
         const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
         const txtBufferDays = document.querySelector('#txtBufferDays');
 
+        const txtFFmpegAnalyzeDuration = document.querySelector('#txtFFmpegAnalyzeDuration');
+        const txtFFmpegProbeSize = document.querySelector('#txtFFmpegProbeSize');
+
         const chkP2PEnabled = document.querySelector('#chkP2PEnabled');
         const txtP2PDLSpeed = document.querySelector('#txtP2PDLSpeed');
         const txtP2PULSpeed = document.querySelector('#txtP2PULSpeed');
@@ -133,6 +151,9 @@
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
             chkFilterUnreleased.checked = cfg.FilterUnreleased ?? false;
             txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 30;
+
+            txtFFmpegAnalyzeDuration.value = (cfg.FFmpegAnalyzeDuration || "5M");
+            txtFFmpegProbeSize.value = (cfg.FFmpegProbeSize || "25M");
 
             chkP2PEnabled.checked = cfg.P2PEnabled ?? true;
             txtP2PDLSpeed.value = (cfg.P2PDLSpeed ?? 0).toString();
@@ -159,6 +180,9 @@
             cfg.EnableMixed = !!chkEnableMixed.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked ?? false;
             cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) ?? 30;
+
+            cfg.FFmpegAnalyzeDuration = (txtFFmpegAnalyzeDuration.value || "5M").trim();
+            cfg.FFmpegProbeSize = (txtFFmpegProbeSize.value || "25M").trim();
 
             cfg.P2PEnabled = !!chkP2PEnabled.checked;
             cfg.P2PDLSpeed = parseInt(txtP2PDLSpeed.value) || 0;
