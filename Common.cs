@@ -120,16 +120,6 @@ public sealed class StremioUri
         var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(ToString()));
         return new Guid(hash);
     }
-
-    // Convenience builders
-    public StremioUri WithStream(string streamId) => new(MediaType, ExternalId, streamId);
-    public StremioUri WithoutStream() => new(MediaType, ExternalId, null);
-
-    public static StremioUri Movie(string externalId, string? streamId = null)
-        => new(StremioMediaType.Movie, externalId, streamId);
-
-    public static StremioUri Series(string externalId, string? streamId = null)
-        => new(StremioMediaType.Series, externalId, streamId);
 }
 
 public static class Utils
