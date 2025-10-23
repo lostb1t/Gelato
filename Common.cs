@@ -1,11 +1,9 @@
 using System;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jellyfin.Data.Enums;
-using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
@@ -35,25 +33,6 @@ public sealed class StremioUri
     private static readonly Regex Rx =
         new(@"^stremio://(?<type>movie|series)/(?<ext>[^/\s]+)(?:/(?<stream>[^/\s]+))?$",
             RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    public static StremioUri FromString(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("Value cannot be null or empty.", nameof(value));
-
-        if (TryParse(value.ToLowerInvariant(), out var sid) && sid is not null)
-            return sid;
-
-        throw new FormatException($"Invalid StremioId string: {value}");
-    }
-
-    public static StremioUri? FromMeta(StremioMeta meta)
-    {
-        if (TryParse(meta.Id, out var sid) && sid is not null)
-            return sid;
-
-        return null;
-    }
 
     public static StremioUri? FromBaseItem(BaseItem item)
     {
@@ -135,13 +114,6 @@ public sealed class StremioUri
             : $"stremio://{type}/{ExternalId}/{StreamId}";
     }
 
-    // without stream id
-    public string ToBaseString()
-    {
-        var type = MediaType == StremioMediaType.Movie ? "movie" : "series";
-        return $"stremio://{type}/{ExternalId}";
-    }
-
     public Guid ToGuid()
     {
         using var md5 = MD5.Create();
@@ -197,24 +169,6 @@ public static class Utils
             mins = onlyNum;
 
         return new TimeSpan(hours, mins, secs).Ticks;
-    }
-}
-
-public sealed class TimedBlock : IDisposable
-{
-    private readonly Stopwatch _sw;
-    private readonly string _label;
-
-    public TimedBlock(string label)
-    {
-        _label = label;
-        _sw = Stopwatch.StartNew();
-    }
-
-    public void Dispose()
-    {
-        _sw.Stop();
-        Console.WriteLine($"{_label} took {_sw.ElapsedMilliseconds} ms");
     }
 }
 

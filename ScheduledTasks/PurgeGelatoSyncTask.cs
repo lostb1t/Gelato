@@ -8,13 +8,11 @@ using Microsoft.Extensions.Logging;
 using Gelato;
 using Gelato.Common;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Entities;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Entities;
 
 namespace Gelato.Tasks
 {

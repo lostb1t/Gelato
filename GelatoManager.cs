@@ -32,10 +32,7 @@ using MediaBrowser.Common.Configuration;
 using Jellyfin.Extensions;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Common.Plugins;
-using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Model.Plugins;
-//using Jellyfin.Networking.Configuration;
-//using Jellyfin.Server.Extensions;
 
 namespace Gelato;
 

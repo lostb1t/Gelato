@@ -1,7 +1,6 @@
 
 using System.Net.Http;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
