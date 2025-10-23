@@ -12,23 +12,25 @@
     <PackageReference Include="Jellyfin.Controller" Version="10.11" />
     <PackageReference Include="Jellyfin.Common" Version="10.11" />
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
+
   </ItemGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="Config\config.html" />
   </ItemGroup>
 
-  <!-- Delete Jellyfin dependencies, keep only MonoTorrent -->
-  <Target Name="CleanupJellyfinDlls" AfterTargets="Build">
-    <ItemGroup>
-      <AllDlls Include="$(OutDir)*.dll" />
-      <FilesToKeep Include="$(OutDir)Gelato.dll" />
-      <FilesToKeep Include="$(OutDir)MonoTorrent*.dll" />
-      <FilesToKeep Include="$(OutDir)Mono.Nat.dll" />
-      <FilesToKeep Include="$(OutDir)ReusableTasks.dll" />
-      <FilesToDelete Include="@(AllDlls)" Exclude="@(FilesToKeep)" />
-    </ItemGroup>
-    
-    <Delete Files="@(FilesToDelete)" />
-  </Target>
+<Target Name="CleanupJellyfinDlls" AfterTargets="Build">
+  <ItemGroup>
+    <AllDlls Include="$(OutDir)*.dll" />
+    <FilesToKeep Include="
+        $(OutDir)Gelato.dll;
+        $(OutDir)JellyfinLoaderStub*.dll;  
+        $(OutDir)0Harmony.dll;             
+        $(OutDir)MonoTorrent*.dll;
+        $(OutDir)Mono.Nat.dll;
+        $(OutDir)ReusableTasks.dll" />
+    <FilesToDelete Include="@(AllDlls)" Exclude="@(FilesToKeep)" />
+  </ItemGroup>
+  <Delete Files="@(FilesToDelete)" />
+</Target>
 </Project>

@@ -98,8 +98,6 @@ namespace Gelato.Filters
                 // if everything is requested. return wat we can
                 requested.Add(BaseItemKind.Movie);
                 requested.Add(BaseItemKind.Series);
-                // await next();
-                // return;
             }
 
             if (requested.Count == 0)
@@ -134,14 +132,8 @@ namespace Gelato.Filters
                 else
                 {
                     _log.LogWarning("no movie folder found, skipping search");
-                    if (requested.Count() == 1)
-                    {
-                        await next();
-                        return;
-                    }
                 }
             }
-
 
             if (requested.Contains(BaseItemKind.Series))
             {
@@ -156,13 +148,15 @@ namespace Gelato.Filters
                 else
                 {
                     _log.LogWarning("no series folder found, skipping search");
-                    if (requested.Count() == 1)
-                    {
-                        await next();
-                        return;
-                    }
                 }
             }
+            
+            //if (metas.Count() == 0)
+            //        {
+                        //_log.LogWarning("no series folder found, skipping search");
+            //            await next();
+            //            return;
+            //        }
             
             _log.LogInformation("intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
                           q, string.Join(",", requested.Select(r => r.ToString())), start, limit, metas.Count());

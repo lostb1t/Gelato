@@ -13,10 +13,12 @@ using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Controller.Dto;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 
 namespace Gelato;
 
-public sealed class ServiceRegistrator : IPluginServiceRegistrator
+public class ServiceRegistrator : IPluginServiceRegistrator
 {
     public void RegisterServices(IServiceCollection services, IServerApplicationHost host)
     {
@@ -31,7 +33,8 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton(sp =>
             new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
         //services.AddSingleton<TorrentEngineHost>();
-      
+      services.AddHostedService<FFmpegConfigSetter>();
+
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
         services.Remove(original);
 
@@ -71,4 +74,32 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<DownloadFilter>();
         });
     }
+    
+    public class FFmpegConfigSetter : IHostedService
+{
+    private readonly IConfiguration _config;
+    private readonly ILogger<FFmpegConfigSetter> _log;
+
+    public FFmpegConfigSetter(IConfiguration config, ILogger<FFmpegConfigSetter> log)
+    {
+        _config = config;
+        _log = log;
+    }
+
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
+        var probe   = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize       ?? "50M";
+
+        // These are the exact keys read by Jellyfin when building ffmpeg/ffprobe args
+        _config["FFmpeg:probesize"]       = probe;
+        _config["FFmpeg:analyzeduration"] = analyze;
+
+        _log.LogInformation("Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}", probe, analyze);
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
 }

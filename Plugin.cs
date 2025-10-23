@@ -23,7 +23,6 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _log = log;
         _library = library;
         _manager = manager;
-
     }
 
     public static GelatoPlugin? Instance { get; private set; }
@@ -58,3 +57,4 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         }
     }
 }
+

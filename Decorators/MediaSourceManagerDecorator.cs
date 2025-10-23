@@ -329,6 +329,16 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
         if (selected is null)
             return refreshed;
     }
+    
+    // never return placeholder
+    if (selected.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)) {
+      selected = null;
+    }
+    
+    if (selected is null) {
+      _log.LogWarning("GetPlaybackMediaSources {Name} does not have any playable sources", item.Name);
+      return Array.Empty<MediaSourceInfo>();
+    }
 
     if (GelatoPlugin.Instance!.Configuration.EnableSubs)
         AddSubtitleStreams(item, selected);
@@ -339,7 +349,7 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
         await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
     }
 
-    return selected is null ? Array.Empty<MediaSourceInfo>() : new[] { selected };
+    return new[] { selected };
 }
 
         public Task<MediaSourceInfo> GetMediaSource(
