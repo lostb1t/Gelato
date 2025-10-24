@@ -456,14 +456,15 @@ var path = s.IsFile()
         {
             if (m.Id != item.Id)
             {
-                _log.LogDebug($"deleting {m.Name}");
-                _library.DeleteItem(m, new DeleteOptions { DeleteFileLocation = false }, true);
+               _log.LogDebug($"deleting {m.Name}");
+               // dont use library delete here
+               _repo.DeleteItem([m.Id]);
             }
         }
 
         var keep = current.Where(m => desiredIds.Contains(m.Id));
         var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
-        _log.LogDebug($"SyncStreams finished for {item.Id}");
+        _log.LogInformation($"SyncStreams finished for {item.Name} count: {merged.Count()} deleted: {stale.Count}");
         return merged.ToList();
     }
 
