@@ -71,11 +71,15 @@ namespace Gelato
             {
                 using var c = NewClient();
                 using var resp = await c.GetAsync(url);
-                if (!resp.IsSuccessStatusCode) return default;
+                if (!resp.IsSuccessStatusCode) {
+ _log.LogError(
+            "external fetch failed: {Url} | status code: {StatusCode}",
+            url,
+            resp.StatusCode
+        )
+                  return default;
+                }
                 await using var s = await resp.Content.ReadAsStreamAsync();
-                // var json = await resp.Content.ReadAsStringAsync();
-                //_log.LogInformation("Gelato: Body {Json}", json);
-                //  _log.LogInformation("Gelato: Response {StatusCode}", resp.StatusCode);
                 return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
             }
             catch (Exception ex)
