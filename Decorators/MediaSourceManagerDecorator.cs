@@ -146,6 +146,7 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
     if (items.Length > 1)
         await manager.MergeVersions(items).ConfigureAwait(false);
 }).GetAwaiter().GetResult();
+               item = _libraryManager.GetItemById(item.Id);
             }
 
             var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
