@@ -76,7 +76,7 @@ namespace Gelato
             "external fetch failed: {Url} | status code: {StatusCode}",
             url,
             resp.StatusCode
-        )
+        );
                   return default;
                 }
                 await using var s = await resp.Content.ReadAsStreamAsync();
