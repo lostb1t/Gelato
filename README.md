@@ -71,7 +71,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - Stream cache can be cleared by restarting the server
 
-### Support
+### Support me
 
 Want to support me? Use my referral codes
 
