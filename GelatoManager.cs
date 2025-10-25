@@ -779,9 +779,9 @@ var path = s.IsFile()
                     Path = epPath,
                     SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
                 };
-
+                if (!string.IsNullOrWhiteSpace(epMeta.Runtime))
+                  epItem.RunTimeTicks = Utils.ParseToTicks(epMeta.Runtime);
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
-                //epItem.SetProviderId("Stremio", epItem.Path);
                 epItem.SetProviderId("Stremio", $"{seasonItem.GetProviderId("Stremio")}:{epMeta.Number}");
                 seasonItem.AddChild(epItem);
                 await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);

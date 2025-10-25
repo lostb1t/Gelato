@@ -267,8 +267,6 @@ namespace Gelato
                     item = new Series
                     {
                         Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)),
-                        //  Id = meta.Guid ?? new Guid($"series{Id}"),
-                        // Path = $"stremio://series/{Id}"
                     };
                     break;
 
@@ -316,10 +314,6 @@ namespace Gelato
                 item.SetProviderId("Stremio", meta.ImdbId);
             }
 
-            //var locked = item.LockedFields?.ToList() ?? new List<MetadataField>();
-            //if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
-            //item.LockedFields = locked.ToArray();
-
             var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
             item.SetProviderId("Stremio", stremioUri.ExternalId);
 
@@ -329,9 +323,7 @@ namespace Gelato
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            //item.OriginalTitle = meta.Name
-            //item.ForcedSortName = $"AA000 {meta.Name}";
-            //item.ForcedSortName = item.SortName;
+            
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
 
