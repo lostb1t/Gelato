@@ -76,7 +76,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 Want to support me? Use my referral codes
 
 - <a target="_blank"
-          href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">Torbox referral</a> code: abe1a9d9-53c9-449a-9d85-ab3dfb5d188d
+          href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">Torbox referral link</a> code: abe1a9d9-53c9-449a-9d85-ab3dfb5d188d
 - <a target="_blank"
-          href="http://real-debrid.com/?id=10148658">RealDebrid Signup</a> 
+          href="http://real-debrid.com/?id=10148658">RealDebrid Signup</a> </br>
   Or use my referral code: 10148658
