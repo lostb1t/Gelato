@@ -1,8 +1,11 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Gelato.Common;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -10,16 +13,13 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using Jellyfin.Data.Enums;
-using Gelato.Common;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 
 
 namespace Gelato.Filters;
@@ -71,37 +71,37 @@ public class RedirectActionFilter : IAsyncActionFilter, IOrderedFilter
 
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
-      
-         var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
-         _log.LogInformation("Requested URL: {Url}", fullUrl);
-     
-      if (TryFromArgs(ctx.ActionArguments, out var id))
+
+        var fullUrl = ctx.HttpContext.Request.GetDisplayUrl();
+        _log.LogInformation("Requested URL: {Url}", fullUrl);
+
+        if (TryFromArgs(ctx.ActionArguments, out var id))
         {
             if (!string.IsNullOrWhiteSpace(id))
             {
-              Guid guid = Guid.Parse(id);
-              var meta = _manager.GetStremioMeta(guid);
-        if (meta is not null)
-        {
-          
-          var baseItem = _stremioProvider.IntoBaseItem(meta);
-          
-        var found = _manager.FindByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
-        if (found is not null)
-        {
-            //_log.LogDebug($"InsertMeta: found existing item: {found.Id}");
-           // _log.LogInformation("MEDIA already exists; redirecting to canonical id");
-            _manager.ReplaceGuid(ctx, guid);
-        }
-        
-        }
+                Guid guid = Guid.Parse(id);
+                var meta = _manager.GetStremioMeta(guid);
+                if (meta is not null)
+                {
+
+                    var baseItem = _stremioProvider.IntoBaseItem(meta);
+
+                    var found = _manager.FindByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
+                    if (found is not null)
+                    {
+                        //_log.LogDebug($"InsertMeta: found existing item: {found.Id}");
+                        // _log.LogInformation("MEDIA already exists; redirecting to canonical id");
+                        _manager.ReplaceGuid(ctx, guid);
+                    }
+
+                }
 
             }
         }
 
         await next();
     }
-    
+
     private static bool TryFromArgs(IDictionary<string, object?> args, out string? id)
     {
         foreach (var kv in args)

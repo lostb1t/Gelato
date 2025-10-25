@@ -118,7 +118,7 @@ namespace Gelato.Filters
                 int.TryParse(limitVal, out var lim) && lim > 0) limit = lim;
 
             var q = http.Request.Query.First(kv => string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)).Value.ToString();
-           
+
             var metas = new List<StremioMeta>(256);
 
             if (requested.Contains(BaseItemKind.Movie))
@@ -150,14 +150,14 @@ namespace Gelato.Filters
                     _log.LogWarning("no series folder found, skipping search");
                 }
             }
-            
+
             //if (metas.Count() == 0)
             //        {
-                        //_log.LogWarning("no series folder found, skipping search");
+            //_log.LogWarning("no series folder found, skipping search");
             //            await next();
             //            return;
             //        }
-            
+
             _log.LogInformation("intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
                           q, string.Join(",", requested.Select(r => r.ToString())), start, limit, metas.Count());
 
@@ -169,17 +169,17 @@ namespace Gelato.Filters
             {
                 var baseItem = _provider.IntoBaseItem(s);
                 if (baseItem is null) continue;
-                
-               // make them "unplayable" so user is forced to details
-               // uch.. infuse doesnt like empty paths and virtual items
+
+                // make them "unplayable" so user is forced to details
+                // uch.. infuse doesnt like empty paths and virtual items
                 //baseItem.Path = null;
                 //baseItem.IsVirtualItem = true;
-               
+
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.FromBaseItem(baseItem);
                 dto.Id = stremioUri.ToGuid();
                 dtos.Add(dto);
-                
+
                 _manager.SaveStremioMeta(dto.Id, s);
             }
 

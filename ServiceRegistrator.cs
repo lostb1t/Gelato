@@ -3,6 +3,7 @@ using Gelato.Decorators;
 using Gelato.Filters;
 using Gelato.Tasks;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Plugins;
@@ -10,11 +11,10 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using MediaBrowser.Controller.Dto;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato;
 
@@ -33,7 +33,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton(sp =>
             new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
         //services.AddSingleton<TorrentEngineHost>();
-      services.AddHostedService<FFmpegConfigSetter>();
+        services.AddHostedService<FFmpegConfigSetter>();
 
         var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
         services.Remove(original);
@@ -64,7 +64,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
-           // o.Filters.AddService<RedirectActionFilter>(order: 0);
+            // o.Filters.AddService<RedirectActionFilter>(order: 0);
             o.Filters.AddService<InsertActionFilter>(order: 1);
             o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
@@ -74,32 +74,32 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<DownloadFilter>();
         });
     }
-    
+
     public class FFmpegConfigSetter : IHostedService
-{
-    private readonly IConfiguration _config;
-    private readonly ILogger<FFmpegConfigSetter> _log;
-
-    public FFmpegConfigSetter(IConfiguration config, ILogger<FFmpegConfigSetter> log)
     {
-        _config = config;
-        _log = log;
+        private readonly IConfiguration _config;
+        private readonly ILogger<FFmpegConfigSetter> _log;
+
+        public FFmpegConfigSetter(IConfiguration config, ILogger<FFmpegConfigSetter> log)
+        {
+            _config = config;
+            _log = log;
+        }
+
+        public Task StartAsync(CancellationToken cancellationToken)
+        {
+            var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
+            var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "25M";
+
+            // These are the exact keys read by Jellyfin when building ffmpeg/ffprobe args
+            _config["FFmpeg:probesize"] = probe;
+            _config["FFmpeg:analyzeduration"] = analyze;
+
+            _log.LogInformation("Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}", probe, analyze);
+            return Task.CompletedTask;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
-
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
-        var probe   = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize       ?? "25M";
-
-        // These are the exact keys read by Jellyfin when building ffmpeg/ffprobe args
-        _config["FFmpeg:probesize"]       = probe;
-        _config["FFmpeg:analyzeduration"] = analyze;
-
-        _log.LogInformation("Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}", probe, analyze);
-        return Task.CompletedTask;
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
 
 }

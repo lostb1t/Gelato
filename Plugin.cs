@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Gelato.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
@@ -5,8 +7,6 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
 
 
 namespace Gelato;

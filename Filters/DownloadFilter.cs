@@ -1,16 +1,16 @@
 
 using System.Net.Http;
+using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Common.Extensions;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
-using MediaBrowser.Common.Extensions;
 using Microsoft.Extensions.Logging;
-using Jellyfin.Database.Implementations.Entities;
-using MediaBrowser.Controller.Entities;
-using Microsoft.AspNetCore.Mvc;
 
 namespace Gelato.Filters;
 
@@ -28,14 +28,14 @@ public sealed class DownloadFilter : IAsyncActionFilter
         IHttpClientFactory http,
         GelatoManager manager,
         IUserManager userManager,
-        IHttpClientFactory httpClientFactory,  
+        IHttpClientFactory httpClientFactory,
         ILogger<DownloadFilter> log)
     {
         _library = library;
         _http = http;
         _log = log;
         _manager = manager;
-          _httpClientFactory = httpClientFactory;
+        _httpClientFactory = httpClientFactory;
         _userManager = userManager;
     }
 
@@ -66,52 +66,52 @@ public sealed class DownloadFilter : IAsyncActionFilter
 
         if (user is not null)
         {
-var mediaSourceId =
-    Guid.TryParse(ctx.HttpContext.Items["MediaSourceId"] as string, out var parsed)
-        ? parsed
-        : guid;
+            var mediaSourceId =
+                Guid.TryParse(ctx.HttpContext.Items["MediaSourceId"] as string, out var parsed)
+                    ? parsed
+                    : guid;
             var item = _library.GetItemById<BaseItem>(mediaSourceId, user);
             if (item is not null)
             {
                 if (_manager.IsStremio(item))
                 {
-var client = _httpClientFactory.CreateClient();
+                    var client = _httpClientFactory.CreateClient();
 
-var resp = await client.GetAsync(
-    item.Path,
-    HttpCompletionOption.ResponseHeadersRead,
-    CancellationToken.None
-);
+                    var resp = await client.GetAsync(
+                        item.Path,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        CancellationToken.None
+                    );
 
-resp.EnsureSuccessStatusCode();
+                    resp.EnsureSuccessStatusCode();
 
-ctx.HttpContext.Response.RegisterForDispose(resp);
+                    ctx.HttpContext.Response.RegisterForDispose(resp);
 
-var stream = await resp.Content.ReadAsStreamAsync(CancellationToken.None);
+                    var stream = await resp.Content.ReadAsStreamAsync(CancellationToken.None);
 
-var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+                    var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
 
-var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
-if (string.IsNullOrWhiteSpace(fileName))
-{
-    var uri = new Uri(item.Path);
-    fileName = Path.GetFileName(uri.AbsolutePath);
-    if (string.IsNullOrWhiteSpace(fileName))
-        fileName = "download";
-}
+                    var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+                    if (string.IsNullOrWhiteSpace(fileName))
+                    {
+                        var uri = new Uri(item.Path);
+                        fileName = Path.GetFileName(uri.AbsolutePath);
+                        if (string.IsNullOrWhiteSpace(fileName))
+                            fileName = "download";
+                    }
 
-if (resp.Content.Headers.ContentLength is long len)
-{
-    ctx.HttpContext.Response.ContentLength = len;
-}
+                    if (resp.Content.Headers.ContentLength is long len)
+                    {
+                        ctx.HttpContext.Response.ContentLength = len;
+                    }
 
-ctx.Result = new FileStreamResult(stream, contentType)
-{
-    FileDownloadName = fileName,
-    EnableRangeProcessing = true
-};
-                        return;
-                    
+                    ctx.Result = new FileStreamResult(stream, contentType)
+                    {
+                        FileDownloadName = fileName,
+                        EnableRangeProcessing = true
+                    };
+                    return;
+
                 }
             }
         }
