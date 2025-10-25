@@ -26,7 +26,9 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 ## Usage
 
 1. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: `https://aiostreams.viren070.me/stremio/configure`
-    
+   
+   If you are new to debrid and are signing up please use one of my <a href="https://github.com/lostb1t/Gelato?tab=readme-ov-file#support-me">referrals</a>.
+   
    At minimum you need the **tmdb addon enabled** for search and one addon that provides streams (comet for example).
    Alternative you can import the [starter config](aiostreams-config.json). Remember to enable your debrid providers under services after importing the config.
    
