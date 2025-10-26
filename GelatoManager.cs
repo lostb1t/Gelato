@@ -339,7 +339,7 @@ public class GelatoManager
             _log.LogError($"Unable to build Stremio URI for {item.Name}");
             return;
         }
-        //var video = item as Video;
+
         var streams = await _stremioProvider.GetStreamsAsync(uri).ConfigureAwait(false);
         if (!providerIds.ContainsKey("Stremio")) providerIds["Stremio"] = uri.ExternalId;
 
@@ -357,6 +357,8 @@ public class GelatoManager
         var items = _library.GetItemList(query)
             .OfType<Video>()
             .ToList();
+        
+        var localItems = items.Where(x => !IsGelato(x));
         var primary = items.FirstOrDefault(v => string.IsNullOrWhiteSpace(v.PrimaryVersionId));
         if (primary is null) {
           primary = (Video)item; 
@@ -366,7 +368,6 @@ public class GelatoManager
 
         var current = items.Where(v => !v.IsFileProtocol && v.Id != primary.Id);
         var currentById = current.ToDictionary(v => v.Id, v => v);
-
 
         var keepIds = new HashSet<Guid>();
         if (primary is not null && IsGelato(primary)) keepIds.Add(primary.Id);
@@ -402,6 +403,13 @@ public class GelatoManager
         }
 
         int index = 0;
+        var newVideos = localItems
+    .Where(i => i.Id != primary.Id)
+    .Select(i =>
+    {
+        i.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
+        return i;
+    }).ToList();
   
         // Process in the order above — primary-related first
         foreach (var s in acceptable)
@@ -419,7 +427,7 @@ public class GelatoManager
             Video target;
             var isNew = false;
 
-            if (index == 1) {
+            if (index == 1 && IsGelato(primary)) {
               target = primary;
 }
             else if (currentById.TryGetValue(id, out var existing))
@@ -455,42 +463,38 @@ public class GelatoManager
             target.Name = primary.Name;
             target.Path = path;
             target.IsVirtualItem = false;
-            target.ProviderIds = primary.ProviderIds;
+            target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             
             if (target.Id != primary.Id) {
-
               target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
+              
               // this is a trick until the pr for primaryversion is merged
               target.IsVirtualItem = true;
             }
 
             if (isNew) {
-              parent.AddChild(target);
-               created.Add(target);
+               parent.AddChild(target);
             } else {
               // primary is saved later on
-              if (index != 1) {
-            await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-}
+              if (IsPrimaryVersion(target)) {
+               await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+              }
             }
 
-            keepIds.Add(target.Id);
+            newVideos.Add(target);
         }
 
         // Delete stale (never delete original base item)
-        var stale = current.Where(m => !keepIds.Contains(m.Id) && m.Id != item.Id).ToList();
+        var stale = current.Where(m => !newVideos.Where(x => IsGelato(x) && !IsPrimaryVersion(x) && item.Id != x.Id).Select(x => x.Id).Contains(m.Id)).ToList();
         foreach (var m in stale)
         {
             _log.LogDebug($"Deleting stale {m.Name}");
             _repo.DeleteItem([m.Id]);
         }
-
-        var kept = current.Where(m => keepIds.Contains(m.Id));
-        var merged = created.Concat(kept).GroupBy(v => v.Id).Select(g => g.First()).ToList();
         
-        primary.LinkedAlternateVersions = merged
-           .Where(i => i.Id != primary.Id )
+        primary.LinkedAlternateVersions = newVideos
+            .Where(i => i.Id != primary.Id )
             .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
             .ToArray();
         primary.SetPrimaryVersionId(null);
@@ -500,7 +504,7 @@ public class GelatoManager
         }         
         await primary.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
         
-        _log.LogInformation($"SyncStreams finished for {item.Name} count: {merged.Count} deleted: {stale.Count}");
+        _log.LogInformation($"SyncStreams finished for {item.Name} count: {newVideos.Count} deleted: {stale.Count}");
     }
 
     public Video? GetPrimaryVersion(List<Video> items)
