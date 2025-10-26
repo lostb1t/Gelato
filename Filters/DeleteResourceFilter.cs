@@ -1,16 +1,16 @@
 
 using System.Net.Http;
+using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Common.Extensions;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
-using MediaBrowser.Common.Extensions;
 using Microsoft.Extensions.Logging;
-using Jellyfin.Database.Implementations.Entities;
-using MediaBrowser.Controller.Entities;
-using Microsoft.AspNetCore.Mvc;
 
 namespace Gelato.Filters;
 
@@ -66,36 +66,36 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             var item = _library.GetItemById<BaseItem>(guid, user);
             if (item is not null)
             {
-                if (_manager.IsStremio(item))
+                if (_manager.IsGelato(item))
                 {
                     if (_manager.CanDelete(item, user))
                     {
-                        if (_manager.IsStremioPlaceholder(item) && item is Video video)
-{
-    foreach (var link in video.LinkedAlternateVersions) // link : LinkedChild
-    {
-        if (link.ItemId is not Guid altId || altId == Guid.Empty)
-        {
-            _log.LogWarning("ALT LINK: missing/empty ItemId; skipping. {@Link}", link);
-            continue;
-        }
+                        if (item is Video video && _manager.IsPrimaryVersion(video))
+                        {
+                            foreach (var link in video.LinkedAlternateVersions) // link : LinkedChild
+                            {
+                                if (link.ItemId is not Guid altId || altId == Guid.Empty)
+                                {
+                                    _log.LogWarning("ALT LINK: missing/empty ItemId; skipping. {@Link}", link);
+                                    continue;
+                                }
 
-        var alt = _library.GetItemById(altId);
-        if (alt is null)
-        {
-            _log.LogWarning("ALT LINK: item not found in DB: {AltId}", altId);
-            continue;
-        }
+                                var alt = _library.GetItemById(altId);
+                                if (alt is null)
+                                {
+                                    _log.LogWarning("ALT LINK: item not found in DB: {AltId}", altId);
+                                    continue;
+                                }
 
-        _log.LogInformation("Deleting alternate version {Name} ({Id})", alt.Name, alt.Id);
+                                _log.LogInformation("Deleting alternate version {Name} ({Id})", alt.Name, alt.Id);
 
-        _library.DeleteItem(
-            alt,
-            new DeleteOptions { DeleteFileLocation = false },
-            true
-        );
-    }
-}
+                                _library.DeleteItem(
+                                    alt,
+                                    new DeleteOptions { DeleteFileLocation = false },
+                                    true
+                                );
+                            }
+                        }
 
                         _log.LogInformation($"deleting {item.Name}");
                         _library.DeleteItem(

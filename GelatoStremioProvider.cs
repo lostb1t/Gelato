@@ -1,20 +1,20 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Globalization;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using Gelato.Common;
+using Gelato.Configuration;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
-using Gelato.Configuration;
-using System.Text.Json.Serialization;
-using Gelato.Common;
-using Jellyfin.Data.Enums;
 
 namespace Gelato
 {
@@ -67,17 +67,19 @@ namespace Gelato
 
         private async Task<T?> GetJsonAsync<T>(string url)
         {
+            _log.LogDebug("GetJsonAsync: requesting {url}", url);
             try
             {
                 using var c = NewClient();
                 using var resp = await c.GetAsync(url);
-                if (!resp.IsSuccessStatusCode) {
- _log.LogError(
-            "external fetch failed: {Url} | status code: {StatusCode}",
-            url,
-            resp.StatusCode
-        );
-                  return default;
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _log.LogError(
+                               "external fetch failed: {Url} | status code: {StatusCode}",
+                               url,
+                               resp.StatusCode
+                           );
+                    return default;
                 }
                 await using var s = await resp.Content.ReadAsStreamAsync();
                 return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
@@ -227,11 +229,12 @@ namespace Gelato
                 _ => null
             };
 
-            if (catalog == null) 
+            if (catalog == null)
             {
-              _log.LogError("SearchAsync: {mediaType} has no search catalog", mediaType);
-              return Array.Empty<StremioMeta>();
-            };
+                _log.LogError("SearchAsync: {mediaType} has no search catalog", mediaType);
+                return Array.Empty<StremioMeta>();
+            }
+            ;
 
             return await GetCatalogMetasAsync(catalog.Id, mediaType, query, skip);
         }
@@ -311,7 +314,7 @@ namespace Gelato
             if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             {
                 item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
-                item.SetProviderId("Stremio", meta.ImdbId);
+                //item.SetProviderId("Stremio", meta.ImdbId);
             }
 
             var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
@@ -323,7 +326,8 @@ namespace Gelato
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            
+            item.Overview = meta.Description;
+
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
 
@@ -533,8 +537,8 @@ namespace Gelato
 
             return false;
         }
-        
-public bool IsReleased(int bufferDays = 0)
+
+        public bool IsReleased(int bufferDays = 0)
         {
             var now = DateTime.UtcNow;
 
@@ -682,18 +686,18 @@ public bool IsReleased(int bufferDays = 0)
                 && !string.IsNullOrWhiteSpace(GetName())
                 && (!string.IsNullOrWhiteSpace(Url) || !string.IsNullOrWhiteSpace(InfoHash));
         }
-        
+
         public bool IsFile()
         {
             return !string.IsNullOrWhiteSpace(Url);
         }
-        
+
         public bool IsTorrent()
         {
             return !string.IsNullOrWhiteSpace(InfoHash);
         }
 
-        
+
 
     }
 

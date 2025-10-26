@@ -1,7 +1,7 @@
+using System;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
-using System;
 
 namespace Gelato.Configuration
 {
@@ -22,7 +22,7 @@ namespace Gelato.Configuration
         public int P2PULSpeed { get; set; } = 0;
         public string FFmpegAnalyzeDuration { get; set; } = "5M";
         public string FFmpegProbeSize { get; set; } = "25M";
-        
+
         public string GetBaseUrl()
         {
             if (string.IsNullOrWhiteSpace(Url))

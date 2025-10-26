@@ -52,7 +52,7 @@ namespace Gelato.Tasks
 
             var maxPerCatalog = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
             var seriesFolder = _manager.TryGetSeriesFolder();
-            var movieFolder  = _manager.TryGetMovieFolder();
+            var movieFolder = _manager.TryGetMovieFolder();
 
             // Progress counters
             var total = Math.Max(1, catalogs.Count * maxPerCatalog);

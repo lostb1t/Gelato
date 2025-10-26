@@ -4,36 +4,36 @@
 #pragma warning disable CS0165
 
 using System.Collections.Generic;
-using MediaBrowser.Controller.Configuration;
-using MediaBrowser.Controller.Dto;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using MediaBrowser.Controller.Persistence;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities;
-using Gelato.Common;
-using System.Text;
-using Jellyfin.Data.Enums;
-using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.IO;
-using System.Text.Json;
 using System.Globalization;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.WebUtilities;
-using Microsoft.Extensions.Primitives;
-using Microsoft.Extensions.Caching.Memory;
-using MediaBrowser.Model.Dto;
+using System.Text;
+using System.Text.Json;
+using Gelato.Common;
+using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
-using MediaBrowser.Common.Configuration;
 using Jellyfin.Extensions;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
+using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Plugins;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 //using Jellyfin.Networking.Configuration;
 //using Jellyfin.Server.Extensions;
 
@@ -82,12 +82,12 @@ public class GelatoManager
         _library = libraryManager;
         _fileSystem = fileSystem;
     }
-    
+
     public int GetHttpPort()
-{
-    var networkConfig = _serverConfig.GetNetworkConfiguration();
-    return networkConfig.InternalHttpPort;
-}
+    {
+        var networkConfig = _serverConfig.GetNetworkConfiguration();
+        return networkConfig.InternalHttpPort;
+    }
 
     public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
     {
@@ -319,29 +319,29 @@ public class GelatoManager
         _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
     }
 
-    public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
+    /// <summary>
+    /// Load streams and inserts them into the database keeping original
+    /// sorting. We make sure to keep a one stable version based on primaryversionid
+    /// </summary>
+    /// <returns></returns>
+    public async Task SyncStreams(BaseItem item, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
-        Episode? baseEp = item as Episode;
-        bool isEpisode = baseEp is not null;
+
+        var isEpisode = item is Episode;
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
-        if (parent is null) return new List<Video>();
+        if (parent is null) return;
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null)
         {
-            _log.LogError($"unable to build stremio uri for {item.Name}");
-            return new List<Video>();
+            _log.LogError($"Unable to build Stremio URI for {item.Name}");
+            return;
         }
 
         var streams = await _stremioProvider.GetStreamsAsync(uri).ConfigureAwait(false);
-
-        // item could be a local file which does not have the stremio marker
-        if (!providerIds.ContainsKey("stremio"))
-        {
-            providerIds["Stremio"] = uri.ExternalId;
-        }
+        if (!providerIds.ContainsKey("Stremio")) providerIds["Stremio"] = uri.ExternalId;
 
         var query = new InternalItemsQuery
         {
@@ -354,118 +354,157 @@ public class GelatoManager
             CollapseBoxSetItems = false
         };
 
-        var current = _library.GetItemList(query)
-    .OfType<Video>()
-    .Where(v => !v.IsFileProtocol && !IsStremioPlaceholder(v))
-    .ToList();
+        var items = _library.GetItemList(query)
+            .OfType<Video>()
+            .ToList();
+        
+        var localItems = items.Where(x => !IsGelato(x));
+        var primary = items.FirstOrDefault(v => string.IsNullOrWhiteSpace(v.PrimaryVersionId));
+        if (primary is null) {
+          primary = (Video)item; 
+        }
+        
+       // item = _libraryManager.GetItemById(item.Id);
 
+        var current = items.Where(v => !v.IsFileProtocol && v.Id != primary.Id);
         var currentById = current.ToDictionary(v => v.Id, v => v);
-        var currentIds = new HashSet<Guid>(current.Select(v => v.Id));
-        var desiredIds = new HashSet<Guid> { };
+
+        var keepIds = new HashSet<Guid>();
+        if (primary is not null && IsGelato(primary)) keepIds.Add(primary.Id);
 
         var created = new List<Video>();
-        if (item is Video baseVideo) created.Add(baseVideo);
 
-        var parts = item.Name.Split(":::");
-        var name = parts.Length > 1 ? parts[1] : item.Name;
+        var httpPort = GetHttpPort();
 
-        var i = 0;
+        var acceptable = new List<StremioStream>();
         foreach (var s in streams)
         {
             if (!s.IsValid())
             {
-                _log.LogWarning($"invalid stream, skipping {s.Name}");
+                _log.LogWarning($"Invalid stream, skipping {s.Name}");
                 continue;
             }
-            
+
             if (!GelatoPlugin.Instance!.Configuration.P2PEnabled && s.IsTorrent())
             {
                 _log.LogDebug($"P2P stream, skipping {s.Name}");
                 continue;
             }
-            i++;
 
+            acceptable.Add(s);
+        }
+
+        // Primary-first stable ordering (keeps original order otherwise)
+        if (primary is not null && acceptable.Count > 1)
+        {
+            acceptable = acceptable
+                .OrderByDescending(s => s.GetGuid() == primary.Id)
+                .ToList();
+        }
+
+        int index = 0;
+        var newVideos = localItems
+    .Where(i => i.Id != primary.Id)
+    .Select(i =>
+    {
+        i.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
+        return i;
+    }).ToList();
+  
+        // Process in the order above — primary-related first
+        foreach (var s in acceptable)
+        {
+            index++;
             var id = s.GetGuid();
-            if (!desiredIds.Add(id)) continue; // already accounted for
+            var label = $"{index:D3}:::{item.Name}:::{s.Name}";
+            var path = s.IsFile()
+                ? s.Url
+                : $"http://127.0.0.1:{httpPort}/gelato/stream?ih={s.InfoHash}"
+                    + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
+                    + (s.Sources is { Count: > 0 } ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}" : "");
 
-            var label = $"{i:D3}:::{name}:::{s.Name}";
-var path = s.IsFile()
-    ? s.Url
-    : $"http://127.0.0.1:{GetHttpPort()}/gelato/stream?ih={s.InfoHash}"
-        + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
-        + (s.Sources is { Count: > 0 } ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}" : "");
-            
-            if (currentIds.Contains(id))
+            // Choose target: existing → primary (once) → new
+            Video target;
+            var isNew = false;
+
+            if (index == 1 && IsGelato(primary)) {
+              target = primary;
+}
+            else if (currentById.TryGetValue(id, out var existing))
             {
-                var existing = currentById[id];
-
-                // Temporarily unlock Name to update it
-                var locked = existing.LockedFields?.ToList() ?? new List<MetadataField>();
-                _ = locked.Remove(MetadataField.Name);
-                existing.LockedFields = locked.ToArray();
-                await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-
-                existing.Name = label;
-                existing.Path = path;
-
-                if (!locked.Contains(MetadataField.Name)) locked.Add(MetadataField.Name);
-                existing.LockedFields = locked.ToArray();
-
-                await existing.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-                continue;
+                target = existing;
             }
 
-            Video child;
-            if (isEpisode && baseEp is not null)
-            {
-                var ep = new Episode { Id = id };
-                ep.SeriesId = baseEp.SeriesId;
-                ep.SeriesName = baseEp.SeriesName;
-                ep.SeasonId = baseEp.SeasonId;
-                ep.SeasonName = baseEp.SeasonName;
-                ep.IndexNumber = baseEp.IndexNumber;                 // E number
-                ep.ParentIndexNumber = baseEp.ParentIndexNumber;     // S number
-                ep.PremiereDate = baseEp.PremiereDate;
-
-                child = ep;
-            }
             else
             {
-                child = new Movie { Id = id };
+                if (isEpisode && item is Episode e)
+                {
+                    target = new Episode
+                    {
+                        Id = id,
+                        SeriesId = e.SeriesId,
+                        SeriesName = e.SeriesName,
+                        SeasonId = e.SeasonId,
+                        SeasonName = e.SeasonName,
+                        IndexNumber = e.IndexNumber,
+                        ParentIndexNumber = e.ParentIndexNumber,
+                        PremiereDate = e.PremiereDate
+                    };
+                }
+                else
+                {
+                    target = new Movie { Id = id };
+                }
+                isNew = true;
             }
 
-            child.Name = label;
-            child.IsVirtualItem = false;
-            child.ProviderIds = providerIds;
-            child.Path = path;
-            child.RunTimeTicks = item.RunTimeTicks;
+            // we use externalid for sorting and special. ame
+            target.ExternalId = $"{index:D3}:::{s.Name}";
+            target.Name = primary.Name;
+            target.Path = path;
+            target.IsVirtualItem = false;
+            target.ProviderIds = providerIds;
+            target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
+            
+            if (target.Id != primary.Id) {
+              target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
+              
+              // this is a trick until the pr for primaryversion is merged
+              target.IsVirtualItem = true;
+            }
 
-            var lockedNew = child.LockedFields?.ToList() ?? new List<MetadataField>();
-            if (!lockedNew.Contains(MetadataField.Name)) lockedNew.Add(MetadataField.Name);
-            child.LockedFields = lockedNew.ToArray();
+            if (isNew) {
+               parent.AddChild(target);
+            } else {
+              // primary is saved later on
+              if (IsPrimaryVersion(target)) {
+               await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+              }
+            }
 
-            parent.AddChild(child);
-            await child.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-
-            created.Add(child);
+            newVideos.Add(target);
         }
 
-        // Delete stale children (but don't touch the base item)
-        var stale = current.Where(m => !desiredIds.Contains(m.Id)).ToList();
+        // Delete stale (never delete original base item)
+        var stale = current.Where(m => !newVideos.Where(x => IsGelato(x) && !IsPrimaryVersion(x) && item.Id != x.Id).Select(x => x.Id).Contains(m.Id)).ToList();
         foreach (var m in stale)
         {
-            if (m.Id != item.Id)
-            {
-               _log.LogDebug($"deleting {m.Name}");
-               // dont use library delete here
-               _repo.DeleteItem([m.Id]);
-            }
+            _log.LogDebug($"Deleting stale {m.Name}");
+            _repo.DeleteItem([m.Id]);
         }
+        
+        primary.LinkedAlternateVersions = newVideos
+            .Where(i => i.Id != primary.Id )
+            .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
+            .ToArray();
+        primary.SetPrimaryVersionId(null);
 
-        var keep = current.Where(m => desiredIds.Contains(m.Id));
-        var merged = created.Concat(keep).GroupBy(v => v.Id).Select(g => g.First()).ToArray();
-        _log.LogInformation($"SyncStreams finished for {item.Name} count: {merged.Count()} deleted: {stale.Count}");
-        return merged.ToList();
+        if (streams.Count == 0 && IsGelato(primary)) {
+          primary.Path = uri.ToString();
+        }         
+        await primary.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+        
+        _log.LogInformation($"SyncStreams finished for {item.Name} count: {newVideos.Count} deleted: {stale.Count}");
     }
 
     public Video? GetPrimaryVersion(List<Video> items)
@@ -473,9 +512,9 @@ var path = s.IsFile()
         return items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
     }
 
-    public bool IsStremioPlaceholder(BaseItem item)
+    public bool IsPrimaryVersion(Video item)
     {
-        return item.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true;
+        return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
 
     public async Task MergeVersions(Video[] items)
@@ -578,17 +617,13 @@ var path = s.IsFile()
         return item.IsAuthorizedToDelete(user, allCollectionFolders);
     }
 
-    public bool IsStremioProvider(BaseItem item)
-    {
-
-        if (!string.IsNullOrWhiteSpace(item.Path) && item.Path.StartsWith("stremio://", StringComparison.OrdinalIgnoreCase))
-            return true;
-        return false;
-    }
-
     public bool IsStremio(BaseItem item)
     {
-
+        return IsGelato(item);
+    }
+    
+    public bool IsGelato(BaseItem item)
+    {
         var stremioId = item.GetProviderId("Stremio");
         if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
             return true;
@@ -780,7 +815,7 @@ var path = s.IsFile()
                     SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
                 };
                 if (!string.IsNullOrWhiteSpace(epMeta.Runtime))
-                  epItem.RunTimeTicks = Utils.ParseToTicks(epMeta.Runtime);
+                    epItem.RunTimeTicks = Utils.ParseToTicks(epMeta.Runtime);
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
                 epItem.SetProviderId("Stremio", $"{seasonItem.GetProviderId("Stremio")}:{epMeta.Number}");
                 seasonItem.AddChild(epItem);

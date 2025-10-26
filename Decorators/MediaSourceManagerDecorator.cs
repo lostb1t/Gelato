@@ -4,22 +4,21 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-
-using MediaBrowser.Controller.Library;
+using Gelato.Common;
+using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.IO;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
-using MediaBrowser.Model.Dto;
+using MediaBrowser.Controller.Persistence;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Dlna;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
-using MediaBrowser.Controller.Persistence;
-using Jellyfin.Data.Enums;
-using MediaBrowser.Controller.Providers;
-using MediaBrowser.Controller.IO;
-using Jellyfin.Database.Implementations.Entities;
-using Gelato.Common;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators
 {
@@ -92,7 +91,7 @@ namespace Gelato.Decorators
 
             var manager = _manager.Value;
             _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
-       if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+            if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
             {
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }
@@ -102,8 +101,9 @@ namespace Gelato.Decorators
             {
                 var srcs = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
                 var hasFile = srcs.Where(v => v.Protocol == MediaProtocol.File).Any();
-                if (hasFile) {
-                  return srcs.Where(v => v.Protocol == MediaProtocol.File).ToArray();
+                if (hasFile)
+                {
+                    return srcs.Where(v => v.Protocol == MediaProtocol.File).ToArray();
                 }
             }
 
@@ -121,11 +121,10 @@ namespace Gelato.Decorators
                 isItemsAction &&
                 (!isListAction || IsSingleItemList(ctx, item.Id));
 
-            
-var video = item as Video;
-Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
-    ? id
-    : item.Id;
+            var video = item as Video;
+            Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
+                ? id
+                : item.Id;
             if (!allowSync)
             {
                 _log.LogDebug("GetStaticMediaSources not a sync-eligible call. action={Action} list={IsList} uri={Uri}",
@@ -134,36 +133,80 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
             else if (uri is not null && !manager.HasStreamSync(cacheKey))
             {
                 // bug in webui that calls the detail page twice. So thats why theres a lock
-              _lock.RunSingleFlightAsync(item.Id, async ct =>
-{
-                    _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
-    await manager.SyncStreams(item, ct).ConfigureAwait(false);
+                _lock.RunSingleFlightAsync(item.Id, async ct =>
+  {
+      _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
+      await manager.SyncStreams(item, ct).ConfigureAwait(false);
       manager.SetStreamSync(cacheKey);
-    var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind())
-                       .OfType<Video>()
-                       .ToArray();
-
-    if (items.Length > 1)
-        await manager.MergeVersions(items).ConfigureAwait(false);
-}).GetAwaiter().GetResult();
-               item = _libraryManager.GetItemById(item.Id);
+      
+  }).GetAwaiter().GetResult();
+                item = _libraryManager.GetItemById(item.Id);
             }
 
             var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
 
+
+            // this is kinda shit. We do tbis because there isnt really a field to save the order to. So we use externalid. Which seems unused for video
+            var sourceIds = sources
+    .Select(s => Guid.TryParse(s.Id, out var g) ? g : Guid.Empty)
+    .Where(g => g != Guid.Empty)
+    .ToArray();
+
+
+            var sourceItems = _libraryManager.GetItemList(new InternalItemsQuery
+            {
+                ItemIds = sourceIds
+            })
+                .OfType<Video>()
+                      .ToArray();
+
+            var rankById = sourceItems.ToDictionary(
+    v => v.Id,
+    v =>
+    {
+        var parts = (v.ExternalId ?? "").Split(new[] { ":::" }, 2, StringSplitOptions.None);
+        return new
+        {
+            Rank = int.TryParse(parts.ElementAtOrDefault(0), out var n) ? n : int.MaxValue,
+            Name = parts.ElementAtOrDefault(1) ?? string.Empty
+        };
+    }
+);
+
             sources = sources
-                .Where(s => sources.Count <= 1 || s.Path == null || !s.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(s => s.Protocol == MediaProtocol.File)
-                .ThenBy(s => s.Name)
-                .Select((s, idx) =>
+                .Select(s =>
                 {
-                    if (s.Protocol != MediaProtocol.File && !string.IsNullOrEmpty(s.Name))
+                    var isFile = s.Protocol == MediaProtocol.File;
+                    var rank = int.MaxValue;
+                    var name = string.Empty;
+                    var matched = false;
+
+                    if (Guid.TryParse(s.Id, out var gid) && rankById.TryGetValue(gid, out var info))
                     {
-                      s.Name = s.Name.Split(":::").Last();
+                        matched = true;
+                        rank = info.Rank;
+                        name = info.Name;
                     }
-                    return (s, idx);
+
+                    return new
+                    {
+                        Src = s,
+                        IsFile = isFile,
+                        Matched = matched,
+                        Rank = rank,
+                        Name = name
+                    };
                 })
-                .Select(t => t.s)
+                .OrderByDescending(t => t.IsFile)                                // files first
+                .ThenBy(t => t.Matched ? 0 : 1)                                  // matched before non-matched
+                .ThenBy(t => t.Rank)                                             // numeric order
+                .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase)           // name stem fallback
+                .Select(t =>
+                {
+                    if (t.Matched && !string.IsNullOrEmpty(t.Name))
+                        t.Src.Name = t.Name;
+                    return t.Src;
+                })
                 .ToList();
 
             if (sources.Count > 0) sources[0].Type = MediaSourceType.Default;
@@ -172,14 +215,6 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
                 item.Id, uri?.ToString(), actionName, sources.Count());
 
             return sources;
-        }
-
-        private static bool IsExternal(BaseItem item)
-        {
-            if (item.ProviderIds?.ContainsKey("stremio") == true) return true;
-            if (!string.IsNullOrWhiteSpace(item.Path) &&
-                item.Path.StartsWith("stremio://", StringComparison.OrdinalIgnoreCase)) return true;
-            return false;
         }
 
         public void AddParts(IEnumerable<IMediaSourceProvider> providers)
@@ -226,7 +261,7 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
                     //IsExternalUrl = true,
                     SupportsExternalStream = true,
                     Path = s.Url,
-                   // DeliveryUrl = "yo",
+                    // DeliveryUrl = "yo",
                     DeliveryMethod = SubtitleDeliveryMethod.External
                 });
             }
@@ -247,8 +282,8 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
             if (s.Contains(".ass") || s.Contains(".ssa")) return "ass";
             if (s.Contains(".subf2m")) return "subrip";
             if (s.Contains("subs") && s.Contains(".strem.io"))
-              return "srt"; // Stremio proxies are always normalized to .srt
-            
+                return "srt"; // Stremio proxies are always normalized to .srt
+
             _log.LogWarning($"unkown subtitle format for {s}, defaulting to srt");
             return "srt";
         }
@@ -269,95 +304,97 @@ Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
     bool allowMediaProbe,
     bool enablePathSubstitution,
     CancellationToken ct)
-{
-    if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
-        return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
+        {
+            if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+                return await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
 
-    var manager = _manager.Value;
-    var ctx = _http.HttpContext;
+            var manager = _manager.Value;
+            var ctx = _http.HttpContext;
 
-    static bool NeedsProbe(MediaSourceInfo s) =>
-        (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
+            static bool NeedsProbe(MediaSourceInfo s) =>
+                (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
 
-    BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
-        Guid.TryParse(s.Id, out var g) ? (_libraryManager.GetItemById(g) ?? fallback) : fallback;
+            BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
+                Guid.TryParse(s.Id, out var g) ? (_libraryManager.GetItemById(g) ?? fallback) : fallback;
 
-   // var sources = await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
-    var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
-    string? mediaSourceId =
-        ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true && idObj is string idStr ? idStr
-        : manager.IsStremioPlaceholder(item) && sources.Count > 0 ? sources.First().Id
-        : null;
+            // var sources = await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
+            var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
+            string? mediaSourceId =
+                ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true && idObj is string idStr ? idStr
+                : manager.IsPrimaryVersion(item as Video) && sources.Count > 0 ? sources.First().Id
+                : null;
 
-    _log.LogDebug("GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}", item.Id, mediaSourceId);
+            _log.LogDebug("GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}", item.Id, mediaSourceId);
 
-    var selected =
-        (!string.IsNullOrEmpty(mediaSourceId)
-            ? sources.FirstOrDefault(s => string.Equals(s.Id, mediaSourceId, StringComparison.OrdinalIgnoreCase))
-            : sources.FirstOrDefault())
-        ?? sources.FirstOrDefault();
+            var selected =
+                (!string.IsNullOrEmpty(mediaSourceId)
+                    ? sources.FirstOrDefault(s => string.Equals(s.Id, mediaSourceId, StringComparison.OrdinalIgnoreCase))
+                    : sources.FirstOrDefault())
+                ?? sources.FirstOrDefault();
 
-    if (selected is null)
-        return sources;
+            if (selected is null)
+                return sources;
 
-    var owner = ResolveOwnerFor(selected, item);
-    if (owner.Id != item.Id)
-    {                
-      sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
-        selected = !string.IsNullOrEmpty(selected.Id)
-            ? sources.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? sources.FirstOrDefault()
-            : sources.FirstOrDefault();
-    }
-
-    if (selected is null)
-        return sources;
-    
-    if (NeedsProbe(selected))
-    {
-        await owner.RefreshMetadata(
-            new MetadataRefreshOptions(_directoryService)
+            var owner = ResolveOwnerFor(selected, item);
+            if (owner.Id != item.Id)
             {
-                EnableRemoteContentProbe = true,
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh
-            },
-            ct).ConfigureAwait(false);
+                sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
+                selected = !string.IsNullOrEmpty(selected.Id)
+                    ? sources.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? sources.FirstOrDefault()
+                    : sources.FirstOrDefault();
+            }
 
-        var refreshed = GetStaticMediaSources(owner, enablePathSubstitution, user);
-        selected = !string.IsNullOrEmpty(selected.Id)
-            ? refreshed.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? refreshed.FirstOrDefault()
-            : refreshed.FirstOrDefault();
+            if (selected is null)
+                return sources;
 
-        if (selected is null)
-            return refreshed;
-    }
-    
-    // never return placeholder
-    if (selected.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)) {
-      selected = null;
-    }
-    
-    if (selected is null) {
-      _log.LogWarning("GetPlaybackMediaSources {Name} does not have any playable sources", item.Name);
-      return Array.Empty<MediaSourceInfo>();
-    }
+            if (NeedsProbe(selected))
+            {
+                await owner.RefreshMetadata(
+                    new MetadataRefreshOptions(_directoryService)
+                    {
+                        EnableRemoteContentProbe = true,
+                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh
+                    },
+                    ct).ConfigureAwait(false);
 
-    if (GelatoPlugin.Instance!.Configuration.EnableSubs)
-        AddSubtitleStreams(item, selected);
+                var refreshed = GetStaticMediaSources(owner, enablePathSubstitution, user);
+                selected = !string.IsNullOrEmpty(selected.Id)
+                    ? refreshed.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? refreshed.FirstOrDefault()
+                    : refreshed.FirstOrDefault();
 
-    if (item.RunTimeTicks is null && selected?.RunTimeTicks is not null)
-    {
-        item.RunTimeTicks = selected.RunTimeTicks;
-        await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-    }
+                if (selected is null)
+                    return refreshed;
+            }
 
-    return new[] { selected };
-}
+            // never return placeholder
+            if (selected.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+            {
+                selected = null;
+            }
+
+            if (selected is null)
+            {
+                _log.LogWarning("GetPlaybackMediaSources {Name} does not have any playable sources", item.Name);
+                return Array.Empty<MediaSourceInfo>();
+            }
+
+            if (GelatoPlugin.Instance!.Configuration.EnableSubs)
+                AddSubtitleStreams(item, selected);
+
+            if (item.RunTimeTicks is null && selected?.RunTimeTicks is not null)
+            {
+                item.RunTimeTicks = selected.RunTimeTicks;
+                await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+            }
+
+            return new[] { selected };
+        }
 
         public Task<MediaSourceInfo> GetMediaSource(
             BaseItem item,
             string mediaSourceId,
             string? liveStreamId,
-              
+
             bool enablePathSubstitution,
             CancellationToken cancellationToken)
             => _inner.GetMediaSource(item, mediaSourceId, liveStreamId, enablePathSubstitution, cancellationToken);

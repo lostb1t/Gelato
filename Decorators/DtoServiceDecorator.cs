@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
+using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities; // User
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
-using Jellyfin.Data.Enums;
 
 namespace Gelato.Decorators
 {
@@ -84,20 +84,22 @@ namespace Gelato.Decorators
             {
                 dto.CanDelete = true;
             }
-            if (IsStremio(dto)) {
-
-              dto.CanDownload = true;
-
-              // clean name
-              var parts = dto.Name.Split(":::");
-              dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
-
-            // mark unplayable
-            if (!IsList && dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+            if (IsStremio(dto))
             {
-               dto.LocationType = LocationType.Virtual;
-               dto.Path = null;
+
+                dto.CanDownload = true;
+
+                // clean name (legacy)
+                var parts = dto.Name.Split(":::");
+                dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
+
+                // mark unplayable
+                if (!IsList && dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+                {
+                    dto.LocationType = LocationType.Virtual;
+                    dto.Path = null;
+                }
             }
-          }}
+        }
     }
 }

@@ -1,18 +1,18 @@
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
-using System.Threading.Tasks;
-using System.Threading;
-using System.IO;
-using System.Collections.Concurrent;
 
 namespace Gelato.Common;
 
@@ -67,10 +67,10 @@ public sealed class StremioUri
             _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}")
         };
 
-       var stremioId = item.GetProviderId("Stremio");
-       StremioUri? uri = null;
-       if (!string.IsNullOrWhiteSpace(stremioId))
-         uri = new StremioUri(mediaType, stremioId);
+        var stremioId = item.GetProviderId("Stremio");
+        StremioUri? uri = null;
+        if (!string.IsNullOrWhiteSpace(stremioId))
+            uri = new StremioUri(mediaType, stremioId);
 
         if (kind == BaseItemKind.Movie)
         {

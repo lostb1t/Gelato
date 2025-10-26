@@ -1,8 +1,8 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.Logging;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Gelato.Common;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -10,11 +10,11 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using Jellyfin.Data.Enums;
-using Gelato.Common;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
 
@@ -124,30 +124,24 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         // Note: We do NOT filter unreleased items here because the user has explicitly
         // selected this item from search results to add to their library.
 
-       BaseItem? baseItem = null;
+        BaseItem? baseItem = null;
 
-await _lock.RunQueuedAsync(guid, async ct =>
-{
-    meta.Guid = guid;
+        await _lock.RunQueuedAsync(guid, async ct =>
+        {
+            meta.Guid = guid;
 
-    (baseItem, _) = await _manager.InsertMeta(
-        root,
-        meta,
-        false,
-        true,
-        ct).ConfigureAwait(false);
-});
+            (baseItem, _) = await _manager.InsertMeta(
+                root,
+                meta,
+                false,
+                true,
+                ct).ConfigureAwait(false);
+        });
 
         if (baseItem is not null)
         {
             ReplaceGuid(ctx, baseItem.Id);
-
-           // if (TryBuildRedirect(ctx, out var url))
-           // {
-             //  _log.LogInformation($"REDIRECT {url}.");
-             //  ctx.Result = new LocalRedirectResult(url);
-             //  return;
-           // }
+            _manager.RemoveStremioMeta(guid);
         }
 
         await next();
@@ -163,14 +157,14 @@ await _lock.RunQueuedAsync(guid, async ct =>
             || string.Equals(cad.ActionName, "GetItem", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase)
-           // || string.Equals(cad.ActionName, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
-           // || string.Equals(cad.ActionName, "GetItemSegments", StringComparison.OrdinalIgnoreCase)
+            // || string.Equals(cad.ActionName, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
+            // || string.Equals(cad.ActionName, "GetItemSegments", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetPlaybackInfo", StringComparison.OrdinalIgnoreCase);
     }
 
     private void ReplaceGuid(ActionExecutingContext ctx, Guid value)
     {
-                     //  _log.LogInformation("called");
+        //  _log.LogInformation("called");
         var rd = ctx.RouteData.Values;
         foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
         {

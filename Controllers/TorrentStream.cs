@@ -3,16 +3,14 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Net;
+using MediaBrowser.Common.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-
-using MediaBrowser.Common.Configuration;
-
 using MonoTorrent;
 using MonoTorrent.Client;
 using MonoTorrent.Streaming;
@@ -35,81 +33,81 @@ public sealed class GelatoApiController : ControllerBase
         Directory.CreateDirectory(_downloadPath);
     }
 
-[HttpGet("stream")]
-public async Task<IActionResult> Stream(
-    [FromQuery] string ih,
-    [FromQuery] int? idx,
-    [FromQuery] string? filename,
-    [FromQuery] string? trackers)
-{
-    var remoteIp = HttpContext.Connection.RemoteIpAddress;
-    if (remoteIp == null || !(IPAddress.IsLoopback(remoteIp) || remoteIp.Equals(HttpContext.Connection.LocalIpAddress)))
-        return Forbid();
-
-    if (string.IsNullOrWhiteSpace(ih))
-        return BadRequest("Missing ?ih=<infohash or magnet>");
-
-    var ct = HttpContext.RequestAborted;
-
-    var settings = new EngineSettingsBuilder
+    [HttpGet("stream")]
+    public async Task<IActionResult> Stream(
+        [FromQuery] string ih,
+        [FromQuery] int? idx,
+        [FromQuery] string? filename,
+        [FromQuery] string? trackers)
     {
-        MaximumConnections = 40,
-        MaximumDownloadRate = GelatoPlugin.Instance!.Configuration.P2PDLSpeed,
-        MaximumUploadRate = GelatoPlugin.Instance!.Configuration.P2PULSpeed,
-    }.ToSettings();
+        var remoteIp = HttpContext.Connection.RemoteIpAddress;
+        if (remoteIp == null || !(IPAddress.IsLoopback(remoteIp) || remoteIp.Equals(HttpContext.Connection.LocalIpAddress)))
+            return Forbid();
 
-    var engine = new ClientEngine(settings);
+        if (string.IsNullOrWhiteSpace(ih))
+            return BadRequest("Missing ?ih=<infohash or magnet>");
 
-    var infoHashes = TryParseInfoHashes(ih) ?? throw new ArgumentException("Invalid infohash or magnet.", nameof(ih));
-    var announce = ParseTrackers(trackers) ?? DefaultTrackers();
-    var magnet = new MagnetLink(infoHashes, name: null, announceUrls: announce);
+        var ct = HttpContext.RequestAborted;
 
-    var manager = await engine.AddStreamingAsync(magnet, _downloadPath);
-    await manager.StartAsync();
+        var settings = new EngineSettingsBuilder
+        {
+            MaximumConnections = 40,
+            MaximumDownloadRate = GelatoPlugin.Instance!.Configuration.P2PDLSpeed,
+            MaximumUploadRate = GelatoPlugin.Instance!.Configuration.P2PULSpeed,
+        }.ToSettings();
 
-    if (!manager.HasMetadata)
-    {
-        while (!manager.HasMetadata && !ct.IsCancellationRequested)
-            await Task.Delay(100, ct);
+        var engine = new ClientEngine(settings);
+
+        var infoHashes = TryParseInfoHashes(ih) ?? throw new ArgumentException("Invalid infohash or magnet.", nameof(ih));
+        var announce = ParseTrackers(trackers) ?? DefaultTrackers();
+        var magnet = new MagnetLink(infoHashes, name: null, announceUrls: announce);
+
+        var manager = await engine.AddStreamingAsync(magnet, _downloadPath);
+        await manager.StartAsync();
 
         if (!manager.HasMetadata)
-            return StatusCode(503, "Metadata not yet available.");
-    }
+        {
+            while (!manager.HasMetadata && !ct.IsCancellationRequested)
+                await Task.Delay(100, ct);
 
-    ITorrentManagerFile selected =
-        (idx is int i && i >= 0 && i < manager.Files.Count) ? manager.Files[i]
-      : (!string.IsNullOrWhiteSpace(filename)
-            ? manager.Files.FirstOrDefault(x =>
-                  x.Path.EndsWith(filename, StringComparison.OrdinalIgnoreCase) ||
-                  string.Equals(Path.GetFileName(x.Path), filename, StringComparison.OrdinalIgnoreCase))
-              ?? PickHeuristic(manager)
-            : PickHeuristic(manager));
+            if (!manager.HasMetadata)
+                return StatusCode(503, "Metadata not yet available.");
+        }
 
-    var timerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-    var timer = new System.Threading.Timer(_ =>
+        ITorrentManagerFile selected =
+            (idx is int i && i >= 0 && i < manager.Files.Count) ? manager.Files[i]
+          : (!string.IsNullOrWhiteSpace(filename)
+                ? manager.Files.FirstOrDefault(x =>
+                      x.Path.EndsWith(filename, StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(Path.GetFileName(x.Path), filename, StringComparison.OrdinalIgnoreCase))
+                  ?? PickHeuristic(manager)
+                : PickHeuristic(manager));
+
+        var timerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var timer = new System.Threading.Timer(_ =>
+        {
+            _log.LogDebug("file: {File}, progress: {Progress:0.00}%, dl: {DL}/s, ul: {UL}/s, peers: {Peers}, seeds: {Seeds}, leechers: {Leechs}, bytes: {Bytes}",
+                selected.Path, manager.Progress, manager.Monitor.DownloadRate, manager.Monitor.UploadRate,
+                manager.Peers.Available, manager.Peers.Seeds, manager.Peers.Leechs, manager.Monitor.DataBytesReceived);
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
+
+        _log.LogInformation($"starting torrent stream for {selected.Path}");
+        var stream = await manager.StreamProvider.CreateStreamAsync(selected, ct);
+
+        // Register cleanup for both normal completion and cancellation
+        ct.Register(() =>
     {
-        _log.LogDebug("file: {File}, progress: {Progress:0.00}%, dl: {DL}/s, ul: {UL}/s, peers: {Peers}, seeds: {Seeds}, leechers: {Leechs}, bytes: {Bytes}",
-            selected.Path, manager.Progress, manager.Monitor.DownloadRate, manager.Monitor.UploadRate,
-            manager.Peers.Available, manager.Peers.Seeds, manager.Peers.Leechs, manager.Monitor.DataBytesReceived);
-    }, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
-
-    _log.LogInformation($"starting torrent stream for {selected.Path}");
-    var stream = await manager.StreamProvider.CreateStreamAsync(selected, ct);
-
-    // Register cleanup for both normal completion and cancellation
-    ct.Register(() =>
-{
-    _log.LogInformation("Client disconnected. Cleaning up resources...");
-    try { timerCts.Cancel(); } catch { }
-    try { timer.Dispose(); } catch { }
-    try { manager.StopAsync().GetAwaiter().GetResult(); } catch { }
-    try { engine.Dispose(); } catch { }
-});
+        _log.LogInformation("Client disconnected. Cleaning up resources...");
+        try { timerCts.Cancel(); } catch { }
+        try { timer.Dispose(); } catch { }
+        try { manager.StopAsync().GetAwaiter().GetResult(); } catch { }
+        try { engine.Dispose(); } catch { }
+    });
 
 
-    Response.Headers["Accept-Ranges"] = "bytes";
-    return File(stream, GuessContentType(selected.Path), enableRangeProcessing: true);
-}
+        Response.Headers["Accept-Ranges"] = "bytes";
+        return File(stream, GuessContentType(selected.Path), enableRangeProcessing: true);
+    }
 
 
     private static ITorrentManagerFile PickHeuristic(TorrentManager manager)
@@ -154,7 +152,7 @@ public async Task<IActionResult> Stream(
         : Uri
             .UnescapeDataString(trackers)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-  
+
     private static string[] DefaultTrackers() => new[]
     {
         "udp://tracker.opentrackr.org:1337/announce",
