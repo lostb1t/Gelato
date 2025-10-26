@@ -320,13 +320,13 @@ namespace Gelato
             var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
             item.SetProviderId("Stremio", stremioUri.ExternalId);
 
-            // item.SetProviderId("GelatoPrimary", string.Empty);
             // path is needed otherwise its set as placeholder and you cant play
             item.Path = stremioUri.ToString();
             item.IsVirtualItem = false;
             item.ProductionYear = meta.GetYear();
             item.PremiereDate = meta.GetPremiereDate();
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+            item.Overview = meta.Description;
 
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);

@@ -89,7 +89,7 @@ namespace Gelato.Decorators
 
                 dto.CanDownload = true;
 
-                // clean name
+                // clean name (legacy)
                 var parts = dto.Name.Split(":::");
                 dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
 

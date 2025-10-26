@@ -324,22 +324,22 @@ public class GelatoManager
     /// sorting. We make sure to keep a one stable version based on primaryversionid
     /// </summary>
     /// <returns></returns>
-    public async Task<List<Video>> SyncStreams(BaseItem item, CancellationToken ct)
+    public async Task SyncStreams(BaseItem item, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
 
         var isEpisode = item is Episode;
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
-        if (parent is null) return new List<Video>();
+        if (parent is null) return;
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null)
         {
             _log.LogError($"Unable to build Stremio URI for {item.Name}");
-            return new List<Video>();
+            return;
         }
-
+        //var video = item as Video;
         var streams = await _stremioProvider.GetStreamsAsync(uri).ConfigureAwait(false);
         if (!providerIds.ContainsKey("Stremio")) providerIds["Stremio"] = uri.ExternalId;
 
@@ -354,22 +354,25 @@ public class GelatoManager
             CollapseBoxSetItems = false
         };
 
-        var current = _library.GetItemList(query)
+        var items = _library.GetItemList(query)
             .OfType<Video>()
-            .Where(v => !v.IsFileProtocol)
             .ToList();
+        var primary = items.FirstOrDefault(v => string.IsNullOrWhiteSpace(v.PrimaryVersionId));
+        if (primary is null) {
+          primary = (Video)item; 
+        }
+        
+       // item = _libraryManager.GetItemById(item.Id);
 
+        var current = items.Where(v => !v.IsFileProtocol && v.Id != primary.Id);
         var currentById = current.ToDictionary(v => v.Id, v => v);
-        var primary = current.FirstOrDefault(v => string.IsNullOrWhiteSpace(v.PrimaryVersionId));
+
 
         var keepIds = new HashSet<Guid>();
-        if (primary is not null) keepIds.Add(primary.Id);
+        if (primary is not null && IsGelato(primary)) keepIds.Add(primary.Id);
 
         var created = new List<Video>();
-        if (item is Video baseVideo) created.Add(baseVideo);
 
-        //var parts = item.ExternalId.Split(":::");
-        //var nameStem = parts.Length > 1 ? parts[1] : item.Name;
         var httpPort = GetHttpPort();
 
         var acceptable = new List<StremioStream>();
@@ -398,9 +401,8 @@ public class GelatoManager
                 .ToList();
         }
 
-        bool primaryUsed = false;
         int index = 0;
-
+  
         // Process in the order above — primary-related first
         foreach (var s in acceptable)
         {
@@ -417,15 +419,14 @@ public class GelatoManager
             Video target;
             var isNew = false;
 
-            if (currentById.TryGetValue(id, out var existing))
+            if (index == 1) {
+              target = primary;
+}
+            else if (currentById.TryGetValue(id, out var existing))
             {
                 target = existing;
             }
-            else if (primary is not null && !primaryUsed)
-            {
-                target = primary;
-                primaryUsed = true;
-            }
+
             else
             {
                 if (isEpisode && item is Episode e)
@@ -449,25 +450,30 @@ public class GelatoManager
                 isNew = true;
             }
 
-
-
             // we use externalid for sorting and special. ame
             target.ExternalId = $"{index:D3}:::{s.Name}";
-            target.Name = item.Name;
+            target.Name = primary.Name;
             target.Path = path;
             target.IsVirtualItem = false;
-            target.ProviderIds = providerIds;
-            target.RunTimeTicks = item.RunTimeTicks;
+            target.ProviderIds = primary.ProviderIds;
+            target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
+            
+            if (target.Id != primary.Id) {
 
+              target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
+              // this is a trick until the pr for primaryversion is merged
+              target.IsVirtualItem = true;
+            }
 
-
-            if (isNew)
-                parent.AddChild(target);
-
+            if (isNew) {
+              parent.AddChild(target);
+               created.Add(target);
+            } else {
+              // primary is saved later on
+              if (index != 1) {
             await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-
-            if (isNew)
-                created.Add(target);
+}
+            }
 
             keepIds.Add(target.Id);
         }
@@ -482,9 +488,19 @@ public class GelatoManager
 
         var kept = current.Where(m => keepIds.Contains(m.Id));
         var merged = created.Concat(kept).GroupBy(v => v.Id).Select(g => g.First()).ToList();
+        
+        primary.LinkedAlternateVersions = merged
+           .Where(i => i.Id != primary.Id )
+            .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
+            .ToArray();
+        primary.SetPrimaryVersionId(null);
 
+        if (streams.Count == 0 && IsGelato(primary)) {
+          primary.Path = uri.ToString();
+        }         
+        await primary.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+        
         _log.LogInformation($"SyncStreams finished for {item.Name} count: {merged.Count} deleted: {stale.Count}");
-        return merged;
     }
 
     public Video? GetPrimaryVersion(List<Video> items)
@@ -599,7 +615,11 @@ public class GelatoManager
 
     public bool IsStremio(BaseItem item)
     {
-
+        return IsGelato(item);
+    }
+    
+    public bool IsGelato(BaseItem item)
+    {
         var stremioId = item.GetProviderId("Stremio");
         if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
             return true;

@@ -121,7 +121,6 @@ namespace Gelato.Decorators
                 isItemsAction &&
                 (!isListAction || IsSingleItemList(ctx, item.Id));
 
-
             var video = item as Video;
             Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
                 ? id
@@ -139,12 +138,7 @@ namespace Gelato.Decorators
       _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
       await manager.SyncStreams(item, ct).ConfigureAwait(false);
       manager.SetStreamSync(cacheKey);
-      var items = manager.FindByProviderIds(item.ProviderIds, item.GetBaseItemKind())
-                         .OfType<Video>()
-                         .ToArray();
-
-      if (items.Length > 1)
-          await manager.MergeVersions(items).ConfigureAwait(false);
+      
   }).GetAwaiter().GetResult();
                 item = _libraryManager.GetItemById(item.Id);
             }
@@ -231,7 +225,7 @@ namespace Gelato.Decorators
 
         public IReadOnlyList<MediaStream> GetMediaStreams(Guid itemId)
         {
-            return _inner.GetMediaStreams(itemIda);
+            return _inner.GetMediaStreams(itemId);
         }
 
         public void AddSubtitleStreams(BaseItem item, MediaSourceInfo source)

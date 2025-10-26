@@ -141,13 +141,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         if (baseItem is not null)
         {
             ReplaceGuid(ctx, baseItem.Id);
-
-            // if (TryBuildRedirect(ctx, out var url))
-            // {
-            //  _log.LogInformation($"REDIRECT {url}.");
-            //  ctx.Result = new LocalRedirectResult(url);
-            //  return;
-            // }
+            _manager.RemoveStremioMeta(guid);
         }
 
         await next();

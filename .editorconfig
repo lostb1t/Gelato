@@ -3,7 +3,21 @@ root = true
 [*.cs]
 indent_style = space
 indent_size = 4
+tab_width = 4
+
+# Indentation rules Roslyn uses
+csharp_indent_block_contents = true
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_switch_labels = true
+
+# Newline/whitespace helpers
 csharp_new_line_before_open_brace = all
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Fully spelled analyzer severities (fix your wrapped lines)
 dotnet_sort_system_directives_first = true
 dotnet_style_qualification_for_field = false:suggestion
 dotnet_style_qualification_for_property = false:suggestion
