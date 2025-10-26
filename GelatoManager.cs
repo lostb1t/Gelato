@@ -372,8 +372,6 @@ public class GelatoManager
         var keepIds = new HashSet<Guid>();
         if (primary is not null && IsGelato(primary)) keepIds.Add(primary.Id);
 
-        var created = new List<Video>();
-
         var httpPort = GetHttpPort();
 
         var acceptable = new List<StremioStream>();
@@ -416,7 +414,7 @@ public class GelatoManager
         {
             index++;
             var id = s.GetGuid();
-            var label = $"{index:D3}:::{item.Name}:::{s.Name}";
+          //  var label = $"{index:D3}:::{item.Name}:::{s.Name}";
             var path = s.IsFile()
                 ? s.Url
                 : $"http://127.0.0.1:{httpPort}/gelato/stream?ih={s.InfoHash}"
@@ -465,7 +463,8 @@ public class GelatoManager
             target.IsVirtualItem = false;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
-            
+            target.Tags = primary.Tags;
+
             if (target.Id != primary.Id) {
               target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
               
@@ -477,7 +476,7 @@ public class GelatoManager
                parent.AddChild(target);
             } else {
               // primary is saved later on
-              if (IsPrimaryVersion(target)) {
+              if (!IsPrimaryVersion(target)) {
                await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
               }
             }
@@ -486,7 +485,11 @@ public class GelatoManager
         }
 
         // Delete stale (never delete original base item)
-        var stale = current.Where(m => !newVideos.Where(x => IsGelato(x) && !IsPrimaryVersion(x) && item.Id != x.Id).Select(x => x.Id).Contains(m.Id)).ToList();
+        var stale = current
+            .Where(m => !newVideos
+                .Any(x => IsGelato(x) && !IsPrimaryVersion(x) && item.Id != x.Id && x.Id == m.Id))
+            .ToList();
+
         foreach (var m in stale)
         {
             _log.LogDebug($"Deleting stale {m.Name}");
