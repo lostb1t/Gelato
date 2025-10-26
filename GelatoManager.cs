@@ -508,9 +508,9 @@ public class GelatoManager
         return items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId));
     }
 
-    public bool IsStremioPlaceholder(BaseItem item)
+    public bool IsPrimaryVersion(Video item)
     {
-        return item.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true;
+        return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
 
     public async Task MergeVersions(Video[] items)

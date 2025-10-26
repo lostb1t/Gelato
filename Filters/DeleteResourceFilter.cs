@@ -66,11 +66,11 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             var item = _library.GetItemById<BaseItem>(guid, user);
             if (item is not null)
             {
-                if (_manager.IsStremio(item))
+                if (_manager.IsGelato(item))
                 {
                     if (_manager.CanDelete(item, user))
                     {
-                        if (_manager.IsStremioPlaceholder(item) && item is Video video)
+                        if (item is Video video && _manager.IsPrimaryVersion(video))
                         {
                             foreach (var link in video.LinkedAlternateVersions) // link : LinkedChild
                             {

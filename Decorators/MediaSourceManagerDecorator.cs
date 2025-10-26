@@ -321,7 +321,7 @@ namespace Gelato.Decorators
             var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
             string? mediaSourceId =
                 ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true && idObj is string idStr ? idStr
-                : manager.IsStremioPlaceholder(item) && sources.Count > 0 ? sources.First().Id
+                : manager.IsPrimaryVersion(item as Video) && sources.Count > 0 ? sources.First().Id
                 : null;
 
             _log.LogDebug("GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}", item.Id, mediaSourceId);
