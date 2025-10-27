@@ -25,15 +25,13 @@
         </div>
 
         <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtMoviePath" label="Movies base path:" />
-          <span>Filesystem path for movie items (e.g. <code>/media/external_movies</code>). Must exist
-            and be readable by Jellyfin. They should be empty.</span>
+          <input is="emby-input" type="text" id="txtMoviePath" label="Movies path:" />
+          <span>Filesystem path for movie items. Use this path as library folder.</span>
         </div>
 
         <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtSeriesPath" label="Series base path:" />
-          <span>Filesystem path for series items (e.g. <code>/media/external_series</code>). Must exist
-            and be readable by Jellyfin. They should be empty.</span>
+          <input is="emby-input" type="text" id="txtSeriesPath" label="Series path:" />
+          <span>Filesystem path for series items. Use this path as library folder.</span>
         </div>
 
         <div class="inputContainer">
@@ -172,8 +170,8 @@
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
             cfg.Url = (txtUrl.value || "").trim();
-            cfg.MoviePath = (txtMoviePath.value || "").trim() || null;
-            cfg.SeriesPath = (txtSeriesPath.value || "").trim() || null;
+cfg.MoviePath = txtMoviePath.value.trim() || null;
+            cfg.SeriesPath = txtSeriesPath.value.trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
             cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
             cfg.EnableSubs = !!chkEnableSubs.checked;

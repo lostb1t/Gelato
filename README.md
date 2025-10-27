@@ -39,7 +39,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 3. Install and configure the plugin.
    **Note:** Only **AIOStreams** is supported.
 
-4. Add the configured base paths to the Jellyfin library of your choice.
+4. Add the configured base paths to the Jellyfin library of your choice. After adding them, start a library scan.
 
 5. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
 

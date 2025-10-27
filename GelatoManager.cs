@@ -148,20 +148,14 @@ public class GelatoManager
         Directory.CreateDirectory(path);
         var seed = System.IO.Path.Combine(path, "stub.txt");
         if (!File.Exists(seed))
-            File.WriteAllBytes(seed, Array.Empty<byte>());
-    }
-
-    public async Task WriteAllTextAsync(string path, string contents, CancellationToken ct)
-    {
-        var bytes = new UTF8Encoding(false).GetBytes(contents);
-        await using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.Read);
-        await fs.WriteAsync(bytes, 0, bytes.Length, ct).ConfigureAwait(false);
+            File.WriteAllText(seed, "This is a seed file created by Gelato so that library scans are triggered. Do not remove.");
     }
 
     public Folder? TryGetMovieFolder()
     {
         var cfg = GelatoPlugin.Instance!.Configuration;
-        if (cfg.MoviePath is null)
+
+        if (string.IsNullOrWhiteSpace(cfg.MoviePath))
         {
             return null;
         }
@@ -179,7 +173,7 @@ public class GelatoManager
     public Folder? TryGetSeriesFolder()
     {
         var cfg = GelatoPlugin.Instance!.Configuration;
-        if (cfg.SeriesPath is null)
+        if (string.IsNullOrWhiteSpace(cfg.SeriesPath))
         {
             return null;
         }

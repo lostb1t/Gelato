@@ -23,6 +23,9 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _log = log;
         _library = library;
         _manager = manager;
+
+        _manager.TryGetMovieFolder();
+        _manager.TryGetSeriesFolder(); 
     }
 
     public static GelatoPlugin? Instance { get; private set; }
@@ -46,15 +49,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         base.UpdateConfiguration(configuration);
         var cfg = (PluginConfiguration)configuration;
-
-        if (cfg.MoviePath is not null)
-        {
-            GelatoManager.SeedFolder(cfg.MoviePath);
-        }
-        if (cfg.SeriesPath is not null)
-        {
-            GelatoManager.SeedFolder(cfg.SeriesPath);
-        }
+        _manager.TryGetMovieFolder();
+        _manager.TryGetSeriesFolder();
     }
 }
 
