@@ -317,7 +317,6 @@ namespace Gelato.Decorators
             BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
                 Guid.TryParse(s.Id, out var g) ? (_libraryManager.GetItemById(g) ?? fallback) : fallback;
 
-            // var sources = await _inner.GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct).ConfigureAwait(false);
             var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
             string? mediaSourceId =
                 ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true && idObj is string idStr ? idStr
@@ -349,6 +348,7 @@ namespace Gelato.Decorators
 
             if (NeedsProbe(selected))
             {
+                owner.IsVirtualItem = false;
                 await owner.RefreshMetadata(
                     new MetadataRefreshOptions(_directoryService)
                     {
@@ -362,20 +362,8 @@ namespace Gelato.Decorators
                     ? refreshed.FirstOrDefault(s => string.Equals(s.Id, selected.Id, StringComparison.OrdinalIgnoreCase)) ?? refreshed.FirstOrDefault()
                     : refreshed.FirstOrDefault();
 
-                if (selected is null)
+                if (selected is null) 
                     return refreshed;
-            }
-
-            // never return placeholder
-            if (selected.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
-            {
-                selected = null;
-            }
-
-            if (selected is null)
-            {
-                _log.LogWarning("GetPlaybackMediaSources {Name} does not have any playable sources", item.Name);
-                return Array.Empty<MediaSourceInfo>();
             }
 
             if (GelatoPlugin.Instance!.Configuration.EnableSubs)
