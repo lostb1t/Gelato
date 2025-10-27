@@ -25,7 +25,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _manager = manager;
 
         _manager.TryGetMovieFolder();
-        _manager.TryGetSeriesFolder(); 
+        _manager.TryGetSeriesFolder();
     }
 
     public static GelatoPlugin? Instance { get; private set; }
@@ -49,6 +49,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         base.UpdateConfiguration(configuration);
         var cfg = (PluginConfiguration)configuration;
+        _manager.ClearCache();
         _manager.TryGetMovieFolder();
         _manager.TryGetSeriesFolder();
     }

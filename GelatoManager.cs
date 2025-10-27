@@ -111,7 +111,7 @@ public class GelatoManager
 
     public void SetStreamSync(Guid guid)
     {
-        _memoryCache.Set($"streamsync:{guid}", guid, TimeSpan.FromMinutes(3600));
+        _memoryCache.Set($"streamsync:{guid}", guid, TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL));
     }
 
     public bool HasStreamSync(Guid guid)
@@ -121,13 +121,11 @@ public class GelatoManager
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
     {
-        // _log.LogInformation("Caching StremioMeta {Guid} {Name} ({Year})", guid, meta.Name, meta.Year);
         _memoryCache.Set($"meta:{guid}", meta, TimeSpan.FromMinutes(360));
     }
 
     public StremioMeta? GetStremioMeta(Guid guid)
     {
-        // _log.LogInformation("Retrieving StremioMeta for {Guid}", guid);
         return _memoryCache.TryGetValue($"meta:{guid}", out var value) ? value as StremioMeta : null;
     }
 
@@ -351,14 +349,13 @@ public class GelatoManager
         var items = _library.GetItemList(query)
             .OfType<Video>()
             .ToList();
-        
+
         var localItems = items.Where(x => !IsGelato(x));
         var primary = items.FirstOrDefault(v => string.IsNullOrWhiteSpace(v.PrimaryVersionId));
-        if (primary is null) {
-          primary = (Video)item; 
+        if (primary is null)
+        {
+            primary = (Video)item;
         }
-        
-       // item = _libraryManager.GetItemById(item.Id);
 
         var current = items.Where(v => !v.IsFileProtocol && v.Id != primary.Id);
         var currentById = current.ToDictionary(v => v.Id, v => v);
@@ -402,13 +399,13 @@ public class GelatoManager
         i.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
         return i;
     }).ToList();
-  
+
         // Process in the order above — primary-related first
         foreach (var s in acceptable)
         {
             index++;
             var id = s.GetGuid();
-          //  var label = $"{index:D3}:::{item.Name}:::{s.Name}";
+            //  var label = $"{index:D3}:::{item.Name}:::{s.Name}";
             var path = s.IsFile()
                 ? s.Url
                 : $"http://127.0.0.1:{httpPort}/gelato/stream?ih={s.InfoHash}"
@@ -419,9 +416,10 @@ public class GelatoManager
             Video target;
             var isNew = false;
 
-            if (index == 1 && IsGelato(primary)) {
-              target = primary;
-}
+            if (index == 1 && IsGelato(primary))
+            {
+                target = primary;
+            }
             else if (currentById.TryGetValue(id, out var existing))
             {
                 target = existing;
@@ -459,20 +457,25 @@ public class GelatoManager
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.Tags = primary.Tags;
 
-            if (target.Id != primary.Id) {
-              target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
-              target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-              // this is a trick until the pr for primaryversion is merged
-              target.IsVirtualItem = true;
+            if (target.Id != primary.Id)
+            {
+                target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
+                target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+                // this is a trick until the pr for primaryversion is merged
+                target.IsVirtualItem = true;
             }
 
-            if (isNew) {
-               parent.AddChild(target);
-            } else {
-              // primary is saved later on
-              if (!IsPrimaryVersion(target)) {
-               await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-              }
+            if (isNew)
+            {
+                parent.AddChild(target);
+            }
+            else
+            {
+                // primary is saved later on
+                if (!IsPrimaryVersion(target))
+                {
+                    await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+                }
             }
 
             newVideos.Add(target);
@@ -489,18 +492,19 @@ public class GelatoManager
             _log.LogDebug($"Deleting stale {m.Name}");
             _repo.DeleteItem([m.Id]);
         }
-        
+
         primary.LinkedAlternateVersions = newVideos
-            .Where(i => i.Id != primary.Id )
+            .Where(i => i.Id != primary.Id)
             .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
             .ToArray();
         primary.SetPrimaryVersionId(null);
 
-        if (streams.Count == 0 && IsGelato(primary)) {
-          primary.Path = uri.ToString();
-        }         
+        if (streams.Count == 0 && IsGelato(primary))
+        {
+            primary.Path = uri.ToString();
+        }
         await primary.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-        
+
         _log.LogInformation($"SyncStreams finished for {item.Name} count: {newVideos.Count} deleted: {stale.Count}");
     }
 
@@ -513,84 +517,84 @@ public class GelatoManager
     {
         return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
-    
+
     public async Task PurgeAlternateStreamVersions()
-{
-    var query = new InternalItemsQuery
     {
-        IncludeItemTypes = new[] { BaseItemKind.Episode, BaseItemKind.Movie },
-        Recursive = true,
-        CollapseBoxSetItems = false
-    };
-
-    var items = _library.GetItemList(query)
-        .OfType<Video>()
-        .ToList();
-
-    foreach (var item in items)
-    {
-        if (!IsPrimaryVersion(item))
-            continue;
-
-        var linked = item.LinkedAlternateVersions;
-        if (linked is null || linked.Count() == 0)
-            continue;
-
-        var keep = new List<LinkedChild>();
-
-        foreach (var child in linked)
+        var query = new InternalItemsQuery
         {
-            var path = child?.Path;
-            if (IsLocalFile(path))
-                keep.Add(child);
+            IncludeItemTypes = new[] { BaseItemKind.Episode, BaseItemKind.Movie },
+            Recursive = true,
+            CollapseBoxSetItems = false
+        };
+
+        var items = _library.GetItemList(query)
+            .OfType<Video>()
+            .ToList();
+
+        foreach (var item in items)
+        {
+            if (!IsPrimaryVersion(item))
+                continue;
+
+            var linked = item.LinkedAlternateVersions;
+            if (linked is null || linked.Count() == 0)
+                continue;
+
+            var keep = new List<LinkedChild>();
+
+            foreach (var child in linked)
+            {
+                var path = child?.Path;
+                if (IsLocalFile(path))
+                    keep.Add(child);
+            }
+
+            if (keep.Count() != linked.Count())
+            {
+
+                item.LinkedAlternateVersions = keep.ToArray();
+                await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                               .ConfigureAwait(false);
+            }
         }
 
-        if (keep.Count() != linked.Count())
-        {
-          
-            item.LinkedAlternateVersions = keep.ToArray();
-            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                           .ConfigureAwait(false);
-        }
+        return;
     }
 
-    return;
-}
+    private static bool IsLocalFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
 
-private static bool IsLocalFile(string? path)
-{
-    if (string.IsNullOrWhiteSpace(path))
-        return false;
+        if (Uri.TryCreate(path, UriKind.Absolute, out var uri))
+            return uri.IsFile;
 
-    if (Uri.TryCreate(path, UriKind.Absolute, out var uri))
-        return uri.IsFile;
+        if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return false;
 
-    if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-        return false;
+        if (path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+            return false;
 
-    if (path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
-        return false;
+        if (path.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+            return false;
 
-    if (path.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
-        return false;
-
-    return true;
-}
+        return true;
+    }
 
     public async Task MergeVersions(Video[] items)
     {
-      //  if (items == null || items.Length < 2)
-      //  {
-      //      _log.LogWarning("MergeVersions called with insufficient items.");
-      //      return;
-      //  }
+        //  if (items == null || items.Length < 2)
+        //  {
+        //      _log.LogWarning("MergeVersions called with insufficient items.");
+        //      return;
+        //  }
 
         // try to get a persistsnt value
         var primaryVersion =
         items.FirstOrDefault(i => string.IsNullOrEmpty(i.PrimaryVersionId))
         ?? items.FirstOrDefault(i => i.IsFileProtocol)
         //?? items.FirstOrDefault(i => i.IsFileProtocol)
-      //  ?? items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId))
+        //  ?? items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId))
         ?? items.FirstOrDefault();
 
         _log.LogDebug($"selected {primaryVersion.Name} {primaryVersion.Id} as primary version");
@@ -676,7 +680,7 @@ private static bool IsLocalFile(string? path)
     {
         return IsGelato(item);
     }
-    
+
     public bool IsGelato(BaseItem item)
     {
         var stremioId = item.GetProviderId("Stremio");
