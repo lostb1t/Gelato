@@ -141,66 +141,13 @@ namespace Gelato.Decorators
 
             var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
 
-            // This is kinda hacky. We do this because there isn't really a field to save the order to.
-            // So we use ExternalId, which seems unused for Video.
-            var sourceIds = sources
-                .Select(s => Guid.TryParse(s.Id, out var g) ? g : Guid.Empty)
-                .Where(g => g != Guid.Empty)
-                .ToArray();
-
-            var sourceItems = _libraryManager
-                .GetItemList(new InternalItemsQuery { ItemIds = sourceIds })
-                .OfType<Video>()
-                .ToArray();
-
-            var rankById = sourceItems.ToDictionary(
-                v => v.Id,
-                v =>
-                {
-                    var parts = (v.ExternalId ?? "").Split(new[] { ":::" }, 2, StringSplitOptions.None);
-                    return new
-                    {
-                        Rank = int.TryParse(parts.ElementAtOrDefault(0), out var n) ? n : int.MaxValue,
-                        Name = parts.ElementAtOrDefault(1) ?? string.Empty
-                    };
-                });
-
             sources = sources
-                .Select(s =>
-                {
-                    var isFile = s.Protocol == MediaProtocol.File;
-                    var rank = int.MaxValue;
-                    var name = string.Empty;
-                    var matched = false;
-
-                    if (Guid.TryParse(s.Id, out var gid) && rankById.TryGetValue(gid, out var info))
-                    {
-                        matched = true;
-                        rank = info.Rank;
-                        name = info.Name;
-                    }
-
-                    return new
-                    {
-                        Src = s,
-                        IsFile = isFile,
-                        Matched = matched,
-                        Rank = rank,
-                        Name = name
-                    };
-                })
-                .OrderByDescending(t => t.IsFile)                      // files first
-                .ThenBy(t => t.Matched ? 0 : 1)                        // matched before non-matched
-                .ThenBy(t => t.Rank)                                   // numeric order
-                .ThenBy(t => t.Name, StringComparer.OrdinalIgnoreCase) // name stem fallback
-                .Select(t =>
-                {
-                    if (t.Matched && !string.IsNullOrEmpty(t.Name))
-                    {
-                        t.Src.Name = t.Name;
-                    }
-
-                    return t.Src;
+                .OrderByDescending(s => s.Protocol == MediaProtocol.File)
+                .ThenBy(s => s.Container.Split(":::").First())
+                .Select(s => {
+                  s.Name = s.Container.Split(":::").Last();
+                  s.Container = "";
+                  return s;
                 })
                 .ToList();
 

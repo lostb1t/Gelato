@@ -405,7 +405,6 @@ public class GelatoManager
         {
             index++;
             var id = s.GetGuid();
-            //  var label = $"{index:D3}:::{item.Name}:::{s.Name}";
             var path = s.IsFile()
                 ? s.Url
                 : $"http://127.0.0.1:{httpPort}/gelato/stream?ih={s.InfoHash}"
@@ -447,9 +446,9 @@ public class GelatoManager
                 }
                 isNew = true;
             }
-
-            // we use externalid for sorting and special. ame
-            target.ExternalId = $"{index:D3}:::{s.Name}";
+  
+            // we use container for sorting
+            target.Container = $"{index:D3}:::{s.Name}";
             target.Name = primary.Name;
             target.Path = path;
             target.IsVirtualItem = false;
