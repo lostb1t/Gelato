@@ -14,9 +14,10 @@ namespace Gelato.Configuration
         public int CatalogMaxItems { get; set; } = 100;
         public string Url { get; set; } = "";
         public bool EnableSubs { get; set; } = false;
-        public bool EnableMixed { get; set; } = true;
+        public bool EnableMixed { get; set; } = false;
         public bool FilterUnreleased { get; set; } = false;
         public int FilterUnreleasedBufferDays { get; set; } = 30;
+        public bool DisableSourceCount { get; set; } = false;
         public bool P2PEnabled { get; set; } = false;
         public int P2PDLSpeed { get; set; } = 0;
         public int P2PULSpeed { get; set; } = 0;

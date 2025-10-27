@@ -461,7 +461,7 @@ public class GelatoManager
 
             if (target.Id != primary.Id) {
               target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
-              
+              target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
               // this is a trick until the pr for primaryversion is merged
               target.IsVirtualItem = true;
             }
@@ -513,27 +513,85 @@ public class GelatoManager
     {
         return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
+    
+    public async Task PurgeAlternateStreamVersions()
+{
+    var query = new InternalItemsQuery
+    {
+        IncludeItemTypes = new[] { BaseItemKind.Episode, BaseItemKind.Movie },
+        Recursive = true,
+        CollapseBoxSetItems = false
+    };
+
+    var items = _library.GetItemList(query)
+        .OfType<Video>()
+        .ToList();
+
+    foreach (var item in items)
+    {
+        if (!IsPrimaryVersion(item))
+            continue;
+
+        var linked = item.LinkedAlternateVersions;
+        if (linked is null || linked.Count() == 0)
+            continue;
+
+        var keep = new List<LinkedChild>();
+
+        foreach (var child in linked)
+        {
+            var path = child?.Path;
+            if (IsLocalFile(path))
+                keep.Add(child);
+        }
+
+        if (keep.Count() != linked.Count())
+        {
+          
+            item.LinkedAlternateVersions = keep.ToArray();
+            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                           .ConfigureAwait(false);
+        }
+    }
+
+    return;
+}
+
+private static bool IsLocalFile(string? path)
+{
+    if (string.IsNullOrWhiteSpace(path))
+        return false;
+
+    if (Uri.TryCreate(path, UriKind.Absolute, out var uri))
+        return uri.IsFile;
+
+    if (path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        return false;
+
+    if (path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+        return false;
+
+    if (path.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
+        return false;
+
+    return true;
+}
 
     public async Task MergeVersions(Video[] items)
     {
-        if (items == null || items.Length < 2)
-        {
-            _log.LogWarning("MergeVersions called with insufficient items.");
-            return;
-        }
+      //  if (items == null || items.Length < 2)
+      //  {
+      //      _log.LogWarning("MergeVersions called with insufficient items.");
+      //      return;
+      //  }
 
         // try to get a persistsnt value
         var primaryVersion =
-        items.FirstOrDefault(i => i.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true)
+        items.FirstOrDefault(i => string.IsNullOrEmpty(i.PrimaryVersionId))
         ?? items.FirstOrDefault(i => i.IsFileProtocol)
-        ?? items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId))
+        //?? items.FirstOrDefault(i => i.IsFileProtocol)
+      //  ?? items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId))
         ?? items.FirstOrDefault();
-
-        if (primaryVersion == null)
-        {
-            _log.LogError("MergeVersions: No item with a path starting with 'stremio' found. Merge aborted.");
-            return;
-        }
 
         _log.LogDebug($"selected {primaryVersion.Name} {primaryVersion.Id} as primary version");
 

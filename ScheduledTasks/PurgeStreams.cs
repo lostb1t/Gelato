@@ -50,14 +50,6 @@ namespace Gelato.Tasks
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
             return Array.Empty<TaskTriggerInfo>();
-            // return
-            // [
-            //     new TaskTriggerInfo
-            // {
-            //     Type = TaskTriggerInfo.TriggerInterval,
-            //     IntervalTicks = TimeSpan.FromHours(24).Ticks
-            // }
-            // ];
         }
 
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
@@ -66,7 +58,6 @@ namespace Gelato.Tasks
 
             var query = new InternalItemsQuery
             {
-
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
                 Recursive = false,
                 HasAnyProviderId = new() { { "Stremio", string.Empty }, { "stremio", string.Empty } },
@@ -78,7 +69,6 @@ namespace Gelato.Tasks
                 .ToArray();
 
             int total = items.Length;
-
 
             int done = 0;
 
@@ -103,6 +93,7 @@ namespace Gelato.Tasks
 
             progress?.Report(100.0);
             _manager.ClearCache();
+            await _manager.PurgeAlternateStreamVersions().ConfigureAwait(false);
             await _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
             _log.LogInformation("stream purge completed");
         }
