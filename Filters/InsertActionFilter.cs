@@ -48,7 +48,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         ILibraryMonitor libraryMonitor,
         IMediaSourceManager sourceManager,
         ILogger<InsertActionFilter> log,
-        LinkGenerator links)
+        LinkGenerator links
+    )
     {
         _library = library;
         _sourceManager = sourceManager;
@@ -64,7 +65,10 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         _links = links;
     }
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext ctx,
+        ActionExecutionDelegate next
+    )
     {
         //         var req = ctx.HttpContext.Request;
         // _log.LogInformation("GELATTOTOOOOO: Requested path = {Path}{Query}", req.Path, req.QueryString);
@@ -97,7 +101,10 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         };
         if (_library.GetItemList(q).OfType<BaseItem>().FirstOrDefault() is BaseItem existing)
         {
-            _log.LogInformation("Media already exists; redirecting to canonical id {Id}", existing.Id);
+            _log.LogInformation(
+                "Media already exists; redirecting to canonical id {Id}",
+                existing.Id
+            );
             ReplaceGuid(ctx, existing.Id);
             await next();
             return;
@@ -113,10 +120,16 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
-        var meta = await _stremioProvider.GetMetaAsync(stremioMeta.Id, stremioMeta.Type).ConfigureAwait(false);
+        var meta = await _stremioProvider
+            .GetMetaAsync(stremioMeta.Id, stremioMeta.Type)
+            .ConfigureAwait(false);
         if (meta is null)
         {
-            _log.LogWarning("Stremio meta not found for {Id} {Type}", stremioMeta.Id, stremioMeta.Type);
+            _log.LogWarning(
+                "Stremio meta not found for {Id} {Type}",
+                stremioMeta.Id,
+                stremioMeta.Type
+            );
             await next();
             return;
         }
@@ -127,22 +140,22 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         BaseItem? baseItem = null;
         var created = false;
 
-        await _lock.RunQueuedAsync(guid, async ct =>
-        {
-            meta.Guid = guid;
+        await _lock.RunQueuedAsync(
+            guid,
+            async ct =>
+            {
+                meta.Guid = guid;
 
-            (baseItem, created) = await _manager.InsertMeta(
-                root,
-                meta,
-                false,
-                true,
-                ct).ConfigureAwait(false);
-        });
+                (baseItem, created) = await _manager
+                    .InsertMeta(root, meta, false, true, ct)
+                    .ConfigureAwait(false);
+            }
+        );
 
         if (baseItem is not null)
         {
             if (created)
-              _log.LogInformation($"inserted new media: {baseItem.Name}");
+                _log.LogInformation($"inserted new media: {baseItem.Name}");
 
             ReplaceGuid(ctx, baseItem.Id);
             _manager.RemoveStremioMeta(guid);
@@ -156,11 +169,14 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
             return false;
 
-
         return string.Equals(cad.ActionName, "GetItems", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItem", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(cad.ActionName, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(
+                cad.ActionName,
+                "GetItemsByUserIdLegacy",
+                StringComparison.OrdinalIgnoreCase
+            )
             // || string.Equals(cad.ActionName, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
             // || string.Equals(cad.ActionName, "GetItemSegments", StringComparison.OrdinalIgnoreCase)
             || string.Equals(cad.ActionName, "GetPlaybackInfo", StringComparison.OrdinalIgnoreCase);
@@ -200,7 +216,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             httpContext: ctx.HttpContext,
             action: cad.ActionName,
             controller: cad.ControllerName,
-            values: routeValues);
+            values: routeValues
+        );
 
         if (string.IsNullOrEmpty(path))
             return false;
@@ -209,5 +226,4 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         url = path + qs;
         return true;
     }
-
 }

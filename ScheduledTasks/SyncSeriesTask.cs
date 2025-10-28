@@ -28,8 +28,9 @@ namespace Gelato.Tasks
             ILibraryManager library,
             ILogger<SyncRunningSeriesTask> log,
             IFileSystem fs,
-                          GelatoStremioProvider stremio,
-            GelatoManager manager)
+            GelatoStremioProvider stremio,
+            GelatoManager manager
+        )
         {
             _library = library;
             _log = log;
@@ -40,33 +41,43 @@ namespace Gelato.Tasks
 
         public string Name => "Gelato: Sync running series";
         public string Key => "SyncRunningSeries";
-        public string Description => "Scans all TV libraries for continuing series and builds their series trees.";
+        public string Description =>
+            "Scans all TV libraries for continuing series and builds their series trees.";
         public string Category => "Gelato";
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
             return new[]
-                    {
-            new TaskTriggerInfo
             {
-                Type = TaskTriggerInfoType.IntervalTrigger,
-                IntervalTicks = TimeSpan.FromHours(24).Ticks
-            }
-        };
+                new TaskTriggerInfo
+                {
+                    Type = TaskTriggerInfoType.IntervalTrigger,
+                    IntervalTicks = TimeSpan.FromHours(24).Ticks,
+                },
+            };
         }
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(
+            IProgress<double> progress,
+            CancellationToken cancellationToken
+        )
         {
-
             var seriesFolder = _manager.TryGetSeriesFolder();
-            var seriesItems = _library.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Series },
-                SeriesStatuses = new[] { SeriesStatus.Continuing }
-            }).OfType<Series>()
-              .ToList();
+            var seriesItems = _library
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Series },
+                        SeriesStatuses = new[] { SeriesStatus.Continuing },
+                    }
+                )
+                .OfType<Series>()
+                .ToList();
 
-            _log.LogInformation("found {Count} continuing series under TV libraries.", seriesItems.Count);
+            _log.LogInformation(
+                "found {Count} continuing series under TV libraries.",
+                seriesItems.Count
+            );
 
             var processed = 0;
             foreach (var series in seriesItems)
@@ -74,7 +85,11 @@ namespace Gelato.Tasks
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    _log.LogDebug("SyncRunningSeries: syncing series trees for {Name} ({Id})", series.Name, series.Id);
+                    _log.LogDebug(
+                        "SyncRunningSeries: syncing series trees for {Name} ({Id})",
+                        series.Name,
+                        series.Id
+                    );
 
                     // var imdbId = series.GetProviderId("Imdb");
                     // if (imdbId is null)
@@ -86,7 +101,11 @@ namespace Gelato.Tasks
                     var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
                     if (meta is null)
                     {
-                        _log.LogWarning("SyncRunningSeries: skipping {Name} ({Id}) - no metadata found", series.Name, series.Id);
+                        _log.LogWarning(
+                            "SyncRunningSeries: skipping {Name} ({Id}) - no metadata found",
+                            series.Name,
+                            series.Id
+                        );
                         continue;
                     }
                     await _manager.SyncSeriesTreesAsync(seriesFolder, meta, cancellationToken);
@@ -94,13 +113,20 @@ namespace Gelato.Tasks
                 }
                 catch (Exception ex)
                 {
-                    _log.LogError(ex, "SyncRunningSeries: failed for {Name} ({Id})", series.Name, series.Id);
+                    _log.LogError(
+                        ex,
+                        "SyncRunningSeries: failed for {Name} ({Id})",
+                        series.Name,
+                        series.Id
+                    );
                 }
             }
 
-            _log.LogInformation("SyncRunningSeries completed. Processed {Processed}/{Total} series.", processed, seriesItems.Count);
+            _log.LogInformation(
+                "SyncRunningSeries completed. Processed {Processed}/{Total} series.",
+                processed,
+                seriesItems.Count
+            );
         }
-
-
     }
 }

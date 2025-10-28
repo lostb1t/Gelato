@@ -151,7 +151,7 @@
             txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 30;
 
             txtFFmpegAnalyzeDuration.value = (cfg.FFmpegAnalyzeDuration || "5M");
-            txtFFmpegProbeSize.value = (cfg.FFmpegProbeSize || "25M");
+            txtFFmpegProbeSize.value = (cfg.FFmpegProbeSize || "40M");
 
             chkP2PEnabled.checked = cfg.P2PEnabled ?? true;
             txtP2PDLSpeed.value = (cfg.P2PDLSpeed ?? 0).toString();
@@ -180,7 +180,7 @@ cfg.MoviePath = txtMoviePath.value.trim() || null;
             cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) ?? 30;
 
             cfg.FFmpegAnalyzeDuration = (txtFFmpegAnalyzeDuration.value || "5M").trim();
-            cfg.FFmpegProbeSize = (txtFFmpegProbeSize.value || "25M").trim();
+            cfg.FFmpegProbeSize = (txtFFmpegProbeSize.value || "40M").trim();
 
             cfg.P2PEnabled = !!chkP2PEnabled.checked;
             cfg.P2PDLSpeed = parseInt(txtP2PDLSpeed.value) || 0;

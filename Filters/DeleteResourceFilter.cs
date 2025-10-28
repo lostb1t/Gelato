@@ -1,17 +1,16 @@
-
 using System.Net.Http;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
-using MediaBrowser.Model.Entities;
 
 namespace Gelato.Filters;
 
@@ -28,7 +27,8 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         IHttpClientFactory http,
         GelatoManager manager,
         IUserManager userManager,
-        ILogger<ImageResourceFilter> log)
+        ILogger<ImageResourceFilter> log
+    )
     {
         _library = library;
         _http = http;
@@ -37,11 +37,15 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         _userManager = userManager;
     }
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext ctx,
+        ActionExecutionDelegate next
+    )
     {
-
-        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad
-     || cad.ActionName != "DeleteItem")
+        if (
+            ctx.ActionDescriptor is not ControllerActionDescriptor cad
+            || cad.ActionName != "DeleteItem"
+        )
         {
             await next();
             return;
@@ -54,7 +58,11 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         }
 
         var principal = ctx.HttpContext.User;
-        var userIdStr = ctx.HttpContext.User.Claims.FirstOrDefault(c => c.Type == "UserId" || c.Type == "Jellyfin-UserId")?.Value;
+        var userIdStr = ctx
+            .HttpContext.User.Claims.FirstOrDefault(c =>
+                c.Type == "UserId" || c.Type == "Jellyfin-UserId"
+            )
+            ?.Value;
 
         User? user = null;
         if (Guid.TryParse(userIdStr, out var userId))
@@ -73,26 +81,27 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
                     {
                         if (_manager.IsPrimaryVersion(video))
                         {
-                          var query = new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { item.GetBaseItemKind() },
-            HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
-            Recursive = false,
-            GroupByPresentationUniqueKey = false,
-            GroupBySeriesPresentationUniqueKey = false,
-            CollapseBoxSetItems = false
-        };
+                            var query = new InternalItemsQuery
+                            {
+                                IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                                HasAnyProviderId = new()
+                                {
+                                    { "Stremio", item.GetProviderId("Stremio") },
+                                },
+                                Recursive = false,
+                                GroupByPresentationUniqueKey = false,
+                                GroupBySeriesPresentationUniqueKey = false,
+                                CollapseBoxSetItems = false,
+                            };
 
-        var sources = _library.GetItemList(query)
-            .OfType<Video>()
-            .ToList();
+                            var sources = _library.GetItemList(query).OfType<Video>().ToList();
                             foreach (var alt in sources)
                             {
-                              
-
-                              
-
-                                _log.LogInformation("Deleting alternate version {Name} ({Id})", alt.Name, alt.Id);
+                                _log.LogInformation(
+                                    "Deleting alternate version {Name} ({Id})",
+                                    alt.Name,
+                                    alt.Id
+                                );
 
                                 _library.DeleteItem(
                                     alt,
@@ -100,14 +109,16 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
                                     true
                                 );
                             }
-                        } else {
-
-                        _log.LogInformation($"deleting {item.Name}");
-                        _library.DeleteItem(
-                            item,
-                            new DeleteOptions { DeleteFileLocation = false },
-                            true);
-                      }
+                        }
+                        else
+                        {
+                            _log.LogInformation($"deleting {item.Name}");
+                            _library.DeleteItem(
+                                item,
+                                new DeleteOptions { DeleteFileLocation = false },
+                                true
+                            );
+                        }
 
                         ctx.Result = new NoContentResult();
                         return;

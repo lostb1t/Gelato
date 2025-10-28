@@ -7,9 +7,10 @@ namespace Gelato.Configuration
 {
     public class PluginConfiguration : BasePluginConfiguration
     {
-
-        public string MoviePath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "movies");
-        public string SeriesPath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "series");
+        public string MoviePath { get; set; } =
+            Path.Combine(Path.GetTempPath(), "gelato", "movies");
+        public string SeriesPath { get; set; } =
+            Path.Combine(Path.GetTempPath(), "gelato", "series");
         public int StreamTTL { get; set; } = 3600;
         public int CatalogMaxItems { get; set; } = 100;
         public string Url { get; set; } = "";
@@ -22,7 +23,7 @@ namespace Gelato.Configuration
         public int P2PDLSpeed { get; set; } = 0;
         public int P2PULSpeed { get; set; } = 0;
         public string FFmpegAnalyzeDuration { get; set; } = "5M";
-        public string FFmpegProbeSize { get; set; } = "25M";
+        public string FFmpegProbeSize { get; set; } = "40M";
 
         public string GetBaseUrl()
         {

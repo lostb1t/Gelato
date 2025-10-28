@@ -31,14 +31,15 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
         services.AddSingleton<GelatoManager>();
-        services.AddSingleton(sp =>
-            new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
+        services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
+            sp.GetRequiredService<GelatoManager>()
+        ));
         services.AddHostedService<FFmpegConfigSetter>();
 
         services
-    .DecorateSingle<IDtoService, DtoServiceDecorator>()
-    .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
-    .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
+            .DecorateSingle<IDtoService, DtoServiceDecorator>()
+            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
+            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
@@ -65,70 +66,87 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         public Task StartAsync(CancellationToken cancellationToken)
         {
             var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
-            var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "25M";
+            var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "40M";
 
             _config["FFmpeg:probesize"] = probe;
             _config["FFmpeg:analyzeduration"] = analyze;
 
-            _log.LogInformation("Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}", probe, analyze);
+            _log.LogInformation(
+                "Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}",
+                probe,
+                analyze
+            );
             return Task.CompletedTask;
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
-
 }
 
 public static class ServiceCollectionDecorationExtensions
+{
+    static object BuildInner(IServiceProvider sp, ServiceDescriptor d)
     {
-        static object BuildInner(IServiceProvider sp, ServiceDescriptor d)
-        {
-            if (d.ImplementationInstance is not null) return d.ImplementationInstance;
-            if (d.ImplementationFactory is not null) return d.ImplementationFactory(sp);
-            return ActivatorUtilities.CreateInstance(sp, d.ImplementationType!);
-        }
+        if (d.ImplementationInstance is not null)
+            return d.ImplementationInstance;
+        if (d.ImplementationFactory is not null)
+            return d.ImplementationFactory(sp);
+        return ActivatorUtilities.CreateInstance(sp, d.ImplementationType!);
+    }
 
-        public static IServiceCollection DecorateSingle<TService, TDecorator>(this IServiceCollection services)
-            where TDecorator : class, TService
-        {
-            var original = services.LastOrDefault(sd => sd.ServiceType == typeof(TService));
-            if (original is null) return services; // nothing to decorate
+    public static IServiceCollection DecorateSingle<TService, TDecorator>(
+        this IServiceCollection services
+    )
+        where TDecorator : class, TService
+    {
+        var original = services.LastOrDefault(sd => sd.ServiceType == typeof(TService));
+        if (original is null)
+            return services; // nothing to decorate
 
-            services.Remove(original);
+        services.Remove(original);
 
-            services.Add(new ServiceDescriptor(
+        services.Add(
+            new ServiceDescriptor(
                 typeof(TService),
                 sp =>
                 {
                     var inner = (TService)BuildInner(sp, original);
                     return ActivatorUtilities.CreateInstance<TDecorator>(sp, inner);
                 },
-                original.Lifetime));
+                original.Lifetime
+            )
+        );
 
+        return services;
+    }
+
+    public static IServiceCollection DecorateAll<TService, TDecorator>(
+        this IServiceCollection services
+    )
+        where TDecorator : class, TService
+    {
+        var originals = services.Where(sd => sd.ServiceType == typeof(TService)).ToList();
+        if (originals.Count == 0)
             return services;
-        }
 
-        public static IServiceCollection DecorateAll<TService, TDecorator>(this IServiceCollection services)
-            where TDecorator : class, TService
+        foreach (var d in originals)
+            services.Remove(d);
+
+        foreach (var d in originals)
         {
-            var originals = services.Where(sd => sd.ServiceType == typeof(TService)).ToList();
-            if (originals.Count == 0) return services;
-
-            foreach (var d in originals) services.Remove(d);
-
-            foreach (var d in originals)
-            {
-                services.Add(new ServiceDescriptor(
+            services.Add(
+                new ServiceDescriptor(
                     typeof(TService),
                     sp =>
                     {
                         var inner = (TService)BuildInner(sp, d);
                         return ActivatorUtilities.CreateInstance<TDecorator>(sp, inner);
                     },
-                    d.Lifetime));
-            }
-
-            return services;
+                    d.Lifetime
+                )
+            );
         }
-    }
 
+        return services;
+    }
+}

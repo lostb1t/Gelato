@@ -29,7 +29,8 @@ namespace Gelato.Tasks
             ILibraryManager libraryManager,
             ILogger<PurgeGelatoSyncTask> log,
             GelatoStremioProvider stremio,
-            GelatoManager manager)
+            GelatoManager manager
+        )
         {
             _log = log;
             _library = libraryManager;
@@ -55,26 +56,32 @@ namespace Gelato.Tasks
             // ];
         }
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(
+            IProgress<double> progress,
+            CancellationToken cancellationToken
+        )
         {
             _log.LogInformation("purging");
 
             var query = new InternalItemsQuery
             {
-
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
                 Recursive = false,
-                HasAnyProviderId = new() { { "Stremio", string.Empty }, { "stremio", string.Empty } },
+                HasAnyProviderId = new()
+                {
+                    { "Stremio", string.Empty },
+                    { "stremio", string.Empty },
+                },
             };
 
-            var items = _library.GetItemList(query)
+            var items = _library
+                .GetItemList(query)
                 .OfType<Video>()
                 .Where(v => !v.IsFileProtocol)
                 //.Where(v => v.ProviderIds.TryGetValue("Stremio", out var id) && !string.IsNullOrWhiteSpace(id) && !v.IsFileProtocol)
                 .ToArray();
 
             int total = items.Length;
-
 
             int done = 0;
 
@@ -84,7 +91,11 @@ namespace Gelato.Tasks
 
                 try
                 {
-                    _library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
+                    _library.DeleteItem(
+                        item,
+                        new DeleteOptions { DeleteFileLocation = false },
+                        true
+                    );
                 }
                 catch (Exception ex)
                 {
@@ -98,34 +109,48 @@ namespace Gelato.Tasks
             DeleteEmptyStremioContainers();
             _manager.ClearCache();
             progress?.Report(100.0);
-            await _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
+            await _library.ValidateMediaLibrary(
+                progress: new Progress<double>(),
+                cancellationToken
+            );
             _log.LogInformation("purge completed");
         }
 
-
         private void DeleteEmptyStremioContainers()
         {
-            var seasons = _library.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Season },
-                Recursive = true
-            }).OfType<Season>()
-              .ToArray();
+            var seasons = _library
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Season },
+                        Recursive = true,
+                    }
+                )
+                .OfType<Season>()
+                .ToArray();
 
             foreach (var season in seasons)
             {
-                var hasEpisodes = _library.GetItemList(new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { BaseItemKind.Episode },
-                    ParentId = season.Id,
-                    IsVirtualItem = false
-                }).Any();
+                var hasEpisodes = _library
+                    .GetItemList(
+                        new InternalItemsQuery
+                        {
+                            IncludeItemTypes = new[] { BaseItemKind.Episode },
+                            ParentId = season.Id,
+                            IsVirtualItem = false,
+                        }
+                    )
+                    .Any();
 
                 if (!hasEpisodes)
                 {
                     try
                     {
-                        _library.DeleteItem(season, new DeleteOptions { DeleteFileLocation = false }, true);
+                        _library.DeleteItem(
+                            season,
+                            new DeleteOptions { DeleteFileLocation = false },
+                            true
+                        );
                         _log.LogInformation("deleted empty season {Name}", season.Name);
                     }
                     catch (Exception ex)
@@ -135,27 +160,39 @@ namespace Gelato.Tasks
                 }
             }
 
-            var seriesList = _library.GetItemList(new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Series },
-                Recursive = true
-            }).OfType<Series>()
-              .ToArray();
+            var seriesList = _library
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.Series },
+                        Recursive = true,
+                    }
+                )
+                .OfType<Series>()
+                .ToArray();
 
             foreach (var series in seriesList)
             {
-                var hasEpisodes = _library.GetItemList(new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { BaseItemKind.Episode },
-                    AncestorIds = new[] { series.Id },
-                    IsVirtualItem = false
-                }).Any();
+                var hasEpisodes = _library
+                    .GetItemList(
+                        new InternalItemsQuery
+                        {
+                            IncludeItemTypes = new[] { BaseItemKind.Episode },
+                            AncestorIds = new[] { series.Id },
+                            IsVirtualItem = false,
+                        }
+                    )
+                    .Any();
 
                 if (!hasEpisodes)
                 {
                     try
                     {
-                        _library.DeleteItem(series, new DeleteOptions { DeleteFileLocation = false }, true);
+                        _library.DeleteItem(
+                            series,
+                            new DeleteOptions { DeleteFileLocation = false },
+                            true
+                        );
                         _log.LogInformation("deleted empty series {Name}", series.Name);
                     }
                     catch (Exception ex)

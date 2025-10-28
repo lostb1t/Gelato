@@ -22,7 +22,8 @@ namespace Gelato.Tasks
             ILibraryManager libraryManager,
             ILogger<GelatoCatalogItemsSyncTask> log,
             GelatoStremioProvider stremio,
-            GelatoManager manager)
+            GelatoManager manager
+        )
         {
             _log = log;
             _library = libraryManager;
@@ -32,12 +33,16 @@ namespace Gelato.Tasks
 
         public string Name => "Gelato: Import catalog items";
         public string Key => "GelatoCatalogItemsSync";
-        public string Description => "Loads all Stremio catalogs items and inserts/updates items in the Jellyfin database.";
+        public string Description =>
+            "Loads all Stremio catalogs items and inserts/updates items in the Jellyfin database.";
         public string Category => "Gelato";
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(
+            IProgress<double> progress,
+            CancellationToken cancellationToken
+        )
         {
             _log.LogInformation("Catalog sync started");
 
@@ -61,100 +66,140 @@ namespace Gelato.Tasks
             var opts = new ParallelOptions
             {
                 MaxDegreeOfParallelism = 8,
-                CancellationToken = cancellationToken
+                CancellationToken = cancellationToken,
             };
 
-            await Parallel.ForEachAsync(catalogs, opts, async (cat, ct) =>
-            {
-                var root = cat.Type == StremioMediaType.Series ? seriesFolder : movieFolder;
-                if (root is null)
+            await Parallel.ForEachAsync(
+                catalogs,
+                opts,
+                async (cat, ct) =>
                 {
-                    _log.LogWarning("Catalog task: No {Type} root folder found; skipping {Type}/{Id}", cat.Type, cat.Id);
-                    return;
-                }
-
-                try
-                {
-                    _log.LogInformation("Loading catalog: {Type} / {Id}", cat.Type, cat.Id);
-
-                    var skip = 0;
-                    var processed = 0;
-
-                    while (processed < maxPerCatalog)
+                    var root = cat.Type == StremioMediaType.Series ? seriesFolder : movieFolder;
+                    if (root is null)
                     {
-                        ct.ThrowIfCancellationRequested();
+                        _log.LogWarning(
+                            "Catalog task: No {Type} root folder found; skipping {Type}/{Id}",
+                            cat.Type,
+                            cat.Id
+                        );
+                        return;
+                    }
 
-                        var page = await _stremio
-                            .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
-                            .ConfigureAwait(false);
+                    try
+                    {
+                        _log.LogInformation("Loading catalog: {Type} / {Id}", cat.Type, cat.Id);
 
-                        if (page is null || page.Count == 0)
-                            break;
+                        var skip = 0;
+                        var processed = 0;
 
-                        var filterUnreleased = GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
-                        var bufferDays = GelatoPlugin.Instance?.Configuration.FilterUnreleasedBufferDays ?? 30;
-
-                        foreach (var _meta in page)
+                        while (processed < maxPerCatalog)
                         {
                             ct.ThrowIfCancellationRequested();
 
-                            // Filter unreleased items from catalog
-                            if (filterUnreleased && !_meta.IsReleased(cat.Type == StremioMediaType.Movie ? bufferDays : 0))
-                            {
-                                _log.LogDebug("Skipping unreleased item: {Name} ({Id})", _meta.Name, _meta.Id);
-                                continue;
-                            }
+                            var page = await _stremio
+                                .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
+                                .ConfigureAwait(false);
 
-                            var meta = _meta;
-                            if (cat.Type == StremioMediaType.Series && _meta.Videos is null)
-                            {
-                                meta = await _stremio.GetMetaAsync(_meta.ImdbId ?? _meta.Id, _meta.Type).ConfigureAwait(false);
-                                if (meta is null)
-                                {
-                                    _log.LogWarning("Stremio meta not found for {Id} {Type}", _meta.Id, _meta.Type);
-                                    continue;
-                                }
-
-                                // Re-check release status for the detailed meta (no buffer for TV series)
-                                if (filterUnreleased && !meta.IsReleased(0))
-                                {
-                                    _log.LogDebug("Skipping unreleased series: {Name} ({Id})", meta.Name, meta.Id);
-                                    continue;
-                                }
-                            }
-
-                            try
-                            {
-
-                                var _ = await _manager
-                                    .InsertMeta(root, meta, true, false, ct)
-                                    .ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                _log.LogError("Insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
-                                    meta?.Id, ex.Message, ex.StackTrace);
-                            }
-
-                            processed++;
-                            var current = Interlocked.Increment(ref done);
-                            progress.Report(Math.Min(100, (current / (double)total) * 100.0));
-
-                            if (processed >= maxPerCatalog)
+                            if (page is null || page.Count == 0)
                                 break;
+
+                            var filterUnreleased =
+                                GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
+                            var bufferDays =
+                                GelatoPlugin.Instance?.Configuration.FilterUnreleasedBufferDays
+                                ?? 30;
+
+                            foreach (var _meta in page)
+                            {
+                                ct.ThrowIfCancellationRequested();
+
+                                // Filter unreleased items from catalog
+                                if (
+                                    filterUnreleased
+                                    && !_meta.IsReleased(
+                                        cat.Type == StremioMediaType.Movie ? bufferDays : 0
+                                    )
+                                )
+                                {
+                                    _log.LogDebug(
+                                        "Skipping unreleased item: {Name} ({Id})",
+                                        _meta.Name,
+                                        _meta.Id
+                                    );
+                                    continue;
+                                }
+
+                                var meta = _meta;
+                                if (cat.Type == StremioMediaType.Series && _meta.Videos is null)
+                                {
+                                    meta = await _stremio
+                                        .GetMetaAsync(_meta.ImdbId ?? _meta.Id, _meta.Type)
+                                        .ConfigureAwait(false);
+                                    if (meta is null)
+                                    {
+                                        _log.LogWarning(
+                                            "Stremio meta not found for {Id} {Type}",
+                                            _meta.Id,
+                                            _meta.Type
+                                        );
+                                        continue;
+                                    }
+
+                                    // Re-check release status for the detailed meta (no buffer for TV series)
+                                    if (filterUnreleased && !meta.IsReleased(0))
+                                    {
+                                        _log.LogDebug(
+                                            "Skipping unreleased series: {Name} ({Id})",
+                                            meta.Name,
+                                            meta.Id
+                                        );
+                                        continue;
+                                    }
+                                }
+
+                                try
+                                {
+                                    var _ = await _manager
+                                        .InsertMeta(root, meta, true, false, ct)
+                                        .ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _log.LogError(
+                                        "Insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                        meta?.Id,
+                                        ex.Message,
+                                        ex.StackTrace
+                                    );
+                                }
+
+                                processed++;
+                                var current = Interlocked.Increment(ref done);
+                                progress.Report(Math.Min(100, (current / (double)total) * 100.0));
+
+                                if (processed >= maxPerCatalog)
+                                    break;
+                            }
+
+                            skip += page.Count;
                         }
 
-                        skip += page.Count;
+                        _log.LogInformation(
+                            "Catalog {Id} synced ({Count} items)",
+                            cat.Id,
+                            processed
+                        );
                     }
-
-                    _log.LogInformation("Catalog {Id} synced ({Count} items)", cat.Id, processed);
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning(ex, "Catalog sync failed for {Id}", cat.Id);
+                    }
                 }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex)
-                {
-                    _log.LogWarning(ex, "Catalog sync failed for {Id}", cat.Id);
-                }
-            });
+            );
 
             _log.LogInformation("Catalog sync completed");
         }

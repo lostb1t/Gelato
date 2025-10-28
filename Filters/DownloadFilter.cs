@@ -1,4 +1,3 @@
-
 using System.Net.Http;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Extensions;
@@ -29,7 +28,8 @@ public sealed class DownloadFilter : IAsyncActionFilter
         GelatoManager manager,
         IUserManager userManager,
         IHttpClientFactory httpClientFactory,
-        ILogger<DownloadFilter> log)
+        ILogger<DownloadFilter> log
+    )
     {
         _library = library;
         _http = http;
@@ -39,11 +39,15 @@ public sealed class DownloadFilter : IAsyncActionFilter
         _userManager = userManager;
     }
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext ctx,
+        ActionExecutionDelegate next
+    )
     {
-
-        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad
-     || cad.ActionName != "GetDownload")
+        if (
+            ctx.ActionDescriptor is not ControllerActionDescriptor cad
+            || cad.ActionName != "GetDownload"
+        )
         {
             await next();
             return;
@@ -56,7 +60,11 @@ public sealed class DownloadFilter : IAsyncActionFilter
         }
 
         var principal = ctx.HttpContext.User;
-        var userIdStr = ctx.HttpContext.User.Claims.FirstOrDefault(c => c.Type == "UserId" || c.Type == "Jellyfin-UserId")?.Value;
+        var userIdStr = ctx
+            .HttpContext.User.Claims.FirstOrDefault(c =>
+                c.Type == "UserId" || c.Type == "Jellyfin-UserId"
+            )
+            ?.Value;
 
         User? user = null;
         if (Guid.TryParse(userIdStr, out var userId))
@@ -66,10 +74,12 @@ public sealed class DownloadFilter : IAsyncActionFilter
 
         if (user is not null)
         {
-            var mediaSourceId =
-                Guid.TryParse(ctx.HttpContext.Items["MediaSourceId"] as string, out var parsed)
-                    ? parsed
-                    : guid;
+            var mediaSourceId = Guid.TryParse(
+                ctx.HttpContext.Items["MediaSourceId"] as string,
+                out var parsed
+            )
+                ? parsed
+                : guid;
             var item = _library.GetItemById<BaseItem>(mediaSourceId, user);
             if (item is not null)
             {
@@ -89,7 +99,8 @@ public sealed class DownloadFilter : IAsyncActionFilter
 
                     var stream = await resp.Content.ReadAsStreamAsync(CancellationToken.None);
 
-                    var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+                    var contentType =
+                        resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
 
                     var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
                     if (string.IsNullOrWhiteSpace(fileName))
@@ -108,10 +119,9 @@ public sealed class DownloadFilter : IAsyncActionFilter
                     ctx.Result = new FileStreamResult(stream, contentType)
                     {
                         FileDownloadName = fileName,
-                        EnableRangeProcessing = true
+                        EnableRangeProcessing = true,
                     };
                     return;
-
                 }
             }
         }
@@ -119,5 +129,4 @@ public sealed class DownloadFilter : IAsyncActionFilter
         await next();
         return;
     }
-
 }

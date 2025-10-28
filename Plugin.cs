@@ -8,7 +8,6 @@ using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
 
-
 namespace Gelato;
 
 public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
@@ -16,8 +15,15 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly ILogger<GelatoPlugin> _log;
     private readonly ILibraryManager _library;
     private readonly GelatoManager _manager;
-    public GelatoPlugin(IApplicationPaths applicationPaths, GelatoManager manager, IXmlSerializer xmlSerializer, ILogger<GelatoPlugin> log, ILibraryManager library)
-    : base(applicationPaths, xmlSerializer)
+
+    public GelatoPlugin(
+        IApplicationPaths applicationPaths,
+        GelatoManager manager,
+        IXmlSerializer xmlSerializer,
+        ILogger<GelatoPlugin> log,
+        ILibraryManager library
+    )
+        : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
         _log = log;
@@ -54,4 +60,3 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _manager.TryGetSeriesFolder();
     }
 }
-

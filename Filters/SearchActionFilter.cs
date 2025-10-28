@@ -43,7 +43,8 @@ namespace Gelato.Filters
             IDtoService dtoService,
             GelatoManager manager,
             GelatoStremioProvider provider,
-            ILogger<SearchActionFilter> log)
+            ILogger<SearchActionFilter> log
+        )
         {
             _library = library;
             _manager = manager;
@@ -56,7 +57,10 @@ namespace Gelato.Filters
 
         public int Order => 1;
 
-        public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
+        public async Task OnActionExecutionAsync(
+            ActionExecutingContext ctx,
+            ActionExecutionDelegate next
+        )
         {
             if (!await _provider.IsReady())
             {
@@ -72,9 +76,10 @@ namespace Gelato.Filters
 
             var http = ctx.HttpContext;
 
-            var hasSearch = http.Request.Query.Keys
-                .Any(k => string.Equals(k, "SearchTerm", StringComparison.OrdinalIgnoreCase) &&
-                          !string.IsNullOrWhiteSpace(http.Request.Query[k]));
+            var hasSearch = http.Request.Query.Keys.Any(k =>
+                string.Equals(k, "SearchTerm", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(http.Request.Query[k])
+            );
             if (!hasSearch)
             {
                 await next();
@@ -82,9 +87,19 @@ namespace Gelato.Filters
             }
 
             var requested = new HashSet<BaseItemKind>();
-            if (http.Request.Query.TryGetValue("IncludeItemTypes", out var includeVal) && !string.IsNullOrWhiteSpace(includeVal))
+            if (
+                http.Request.Query.TryGetValue("IncludeItemTypes", out var includeVal)
+                && !string.IsNullOrWhiteSpace(includeVal)
+            )
             {
-                foreach (var raw in includeVal.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                foreach (
+                    var raw in includeVal
+                        .ToString()
+                        .Split(
+                            ',',
+                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+                        )
+                )
                 {
                     if (Enum.TryParse<BaseItemKind>(raw, true, out var mt))
                     {
@@ -102,22 +117,36 @@ namespace Gelato.Filters
 
             if (requested.Count == 0)
             {
-                ctx.Result = new OkObjectResult(new QueryResult<BaseItemDto>
-                {
-                    Items = Array.Empty<BaseItemDto>(),
-                    TotalRecordCount = 0
-                });
+                ctx.Result = new OkObjectResult(
+                    new QueryResult<BaseItemDto>
+                    {
+                        Items = Array.Empty<BaseItemDto>(),
+                        TotalRecordCount = 0,
+                    }
+                );
                 return;
             }
 
             int start = 0;
             int limit = int.MaxValue;
-            if (http.Request.Query.TryGetValue("StartIndex", out var startVal) &&
-                int.TryParse(startVal, out var si) && si >= 0) start = si;
-            if (http.Request.Query.TryGetValue("Limit", out var limitVal) &&
-                int.TryParse(limitVal, out var lim) && lim > 0) limit = lim;
+            if (
+                http.Request.Query.TryGetValue("StartIndex", out var startVal)
+                && int.TryParse(startVal, out var si)
+                && si >= 0
+            )
+                start = si;
+            if (
+                http.Request.Query.TryGetValue("Limit", out var limitVal)
+                && int.TryParse(limitVal, out var lim)
+                && lim > 0
+            )
+                limit = lim;
 
-            var q = http.Request.Query.First(kv => string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)).Value.ToString();
+            var q = http
+                .Request.Query.First(kv =>
+                    string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)
+                )
+                .Value.ToString();
 
             var metas = new List<StremioMeta>(256);
 
@@ -139,7 +168,6 @@ namespace Gelato.Filters
             {
                 var seriesFolder = _manager.TryGetSeriesFolder();
 
-
                 if (seriesFolder is not null)
                 {
                     var series = await _provider.SearchAsync(q, StremioMediaType.Series);
@@ -151,28 +179,31 @@ namespace Gelato.Filters
                 }
             }
 
-            _log.LogInformation("intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
-                          q, string.Join(",", requested.Select(r => r.ToString())), start, limit, metas.Count());
+            _log.LogInformation(
+                "intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
+                q,
+                string.Join(",", requested.Select(r => r.ToString())),
+                start,
+                limit,
+                metas.Count()
+            );
 
-
-var options = new DtoOptions
-{
-Fields = new[]
-    {
-        ItemFields.PrimaryImageAspectRatio
-    },
-    EnableImages = true,
-    EnableUserData = false
-};
+            var options = new DtoOptions
+            {
+                Fields = new[] { ItemFields.PrimaryImageAspectRatio },
+                EnableImages = true,
+                EnableUserData = false,
+            };
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var dtos = new List<BaseItemDto>(metas.Count);
 
             foreach (var s in metas)
             {
-              Console.Write("UIWSA");
+                Console.Write("UIWSA");
                 var baseItem = _provider.IntoBaseItem(s);
-                if (baseItem is null) continue;
-Console.Write("YOSOSIW");
+                if (baseItem is null)
+                    continue;
+                Console.Write("YOSOSIW");
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
                 Console.Write("HSJDIDND");
                 var stremioUri = StremioUri.FromBaseItem(baseItem);
@@ -184,11 +215,9 @@ Console.Write("YOSOSIW");
 
             var paged = dtos.Skip(start).Take(limit).ToArray();
 
-            ctx.Result = new OkObjectResult(new QueryResult<BaseItemDto>
-            {
-                Items = paged,
-                TotalRecordCount = dtos.Count
-            });
+            ctx.Result = new OkObjectResult(
+                new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = dtos.Count }
+            );
             return;
         }
     }

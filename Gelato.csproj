@@ -6,31 +6,29 @@
     <AssemblyName>Gelato</AssemblyName>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Jellyfin.Model" Version="10.11" />
     <PackageReference Include="Jellyfin.Controller" Version="10.11" />
     <PackageReference Include="Jellyfin.Common" Version="10.11" />
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
-
   </ItemGroup>
-
   <ItemGroup>
     <EmbeddedResource Include="Config\config.html" />
   </ItemGroup>
-
-<Target Name="CleanupJellyfinDlls" AfterTargets="Build">
-  <ItemGroup>
-    <AllDlls Include="$(OutDir)*.dll" />
-    <FilesToKeep Include="
+  <Target Name="CleanupJellyfinDlls" AfterTargets="Build">
+    <ItemGroup>
+      <AllDlls Include="$(OutDir)*.dll" />
+      <FilesToKeep
+        Include="
         $(OutDir)Gelato.dll;
         $(OutDir)JellyfinLoaderStub*.dll;  
         $(OutDir)0Harmony.dll;             
         $(OutDir)MonoTorrent*.dll;
         $(OutDir)Mono.Nat.dll;
-        $(OutDir)ReusableTasks.dll" />
-    <FilesToDelete Include="@(AllDlls)" Exclude="@(FilesToKeep)" />
-  </ItemGroup>
-  <Delete Files="@(FilesToDelete)" />
-</Target>
+        $(OutDir)ReusableTasks.dll"
+      />
+      <FilesToDelete Include="@(AllDlls)" Exclude="@(FilesToKeep)" />
+    </ItemGroup>
+    <Delete Files="@(FilesToDelete)" />
+  </Target>
 </Project>

@@ -19,7 +19,10 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
     private const string ItemsKey = "MediaSourceId";
     private static readonly string[] InputKeys = new[] { "MediaSourceId", "RouteMediaSourceId" };
 
-    public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
+    public async Task OnActionExecutionAsync(
+        ActionExecutingContext ctx,
+        ActionExecutionDelegate next
+    )
     {
         if (ctx.ActionDescriptor is ControllerActionDescriptor cad)
             ctx.HttpContext.Items["actionName"] = cad.ActionName;
@@ -30,9 +33,11 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
-        if (TryFromArgs(ctx.ActionArguments, out var id) ||
-            TryFromRoute(ctx, out id) ||
-            TryFromQuery(ctx.HttpContext.Request, out id))
+        if (
+            TryFromArgs(ctx.ActionArguments, out var id)
+            || TryFromRoute(ctx, out id)
+            || TryFromQuery(ctx.HttpContext.Request, out id)
+        )
         {
             if (!string.IsNullOrWhiteSpace(id))
                 ctx.HttpContext.Items[ItemsKey] = id!;
@@ -45,12 +50,16 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
     {
         foreach (var kv in args)
         {
-            if (kv.Value is null) continue;
+            if (kv.Value is null)
+                continue;
 
             foreach (var key in InputKeys)
             {
-                if (kv.Key.Equals(key, System.StringComparison.OrdinalIgnoreCase)
-                    && kv.Value is string s && !string.IsNullOrWhiteSpace(s))
+                if (
+                    kv.Key.Equals(key, System.StringComparison.OrdinalIgnoreCase)
+                    && kv.Value is string s
+                    && !string.IsNullOrWhiteSpace(s)
+                )
                 {
                     id = s;
                     return true;
@@ -61,12 +70,16 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
         foreach (var kv in args)
         {
             var v = kv.Value;
-            if (v is null) continue;
+            if (v is null)
+                continue;
 
             var type = v.GetType();
             foreach (var key in InputKeys)
             {
-                var prop = type.GetProperty(key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                var prop = type.GetProperty(
+                    key,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase
+                );
                 if (prop?.GetValue(v) is string s && !string.IsNullOrWhiteSpace(s))
                 {
                     id = s;
@@ -83,7 +96,11 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
     {
         foreach (var key in InputKeys)
         {
-            if (ctx.RouteData.Values.TryGetValue(key, out var val) && val is string s && !string.IsNullOrWhiteSpace(s))
+            if (
+                ctx.RouteData.Values.TryGetValue(key, out var val)
+                && val is string s
+                && !string.IsNullOrWhiteSpace(s)
+            )
             {
                 id = s;
                 return true;

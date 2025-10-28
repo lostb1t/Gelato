@@ -29,7 +29,8 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
         ILibraryManager library,
         IHttpClientFactory http,
         GelatoManager manager,
-        ILogger<ImageResourceFilter> log)
+        ILogger<ImageResourceFilter> log
+    )
     {
         _library = library;
         _http = http;
@@ -37,10 +38,15 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
         _manager = manager;
     }
 
-    public async Task OnResourceExecutionAsync(ResourceExecutingContext ctx, ResourceExecutionDelegate next)
+    public async Task OnResourceExecutionAsync(
+        ResourceExecutingContext ctx,
+        ResourceExecutionDelegate next
+    )
     {
-        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad
-     || cad.ActionName != "GetItemImage")
+        if (
+            ctx.ActionDescriptor is not ControllerActionDescriptor cad
+            || cad.ActionName != "GetItemImage"
+        )
         {
             await next();
             return;
@@ -48,8 +54,10 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
 
         var routeValues = ctx.RouteData.Values;
 
-        if (!routeValues.TryGetValue("itemId", out var guidString) ||
-    !Guid.TryParse(guidString?.ToString(), out var guid))
+        if (
+            !routeValues.TryGetValue("itemId", out var guidString)
+            || !Guid.TryParse(guidString?.ToString(), out var guid)
+        )
         {
             await next();
             return;
@@ -64,5 +72,4 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
 
         ctx.HttpContext.Response.Redirect(stremioMeta.Poster, permanent: false);
     }
-
 }

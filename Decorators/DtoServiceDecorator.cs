@@ -20,14 +20,15 @@ namespace Gelato.Decorators
             _manager = manager;
         }
 
-        public double? GetPrimaryImageAspectRatio(BaseItem item)
-            => _inner.GetPrimaryImageAspectRatio(item);
+        public double? GetPrimaryImageAspectRatio(BaseItem item) =>
+            _inner.GetPrimaryImageAspectRatio(item);
 
         public BaseItemDto GetBaseItemDto(
             BaseItem item,
             DtoOptions options,
             User? user = null,
-            BaseItem? owner = null)
+            BaseItem? owner = null
+        )
         {
             var dto = _inner.GetBaseItemDto(item, options, user, owner);
             Patch(dto, item, user, owner, options, false);
@@ -38,7 +39,8 @@ namespace Gelato.Decorators
             IReadOnlyList<BaseItem> items,
             DtoOptions options,
             User? user = null,
-            BaseItem? owner = null)
+            BaseItem? owner = null
+        )
         {
             var list = _inner.GetBaseItemDtos(items, options, user, owner);
             for (int i = 0; i < list.Count; i++)
@@ -52,7 +54,8 @@ namespace Gelato.Decorators
             BaseItem item,
             DtoOptions options,
             List<BaseItem>? taggedItems,
-            User? user = null)
+            User? user = null
+        )
         {
             var dto = _inner.GetItemByNameDto(item, options, taggedItems, user);
             Patch(dto, item, user, owner: null, options, false);
@@ -77,19 +80,24 @@ namespace Gelato.Decorators
             User? user,
             BaseItem? owner,
             DtoOptions options,
-            bool IsList)
+            bool IsList
+        )
         {
             var manager = _manager.Value;
-            
+
             //dto.MediaSourceCount = 1;
             //dto.Container = null;
-            if (item is not null && user is not null && IsStremio(dto) && manager.CanDelete(item, user))
+            if (
+                item is not null
+                && user is not null
+                && IsStremio(dto)
+                && manager.CanDelete(item, user)
+            )
             {
                 dto.CanDelete = true;
             }
             if (IsStremio(dto))
             {
-
                 dto.CanDownload = true;
 
                 // clean name (legacy)
@@ -97,7 +105,12 @@ namespace Gelato.Decorators
                 dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
 
                 // mark unplayable
-                if (!IsList && dto.MediaSources?.Length == 1 && dto.Path is not null && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+                if (
+                    !IsList
+                    && dto.MediaSources?.Length == 1
+                    && dto.Path is not null
+                    && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
+                )
                 {
                     dto.LocationType = LocationType.Virtual;
                     dto.Path = null;

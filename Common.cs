@@ -32,9 +32,10 @@ public sealed class StremioUri
         StreamId = string.IsNullOrWhiteSpace(streamId) ? null : streamId;
     }
 
-    private static readonly Regex Rx =
-        new(@"^stremio://(?<type>movie|series)/(?<ext>[^/\s]+)(?:/(?<stream>[^/\s]+))?$",
-            RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex Rx = new(
+        @"^stremio://(?<type>movie|series)/(?<ext>[^/\s]+)(?:/(?<stream>[^/\s]+))?$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
 
     public static StremioUri FromString(string value)
     {
@@ -57,14 +58,15 @@ public sealed class StremioUri
 
     public static StremioUri? FromBaseItem(BaseItem item)
     {
-        if (item is null) throw new ArgumentNullException(nameof(item));
+        if (item is null)
+            throw new ArgumentNullException(nameof(item));
 
         var kind = item.GetBaseItemKind();
         var mediaType = kind switch
         {
             BaseItemKind.Movie => StremioMediaType.Movie,
             BaseItemKind.Series or BaseItemKind.Episode => StremioMediaType.Series,
-            _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}")
+            _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}"),
         };
 
         var stremioId = item.GetProviderId("Stremio");
@@ -75,20 +77,28 @@ public sealed class StremioUri
         if (kind == BaseItemKind.Movie)
         {
             var imdb = item.GetProviderId(MetadataProvider.Imdb);
-            return string.IsNullOrWhiteSpace(imdb) ? uri : new StremioUri(StremioMediaType.Movie, imdb);
+            return string.IsNullOrWhiteSpace(imdb)
+                ? uri
+                : new StremioUri(StremioMediaType.Movie, imdb);
         }
 
         if (kind == BaseItemKind.Series)
         {
             var imdb = item.GetProviderId(MetadataProvider.Imdb);
-            return string.IsNullOrWhiteSpace(imdb) ? uri : new StremioUri(StremioMediaType.Series, imdb);
+            return string.IsNullOrWhiteSpace(imdb)
+                ? uri
+                : new StremioUri(StremioMediaType.Series, imdb);
         }
 
         if (kind == BaseItemKind.Episode)
         {
             var ep = (MediaBrowser.Controller.Entities.TV.Episode)item;
             var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
-            if (string.IsNullOrWhiteSpace(seriesImdb) || ep.ParentIndexNumber is null || ep.IndexNumber is null)
+            if (
+                string.IsNullOrWhiteSpace(seriesImdb)
+                || ep.ParentIndexNumber is null
+                || ep.IndexNumber is null
+            )
                 return uri;
 
             var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
@@ -115,7 +125,7 @@ public sealed class StremioUri
         {
             "movie" => StremioMediaType.Movie,
             "series" => StremioMediaType.Series,
-            _ => throw new FormatException($"Unknown media type in StremioId: {typeStr}")
+            _ => throw new FormatException($"Unknown media type in StremioId: {typeStr}"),
         };
 
         return new StremioUri(mediaType, ext, stream);
@@ -123,8 +133,16 @@ public sealed class StremioUri
 
     public static bool TryParse(string id, out StremioUri? value)
     {
-        try { value = Parse(id); return true; }
-        catch { value = null; return false; }
+        try
+        {
+            value = Parse(id);
+            return true;
+        }
+        catch
+        {
+            value = null;
+            return false;
+        }
     }
 
     public override string ToString()
@@ -151,13 +169,14 @@ public sealed class StremioUri
 
     // Convenience builders
     public StremioUri WithStream(string streamId) => new(MediaType, ExternalId, streamId);
+
     public StremioUri WithoutStream() => new(MediaType, ExternalId, null);
 
-    public static StremioUri Movie(string externalId, string? streamId = null)
-        => new(StremioMediaType.Movie, externalId, streamId);
+    public static StremioUri Movie(string externalId, string? streamId = null) =>
+        new(StremioMediaType.Movie, externalId, streamId);
 
-    public static StremioUri Series(string externalId, string? streamId = null)
-        => new(StremioMediaType.Series, externalId, streamId);
+    public static StremioUri Series(string externalId, string? streamId = null) =>
+        new(StremioMediaType.Series, externalId, streamId);
 }
 
 public static class Utils
@@ -223,60 +242,139 @@ public sealed class KeyLock
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _queues = new();
     private readonly ConcurrentDictionary<Guid, Lazy<Task>> _inflight = new();
 
-    public Task RunSingleFlightAsync(Guid key, Func<CancellationToken, Task> action, CancellationToken ct = default)
+    public Task RunSingleFlightAsync(
+        Guid key,
+        Func<CancellationToken, Task> action,
+        CancellationToken ct = default
+    )
     {
-        var lazy = _inflight.GetOrAdd(key, _ => new Lazy<Task>(() => Once(key, action, ct), LazyThreadSafetyMode.ExecutionAndPublication));
+        var lazy = _inflight.GetOrAdd(
+            key,
+            _ => new Lazy<Task>(
+                () => Once(key, action, ct),
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        );
         return lazy.Value;
     }
 
-    public Task<T> RunSingleFlightAsync<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
+    public Task<T> RunSingleFlightAsync<T>(
+        Guid key,
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken ct = default
+    )
     {
-        var lazy = _inflight.GetOrAdd(key, _ => new Lazy<Task>(() => Once(key, action, ct), LazyThreadSafetyMode.ExecutionAndPublication));
+        var lazy = _inflight.GetOrAdd(
+            key,
+            _ => new Lazy<Task>(
+                () => Once(key, action, ct),
+                LazyThreadSafetyMode.ExecutionAndPublication
+            )
+        );
         return (Task<T>)lazy.Value;
     }
 
-    public async Task RunQueuedAsync(Guid key, Func<CancellationToken, Task> action, CancellationToken ct = default)
+    public async Task RunQueuedAsync(
+        Guid key,
+        Func<CancellationToken, Task> action,
+        CancellationToken ct = default
+    )
     {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct).ConfigureAwait(false);
-        try { await action(ct).ConfigureAwait(false); }
-        finally { ReleaseAndMaybeRemove(key, sem); }
+        try
+        {
+            await action(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            ReleaseAndMaybeRemove(key, sem);
+        }
     }
 
-    public async Task<T> RunQueuedAsync<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
+    public async Task<T> RunQueuedAsync<T>(
+        Guid key,
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken ct = default
+    )
     {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct).ConfigureAwait(false);
-        try { return await action(ct).ConfigureAwait(false); }
-        finally { ReleaseAndMaybeRemove(key, sem); }
+        try
+        {
+            return await action(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            ReleaseAndMaybeRemove(key, sem);
+        }
     }
 
-    public async Task<bool> TryRunQueuedAsync(Guid key, Func<CancellationToken, Task> action, CancellationToken ct = default)
+    public async Task<bool> TryRunQueuedAsync(
+        Guid key,
+        Func<CancellationToken, Task> action,
+        CancellationToken ct = default
+    )
     {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false)) return false;
-        try { await action(ct).ConfigureAwait(false); return true; }
-        finally { ReleaseAndMaybeRemove(key, sem); }
+        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false))
+            return false;
+        try
+        {
+            await action(ct).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            ReleaseAndMaybeRemove(key, sem);
+        }
     }
 
-    public async Task<(bool ran, T result)> TryRunQueuedAsync<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
+    public async Task<(bool ran, T result)> TryRunQueuedAsync<T>(
+        Guid key,
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken ct = default
+    )
     {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false)) return (false, default!);
-        try { return (true, await action(ct).ConfigureAwait(false)); }
-        finally { ReleaseAndMaybeRemove(key, sem); }
+        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false))
+            return (false, default!);
+        try
+        {
+            return (true, await action(ct).ConfigureAwait(false));
+        }
+        finally
+        {
+            ReleaseAndMaybeRemove(key, sem);
+        }
     }
 
     private async Task Once(Guid key, Func<CancellationToken, Task> action, CancellationToken ct)
     {
-        try { await action(ct).ConfigureAwait(false); }
-        finally { _inflight.TryRemove(key, out _); }
+        try
+        {
+            await action(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _inflight.TryRemove(key, out _);
+        }
     }
 
-    private async Task<T> Once<T>(Guid key, Func<CancellationToken, Task<T>> action, CancellationToken ct)
+    private async Task<T> Once<T>(
+        Guid key,
+        Func<CancellationToken, Task<T>> action,
+        CancellationToken ct
+    )
     {
-        try { return await action(ct).ConfigureAwait(false); }
-        finally { _inflight.TryRemove(key, out _); }
+        try
+        {
+            return await action(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _inflight.TryRemove(key, out _);
+        }
     }
 
     private void ReleaseAndMaybeRemove(Guid key, SemaphoreSlim sem)

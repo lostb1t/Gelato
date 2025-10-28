@@ -1,4 +1,3 @@
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -32,8 +31,9 @@ namespace Gelato.Tasks
             ILibraryManager libraryManager,
             ILogger<PurgeGelatoStreamsTask> log,
             GelatoStremioProvider stremio,
-                    IItemRepository repo,
-            GelatoManager manager)
+            IItemRepository repo,
+            GelatoManager manager
+        )
         {
             _log = log;
             _library = libraryManager;
@@ -52,7 +52,10 @@ namespace Gelato.Tasks
             return Array.Empty<TaskTriggerInfo>();
         }
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task ExecuteAsync(
+            IProgress<double> progress,
+            CancellationToken cancellationToken
+        )
         {
             _log.LogInformation("purging streams");
 
@@ -60,10 +63,15 @@ namespace Gelato.Tasks
             {
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
                 Recursive = false,
-                HasAnyProviderId = new() { { "Stremio", string.Empty }, { "stremio", string.Empty } },
+                HasAnyProviderId = new()
+                {
+                    { "Stremio", string.Empty },
+                    { "stremio", string.Empty },
+                },
             };
 
-            var items = _library.GetItemList(query)
+            var items = _library
+                .GetItemList(query)
                 .OfType<Video>()
                 .Where(v => !v.IsFileProtocol && !string.IsNullOrWhiteSpace(v.PrimaryVersionId))
                 .ToArray();
@@ -79,7 +87,6 @@ namespace Gelato.Tasks
                 try
                 {
                     _repo.DeleteItem([item.Id]);
-
                 }
                 catch (Exception ex)
                 {
@@ -93,9 +100,11 @@ namespace Gelato.Tasks
 
             progress?.Report(100.0);
             _manager.ClearCache();
-            await _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
+            await _library.ValidateMediaLibrary(
+                progress: new Progress<double>(),
+                cancellationToken
+            );
             _log.LogInformation("stream purge completed");
         }
     }
-
 }

@@ -9,20 +9,24 @@ insert_final_newline = true
 end_of_line = lf
 max_line_length = off
 
-# Indentation rules Roslyn uses
-csharp_indent_block_contents = true
-csharp_indent_case_contents = true
-csharp_indent_case_contents_when_block = true
-csharp_indent_labels = one_less_than_current
-csharp_indent_switch_labels = true
+csharp_indent_block_contents = true:warning
+csharp_indent_case_contents = true:warning
+csharp_indent_case_contents_when_block = true:warning
+csharp_indent_labels = one_less_than_current:warning
+csharp_indent_switch_labels = true:warning
 
-# Newline/whitespace helpers
-csharp_new_line_before_open_brace = all
-trim_trailing_whitespace = true
-insert_final_newline = true
+# Wrapping preferences
+csharp_preserve_single_line_blocks = true:warning
+csharp_preserve_single_line_statements = false:warning
 
-# Fully spelled analyzer severities (fix your wrapped lines)
-dotnet_sort_system_directives_first = true
+# Indentation for wrapped lines
+csharp_indent_braces = false:warning
+csharp_indent_case_contents = true:warning
+
+csharp_new_line_before_open_brace = all:warning
+
+# Fully spelled analyzer severities
+dotnet_sort_system_directives_first = true:warning
 dotnet_style_qualification_for_field = false:suggestion
 dotnet_style_qualification_for_property = false:suggestion
 dotnet_style_qualification_for_method = false:suggestion

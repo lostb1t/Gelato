@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Mvc.Routing;
 
 namespace Gelato.Controllers
 {
-
     /// <summary>
     /// This endpoint method overrides the given endpoint method
     /// Credits to: https://github.com/stenlan/JellyGuard
@@ -19,27 +18,50 @@ namespace Gelato.Controllers
     public class EndpointOverrideAttribute<TControllerClass> : HttpMethodAttribute
         where TControllerClass : class
     {
-        public EndpointOverrideAttribute(string methodName) : base([])
+        public EndpointOverrideAttribute(string methodName)
+            : base([])
         {
-            var targetMethod = typeof(TControllerClass).GetMethod(methodName)
-                ?? throw new ArgumentException($"Method ${methodName} not found on ${typeof(TControllerClass).GetType().FullName}.");
+            var targetMethod =
+                typeof(TControllerClass).GetMethod(methodName)
+                ?? throw new ArgumentException(
+                    $"Method ${methodName} not found on ${typeof(TControllerClass).GetType().FullName}."
+                );
 
             this.Order = -1;
 
-            var methodAttr = (HttpMethodAttribute)(GetCustomAttribute(targetMethod, typeof(HttpMethodAttribute), false)
-                ?? throw new ArgumentException($"{targetMethod.DeclaringType?.FullName}#{methodName} does not implement HttpMethodAttribute."));
+            var methodAttr = (HttpMethodAttribute)(
+                GetCustomAttribute(targetMethod, typeof(HttpMethodAttribute), false)
+                ?? throw new ArgumentException(
+                    $"{targetMethod.DeclaringType?.FullName}#{methodName} does not implement HttpMethodAttribute."
+                )
+            );
 
             ((List<string>)HttpMethods).AddRange(methodAttr.HttpMethods);
 
             var order = methodAttr.Order;
 
-            RouteAttribute? parentClassAttr = targetMethod.DeclaringType != null ? (RouteAttribute?)GetCustomAttribute(targetMethod.DeclaringType, typeof(RouteAttribute), false) : null;
+            RouteAttribute? parentClassAttr =
+                targetMethod.DeclaringType != null
+                    ? (RouteAttribute?)GetCustomAttribute(
+                        targetMethod.DeclaringType,
+                        typeof(RouteAttribute),
+                        false
+                    )
+                    : null;
             var parentClassTemplate = parentClassAttr?.Template;
 
             order = Math.Min(order, parentClassAttr?.Order ?? 0);
 
-            var templateField = typeof(HttpMethodAttribute).GetField(GetBackingFieldName(nameof(Template)), BindingFlags.Instance | BindingFlags.NonPublic)!;
-            templateField.SetValue(this, (parentClassTemplate ?? "") + ((parentClassTemplate != null && methodAttr.Template != null) ? "/" : "") + (methodAttr.Template ?? ""));
+            var templateField = typeof(HttpMethodAttribute).GetField(
+                GetBackingFieldName(nameof(Template)),
+                BindingFlags.Instance | BindingFlags.NonPublic
+            )!;
+            templateField.SetValue(
+                this,
+                (parentClassTemplate ?? "")
+                    + ((parentClassTemplate != null && methodAttr.Template != null) ? "/" : "")
+                    + (methodAttr.Template ?? "")
+            );
 
             this.Order = order - 1;
         }
