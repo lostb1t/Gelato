@@ -125,12 +125,13 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         // selected this item from search results to add to their library.
 
         BaseItem? baseItem = null;
+        var created = false;
 
         await _lock.RunQueuedAsync(guid, async ct =>
         {
             meta.Guid = guid;
 
-            (baseItem, _) = await _manager.InsertMeta(
+            (baseItem, created) = await _manager.InsertMeta(
                 root,
                 meta,
                 false,
@@ -140,6 +141,9 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 
         if (baseItem is not null)
         {
+            if (created)
+              _log.LogInformation($"inserted new media: {baseItem.Name}");
+
             ReplaceGuid(ctx, baseItem.Id);
             _manager.RemoveStremioMeta(guid);
         }

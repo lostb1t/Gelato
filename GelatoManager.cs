@@ -246,10 +246,10 @@ public class GelatoManager
 
         if (baseItem is not null)
         {
-            _log.LogInformation($"inserted new media: {baseItem.Name}");
+            _log.LogDebug($"inserted new media: {baseItem.Name}");
             if (queueRefreshItem)
             {
-                _log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");
+                //_log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");
                 _provider.QueueRefresh(
                         baseItem.Id,
                           options,
@@ -257,7 +257,7 @@ public class GelatoManager
             }
             else if (refreshItem)
             {
-                _log.LogDebug($"InsertMeta: refresh for: {baseItem.Id}");
+              //  _log.LogDebug($"InsertMeta: refresh for: {baseItem.Id}");
                 await _provider.RefreshFullItem(baseItem, options, ct);
             }
         }
@@ -340,7 +340,7 @@ public class GelatoManager
             ParentId = parent.Id,
             IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
             HasAnyProviderId = new() { { "Stremio", providerIds["Stremio"] } },
-            Recursive = false,
+            Recursive = true,
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,
             CollapseBoxSetItems = false
