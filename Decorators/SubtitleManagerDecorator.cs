@@ -38,7 +38,10 @@ namespace Gelato.Decorators
             SubtitleSearchRequest request,
             CancellationToken cancellationToken) {
             // nasty hack to prevent some plugins chocking on remote files
-            request.MediaPath = request.MediaPath + ".strm";
+if (request.MediaPath.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+{
+    request.MediaPath += ".strm";
+}
             return _inner.SearchSubtitles(request, cancellationToken);
           }
 
