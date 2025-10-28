@@ -81,8 +81,8 @@ namespace Gelato.Decorators
         {
             var manager = _manager.Value;
             
-            dto.MediaSourceCount = 1;
-            dto.Container = null;
+            //dto.MediaSourceCount = 1;
+            //dto.Container = null;
             if (item is not null && user is not null && IsStremio(dto) && manager.CanDelete(item, user))
             {
                 dto.CanDelete = true;

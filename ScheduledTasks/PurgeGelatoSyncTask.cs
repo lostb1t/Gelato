@@ -98,7 +98,6 @@ namespace Gelato.Tasks
             DeleteEmptyStremioContainers();
             _manager.ClearCache();
             progress?.Report(100.0);
-            await _manager.PurgeAlternateStreamVersions().ConfigureAwait(false);
             await _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
             _log.LogInformation("purge completed");
         }

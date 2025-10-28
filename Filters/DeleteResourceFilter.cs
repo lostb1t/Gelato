@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Model.Entities;
 
 namespace Gelato.Filters;
 
@@ -66,26 +67,30 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             var item = _library.GetItemById<BaseItem>(guid, user);
             if (item is not null)
             {
-                if (_manager.IsGelato(item))
+                if (_manager.IsGelato(item) && item is Video video)
                 {
                     if (_manager.CanDelete(item, user))
                     {
-                        if (item is Video video && _manager.IsPrimaryVersion(video))
+                        if (_manager.IsPrimaryVersion(video))
                         {
-                            foreach (var link in video.LinkedAlternateVersions) // link : LinkedChild
-                            {
-                                if (link.ItemId is not Guid altId || altId == Guid.Empty)
-                                {
-                                    _log.LogWarning("ALT LINK: missing/empty ItemId; skipping. {@Link}", link);
-                                    continue;
-                                }
+                          var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { item.GetBaseItemKind() },
+            HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
+            Recursive = false,
+            GroupByPresentationUniqueKey = false,
+            GroupBySeriesPresentationUniqueKey = false,
+            CollapseBoxSetItems = false
+        };
 
-                                var alt = _library.GetItemById(altId);
-                                if (alt is null)
-                                {
-                                    _log.LogWarning("ALT LINK: item not found in DB: {AltId}", altId);
-                                    continue;
-                                }
+        var sources = _library.GetItemList(query)
+            .OfType<Video>()
+            .ToList();
+                            foreach (var alt in sources)
+                            {
+                              
+
+                              
 
                                 _log.LogInformation("Deleting alternate version {Name} ({Id})", alt.Name, alt.Id);
 
@@ -95,13 +100,14 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
                                     true
                                 );
                             }
-                        }
+                        } else {
 
                         _log.LogInformation($"deleting {item.Name}");
                         _library.DeleteItem(
                             item,
                             new DeleteOptions { DeleteFileLocation = false },
                             true);
+                      }
 
                         ctx.Result = new NoContentResult();
                         return;

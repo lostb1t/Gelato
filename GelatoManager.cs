@@ -447,21 +447,28 @@ public class GelatoManager
                 isNew = true;
             }
   
-            // we use container for sorting
-            target.Container = $"{index:D3}:::{s.Name}";
+            // we use container for storing our own metadata
+            target.ExternalId = $"{index:D3}:::{s.Name}";
             target.Name = primary.Name;
             target.Path = path;
             target.IsVirtualItem = false;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.Tags = primary.Tags;
+            target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
 
             if (target.Id != primary.Id)
             {
                 target.SetPrimaryVersionId(primary.Id.ToString("N", CultureInfo.InvariantCulture));
-                target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+
                 // this is a trick until the pr for primaryversion is merged
                 target.IsVirtualItem = true;
+            } else {
+               target.SetPrimaryVersionId(null);
+               if (streams.Count == 0 && IsGelato(target))
+        {
+            target.Path = uri.ToString();
+        }
             }
 
             if (isNew)
@@ -470,16 +477,16 @@ public class GelatoManager
             }
             else
             {
-                // primary is saved later on
-                if (!IsPrimaryVersion(target))
-                {
-                    await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-                }
+              
+              await target.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
+                
             }
 
             newVideos.Add(target);
         }
-
+       // foreach (var m in newVideos) {
+       //               _log.LogDebug($"promary: {m.PrimaryVersionId}");
+       // }
         // Delete stale (never delete original base item)
         var stale = current
             .Where(m => !newVideos
@@ -492,18 +499,6 @@ public class GelatoManager
             _repo.DeleteItem([m.Id]);
         }
 
-        primary.LinkedAlternateVersions = newVideos
-            .Where(i => i.Id != primary.Id)
-            .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
-            .ToArray();
-        primary.SetPrimaryVersionId(null);
-
-        if (streams.Count == 0 && IsGelato(primary))
-        {
-            primary.Path = uri.ToString();
-        }
-        await primary.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct).ConfigureAwait(false);
-
         _log.LogInformation($"SyncStreams finished for {item.Name} count: {newVideos.Count} deleted: {stale.Count}");
     }
 
@@ -515,49 +510,6 @@ public class GelatoManager
     public bool IsPrimaryVersion(Video item)
     {
         return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
-    }
-
-    public async Task PurgeAlternateStreamVersions()
-    {
-        var query = new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { BaseItemKind.Episode, BaseItemKind.Movie },
-            Recursive = true,
-            CollapseBoxSetItems = false
-        };
-
-        var items = _library.GetItemList(query)
-            .OfType<Video>()
-            .ToList();
-
-        foreach (var item in items)
-        {
-            if (!IsPrimaryVersion(item))
-                continue;
-
-            var linked = item.LinkedAlternateVersions;
-            if (linked is null || linked.Count() == 0)
-                continue;
-
-            var keep = new List<LinkedChild>();
-
-            foreach (var child in linked)
-            {
-                var path = child?.Path;
-                if (IsLocalFile(path))
-                    keep.Add(child);
-            }
-
-            if (keep.Count() != linked.Count())
-            {
-
-                item.LinkedAlternateVersions = keep.ToArray();
-                await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                               .ConfigureAwait(false);
-            }
-        }
-
-        return;
     }
 
     private static bool IsLocalFile(string? path)
@@ -578,60 +530,6 @@ public class GelatoManager
             return false;
 
         return true;
-    }
-
-    public async Task MergeVersions(Video[] items)
-    {
-        //  if (items == null || items.Length < 2)
-        //  {
-        //      _log.LogWarning("MergeVersions called with insufficient items.");
-        //      return;
-        //  }
-
-        // try to get a persistsnt value
-        var primaryVersion =
-        items.FirstOrDefault(i => string.IsNullOrEmpty(i.PrimaryVersionId))
-        ?? items.FirstOrDefault(i => i.IsFileProtocol)
-        //?? items.FirstOrDefault(i => i.IsFileProtocol)
-        //  ?? items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId))
-        ?? items.FirstOrDefault();
-
-        _log.LogDebug($"selected {primaryVersion.Name} {primaryVersion.Id} as primary version");
-
-        var inv = CultureInfo.InvariantCulture;
-        var alternates = items.Where(i => !i.Id.Equals(primaryVersion.Id)).ToList();
-        var replacementLinks = alternates
-            .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
-            .ToArray();
-
-        foreach (var v in alternates)
-        {
-            v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
-            v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-
-            await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                   .ConfigureAwait(false);
-        }
-
-        primaryVersion.LinkedAlternateVersions = replacementLinks;
-        primaryVersion.SetPrimaryVersionId(null);
-
-        await primaryVersion.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                           .ConfigureAwait(false);
-    }
-
-
-    private void AddToAlternateVersionsIfNotPresent(List<LinkedChild> alternateVersions,
-                                                        LinkedChild newVersion)
-    {
-        if (!alternateVersions.Any(
-            i => string.Equals(i.Path,
-                            newVersion.Path,
-                            StringComparison.OrdinalIgnoreCase
-                        )))
-        {
-            alternateVersions.Add(newVersion);
-        }
     }
 
     public bool IsItemsAction(ActionContext ctx)

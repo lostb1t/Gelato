@@ -154,16 +154,27 @@ namespace Gelato.Filters
             _log.LogInformation("intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
                           q, string.Join(",", requested.Select(r => r.ToString())), start, limit, metas.Count());
 
-            var options = new DtoOptions();
+
+var options = new DtoOptions
+{
+Fields = new[]
+    {
+        ItemFields.PrimaryImageAspectRatio
+    },
+    EnableImages = true,
+    EnableUserData = false
+};
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var dtos = new List<BaseItemDto>(metas.Count);
 
             foreach (var s in metas)
             {
+              Console.Write("UIWSA");
                 var baseItem = _provider.IntoBaseItem(s);
                 if (baseItem is null) continue;
-
+Console.Write("YOSOSIW");
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
+                Console.Write("HSJDIDND");
                 var stremioUri = StremioUri.FromBaseItem(baseItem);
                 dto.Id = stremioUri.ToGuid();
                 dtos.Add(dto);

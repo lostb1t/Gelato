@@ -93,7 +93,6 @@ namespace Gelato.Tasks
 
             progress?.Report(100.0);
             _manager.ClearCache();
-            await _manager.PurgeAlternateStreamVersions().ConfigureAwait(false);
             await _library.ValidateMediaLibrary(progress: new Progress<double>(), cancellationToken);
             _log.LogInformation("stream purge completed");
         }

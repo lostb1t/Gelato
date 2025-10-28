@@ -19,6 +19,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
+
 
 namespace Gelato.Decorators
 {
@@ -140,18 +142,30 @@ namespace Gelato.Decorators
                 item = _libraryManager.GetItemById(item.Id);
             }
 
-            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
+            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).Where(x => x.Protocol == MediaProtocol.File).ToList();
+       var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { item.GetBaseItemKind() },
+            HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
+            Recursive = false,
+            GroupByPresentationUniqueKey = false,
+            GroupBySeriesPresentationUniqueKey = false,
+            CollapseBoxSetItems = false
+        };
 
-            sources = sources
-    .OrderByDescending(s => s.Protocol == MediaProtocol.File)
-    .ThenBy(s => (s.Container ?? "").Split(":::").FirstOrDefault() ?? "")
-    .Select(s => {
-        var parts = (s.Container ?? "").Split(":::");
-        s.Name = parts.Length > 1 ? parts[^1] : s.Name;
-        s.Container = null;
-        return s;
-    })
+        var gelatoSources = _libraryManager.GetItemList(query)
+            .OfType<Video>()
+              .Where(x => manager.IsGelato(x))
+     .OrderByDescending(x => manager.IsPrimaryVersion(x) ? 1 : 0)
+    .ThenBy(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
+    .Select(s => GetVersionInfo(enablePathSubstitution, s, MediaSourceType.Grouping))
     .ToList();
+    
+    sources.AddRange(gelatoSources);
+    
+            foreach (var m in sources) {
+                      _log.LogDebug($"id: {m.Id}");
+        }
 
 if (sources.Count > 0)
     sources[0].Type = MediaSourceType.Default;
@@ -378,5 +392,60 @@ if (sources.Count > 0)
             bool isLiveStream,
             CancellationToken cancellationToken)
             => _inner.AddMediaInfoWithProbe(mediaSource, isAudio, cacheKey, addProbeDelay, isLiveStream, cancellationToken);
+        
+        private MediaSourceInfo GetVersionInfo(bool enablePathSubstitution, BaseItem item, MediaSourceType type)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+
+            var protocol = item.PathProtocol;
+            var parts = (item.ExternalId ?? "").Split(":::");
+            var Name = parts.Length > 1 ? parts[^1] : item.Name;
+
+            var info = new MediaSourceInfo
+            {
+                Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
+                Protocol = protocol ?? MediaProtocol.Http,
+                MediaStreams = _inner.GetMediaStreams(item.Id),
+                MediaAttachments = _inner.GetMediaAttachments(item.Id),
+                Name = Name,
+                Path = item.Path,
+                RunTimeTicks = item.RunTimeTicks,
+                Container = item.Container,
+                Size = item.Size,      
+                Type = type,
+                SupportsDirectStream = true,
+                SupportsDirectPlay = true,
+            };
+
+            if (string.IsNullOrEmpty(info.Path))
+            {
+                info.Type = MediaSourceType.Placeholder;
+            }
+
+            var video = item as Video;
+            if (video is not null)
+            {
+                info.IsoType = video.IsoType;
+                info.VideoType = video.VideoType;
+                info.Video3DFormat = video.Video3DFormat;
+                info.Timestamp = video.Timestamp;
+                info.IsRemote = true;
+            }
+            
+            // todo fix this for remote file names
+            if (string.IsNullOrEmpty(info.Container))
+            {
+                if (protocol.HasValue && protocol.Value == MediaProtocol.File)
+                {
+                    info.Container = System.IO.Path.GetExtension(item.Path).TrimStart('.');
+                }
+            }
+
+
+            info.Bitrate = item.TotalBitrate;
+            info.InferTotalBitrate();
+
+            return info;
+        }
     }
 }
