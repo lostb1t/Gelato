@@ -7,6 +7,7 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -34,32 +35,10 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             new Lazy<GelatoManager>(() => sp.GetRequiredService<GelatoManager>()));
         services.AddHostedService<FFmpegConfigSetter>();
 
-        var original = services.First(sd => sd.ServiceType == typeof(IMediaSourceManager));
-        services.Remove(original);
-
-        services.AddSingleton<IMediaSourceManager>(sp =>
-        {
-            IMediaSourceManager inner =
-                original.ImplementationInstance as IMediaSourceManager
-                ?? (IMediaSourceManager)(original.ImplementationFactory?.Invoke(sp)
-                    ?? ActivatorUtilities.CreateInstance(sp, original.ImplementationType!));
-
-            return ActivatorUtilities.CreateInstance<MediaSourceManagerDecorator>(sp, inner);
-        });
-
-
-        var originalDto = services.First(sd => sd.ServiceType == typeof(IDtoService));
-        services.Remove(originalDto);
-
-        services.AddSingleton<IDtoService>(sp =>
-        {
-            IDtoService inner =
-               originalDto.ImplementationInstance as IDtoService
-               ?? (IDtoService)(originalDto.ImplementationFactory?.Invoke(sp)
-                   ?? ActivatorUtilities.CreateInstance(sp, originalDto.ImplementationType!));
-
-            return ActivatorUtilities.CreateInstance<DtoServiceDecorator>(sp, inner);
-        });
+        services
+    .DecorateSingle<IDtoService, DtoServiceDecorator>()
+    .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
+    .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
@@ -88,7 +67,6 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
             var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "25M";
 
-            // These are the exact keys read by Jellyfin when building ffmpeg/ffprobe args
             _config["FFmpeg:probesize"] = probe;
             _config["FFmpeg:analyzeduration"] = analyze;
 
@@ -100,3 +78,57 @@ public class ServiceRegistrator : IPluginServiceRegistrator
     }
 
 }
+
+public static class ServiceCollectionDecorationExtensions
+    {
+        static object BuildInner(IServiceProvider sp, ServiceDescriptor d)
+        {
+            if (d.ImplementationInstance is not null) return d.ImplementationInstance;
+            if (d.ImplementationFactory is not null) return d.ImplementationFactory(sp);
+            return ActivatorUtilities.CreateInstance(sp, d.ImplementationType!);
+        }
+
+        public static IServiceCollection DecorateSingle<TService, TDecorator>(this IServiceCollection services)
+            where TDecorator : class, TService
+        {
+            var original = services.LastOrDefault(sd => sd.ServiceType == typeof(TService));
+            if (original is null) return services; // nothing to decorate
+
+            services.Remove(original);
+
+            services.Add(new ServiceDescriptor(
+                typeof(TService),
+                sp =>
+                {
+                    var inner = (TService)BuildInner(sp, original);
+                    return ActivatorUtilities.CreateInstance<TDecorator>(sp, inner);
+                },
+                original.Lifetime));
+
+            return services;
+        }
+
+        public static IServiceCollection DecorateAll<TService, TDecorator>(this IServiceCollection services)
+            where TDecorator : class, TService
+        {
+            var originals = services.Where(sd => sd.ServiceType == typeof(TService)).ToList();
+            if (originals.Count == 0) return services;
+
+            foreach (var d in originals) services.Remove(d);
+
+            foreach (var d in originals)
+            {
+                services.Add(new ServiceDescriptor(
+                    typeof(TService),
+                    sp =>
+                    {
+                        var inner = (TService)BuildInner(sp, d);
+                        return ActivatorUtilities.CreateInstance<TDecorator>(sp, inner);
+                    },
+                    d.Lifetime));
+            }
+
+            return services;
+        }
+    }
+

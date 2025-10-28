@@ -298,7 +298,7 @@ if (sources.Count > 0)
             new MetadataRefreshOptions(_directoryService)
             {
                 EnableRemoteContentProbe = true,
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh
+                MetadataRefreshMode = MetadataRefreshMode.Default
             },
             ct).ConfigureAwait(false);
 
