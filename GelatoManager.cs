@@ -415,7 +415,7 @@ public async Task SyncStreams(BaseItem item, CancellationToken ct)
         var isNew = target is null;
         
         // First stream updates the primary item
-        if (i == 0)
+        if (i == 0 && IsGelato(primary))
         {
             primary.Path = path;
             primary.ExternalId = externalId;
