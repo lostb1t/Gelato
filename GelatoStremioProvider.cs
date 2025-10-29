@@ -243,8 +243,16 @@ namespace Gelato
 
         public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName)
         {
+            string[] extras = Array.Empty<string>();
+
+            if (!string.IsNullOrEmpty(fileName))
+            {
+                extras = new[] { $"filename={fileName}" };
+            }
+
             var url = BuildUrl(
-                new[] { "subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId }
+                new[] { "subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId },
+                extras
             );
             var r = await GetJsonAsync<StremioSubtitleResponse>(url);
             return r.Subtitles;
@@ -468,6 +476,8 @@ namespace Gelato
         public bool? AiTranslated { get; set; }
         public bool? FromTrusted { get; set; }
         public int? UploaderId { get; set; }
+
+        [JsonPropertyName("lang_code")]
         public string? LangCode { get; set; }
         public string? Title { get; set; }
         public string? Moviehash { get; set; }

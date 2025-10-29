@@ -214,7 +214,10 @@ namespace Gelato.Decorators
             return _inner.GetMediaStreams(itemId);
         }
 
-        public void AddSubtitleStreams(BaseItem item, MediaSourceInfo source)
+        public async Task<List<MediaStream>> GetSubtitleStreams(
+            BaseItem item,
+            MediaSourceInfo source
+        )
         {
             var manager = _manager.Value;
 
@@ -225,19 +228,27 @@ namespace Gelato.Decorators
                 if (uri is null)
                 {
                     _log.LogError($"unable to build stremio uri for {item.Name}");
-                    return;
+                    return new List<MediaStream>(); // Return empty list instead of void
                 }
 
-                subtitles = _stremio.GetSubtitlesAsync(uri, null).GetAwaiter().GetResult();
+                Uri u = new Uri(source.Path);
+                string filename = System.IO.Path.GetFileName(u.LocalPath);
+
+                subtitles = await _stremio.GetSubtitlesAsync(uri, filename).ConfigureAwait(false);
                 manager.SetStremioSubtitlesCache(item.Id, subtitles);
             }
 
-            var streams = source.MediaStreams?.ToList() ?? new List<MediaStream>();
-            var index = streams.Last().Index;
+            var streams = new List<MediaStream>();
 
+            if (subtitles == null || !subtitles.Any())
+            {
+                _log.LogDebug($"GetSubtitleStreams: no subtitles found");
+                return streams;
+            }
+
+            var index = 0; // Start from 0 since this is a new list
             foreach (var s in subtitles)
             {
-                index++;
                 streams.Add(
                     new MediaStream
                     {
@@ -251,10 +262,11 @@ namespace Gelato.Decorators
                         DeliveryMethod = SubtitleDeliveryMethod.External,
                     }
                 );
+                index++;
             }
 
-            _log.LogDebug($"AddSubtitleStreams: loaded {streams.Count()} subtitles");
-            source.MediaStreams = streams;
+            _log.LogDebug($"GetSubtitleStreams: loaded {streams.Count} subtitles");
+            return streams;
         }
 
         public string GuessSubtitleCodec(string? urlOrPath)
@@ -388,7 +400,22 @@ namespace Gelato.Decorators
             }
 
             if (GelatoPlugin.Instance!.Configuration.EnableSubs)
-                AddSubtitleStreams(item, selected);
+            {
+                var subtitleStreams = await GetSubtitleStreams(item, selected)
+                    .ConfigureAwait(false);
+                ;
+                var streams = selected.MediaStreams?.ToList() ?? new List<MediaStream>();
+
+                var index = streams.LastOrDefault()?.Index ?? -1;
+                foreach (var s in subtitleStreams)
+                {
+                    index++;
+                    s.Index = index;
+                    streams.Add(s);
+                }
+
+                selected.MediaStreams = streams;
+            }
 
             if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
             {

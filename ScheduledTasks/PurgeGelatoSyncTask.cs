@@ -109,10 +109,10 @@ namespace Gelato.Tasks
             DeleteEmptyStremioContainers();
             _manager.ClearCache();
             progress?.Report(100.0);
-            await _library.ValidateMediaLibrary(
-                progress: new Progress<double>(),
-                cancellationToken
-            );
+            //await _library.ValidateMediaLibrary(
+            //    progress: new Progress<double>(),
+            //    cancellationToken
+            //);
             _log.LogInformation("purge completed");
         }
 

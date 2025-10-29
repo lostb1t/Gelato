@@ -474,7 +474,6 @@ public class GelatoManager
                     .ConfigureAwait(false);
 
             newVideos.Add(target);
-            _log.LogDebug($"Stream {target.ExternalId}: virtual={target.IsVirtualItem}");
         }
 
         // Delete stale items

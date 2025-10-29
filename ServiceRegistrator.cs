@@ -31,6 +31,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
         services.AddSingleton<GelatoManager>();
+        //services.AddSingleton<ISubtitleProvider,SubtitleProvider>();
         services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
             sp.GetRequiredService<GelatoManager>()
         ));
@@ -38,7 +39,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
-            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
+            // .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
             .DecorateSingle<IItemRepository, ItemRepositoryDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
 
