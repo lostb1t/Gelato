@@ -183,7 +183,7 @@ namespace Gelato.Decorators
                 GroupByPresentationUniqueKey = false,
                 GroupBySeriesPresentationUniqueKey = false,
                 CollapseBoxSetItems = false,
-                IsVirtualItem = true
+                IsVirtualItem = true,
             };
 
             var gelatoStreams = _libraryManager
@@ -199,8 +199,6 @@ namespace Gelato.Decorators
 
             if (sources.Count > 0)
                 sources[0].Type = MediaSourceType.Default;
-
-       
 
             return sources;
         }
@@ -378,8 +376,9 @@ namespace Gelato.Decorators
                         ct
                     )
                     .ConfigureAwait(false);
-owner.IsVirtualItem = v;
-await owner.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+                owner.IsVirtualItem = v;
+                await owner
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                     .ConfigureAwait(false);
                 var refreshed = GetStaticMediaSources(owner, enablePathSubstitution, user);
                 selected = SelectByIdOrFirst(refreshed, selected.Id);
@@ -523,7 +522,6 @@ await owner.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                 info.Timestamp = video.Timestamp;
                 info.IsRemote = true;
             }
-
 
             info.Bitrate = item.TotalBitrate;
             info.InferTotalBitrate();
