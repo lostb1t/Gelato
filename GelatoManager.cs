@@ -480,12 +480,6 @@ public class GelatoManager
         // Delete stale items
         var stale = existing.Values.Where(m => !newVideos.Any(x => x.Id == m.Id)).ToList();
 
-        foreach (var m in stale)
-        {
-            _log.LogDebug($"Deleting stale {m.Name}");
-            // _repo.DeleteItem([m.Id]);
-        }
-
         _log.LogInformation(
             $"SyncStreams finished for {item.Name}: {newVideos.Count} streams, {stale.Count} deleted"
         );
