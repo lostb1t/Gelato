@@ -183,9 +183,10 @@ namespace Gelato.Decorators
                 GroupByPresentationUniqueKey = false,
                 GroupBySeriesPresentationUniqueKey = false,
                 CollapseBoxSetItems = false,
+                IsVirtualItem = true
             };
 
-            var gelatoSources = _libraryManager
+            var gelatoStreams = _libraryManager
                 .GetItemList(query)
                 .OfType<Video>()
                 .Where(x => manager.IsGelato(x))
@@ -194,7 +195,7 @@ namespace Gelato.Decorators
                 .Select(s => GetVersionInfo(enablePathSubstitution, s, MediaSourceType.Grouping))
                 .ToList();
 
-            sources.AddRange(gelatoSources);
+            sources.AddRange(gelatoStreams);
 
             if (sources.Count > 0)
                 sources[0].Type = MediaSourceType.Default;
@@ -370,6 +371,7 @@ namespace Gelato.Decorators
 
             if (NeedsProbe(selected))
             {
+                var v = owner.IsVirtualItem;
                 owner.IsVirtualItem = false;
 
                 await owner
@@ -377,12 +379,14 @@ namespace Gelato.Decorators
                         new MetadataRefreshOptions(_directoryService)
                         {
                             EnableRemoteContentProbe = true,
-                            MetadataRefreshMode = MetadataRefreshMode.Default,
+                            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                         },
                         ct
                     )
                     .ConfigureAwait(false);
-
+owner.IsVirtualItem = v;
+await owner.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+                    .ConfigureAwait(false);
                 var refreshed = GetStaticMediaSources(owner, enablePathSubstitution, user);
                 selected = SelectByIdOrFirst(refreshed, selected.Id);
                 if (selected is null)
@@ -526,14 +530,6 @@ namespace Gelato.Decorators
                 info.IsRemote = true;
             }
 
-            // todo fix this for remote file names
-            if (string.IsNullOrEmpty(info.Container))
-            {
-                if (protocol.HasValue && protocol.Value == MediaProtocol.File)
-                {
-                    info.Container = System.IO.Path.GetExtension(item.Path).TrimStart('.');
-                }
-            }
 
             info.Bitrate = item.TotalBitrate;
             info.InferTotalBitrate();
