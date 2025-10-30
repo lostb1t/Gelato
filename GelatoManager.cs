@@ -215,12 +215,13 @@ public class GelatoManager
     {
         if (!meta.IsValid())
         {
-            _log.LogError("meta is not valid, skipping");
+            _log.LogWarning("meta is not valid, skipping");
             return (null, false);
         }
 
         if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
         {
+            _log.LogWarning($"type {meta.Type.ToString()} is not valid, skipping");
             return (null, false);
         }
 
@@ -682,12 +683,6 @@ public class GelatoManager
             return null;
         }
 
-        // if (tmpSeries.GetProviderId("Imdb") is null)
-        // {
-        //     _log.LogWarning($"no imdb ID found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
-        //     return null;
-        // }
-
         var seriesItem = (Series)GetByProviderIds(
             tmpSeries.ProviderIds,
             tmpSeries.GetBaseItemKind()
@@ -747,19 +742,23 @@ public class GelatoManager
             foreach (var epMeta in seasonGroup)
             {
                 ct.ThrowIfCancellationRequested();
+                var index = epMeta.Episode ?? epMeta.Number;
+                
+                if (index is null)
+                  _log.LogWarning($"episode number missing for: {epMeta.Name}, skipping");
 
-                var epPath = $"{seasonItem.Path}:{epMeta.Number}";
-
+                var epPath = $"{seasonItem.Path}:{index}";
+                
                 if (existing.GetValueOrDefault(epPath) is not null)
                 {
                     continue;
                 }
-                _log.LogInformation($"insert episode id: {epPath}");
+
                 var epItem = new Episode
                 {
                     Id = Guid.NewGuid(),
                     Name = epMeta.Name,
-                    IndexNumber = epMeta.Episode,
+                    IndexNumber = index,
                     ParentIndexNumber = epMeta.Season,
                     SeasonId = seasonItem.Id,
                     SeriesId = seriesItem.Id,

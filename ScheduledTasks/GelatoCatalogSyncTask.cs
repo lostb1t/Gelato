@@ -142,7 +142,7 @@ namespace Gelato.Tasks
                                             _meta.Id,
                                             _meta.Type
                                         );
-                                        continue;
+                                       continue; 
                                     }
 
                                     // Re-check release status for the detailed meta (no buffer for TV series)
@@ -185,7 +185,7 @@ namespace Gelato.Tasks
                         }
 
                         _log.LogInformation(
-                            "Catalog {Id} synced ({Count} items)",
+                            "Catalog {Id} processed ({Count} items)",
                             cat.Id,
                             processed
                         );

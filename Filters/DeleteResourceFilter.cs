@@ -18,7 +18,7 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
 {
     private readonly ILibraryManager _library;
     private readonly IHttpClientFactory _http;
-    private readonly ILogger<ImageResourceFilter> _log;
+    private readonly ILogger<DeleteResourceFilter> _log;
     private readonly GelatoManager _manager;
     private readonly IUserManager _userManager;
 
@@ -27,7 +27,7 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         IHttpClientFactory http,
         GelatoManager manager,
         IUserManager userManager,
-        ILogger<ImageResourceFilter> log
+        ILogger<DeleteResourceFilter> log
     )
     {
         _library = library;
@@ -75,11 +75,11 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             var item = _library.GetItemById<BaseItem>(guid, user);
             if (item is not null)
             {
-                if (_manager.IsGelato(item) && item is Video video)
+                if (_manager.IsGelato(item))
                 {
                     if (_manager.CanDelete(item, user))
-                    {
-                        if (_manager.IsPrimaryVersion(video))
+                    { 
+                        if (item is Video video && _manager.IsPrimaryVersion(video))
                         {
                             var query = new InternalItemsQuery
                             {
@@ -128,6 +128,5 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         }
 
         await next();
-        return;
-    }
+        }
 }
