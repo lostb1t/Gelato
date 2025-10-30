@@ -68,6 +68,7 @@ namespace Gelato.Tasks
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
+                // translates to null
                 IsVirtualItem = true
             };
 
@@ -111,20 +112,7 @@ namespace Gelato.Tasks
                 },
                 IsVirtualItem = false
             };
-            
-           var items = _library
-                .GetItemList(query)
-                .OfType<Video>()
-                .Where(v => !v.IsFileProtocol && v.IsVirtualItem == false)
-                .ToArray();
-            
-            foreach (var item in items) {
-            var uri = StremioUri.FromBaseItem(item);
-            item.Path = uri.ToString();
-            await item
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken)
-                .ConfigureAwait(false);
-           }
+      
 
             progress?.Report(100.0);
             _manager.ClearCache();
