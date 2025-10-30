@@ -772,7 +772,7 @@ public class GelatoManager
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
                 epItem.SetProviderId(
                     "Stremio",
-                    $"{seasonItem.GetProviderId("Stremio")}:{epMeta.Number}"
+                    $"{seasonItem.GetProviderId("Stremio")}:{index}"
                 );
                 seasonItem.AddChild(epItem);
                 await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
