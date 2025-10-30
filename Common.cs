@@ -387,3 +387,28 @@ public sealed class KeyLock
         }
     }
 }
+
+public static class EnumMappingExtensions
+{
+    public static StremioMediaType ToStremio(this BaseItemKind kind)
+    {
+        return kind switch
+        {
+            BaseItemKind.Movie => StremioMediaType.Movie,
+            BaseItemKind.Series => StremioMediaType.Series,
+            BaseItemKind.Season => StremioMediaType.Series,
+            BaseItemKind.Episode => StremioMediaType.Series,
+            _ => StremioMediaType.Unknown,
+        };
+    }
+
+    public static BaseItemKind ToBaseItem(this StremioMediaType type)
+    {
+        return type switch
+        {
+            StremioMediaType.Movie => BaseItemKind.Movie,
+            StremioMediaType.Series => BaseItemKind.Series,
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown StremioMediaType")
+        };
+    }
+}

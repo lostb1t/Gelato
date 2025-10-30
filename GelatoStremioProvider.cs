@@ -214,7 +214,7 @@ namespace Gelato
                 new string[]
                 {
                     "meta",
-                    BaseItemKindInto(item.GetBaseItemKind()).ToString().ToLower(),
+                    item.GetBaseItemKind().ToStremio().ToString().ToLower(),
                     id,
                 }
             );
@@ -361,7 +361,7 @@ namespace Gelato
             if (!string.IsNullOrWhiteSpace(meta.Description))
                 item.Overview = meta.Description;
 
-            // do this only for show and movie. cause the parent imdb is used for season abd episodes
+            // NOTICE: do this only for show and movie. cause the parent imdb is used for season abd episodes
             if (!string.IsNullOrWhiteSpace(Id))
             {
                 if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
@@ -380,6 +380,7 @@ namespace Gelato
 
             if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             {
+
                 item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
             }
 
@@ -406,19 +407,8 @@ namespace Gelato
             }
             return item;
         }
-
-        public static StremioMediaType BaseItemKindInto(BaseItemKind kind)
-        {
-            return kind switch
-            {
-                BaseItemKind.Movie => StremioMediaType.Movie,
-                BaseItemKind.Series => StremioMediaType.Series,
-                BaseItemKind.Season => StremioMediaType.Series,
-                BaseItemKind.Episode => StremioMediaType.Series,
-                _ => StremioMediaType.Unknown,
-            };
-        }
-    }
+        
+      }
 
     public class StremioManifest
     {

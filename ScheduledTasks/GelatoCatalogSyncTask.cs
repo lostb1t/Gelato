@@ -8,6 +8,8 @@ using Gelato.Common;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Model.Entities;
+using Jellyfin.Data.Enums;
 
 namespace Gelato.Tasks
 {
@@ -106,10 +108,11 @@ namespace Gelato.Tasks
                                 var meta = _meta;
 
                                 var MediaType = meta.Type;
+                                var baseItemKind = MediaType.ToBaseItem();
 
                                 var root =
-                                    MediaType == StremioMediaType.Series ? seriesFolder
-                                    : MediaType == StremioMediaType.Movie ? movieFolder
+                                    baseItemKind == BaseItemKind.Series ? seriesFolder
+                                    : baseItemKind == BaseItemKind.Movie ? movieFolder
                                     : null;
                                 if (root is null)
                                 {

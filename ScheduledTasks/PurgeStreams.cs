@@ -68,19 +68,20 @@ namespace Gelato.Tasks
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
+                IsVirtualItem = true
             };
 
-            var items = _library
+            var streams = _library
                 .GetItemList(query)
                 .OfType<Video>()
-                .Where(v => !v.IsFileProtocol && !string.IsNullOrWhiteSpace(v.PrimaryVersionId))
+                .Where(v => !v.IsFileProtocol && v.IsVirtualItem == true)
                 .ToArray();
 
-            int total = items.Length;
+            int total = streams.Length;
 
             int done = 0;
 
-            foreach (var item in items)
+            foreach (var item in streams)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -97,6 +98,33 @@ namespace Gelato.Tasks
                 var pct = Math.Min(100.0, ((double)done / total) * 100.0);
                 progress?.Report(pct);
             }
+            
+            // reset primary
+            query = new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
+                Recursive = false,
+                HasAnyProviderId = new()
+                {
+                    { "Stremio", string.Empty },
+                    { "stremio", string.Empty },
+                },
+                IsVirtualItem = false
+            };
+            
+           var items = _library
+                .GetItemList(query)
+                .OfType<Video>()
+                .Where(v => !v.IsFileProtocol && v.IsVirtualItem == false)
+                .ToArray();
+            
+            foreach (var item in items) {
+            var uri = StremioUri.FromBaseItem(item);
+            item.Path = uri.ToString();
+            await item
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken)
+                .ConfigureAwait(false);
+           }
 
             progress?.Report(100.0);
             _manager.ClearCache();

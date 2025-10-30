@@ -72,6 +72,8 @@ namespace Gelato.Tasks
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
+                // converts to null
+                IsVirtualItem = true
             };
 
             var items = _library
