@@ -65,7 +65,7 @@ namespace Gelato.Tasks
 
             var opts = new ParallelOptions
             {
-                MaxDegreeOfParallelism = 8,
+                MaxDegreeOfParallelism = 5,
                 CancellationToken = cancellationToken,
             };
 
@@ -74,21 +74,10 @@ namespace Gelato.Tasks
                 opts,
                 async (cat, ct) =>
                 {
-                    var root = cat.Type == StremioMediaType.Series ? seriesFolder : movieFolder;
-                    if (root is null)
-                    {
-                        _log.LogWarning(
-                            "Catalog task: No {Type} root folder found; skipping {Type}/{Id}",
-                            cat.Type,
-                            cat.Id
-                        );
-                        return;
-                    }
+                    _log.LogInformation("Processing catalog: {Type} / {Id}", cat.Type, cat.Id);
 
                     try
                     {
-                        _log.LogInformation("Loading catalog: {Type} / {Id}", cat.Type, cat.Id);
-
                         var skip = 0;
                         var processed = 0;
 
@@ -101,7 +90,9 @@ namespace Gelato.Tasks
                                 .ConfigureAwait(false);
 
                             if (page is null || page.Count == 0)
+                            {
                                 break;
+                            }
 
                             var filterUnreleased =
                                 GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
@@ -113,17 +104,35 @@ namespace Gelato.Tasks
                             {
                                 ct.ThrowIfCancellationRequested();
                                 var meta = _meta;
-                                if (cat.Type == StremioMediaType.Series)
+
+                                var MediaType = meta.Type;
+
+                                var root =
+                                    MediaType == StremioMediaType.Series ? seriesFolder
+                                    : MediaType == StremioMediaType.Movie ? movieFolder
+                                    : null;
+                                if (root is null)
+                                {
+                                    _log.LogWarning(
+                                        "Catalog task: No {Type} root folder found; skipping {Type}/{Id}",
+                                        MediaType,
+                                        cat.Id
+                                    );
+                                    return;
+                                }
+                                if (_meta.ImdbId is null)
                                 {
                                     meta = await _stremio
-                                        .GetMetaAsync(_meta.ImdbId ?? _meta.Id, _meta.Type)
+                                        .GetMetaAsync(_meta.ImdbId ?? _meta.Id, MediaType)
                                         .ConfigureAwait(false);
+
                                     if (meta is null)
                                     {
                                         _log.LogWarning(
-                                            "Stremio meta not found for {Id} {Type}",
+                                            "{CatId}: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",
+                                            cat.Id,
                                             _meta.Id,
-                                            _meta.Type
+                                            MediaType
                                         );
                                         continue;
                                     }
@@ -133,12 +142,13 @@ namespace Gelato.Tasks
                                 if (
                                     filterUnreleased
                                     && !meta.IsReleased(
-                                        cat.Type == StremioMediaType.Movie ? bufferDays : 0
+                                        MediaType == StremioMediaType.Movie ? bufferDays : 0
                                     )
                                 )
                                 {
                                     _log.LogDebug(
-                                        "Skipping unreleased item: {Name} ({Id})",
+                                        "{CatId}: skipping unreleased item: {Name} ({Id})",
+                                        cat.Id,
                                         meta.Name,
                                         meta.Id
                                     );
@@ -154,7 +164,8 @@ namespace Gelato.Tasks
                                 catch (Exception ex)
                                 {
                                     _log.LogError(
-                                        "Insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                        "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                        cat.Id,
                                         meta?.Id,
                                         ex.Message,
                                         ex.StackTrace
@@ -172,11 +183,7 @@ namespace Gelato.Tasks
                             skip += page.Count;
                         }
 
-                        _log.LogInformation(
-                            "Catalog {Id} processed ({Count} items)",
-                            cat.Id,
-                            processed
-                        );
+                        _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
                     }
                     catch (OperationCanceledException)
                     {

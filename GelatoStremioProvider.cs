@@ -372,12 +372,15 @@ namespace Gelato
                 {
                     item.SetProviderId(MetadataProvider.Imdb, Id);
                 }
+                if (Id.StartsWith("anidb", StringComparison.OrdinalIgnoreCase))
+                {
+                    item.SetProviderId("AniDB", Id);
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             {
                 item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
-                //item.SetProviderId("Stremio", meta.ImdbId);
             }
 
             var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);

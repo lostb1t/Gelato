@@ -235,7 +235,9 @@ public class GelatoManager
         var found = GetByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
         if (found is not null)
         {
-            _log.LogDebug($"found existing item: {found.Id} for {baseItem.Name}");
+            _log.LogDebug(
+                $"found existing {found.GetBaseItemKind()}: {found.Id} for {baseItem.Name}"
+            );
             return (found, false);
         }
 
@@ -260,7 +262,7 @@ public class GelatoManager
 
         if (baseItem is not null)
         {
-            _log.LogDebug($"inserted new media: {baseItem.Name}");
+            _log.LogDebug($"inserted new {baseItem.GetBaseItemKind()}: {baseItem.Name}");
             if (queueRefreshItem)
             {
                 //_log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");

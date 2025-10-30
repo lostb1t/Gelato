@@ -125,8 +125,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             .ConfigureAwait(false);
         if (meta is null)
         {
-            _log.LogWarning(
-                "Stremio meta not found for {Id} {Type}",
+            _log.LogError(
+                "aio meta not found for {Id} {Type}, maybe try aiometadata as meta addon.",
                 stremioMeta.Id,
                 stremioMeta.Type
             );
