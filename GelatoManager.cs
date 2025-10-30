@@ -743,12 +743,12 @@ public class GelatoManager
             {
                 ct.ThrowIfCancellationRequested();
                 var index = epMeta.Episode ?? epMeta.Number;
-                
+
                 if (index is null)
-                  _log.LogWarning($"episode number missing for: {epMeta.Name}, skipping");
+                    _log.LogWarning($"episode number missing for: {epMeta.Name}, skipping");
 
                 var epPath = $"{seasonItem.Path}:{index}";
-                
+
                 if (existing.GetValueOrDefault(epPath) is not null)
                 {
                     continue;
@@ -770,10 +770,7 @@ public class GelatoManager
                 if (!string.IsNullOrWhiteSpace(epMeta.Runtime))
                     epItem.RunTimeTicks = Utils.ParseToTicks(epMeta.Runtime);
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
-                epItem.SetProviderId(
-                    "Stremio",
-                    $"{seasonItem.GetProviderId("Stremio")}:{index}"
-                );
+                epItem.SetProviderId("Stremio", $"{seasonItem.GetProviderId("Stremio")}:{index}");
                 seasonItem.AddChild(epItem);
                 await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
             }

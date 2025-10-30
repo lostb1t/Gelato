@@ -78,7 +78,7 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
                 if (_manager.IsGelato(item))
                 {
                     if (_manager.CanDelete(item, user))
-                    { 
+                    {
                         if (item is Video video && _manager.IsPrimaryVersion(video))
                         {
                             var query = new InternalItemsQuery
@@ -128,5 +128,5 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         }
 
         await next();
-        }
+    }
 }

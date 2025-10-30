@@ -18,7 +18,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators
 {
-        public sealed class SubtitleProvider
+    public sealed class SubtitleProvider
     //public sealed class SubtitleProvider : ISubtitleProvider
     {
         private readonly GelatoStremioProvider _stremio;

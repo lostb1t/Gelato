@@ -112,25 +112,8 @@ namespace Gelato.Tasks
                             foreach (var _meta in page)
                             {
                                 ct.ThrowIfCancellationRequested();
-
-                                // Filter unreleased items from catalog
-                                if (
-                                    filterUnreleased
-                                    && !_meta.IsReleased(
-                                        cat.Type == StremioMediaType.Movie ? bufferDays : 0
-                                    )
-                                )
-                                {
-                                    _log.LogDebug(
-                                        "Skipping unreleased item: {Name} ({Id})",
-                                        _meta.Name,
-                                        _meta.Id
-                                    );
-                                    continue;
-                                }
-
                                 var meta = _meta;
-                                if (cat.Type == StremioMediaType.Series && _meta.Videos is null)
+                                if (cat.Type == StremioMediaType.Series)
                                 {
                                     meta = await _stremio
                                         .GetMetaAsync(_meta.ImdbId ?? _meta.Id, _meta.Type)
@@ -142,19 +125,24 @@ namespace Gelato.Tasks
                                             _meta.Id,
                                             _meta.Type
                                         );
-                                       continue; 
-                                    }
-
-                                    // Re-check release status for the detailed meta (no buffer for TV series)
-                                    if (filterUnreleased && !meta.IsReleased(0))
-                                    {
-                                        _log.LogDebug(
-                                            "Skipping unreleased series: {Name} ({Id})",
-                                            meta.Name,
-                                            meta.Id
-                                        );
                                         continue;
                                     }
+                                }
+
+                                // Filter unreleased items from catalog
+                                if (
+                                    filterUnreleased
+                                    && !meta.IsReleased(
+                                        cat.Type == StremioMediaType.Movie ? bufferDays : 0
+                                    )
+                                )
+                                {
+                                    _log.LogDebug(
+                                        "Skipping unreleased item: {Name} ({Id})",
+                                        meta.Name,
+                                        meta.Id
+                                    );
+                                    continue;
                                 }
 
                                 try
