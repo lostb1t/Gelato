@@ -5,11 +5,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Gelato;
 using Gelato.Common;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
-using MediaBrowser.Model.Entities;
-using Jellyfin.Data.Enums;
 
 namespace Gelato.Tasks
 {
@@ -96,12 +96,6 @@ namespace Gelato.Tasks
                                 break;
                             }
 
-                            var filterUnreleased =
-                                GelatoPlugin.Instance?.Configuration.FilterUnreleased ?? true;
-                            var bufferDays =
-                                GelatoPlugin.Instance?.Configuration.FilterUnreleasedBufferDays
-                                ?? 30;
-
                             foreach (var _meta in page)
                             {
                                 ct.ThrowIfCancellationRequested();
@@ -139,23 +133,6 @@ namespace Gelato.Tasks
                                         );
                                         continue;
                                     }
-                                }
-
-                                // Filter unreleased items from catalog
-                                if (
-                                    filterUnreleased
-                                    && !meta.IsReleased(
-                                        MediaType == StremioMediaType.Movie ? bufferDays : 0
-                                    )
-                                )
-                                {
-                                    _log.LogDebug(
-                                        "{CatId}: skipping unreleased item: {Name} ({Id})",
-                                        cat.Id,
-                                        meta.Name,
-                                        meta.Id
-                                    );
-                                    continue;
                                 }
 
                                 try

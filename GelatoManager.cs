@@ -147,12 +147,12 @@ public class GelatoManager
 
     public void ClearCache()
     {
-if (_memoryCache is MemoryCache cache)
-    {
-        cache.Compact(1.0);
-    }
-    
-    _log.LogDebug("Cache cleared");
+        if (_memoryCache is MemoryCache cache)
+        {
+            cache.Compact(1.0);
+        }
+
+        _log.LogDebug("Cache cleared");
     }
 
     public static void SeedFolder(string path)
@@ -219,7 +219,7 @@ if (_memoryCache is MemoryCache cache)
     {
         if (!meta.IsValid())
         {
-            _log.LogWarning($"meta for {meta.Name} is not valid, skipping");
+            _log.LogWarning("meta for {Name} is not valid, skipping", meta.Name);
             return (null, false);
         }
 
@@ -384,7 +384,7 @@ if (_memoryCache is MemoryCache cache)
             {
                 if (!s.IsValid())
                 {
-                    _log.LogWarning($"Invalid stream, skipping {s.Name}");
+                    _log.LogWarning("Invalid stream, skipping {StreamName}", s.Name);
                     return null;
                 }
 

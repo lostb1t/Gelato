@@ -138,17 +138,10 @@ namespace Gelato
             {
                 _log.LogWarning("manifest has no search-capable movie catalog", url);
             }
-            else if (
-                !(
-                    MovieSearchCatalog.Id?.EndsWith(
-                        ".tmdb.search",
-                        StringComparison.OrdinalIgnoreCase
-                    ) ?? false
-                )
-            )
+            else
             {
-                _log.LogWarning(
-                    "manifest uses non-tmdb movie search catalog: {Id}",
+                _log.LogInformation(
+                    "manifest uses movie search catalog: {Id}",
                     MovieSearchCatalog.Id
                 );
             }
@@ -157,17 +150,10 @@ namespace Gelato
             {
                 _log.LogWarning("manifest has no search-capable series catalog", url);
             }
-            else if (
-                !(
-                    SeriesSearchCatalog.Id?.EndsWith(
-                        ".tmdb.search",
-                        StringComparison.OrdinalIgnoreCase
-                    ) ?? false
-                )
-            )
+            else
             {
-                _log.LogWarning(
-                    "manifest uses non-tmdb series search catalog: {Id}",
+                _log.LogInformation(
+                    "manifest uses series search catalog: {Id}",
                     SeriesSearchCatalog.Id
                 );
             }
@@ -211,12 +197,7 @@ namespace Gelato
             }
             ;
             var url = BuildUrl(
-                new string[]
-                {
-                    "meta",
-                    item.GetBaseItemKind().ToStremio().ToString().ToLower(),
-                    id,
-                }
+                new string[] { "meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id }
             );
             var r = await GetJsonAsync<StremioMetaResponse>(url);
             return r?.Meta;
@@ -380,7 +361,6 @@ namespace Gelato
 
             if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             {
-
                 item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
             }
 
@@ -407,8 +387,7 @@ namespace Gelato
             }
             return item;
         }
-        
-      }
+    }
 
     public class StremioManifest
     {

@@ -13,6 +13,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Common;
 
@@ -408,7 +409,29 @@ public static class EnumMappingExtensions
         {
             StremioMediaType.Movie => BaseItemKind.Movie,
             StremioMediaType.Series => BaseItemKind.Series,
-            _ => throw new ArgumentOutOfRangeException(nameof(type), type, "Unknown StremioMediaType")
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(type),
+                type,
+                "Unknown StremioMediaType"
+            ),
         };
+    }
+}
+
+public static class HttpContextExtensions
+{
+    public static bool IsApiRequest(this HttpContext ctx)
+    {
+        return ctx?.Items?.ContainsKey("actionName") ?? false;
+    }
+
+    public static bool IsApiListing(this HttpContext ctx)
+    {
+        if (!ctx.Items.TryGetValue("actionName", out var value))
+            return false;
+
+        var name = value?.ToString() ?? string.Empty;
+        return name.Equals("GetItems", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
     }
 }

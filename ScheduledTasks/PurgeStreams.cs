@@ -69,7 +69,7 @@ namespace Gelato.Tasks
                     { "stremio", string.Empty },
                 },
                 // translates to null
-                IsVirtualItem = true
+                IsVirtualItem = true,
             };
 
             var streams = _library
@@ -99,7 +99,7 @@ namespace Gelato.Tasks
                 var pct = Math.Min(100.0, ((double)done / total) * 100.0);
                 progress?.Report(pct);
             }
-            
+
             // reset primary
             query = new InternalItemsQuery
             {
@@ -110,9 +110,8 @@ namespace Gelato.Tasks
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
-                IsVirtualItem = false
+                IsVirtualItem = false,
             };
-      
 
             progress?.Report(100.0);
             _manager.ClearCache();

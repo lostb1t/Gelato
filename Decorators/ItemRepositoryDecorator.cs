@@ -3,8 +3,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Gelato.Common;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
@@ -12,16 +14,19 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
+using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
 public sealed class ItemRepositoryDecorator : IItemRepository
 {
     private readonly IItemRepository _inner;
+    private readonly IHttpContextAccessor _http;
 
-    public ItemRepositoryDecorator(IItemRepository inner)
+    public ItemRepositoryDecorator(IItemRepository inner, IHttpContextAccessor http)
     {
         _inner = inner;
+        _http = http ?? throw new ArgumentNullException(nameof(http));
     }
 
     public void DeleteItem(params IReadOnlyList<Guid> ids) => _inner.DeleteItem(ids);
@@ -35,17 +40,42 @@ public sealed class ItemRepositoryDecorator : IItemRepository
 
     public QueryResult<BaseItem> GetItems(InternalItemsQuery filter)
     {
-        filter.IsVirtualItem = filter.IsVirtualItem == true ? null : false;
-        return _inner.GetItems(filter);
+        return _inner.GetItems(ApplyFilters(filter));
     }
 
     public IReadOnlyList<Guid> GetItemIdsList(InternalItemsQuery filter) =>
-        _inner.GetItemIdsList(filter);
+        _inner.GetItemIdsList(ApplyFilters(filter));
 
     public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
     {
+        return _inner.GetItemList(ApplyFilters(filter));
+    }
+
+    public InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
+    {
+        var ctx = _http?.HttpContext;
+        var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
+        var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
+
         filter.IsVirtualItem = filter.IsVirtualItem == true ? null : false;
-        return _inner.GetItemList(filter);
+        if (ctx.IsApiRequest())
+        {
+            if (
+                filterUnreleased
+                && (
+                    !filter.IncludeItemTypes.Any()
+                    || filter
+                        .IncludeItemTypes.Intersect(
+                            new[] { BaseItemKind.Movie, BaseItemKind.Series }
+                        )
+                        .Any()
+                )
+            )
+            {
+                filter.MaxPremiereDate = DateTime.Today.AddDays((double)bufferDays);
+            }
+        }
+        return filter;
     }
 
     public IReadOnlyList<BaseItem> GetLatestItemList(
