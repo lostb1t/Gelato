@@ -87,6 +87,7 @@ namespace Gelato.Decorators
 
             //dto.MediaSourceCount = 1;
             //dto.Container = null;
+
             if (
                 item is not null
                 && user is not null
@@ -110,6 +111,7 @@ namespace Gelato.Decorators
                     && dto.MediaSources?.Length == 1
                     && dto.Path is not null
                     && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
+                    || (item is not null && item.IsUnaired)
                 )
                 {
                     dto.LocationType = LocationType.Virtual;
