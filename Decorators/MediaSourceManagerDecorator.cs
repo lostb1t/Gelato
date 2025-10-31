@@ -186,7 +186,7 @@ namespace Gelato.Decorators
                 GroupByPresentationUniqueKey = false,
                 GroupBySeriesPresentationUniqueKey = false,
                 CollapseBoxSetItems = false,
-                IsDeadPerson = true
+                IsDeadPerson = true,
             };
 
             var gelatoStreams = _repo

@@ -30,8 +30,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _library = library;
         _manager = manager;
 
-      //  _manager.TryGetMovieFolder();
-      //  _manager.TryGetSeriesFolder();
+        //  _manager.TryGetMovieFolder();
+        //  _manager.TryGetSeriesFolder();
     }
 
     public static GelatoPlugin? Instance { get; private set; }
@@ -53,8 +53,13 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public override void UpdateConfiguration(BasePluginConfiguration configuration)
     {
-        base.UpdateConfiguration(configuration);
         var cfg = (PluginConfiguration)configuration;
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISABLE_P2P")))
+        {
+            cfg.P2PEnabled = false;
+        }
+        base.UpdateConfiguration(cfg);
+
         _manager.ClearCache();
         _manager.TryGetMovieFolder();
         _manager.TryGetSeriesFolder();

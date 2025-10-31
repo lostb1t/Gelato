@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Gelato.Common;
+using Gelato.Decorators;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
@@ -34,7 +35,6 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
-using Gelato.Decorators;
 
 //using Jellyfin.Networking.Configuration;
 //using Jellyfin.Server.Extensions;
@@ -342,14 +342,16 @@ public class GelatoManager
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
 
-        if (item.IsVirtualItem) {
+        if (item.IsVirtualItem)
+        {
             _log.LogWarning($"SyncStreams: item is virtual, skipping");
             return;
         }
 
         var isEpisode = item is Episode;
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
-        if (parent is null) {
+        if (parent is null)
+        {
             _log.LogWarning($"SyncStreams: no parent, skipping");
             return;
         }
@@ -374,7 +376,7 @@ public class GelatoManager
             IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
             HasAnyProviderId = providerIds,
             Recursive = true,
-            IsDeadPerson = true
+            IsDeadPerson = true,
         };
 
         var existing = _repo
@@ -410,7 +412,7 @@ public class GelatoManager
             primary.Path = uri.ToString();
             await primary
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                .ConfigureAwait(false);   
+                .ConfigureAwait(false);
         }
 
         var newVideos = new List<Video>();

@@ -50,7 +50,7 @@ public sealed class GelatoItemRepository : IItemRepository
     {
         return _inner.GetItemList(ApplyFilters(filter));
     }
-    
+
     public IReadOnlyList<BaseItem> GetNoScopeItemList(InternalItemsQuery filter)
     {
         return _inner.GetItemList(filter);
@@ -61,12 +61,13 @@ public sealed class GelatoItemRepository : IItemRepository
         var ctx = _http?.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
-        
+
         if (ctx is not null && ctx.IsApiRequest() && filter.IsDeadPerson is null)
         {
             filter.IsDeadPerson = null;
-            if (filter.IsVirtualItem is null) {
-               filter.IsVirtualItem = false;
+            if (filter.IsVirtualItem is null)
+            {
+                filter.IsVirtualItem = false;
             }
 
             if (
@@ -145,4 +146,3 @@ public sealed class GelatoItemRepository : IItemRepository
         IReadOnlyList<string> artistNames
     ) => _inner.FindArtists(artistNames);
 }
-

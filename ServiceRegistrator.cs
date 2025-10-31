@@ -33,8 +33,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<GelatoManager>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
 
-services.AddSingleton(sp =>
-    (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
+        services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
 
         services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
             sp.GetRequiredService<GelatoManager>()
