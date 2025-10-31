@@ -65,15 +65,9 @@ public sealed class GelatoItemRepository : IItemRepository
         if (ctx is not null && ctx.IsApiRequest() && filter.IsDeadPerson is null)
         {
             filter.IsDeadPerson = null;
-            if (filter.IsVirtualItem is null)
-            {
-                filter.IsVirtualItem = false;
-            }
 
             if (
-                filter.MaxPremiereDate is null
-                && filterUnreleased
-                && (
+                (
                     !filter.IncludeItemTypes.Any()
                     || filter
                         .IncludeItemTypes.Intersect(
@@ -83,7 +77,14 @@ public sealed class GelatoItemRepository : IItemRepository
                 )
             )
             {
-                filter.MaxPremiereDate = DateTime.Today.AddDays((double)bufferDays);
+                if (filter.IsVirtualItem is null)
+                {
+                    filter.IsVirtualItem = false;
+                }
+                if (filter.MaxPremiereDate is null && filterUnreleased)
+                {
+                    filter.MaxPremiereDate = DateTime.Today.AddDays((double)bufferDays);
+                }
             }
         }
         return filter;
