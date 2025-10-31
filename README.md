@@ -23,10 +23,6 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 **NOTICE: ONLY SUPPORTS JELLYFIN 10.11**
 
-## Demo :tv:
-
-Here's a [video demo](https://www.youtube.com/watch?v=t_5Guc5YOoM) recorded by our friends at [ElfHosted](https://elfhosted.com). You can trial a [JellyGoblin](https://store.elfhosted.com/product/jellygoblin/) setup from ElfHosted for 7 days (*hosted Jellyfin+AIOStreams, bundled with a TorBox subscription*), for just $1! :heart_eyes_cat:
-
 ## Usage
 
 1. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: [Elfhosted public instance](https://aiostreams.elfhosted.com/stremio/configure)
@@ -53,6 +49,10 @@ For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/
 
 - Only **AIOStreams** is supported
 - **P2P currently in beta**
+
+## Demo :tv:
+
+Here's a [video demo](https://www.youtube.com/watch?v=t_5Guc5YOoM) recorded by our friends at [ElfHosted](https://elfhosted.com). You can trial a [JellyGoblin](https://store.elfhosted.com/product/jellygoblin/) setup from ElfHosted for 7 days (*hosted Jellyfin+AIOStreams, bundled with a TorBox subscription*), for just $1! :heart_eyes_cat:
 
 ---
 
