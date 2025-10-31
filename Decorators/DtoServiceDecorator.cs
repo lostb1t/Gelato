@@ -108,10 +108,10 @@ namespace Gelato.Decorators
                 // mark unplayable
                 if (
                     !IsList
-                    && dto.MediaSources?.Length == 1
-                    && dto.Path is not null
-                    && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
-                    || (item is not null && item.IsUnaired)
+                        && dto.MediaSources?.Length == 1
+                        && dto.Path is not null
+                        && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
+                    || (!IsList && item is not null && item.IsUnaired)
                 )
                 {
                     dto.LocationType = LocationType.Virtual;

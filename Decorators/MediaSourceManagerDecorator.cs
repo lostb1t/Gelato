@@ -195,7 +195,15 @@ namespace Gelato.Decorators
                 .Where(x => manager.IsGelato(x))
                 .OrderByDescending(x => manager.IsPrimaryVersion(x) ? 1 : 0)
                 .ThenBy(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
-                .Select(s => GetVersionInfo(enablePathSubstitution, s, MediaSourceType.Grouping))
+                .Select(s =>
+                {
+                    var k = GetVersionInfo(enablePathSubstitution, s, MediaSourceType.Grouping);
+                    if (user is not null)
+                    {
+                        _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
+                    }
+                    return k;
+                })
                 .ToList();
 
             sources.AddRange(gelatoStreams);
