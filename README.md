@@ -25,7 +25,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 ## Usage
 
-1. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: `https://aiostreams.viren070.me/stremio/configure`
+1. Setup an aiostreams manifest. You can selfhost or use an public instance, for example: [Elfhosted public instance](https://aiostreams.elfhosted.com/stremio/configure)
    
    If you are new to debrid and are signing up please use one of my <a href="https://github.com/lostb1t/Gelato?tab=readme-ov-file#support-me">referrals</a>.
    
