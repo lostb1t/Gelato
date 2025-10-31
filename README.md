@@ -43,6 +43,8 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 5. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
 
+For a more in depth guide see (Starter)[https://github.com/lostb1t/Gelato/discussions/40]
+
 ## Notes
 
 - Only **AIOStreams** is supported
