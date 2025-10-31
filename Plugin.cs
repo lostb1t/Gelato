@@ -30,8 +30,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _library = library;
         _manager = manager;
 
-        _manager.TryGetMovieFolder();
-        _manager.TryGetSeriesFolder();
+      //  _manager.TryGetMovieFolder();
+      //  _manager.TryGetSeriesFolder();
     }
 
     public static GelatoPlugin? Instance { get; private set; }

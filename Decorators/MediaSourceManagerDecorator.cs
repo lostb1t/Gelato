@@ -29,6 +29,7 @@ namespace Gelato.Decorators
         private readonly ILogger<MediaSourceManagerDecorator> _log;
         private readonly IHttpContextAccessor _http;
         private readonly ILibraryManager _libraryManager;
+        private readonly GelatoItemRepository _repo;
         private readonly Lazy<GelatoManager> _manager;
         private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
@@ -40,6 +41,7 @@ namespace Gelato.Decorators
             ILibraryManager libraryManager,
             ILogger<MediaSourceManagerDecorator> log,
             IHttpContextAccessor http,
+            GelatoItemRepository repo,
             IDirectoryService directoryService,
             GelatoStremioProvider stremioProvider,
             Lazy<GelatoManager> manager
@@ -52,6 +54,7 @@ namespace Gelato.Decorators
             _libraryManager = libraryManager;
             _directoryService = directoryService;
             _stremio = stremioProvider;
+            _repo = repo;
         }
 
         private static bool IsSingleItemList(HttpContext? ctx, Guid expectedId)
@@ -183,10 +186,10 @@ namespace Gelato.Decorators
                 GroupByPresentationUniqueKey = false,
                 GroupBySeriesPresentationUniqueKey = false,
                 CollapseBoxSetItems = false,
-                IsVirtualItem = true,
+                IsDeadPerson = true
             };
 
-            var gelatoStreams = _libraryManager
+            var gelatoStreams = _repo
                 .GetItemList(query)
                 .OfType<Video>()
                 .Where(x => manager.IsGelato(x))

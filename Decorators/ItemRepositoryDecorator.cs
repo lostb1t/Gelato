@@ -18,12 +18,12 @@ using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
-public sealed class ItemRepositoryDecorator : IItemRepository
+public sealed class GelatoItemRepository : IItemRepository
 {
     private readonly IItemRepository _inner;
     private readonly IHttpContextAccessor _http;
 
-    public ItemRepositoryDecorator(IItemRepository inner, IHttpContextAccessor http)
+    public GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
     {
         _inner = inner;
         _http = http ?? throw new ArgumentNullException(nameof(http));
@@ -50,18 +50,28 @@ public sealed class ItemRepositoryDecorator : IItemRepository
     {
         return _inner.GetItemList(ApplyFilters(filter));
     }
+    
+    public IReadOnlyList<BaseItem> GetNoScopeItemList(InternalItemsQuery filter)
+    {
+        return _inner.GetItemList(filter);
+    }
 
     public InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
     {
         var ctx = _http?.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
-
-        filter.IsVirtualItem = filter.IsVirtualItem == true ? null : false;
-        if (ctx.IsApiRequest())
+        
+        if (ctx is not null && ctx.IsApiRequest() && filter.IsDeadPerson is null)
         {
+            filter.IsDeadPerson = null;
+            if (filter.IsVirtualItem is null) {
+               filter.IsVirtualItem = false;
+            }
+
             if (
-                filterUnreleased
+                filter.MaxPremiereDate is null
+                && filterUnreleased
                 && (
                     !filter.IncludeItemTypes.Any()
                     || filter
@@ -135,3 +145,4 @@ public sealed class ItemRepositoryDecorator : IItemRepository
         IReadOnlyList<string> artistNames
     ) => _inner.FindArtists(artistNames);
 }
+

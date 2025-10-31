@@ -34,6 +34,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
+using Gelato.Decorators;
 
 //using Jellyfin.Networking.Configuration;
 //using Jellyfin.Server.Extensions;
@@ -50,7 +51,7 @@ public class GelatoManager
     private readonly IServerConfigurationManager _config;
     private readonly IUserManager _user;
     private readonly ILibraryManager _library;
-    private readonly IItemRepository _repo;
+    private readonly GelatoItemRepository _repo;
     private readonly IDtoService _dtoService;
     private readonly IFileSystem _fileSystem;
     private readonly IProviderManager _provider;
@@ -66,7 +67,7 @@ public class GelatoManager
         IMediaStreamRepository mediaStreams,
         IServerConfigurationManager config,
         IUserManager userManager,
-        IItemRepository repo,
+        GelatoItemRepository repo,
         IFileSystem fileSystem,
         IMemoryCache memoryCache,
         IServerConfigurationManager serverConfig,
@@ -176,8 +177,8 @@ public class GelatoManager
         }
 
         SeedFolder(cfg.MoviePath);
-        return _library
-            .GetItemList(new InternalItemsQuery { Path = cfg.MoviePath })
+        return _repo
+            .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = cfg.MoviePath })
             .OfType<Folder>()
             .FirstOrDefault();
     }
@@ -191,8 +192,8 @@ public class GelatoManager
         }
 
         SeedFolder(cfg.SeriesPath);
-        return _library
-            .GetItemList(new InternalItemsQuery { Path = cfg.SeriesPath })
+        return _repo
+            .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = cfg.SeriesPath })
             .OfType<Folder>()
             .FirstOrDefault();
     }
@@ -341,13 +342,17 @@ public class GelatoManager
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
 
-        if (item.IsVirtualItem)
+        if (item.IsVirtualItem) {
+            _log.LogWarning($"SyncStreams: item is virtual, skipping");
             return;
+        }
 
         var isEpisode = item is Episode;
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
-        if (parent is null)
+        if (parent is null) {
+            _log.LogWarning($"SyncStreams: no parent, skipping");
             return;
+        }
 
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null)
@@ -369,10 +374,10 @@ public class GelatoManager
             IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
             HasAnyProviderId = providerIds,
             Recursive = true,
-            IsVirtualItem = true,
+            IsDeadPerson = true
         };
 
-        var existing = _library
+        var existing = _repo
             .GetItemList(query)
             .OfType<Video>()
             .Where(v => !v.IsFileProtocol && v.Id != primary.Id)
@@ -405,7 +410,7 @@ public class GelatoManager
             primary.Path = uri.ToString();
             await primary
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                .ConfigureAwait(false);
+                .ConfigureAwait(false);   
         }
 
         var newVideos = new List<Video>();
@@ -488,13 +493,6 @@ public class GelatoManager
 
         _log.LogInformation(
             $"SyncStreams finished for {item.Name}: {newVideos.Count} streams, {stale.Count} deleted"
-        );
-    }
-
-    public Video? GetPrimaryVersion(List<Video> items)
-    {
-        return items.FirstOrDefault(i =>
-            i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId)
         );
     }
 
