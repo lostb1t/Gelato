@@ -54,22 +54,6 @@ For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/
 
 Here's a [video demo](https://www.youtube.com/watch?v=t_5Guc5YOoM) recorded by our friends at [ElfHosted](https://elfhosted.com). You can trial a [JellyGoblin](https://store.elfhosted.com/product/jellygoblin/) setup from ElfHosted for 7 days (*hosted Jellyfin+AIOStreams, bundled with a TorBox subscription*), for just $1! :heart_eyes_cat:
 
----
-
-## Roadmap
-
-- [x] Replace search
-- [x] Inject selected search results into the library
-- [x] Use Stremio streams as media sources
-- [x] Support search result images
-- [x] Import media from Stremio catalogs (scheduled task)
-- [x] Mixed library support (local files and streams)
-- [x] Add support for subtitle addons
-- [x] Enable deletion of Stremio media items
-- [x] Enable downloads of Stremio media items
-- [ ] Create collections from Stremio catalogs (scheduled task)
-- [ ] Add more settings (e.g. cache TTL, stream naming options)
-
 ### FAQ
 
 - You need to restart the server after editing the manifest/config in aiostreams.
