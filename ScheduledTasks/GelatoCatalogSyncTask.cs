@@ -46,7 +46,7 @@ namespace Gelato.Tasks
             CancellationToken cancellationToken
         )
         {
-            _log.LogInformation("Catalog sync started");
+            _log.LogInformation("catalog sync started");
 
             var manifest = await _stremio.GetManifestAsync().ConfigureAwait(false);
             var catalogs = manifest?.Catalogs.Where(c => !c.IsSearchCapable()).ToList() ?? new();

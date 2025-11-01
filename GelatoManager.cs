@@ -169,31 +169,24 @@ public class GelatoManager
 
     public Folder? TryGetMovieFolder()
     {
-        var cfg = GelatoPlugin.Instance!.Configuration;
-
-        if (string.IsNullOrWhiteSpace(cfg.MoviePath))
-        {
-            return null;
-        }
-
-        SeedFolder(cfg.MoviePath);
-        return _repo
-            .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = cfg.MoviePath })
-            .OfType<Folder>()
-            .FirstOrDefault();
+        return TryGetFolder(GelatoPlugin.Instance!.Configuration.MoviePath);
     }
 
     public Folder? TryGetSeriesFolder()
     {
-        var cfg = GelatoPlugin.Instance!.Configuration;
-        if (string.IsNullOrWhiteSpace(cfg.SeriesPath))
+        return TryGetFolder(GelatoPlugin.Instance!.Configuration.SeriesPath);
+    }
+
+    public Folder? TryGetFolder(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
         {
             return null;
         }
 
-        SeedFolder(cfg.SeriesPath);
+        SeedFolder(path);
         return _repo
-            .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = cfg.SeriesPath })
+            .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
     }
@@ -224,14 +217,14 @@ public class GelatoManager
             return (null, false);
         }
 
-        if (meta.Type != StremioMediaType.Movie && meta.Type != StremioMediaType.Series)
+        if (meta.Type is not (StremioMediaType.Movie or StremioMediaType.Series))
         {
-            _log.LogWarning($"type {meta.Type.ToString()} is not valid, skipping");
+            _log.LogWarning("type {Type} is not valid, skipping", meta.Type);
             return (null, false);
         }
 
         var baseItem = _stremioProvider.IntoBaseItem(meta);
-        if (baseItem is null || baseItem.ProviderIds is null || baseItem.ProviderIds.Count == 0)
+        if (baseItem?.ProviderIds is not { Count: > 0 })
         {
             _log.LogWarning("Gelato: Missing provider ids, skipping");
             return (null, false);
@@ -241,45 +234,39 @@ public class GelatoManager
         if (found is not null)
         {
             _log.LogDebug(
-                $"found existing {found.GetBaseItemKind()}: {found.Id} for {baseItem.Name}"
+                "found existing {Kind}: {Id} for {Name}",
+                found.GetBaseItemKind(),
+                found.Id,
+                baseItem.Name
             );
             return (found, false);
         }
 
-        var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-            ReplaceAllImages = true,
-            ReplaceAllMetadata = true,
-            ForceSave = true,
-        };
-
         if (meta.Type == StremioMediaType.Movie)
-        {
             parent.AddChild(baseItem);
-        }
-
-        if (meta.Type == StremioMediaType.Series)
-        {
+        else
             baseItem = await SyncSeriesTreesAsync(parent, meta, ct);
-        }
 
         if (baseItem is not null)
         {
-            _log.LogDebug($"inserted new {baseItem.GetBaseItemKind()}: {baseItem.Name}");
+            _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
+
+            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            {
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                ReplaceAllImages = true,
+                ReplaceAllMetadata = true,
+                ForceSave = true,
+            };
+
             if (queueRefreshItem)
-            {
-                //_log.LogDebug($"InsertMeta: queue refresh for: {baseItem.Id}");
                 _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-            }
             else if (refreshItem)
-            {
-                //  _log.LogDebug($"InsertMeta: refresh for: {baseItem.Id}");
                 await _provider.RefreshFullItem(baseItem, options, ct);
-            }
         }
-        return (baseItem as BaseItem, true);
+
+        return (baseItem, true);
     }
 
     public IEnumerable<BaseItem> FindByProviderIds(
@@ -287,16 +274,18 @@ public class GelatoManager
         BaseItemKind kind
     )
     {
-        providerIds.Remove(MetadataProvider.TmdbCollection.ToString());
-
         var q = new InternalItemsQuery
         {
             IncludeItemTypes = new[] { kind },
             Recursive = true,
-            HasAnyProviderId = providerIds,
+            HasAnyProviderId = providerIds
+                .ExceptBy([MetadataProvider.TmdbCollection.ToString()], kvp => kvp.Key)
+                .ToDictionary(),
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,
             CollapseBoxSetItems = false,
+            // skip filter marker
+            IsDeadPerson = true,
         };
 
         return _library.GetItemList(q).OfType<BaseItem>();
@@ -311,26 +300,6 @@ public class GelatoManager
     {
         var item = _stremioProvider.IntoBaseItem(meta);
         return GetByProviderIds(item.ProviderIds, item.GetBaseItemKind());
-    }
-
-    public void QueueParentRefresh(BaseItem item)
-    {
-        var parent = item.GetParent();
-        if (parent == null)
-            return;
-
-        _log.LogInformation("Gelato: queueing refresh for parent {Name}", parent.Name);
-
-        var opts = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-            ReplaceAllImages = false,
-            ReplaceAllMetadata = false,
-            EnableRemoteContentProbe = false,
-        };
-
-        _provider.QueueRefresh(parent.Id, opts, RefreshPriority.High);
     }
 
     /// <summary>
@@ -524,34 +493,6 @@ public class GelatoManager
         return true;
     }
 
-    public bool IsItemsAction(ActionContext ctx)
-    {
-        if (ctx.ActionDescriptor is not ControllerActionDescriptor cad)
-            return false;
-
-        var name = cad.ActionName;
-        return IsItemsActionName(name);
-    }
-
-    public bool IsItemsActionName(string name)
-    {
-        return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(name, "GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public bool TryGetRouteGuid(ActionContext ctx, out Guid value)
-    {
-        value = Guid.Empty;
-        if (TryGetRouteGuidString(ctx, out var s) && Guid.TryParse(s, out var g))
-        {
-            value = g;
-            return true;
-        }
-        return false;
-    }
-
     /// <summary>
     /// We only check permissions cause jellyfin excludes remote items by default
     /// </summary>
@@ -575,48 +516,6 @@ public class GelatoManager
         var stremioId = item.GetProviderId("Stremio");
         if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
             return true;
-        return false;
-    }
-
-    public bool TryGetRouteGuidString(ActionContext ctx, out string value)
-    {
-        value = "";
-
-        var rd = ctx.RouteData.Values;
-
-        // in flight changing for query items is not allowed
-        if (ctx.HttpContext.Items["GuidResolved"] is Guid g)
-        {
-            value = g.ToString("N");
-            return true;
-        }
-
-        foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
-        {
-            if (rd.TryGetValue(key, out var raw) && raw is not null)
-            {
-                var s = raw.ToString();
-                // _log.LogDebug("Checking route param {Key} = '{Value}'", key, s);
-                if (!string.IsNullOrWhiteSpace(s))
-                {
-                    value = s;
-                    return true;
-                }
-            }
-        }
-
-        // Fallback: check query string "ids"
-        var query = ctx.HttpContext.Request.Query;
-        if (query.TryGetValue("ids", out var ids) && ids.Count == 1)
-        {
-            var s = ids[0];
-            if (!string.IsNullOrWhiteSpace(s))
-            {
-                value = s;
-                return true;
-            }
-        }
-
         return false;
     }
 

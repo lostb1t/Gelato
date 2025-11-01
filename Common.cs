@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
@@ -9,11 +10,23 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Controllers;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Gelato.Common;
 
@@ -418,20 +431,170 @@ public static class EnumMappingExtensions
     }
 }
 
-public static class HttpContextExtensions
+public static class ActionContextExtensions
 {
-    public static bool IsApiRequest(this HttpContext ctx)
+    private static readonly string[] RouteGuidKeys =
     {
-        return ctx?.Items?.ContainsKey("actionName") ?? false;
+        "id",
+        "Id",
+        "ID",
+        "itemId",
+        "ItemId",
+        "ItemID",
+    };
+
+    private static readonly HashSet<string> SearchActionNames = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "GetItems",
+        "GetItemsByUserIdLegacy",
+    };
+
+    private static readonly HashSet<string> InsertableActionNames = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "GetItems",
+        "GetItem",
+        "GetItemLegacy",
+        "GetItemsByUserIdLegacy",
+        "GetPlaybackInfo",
+    };
+
+    public static string? GetActionName(this ActionExecutingContext ctx) =>
+        (ctx.ActionDescriptor as ControllerActionDescriptor)?.ActionName;
+
+    public static string? GetActionName(this HttpContext ctx) =>
+        ctx.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>()?.ActionName;
+
+    public static bool IsApiRequest(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is not null;
+
+    public static bool IsApiRequest(this HttpContext ctx) => ctx.GetActionName() is not null;
+
+    public static bool IsApiListing(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is string actionName && SearchActionNames.Contains(actionName);
+
+    public static bool IsSearchAction(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is string actionName && SearchActionNames.Contains(actionName);
+
+    public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is string actionName && InsertableActionNames.Contains(actionName);
+
+    public static bool TryGetRouteGuid(this ActionExecutingContext ctx, out Guid value)
+    {
+        value = Guid.Empty;
+        return ctx.TryGetRouteGuidString(out var s) && Guid.TryParse(s, out value);
     }
 
-    public static bool IsApiListing(this HttpContext ctx)
+    public static bool TryGetRouteGuidString(this ActionExecutingContext ctx, out string value)
     {
-        if (!ctx.Items.TryGetValue("actionName", out var value))
-            return false;
+        value = string.Empty;
 
-        var name = value?.ToString() ?? string.Empty;
-        return name.Equals("GetItems", StringComparison.OrdinalIgnoreCase)
-            || name.Equals("GetItemsByUserIdLegacy", StringComparison.OrdinalIgnoreCase);
+        // Check if already resolved
+        if (ctx.HttpContext.Items["GuidResolved"] is Guid g)
+        {
+            value = g.ToString("N");
+            return true;
+        }
+
+        var rd = ctx.RouteData.Values;
+
+        // Check route values
+        foreach (var key in RouteGuidKeys)
+        {
+            if (
+                rd.TryGetValue(key, out var raw)
+                && raw?.ToString() is string s
+                && !string.IsNullOrWhiteSpace(s)
+            )
+            {
+                value = s;
+                return true;
+            }
+        }
+
+        // Fallback: check query string "ids"
+        var query = ctx.HttpContext.Request.Query;
+        if (
+            query.TryGetValue("ids", out var ids)
+            && ids.Count == 1
+            && !string.IsNullOrWhiteSpace(ids[0])
+        )
+        {
+            value = ids[0]!;
+            return true;
+        }
+
+        return false;
+    }
+
+    public static void ReplaceGuid(this ActionExecutingContext ctx, Guid value)
+    {
+        var rd = ctx.RouteData.Values;
+
+        foreach (var key in RouteGuidKeys)
+        {
+            if (rd.TryGetValue(key, out var raw) && raw is not null)
+            {
+                rd[key] = value.ToString();
+                ctx.ActionArguments[key] = value;
+            }
+        }
+
+        ctx.HttpContext.Items["GuidResolved"] = value;
+    }
+
+    public static bool TryGetUserId(this ActionExecutingContext ctx, out Guid userId)
+    {
+        userId = Guid.Empty;
+
+        var userIdStr = ctx
+            .HttpContext.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")
+            ?.Value;
+
+        return Guid.TryParse(userIdStr, out userId);
+    }
+
+    public static bool TryGetActionArgument<T>(
+        this ActionExecutingContext ctx,
+        string key,
+        out T value,
+        T defaultValue = default
+    )
+    {
+        if (ctx.ActionArguments.TryGetValue(key, out var objValue) && objValue is T typedValue)
+        {
+            value = typedValue;
+            return true;
+        }
+
+        value = defaultValue;
+        return false;
+    }
+}
+
+public static class StringExtensions
+{
+    public static HashSet<BaseItemKind> ParseBaseItemKinds(this string value)
+    {
+        var kinds = new HashSet<BaseItemKind>();
+
+        if (string.IsNullOrWhiteSpace(value))
+            return kinds;
+
+        foreach (
+            var raw in value.Split(
+                ',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+            )
+        )
+        {
+            if (Enum.TryParse<BaseItemKind>(raw, true, out var kind))
+                kinds.Add(kind);
+        }
+
+        return kinds;
     }
 }

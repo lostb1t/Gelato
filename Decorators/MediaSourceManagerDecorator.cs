@@ -177,7 +177,7 @@ namespace Gelato.Decorators
                 .GetStaticMediaSources(item, enablePathSubstitution, user)
                 .Where(x => x.Protocol == MediaProtocol.File)
                 .ToList();
-            
+
             // dont use jellyfins alternate versions crap. So we have to load it ourselves
             var query = new InternalItemsQuery
             {

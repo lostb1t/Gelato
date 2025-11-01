@@ -1,26 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Gelato.Common;
-// using Gelato.Common;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Querying;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
@@ -62,163 +54,168 @@ namespace Gelato.Filters
             ActionExecutionDelegate next
         )
         {
-            if (!await _provider.IsReady())
+            // Pass through if not ready, not a search action, or no search term
+            if (
+                !await _provider.IsReady()
+                || !ctx.IsSearchAction()
+                || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
+            )
             {
                 await next();
                 return;
             }
 
-            if (!_manager.IsItemsAction(ctx))
+            // Strip "local:" prefix if present and pass through to default handler
+            if (searchTerm.StartsWith("local:", StringComparison.OrdinalIgnoreCase))
             {
+                ctx.ActionArguments["searchTerm"] = searchTerm.Substring(6).Trim();
                 await next();
                 return;
             }
 
-            var http = ctx.HttpContext;
-
-            var hasSearch = http.Request.Query.Keys.Any(k =>
-                string.Equals(k, "SearchTerm", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(http.Request.Query[k])
-            );
-            if (!hasSearch)
+            // Handle Stremio search
+            var requestedTypes = GetRequestedItemTypes(ctx);
+            if (requestedTypes.Count == 0)
             {
+                //ctx.Result = CreateEmptyResult();
+                // let jf handle it
                 await next();
                 return;
             }
 
-            var requested = new HashSet<BaseItemKind>();
-            if (
-                http.Request.Query.TryGetValue("IncludeItemTypes", out var includeVal)
-                && !string.IsNullOrWhiteSpace(includeVal)
-            )
-            {
-                foreach (
-                    var raw in includeVal
-                        .ToString()
-                        .Split(
-                            ',',
-                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-                        )
-                )
-                {
-                    if (Enum.TryParse<BaseItemKind>(raw, true, out var mt))
-                    {
-                        if (mt == BaseItemKind.Movie || mt == BaseItemKind.Series)
-                            requested.Add(mt);
-                    }
-                }
-            }
-            else
-            {
-                // if everything is requested. return wat we can
-                requested.Add(BaseItemKind.Movie);
-                requested.Add(BaseItemKind.Series);
-            }
+            ctx.TryGetActionArgument("startIndex", out var start, 0);
+            ctx.TryGetActionArgument("limit", out var limit, 25);
 
-            if (requested.Count == 0)
-            {
-                ctx.Result = new OkObjectResult(
-                    new QueryResult<BaseItemDto>
-                    {
-                        Items = Array.Empty<BaseItemDto>(),
-                        TotalRecordCount = 0,
-                    }
-                );
-                return;
-            }
-
-            int start = 0;
-            int limit = int.MaxValue;
-            if (
-                http.Request.Query.TryGetValue("StartIndex", out var startVal)
-                && int.TryParse(startVal, out var si)
-                && si >= 0
-            )
-                start = si;
-            if (
-                http.Request.Query.TryGetValue("Limit", out var limitVal)
-                && int.TryParse(limitVal, out var lim)
-                && lim > 0
-            )
-                limit = lim;
-
-            var q = http
-                .Request.Query.First(kv =>
-                    string.Equals(kv.Key, "SearchTerm", StringComparison.OrdinalIgnoreCase)
-                )
-                .Value.ToString();
-
-            var metas = new List<StremioMeta>(256);
-
-            if (requested.Contains(BaseItemKind.Movie))
-            {
-                var movieFolder = _manager.TryGetMovieFolder();
-                if (movieFolder is not null)
-                {
-                    var movies = await _provider.SearchAsync(q, StremioMediaType.Movie);
-                    metas.AddRange(movies);
-                }
-                else
-                {
-                    _log.LogWarning("no movie folder found, skipping search");
-                }
-            }
-
-            if (requested.Contains(BaseItemKind.Series))
-            {
-                var seriesFolder = _manager.TryGetSeriesFolder();
-
-                if (seriesFolder is not null)
-                {
-                    var series = await _provider.SearchAsync(q, StremioMediaType.Series);
-                    metas.AddRange(series);
-                }
-                else
-                {
-                    _log.LogWarning("no series folder found, skipping search");
-                }
-            }
+            var metas = await SearchMetasAsync(searchTerm, requestedTypes);
 
             _log.LogInformation(
-                "intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
-                q,
-                string.Join(",", requested.Select(r => r.ToString())),
+                "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
+                searchTerm,
+                string.Join(",", requestedTypes),
                 start,
                 limit,
-                metas.Count()
+                metas.Count
             );
 
+            var dtos = ConvertMetasToDtos(metas);
+            var paged = dtos.Skip(start).Take(limit).ToArray();
+
+            ctx.Result = new OkObjectResult(
+                new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = dtos.Count }
+            );
+        }
+
+        private HashSet<BaseItemKind> GetRequestedItemTypes(ActionExecutingContext ctx)
+        {
+            var requested = new HashSet<BaseItemKind>(
+                new[] { BaseItemKind.Movie, BaseItemKind.Series }
+            );
+
+            // Already parsed as BaseItemKind[] by model binder
+            if (
+                ctx.TryGetActionArgument<BaseItemKind[]>("includeItemTypes", out var includeTypes)
+                && includeTypes != null
+                && includeTypes.Length > 0
+            )
+            {
+                requested = new HashSet<BaseItemKind>(includeTypes);
+                // Only keep Movie and Series
+                requested.IntersectWith(new[] { BaseItemKind.Movie, BaseItemKind.Series });
+            }
+
+            // Remove excluded types
+            if (
+                ctx.TryGetActionArgument<BaseItemKind[]>("excludeItemTypes", out var excludeTypes)
+                && excludeTypes != null
+                && excludeTypes.Length > 0
+            )
+            {
+                requested.ExceptWith(excludeTypes);
+            }
+
+            // If mediaTypes=Video, exclude Series
+            if (
+                ctx.TryGetActionArgument<MediaType[]>("mediaTypes", out var mediaTypes)
+                && mediaTypes != null
+                && mediaTypes.Contains(MediaType.Video)
+            )
+            {
+                requested.Remove(BaseItemKind.Series);
+            }
+
+            return requested;
+        }
+
+        private async Task<List<StremioMeta>> SearchMetasAsync(
+            string searchTerm,
+            HashSet<BaseItemKind> requestedTypes
+        )
+        {
+            var tasks = new List<Task<IReadOnlyList<StremioMeta>>>();
+
+            if (
+                requestedTypes.Contains(BaseItemKind.Movie)
+                && _manager.TryGetMovieFolder() is not null
+            )
+            {
+                tasks.Add(_provider.SearchAsync(searchTerm, StremioMediaType.Movie));
+            }
+            else if (requestedTypes.Contains(BaseItemKind.Movie))
+            {
+                _log.LogWarning("No movie folder found, skipping search");
+            }
+
+            if (
+                requestedTypes.Contains(BaseItemKind.Series)
+                && _manager.TryGetSeriesFolder() is not null
+            )
+            {
+                tasks.Add(_provider.SearchAsync(searchTerm, StremioMediaType.Series));
+            }
+            else if (requestedTypes.Contains(BaseItemKind.Series))
+            {
+                _log.LogWarning("No series folder found, skipping search");
+            }
+
+            var results = await Task.WhenAll(tasks);
+            return results.SelectMany(r => r).ToList();
+        }
+
+        private List<BaseItemDto> ConvertMetasToDtos(List<StremioMeta> metas)
+        {
             var options = new DtoOptions
             {
                 Fields = new[] { ItemFields.PrimaryImageAspectRatio },
                 EnableImages = true,
                 EnableUserData = false,
             };
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             var dtos = new List<BaseItemDto>(metas.Count);
 
-            foreach (var s in metas)
+            foreach (var meta in metas)
             {
-                Console.Write("UIWSA");
-                var baseItem = _provider.IntoBaseItem(s);
+                var baseItem = _provider.IntoBaseItem(meta);
                 if (baseItem is null)
                     continue;
-                Console.Write("YOSOSIW");
+
                 var dto = _dtoService.GetBaseItemDto(baseItem, options);
-                Console.Write("HSJDIDND");
                 var stremioUri = StremioUri.FromBaseItem(baseItem);
                 dto.Id = stremioUri.ToGuid();
                 dtos.Add(dto);
 
-                _manager.SaveStremioMeta(dto.Id, s);
+                _manager.SaveStremioMeta(dto.Id, meta);
             }
 
-            var paged = dtos.Skip(start).Take(limit).ToArray();
-
-            ctx.Result = new OkObjectResult(
-                new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = dtos.Count }
-            );
-            return;
+            return dtos;
         }
+
+        private static OkObjectResult CreateEmptyResult() =>
+            new(
+                new QueryResult<BaseItemDto>
+                {
+                    Items = Array.Empty<BaseItemDto>(),
+                    TotalRecordCount = 0,
+                }
+            );
     }
 }

@@ -1,4 +1,5 @@
 using System.Net.Http;
+using Gelato.Common;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
@@ -44,16 +45,13 @@ public sealed class DownloadFilter : IAsyncActionFilter
         ActionExecutionDelegate next
     )
     {
-        if (
-            ctx.ActionDescriptor is not ControllerActionDescriptor cad
-            || cad.ActionName != "GetDownload"
-        )
+        if (ctx.GetActionName() != "GetDownload")
         {
             await next();
             return;
         }
 
-        if (!_manager.TryGetRouteGuid(ctx, out var guid))
+        if (!ctx.TryGetRouteGuid(out var guid))
         {
             await next();
             return;
