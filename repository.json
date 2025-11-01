@@ -8,11 +8,11 @@
     "owner": "lstb1t",
     "versions": [
       {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.15.5.0...0.15.6.0",
-        "checksum": "2baf93a033b77398922a642b546c2031",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.15.6.0/gelato_0.16.0.0.zip",
+        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/0.15.5.0...0.16.0.0",
+        "checksum": "c4ce64ac2357dddbfe19d3ca252086b6",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.16.0.0/gelato_0.16.0.0.zip",
         "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-01T12:02:37Z",
+        "timestamp": "2025-11-01T12:04:31Z",
         "version": "0.16.0.0"
       },
       {
