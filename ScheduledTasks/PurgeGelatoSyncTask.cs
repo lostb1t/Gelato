@@ -46,14 +46,6 @@ namespace Gelato.Tasks
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
             return Array.Empty<TaskTriggerInfo>();
-            // return
-            // [
-            //     new TaskTriggerInfo
-            // {
-            //     Type = TaskTriggerInfo.TriggerInterval,
-            //     IntervalTicks = TimeSpan.FromHours(24).Ticks
-            // }
-            // ];
         }
 
         public async Task ExecuteAsync(
@@ -72,8 +64,7 @@ namespace Gelato.Tasks
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
-                // converts to null
-                IsVirtualItem = true,
+                IsDeadPerson = true,
             };
 
             var items = _library
