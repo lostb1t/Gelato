@@ -11,11 +11,11 @@ using MediaBrowser.Model.Providers;
 
 namespace Gelato.Decorators
 {
-    public sealed class SubtitleManagerDecorator : ISubtitleManager
+    public sealed class GelatoSubtitleManager : ISubtitleManager
     {
         private readonly ISubtitleManager _inner;
 
-        public SubtitleManagerDecorator(ISubtitleManager inner)
+        public GelatoSubtitleManager(ISubtitleManager inner)
         {
             _inner = inner;
         }

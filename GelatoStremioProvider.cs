@@ -46,7 +46,7 @@ namespace Gelato
         private HttpClient NewClient()
         {
             var c = _http.CreateClient(nameof(GelatoStremioProvider));
-            c.Timeout = TimeSpan.FromSeconds(15);
+            c.Timeout = TimeSpan.FromSeconds(30);
             return c;
         }
 
@@ -74,27 +74,25 @@ namespace Gelato
         private async Task<T?> GetJsonAsync<T>(string url)
         {
             _log.LogDebug("GetJsonAsync: requesting {url}", url);
-            try
+            //   try
+            //   {
+            using var c = NewClient();
+            using var resp = await c.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
             {
-                using var c = NewClient();
-                using var resp = await c.GetAsync(url);
-                if (!resp.IsSuccessStatusCode)
-                {
-                    _log.LogError(
-                        "external fetch failed: {Url} | status code: {StatusCode}",
-                        url,
-                        resp.StatusCode
-                    );
-                    return default;
-                }
-                await using var s = await resp.Content.ReadAsStreamAsync();
-                return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
+                _log.LogDebug(
+                    "external fetch failed: {Url} | status code: {StatusCode}",
+                    url,
+                    resp.StatusCode
+                );
+                throw new HttpRequestException(
+                    $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
+                    null,
+                    resp.StatusCode
+                );
             }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "External fetch failed: {Url}", url);
-                return default;
-            }
+            await using var s = await resp.Content.ReadAsStreamAsync();
+            return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
         }
 
         public async Task<StremioManifest?> GetManifestAsync(bool force = false)
@@ -205,20 +203,23 @@ namespace Gelato
 
         public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
         {
-            var url = BuildUrl(
-                new[] { "stream", uri.MediaType.ToString().ToLower(), uri.ExternalId }
-            );
-            var r = await GetJsonAsync<StremioStreamsResponse>(url);
-            return r?.Streams ?? new();
+            return await GetStreamsAsync(uri.ExternalId, uri.MediaType);
         }
 
         public async Task<List<StremioStream>> GetStreamsAsync(
-            string Id,
+            string id,
             StremioMediaType mediaType
         )
         {
-            var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), Id });
+            var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
+
+            var error = r?.GetError();
+            if (error is not null)
+            {
+                throw new InvalidOperationException($"Stremio returned an error: {error}");
+            }
+
             return r?.Streams ?? new();
         }
 
@@ -663,6 +664,12 @@ namespace Gelato
     public class StremioStreamsResponse
     {
         public List<StremioStream> Streams { get; set; } = new();
+
+        public string? GetError()
+        {
+            var name = Streams.FirstOrDefault()?.GetName();
+            return name is not null && name.Contains("error") ? name : null;
+        }
     }
 
     public class StremioStream

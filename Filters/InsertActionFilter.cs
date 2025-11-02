@@ -100,7 +100,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         await next();
     }
 
-    private BaseItem? FindExistingItem(BaseItem item)
+    public BaseItem? FindExistingItem(BaseItem item)
     {
         var query = new InternalItemsQuery
         {
@@ -113,7 +113,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         return _library.GetItemList(query).OfType<BaseItem>().FirstOrDefault();
     }
 
-    private async Task<BaseItem?> InsertMetaAsync(Guid guid, Folder root, StremioMeta meta)
+    public async Task<BaseItem?> InsertMetaAsync(Guid guid, Folder root, StremioMeta meta)
     {
         BaseItem? baseItem = null;
         var created = false;

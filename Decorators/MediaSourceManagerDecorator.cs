@@ -113,20 +113,12 @@ namespace Gelato.Decorators
 
             _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
 
-            if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+            if (
+                (!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsGelato(item))
+                || (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+            )
             {
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-            }
-
-            // A file can be added after Stremio has been inserted. If that's the case we just filter out Stremio.
-            if (!GelatoPlugin.Instance!.Configuration.EnableMixed)
-            {
-                var srcs = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-                var hasFile = srcs.Any(v => v.Protocol == MediaProtocol.File);
-                if (hasFile)
-                {
-                    return srcs.Where(v => v.Protocol == MediaProtocol.File).ToArray();
-                }
             }
 
             var ctx = _http?.HttpContext;
@@ -162,8 +154,15 @@ namespace Gelato.Decorators
                                 "GetStaticMediaSources refreshing streams for {Id}",
                                 item.Id
                             );
-                            await manager.SyncStreams(item, ct).ConfigureAwait(false);
-                            manager.SetStreamSync(cacheKey);
+                            try
+                            {
+                                await manager.SyncStreams(item, ct).ConfigureAwait(false);
+                                manager.SetStreamSync(cacheKey);
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.LogError(ex, "Failed to sync streams");
+                            }
                         }
                     )
                     .GetAwaiter()
@@ -175,7 +174,8 @@ namespace Gelato.Decorators
 
             var sources = _inner
                 .GetStaticMediaSources(item, enablePathSubstitution, user)
-                .Where(x => x.Protocol == MediaProtocol.File)
+                //  .Where(x => x.Protocol == MediaProtocol.File)
+                .Where(x => x.Protocol != MediaProtocol.Http)
                 .ToList();
 
             // dont use jellyfins alternate versions crap. So we have to load it ourselves
@@ -389,7 +389,8 @@ namespace Gelato.Decorators
             {
                 var v = owner.IsVirtualItem;
                 owner.IsVirtualItem = false;
-
+                //owner.IsShortcut = true;
+                //owner.IsShortcut = true;
                 await owner
                     .RefreshMetadata(
                         new MetadataRefreshOptions(_directoryService)
