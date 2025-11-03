@@ -337,7 +337,7 @@ namespace Gelato
                     return null;
             }
             ;
-            item.Name = meta.Name;
+            item.Name = meta.GetName();
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
                 item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             if (!string.IsNullOrWhiteSpace(meta.Description))
@@ -481,7 +481,8 @@ namespace Gelato
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
-        public string Name { get; set; } = "";
+        public string Name { get; set; }
+        public string Title { get; set; }
         public string? Poster { get; set; }
         public List<string>? Genres { get; set; }
         public string? ImdbRating { get; set; }
@@ -513,6 +514,19 @@ namespace Gelato
         public int? Number { get; set; }
         public DateTime? FirstAired { get; set; }
         public Guid? Guid { get; set; }
+
+        public string GetName()
+        {
+            if (!string.IsNullOrWhiteSpace(Title))
+            {
+                return Title;
+            }
+            if (!string.IsNullOrWhiteSpace(Name))
+            {
+                return Name;
+            }
+            return "";
+        }
 
         public Dictionary<string, string> GetProviderIds()
         {

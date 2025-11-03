@@ -593,61 +593,74 @@ public class GelatoManager
             return null;
         }
 
-        var seriesItem = (Series)GetByProviderIds(
-            tmpSeries.ProviderIds,
-            tmpSeries.GetBaseItemKind()
-        );
-        if (seriesItem is null)
+        var series = (Series)GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind());
+        if (series is null)
         {
-            seriesItem = tmpSeries;
-            if (seriesItem.Id == Guid.Empty)
-                seriesItem.Id = Guid.NewGuid();
-            seriesItem.PresentationUniqueKey = seriesItem.CreatePresentationUniqueKey();
-            seriesRootFolder.AddChild(seriesItem);
+            series = tmpSeries;
+            if (series.Id == Guid.Empty)
+                series.Id = Guid.NewGuid();
+            series.PresentationUniqueKey = series.CreatePresentationUniqueKey();
+            seriesRootFolder.AddChild(series);
         }
+
+        var existingSeasons = _library
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    ParentId = series.Id,
+                    IncludeItemTypes = new[] { BaseItemKind.Season },
+                    Recursive = true,
+                    IsDeadPerson = true,
+                }
+            )
+            .OfType<Season>();
 
         foreach (var seasonGroup in groups)
         {
             ct.ThrowIfCancellationRequested();
             var seasonIndex = seasonGroup.Key;
-            var seasonPath = $"{seriesItem.Path}:{seasonIndex}";
+            var seasonPath = $"{series.Path}:{seasonIndex}";
 
-            var seasonItem = _library.FindByPath(seasonPath, true) as Season;
-            if (seasonItem is null)
+            var season = existingSeasons.Where(x => x.IndexNumber == seasonIndex).FirstOrDefault();
+            if (season is null)
             {
-                // _log.LogInformation($"Gelato: creating series {seriesItem.Name} season {seasonIndex:D2}");
-                seasonItem = new Season
+                _log.LogDebug($"creating series {series.Name} season {seasonIndex:D2}");
+                season = new Season
                 {
                     Id = Guid.NewGuid(),
+                    // IsVirtualItem = false,
                     Name = $"Season {seasonIndex:D2}",
                     IndexNumber = seasonIndex,
-                    SeriesId = seriesItem.Id,
-                    SeriesName = seriesItem.Name,
+                    SeriesId = series.Id,
+                    SeriesName = series.Name,
                     Path = seasonPath,
-                    SeriesPresentationUniqueKey = seriesItem.GetPresentationUniqueKey(),
+                    SeriesPresentationUniqueKey = series.GetPresentationUniqueKey(),
                 };
-                seasonItem.SetProviderId(
-                    "Stremio",
-                    $"{seriesItem.GetProviderId("Stremio")}:{seasonIndex}"
-                );
-                seriesItem.AddChild(seasonItem);
-                await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+                season.SetProviderId("Stremio", $"{series.GetProviderId("Stremio")}:{seasonIndex}");
+                series.AddChild(season);
+                await season
+                    .RefreshMetadata(
+                        new MetadataRefreshOptions(new DirectoryService(_fileSystem)),
+                        CancellationToken.None
+                    )
+                    .ConfigureAwait(false);
+                _log.LogDebug($"created season with id {season.Id}.");
+                //  await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
             }
 
-            var existing = _library
+            var existingEpisodes = _library
                 .GetItemList(
                     new InternalItemsQuery
                     {
-                        ParentId = seasonItem.Id,
+                        ParentId = season.Id,
                         IncludeItemTypes = new[] { BaseItemKind.Episode },
-                        Recursive = false,
+                        Recursive = true,
                         IsDeadPerson = true,
-                        IsVirtualItem = false,
                     }
                 )
                 .OfType<Episode>()
                 .Where(x => !IsStream(x))
-                .ToDictionary(e => e.Path, e => e);
+                .ToDictionary(e => e.IndexNumber, e => e);
 
             var desiredIds = new HashSet<Guid>();
 
@@ -655,55 +668,43 @@ public class GelatoManager
             {
                 ct.ThrowIfCancellationRequested();
                 var index = epMeta.Episode ?? epMeta.Number;
-
+                _log.LogDebug(
+                    $"processing episode {epMeta.GetName()} with index {index} for {series.Name} season {season.IndexNumber}"
+                );
                 if (index is null)
-                    _log.LogWarning($"episode number missing for: {epMeta.Name}, skipping");
+                    _log.LogWarning($"episode number missing for: {epMeta.GetName()}, skipping");
 
-                var epPath = $"{seasonItem.Path}:{index}";
+                var epPath = $"{season.Path}:{index}";
 
-                if (existing.GetValueOrDefault(epPath) is not null)
+                if (existingEpisodes.GetValueOrDefault(index) is not null)
                 {
-                    _log.LogDebug($"existing episode found for {epMeta.Name} with path {epPath}");
+                    _log.LogDebug($"already exist, skipping episode");
                     continue;
                 }
 
                 var epItem = new Episode
                 {
                     Id = Guid.NewGuid(),
-                    Name = epMeta.Name,
+                    Name = epMeta.GetName(),
                     IndexNumber = index,
                     ParentIndexNumber = epMeta.Season,
-                    SeasonId = seasonItem.Id,
-                    SeriesId = seriesItem.Id,
-                    SeriesName = seriesItem.Name,
-                    SeasonName = seasonItem.Name,
+                    SeasonId = season.Id,
+                    SeriesId = series.Id,
+                    SeriesName = series.Name,
+                    SeasonName = season.Name,
                     Path = epPath,
-                    SeriesPresentationUniqueKey = seasonItem.SeriesPresentationUniqueKey,
+                    SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey,
                 };
                 if (!string.IsNullOrWhiteSpace(epMeta.Runtime))
                     epItem.RunTimeTicks = Utils.ParseToTicks(epMeta.Runtime);
                 epItem.PresentationUniqueKey = epItem.GetPresentationUniqueKey();
-                epItem.SetProviderId("Stremio", $"{seasonItem.GetProviderId("Stremio")}:{index}");
-                seasonItem.AddChild(epItem);
-                await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-                _log.LogDebug($"created episode found for {epItem.Name} with path {epItem.Path}");
+                epItem.SetProviderId("Stremio", $"{season.GetProviderId("Stremio")}:{index}");
+                season.AddChild(epItem);
+                // await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+                _log.LogDebug($"created episode.");
             }
         }
 
-        var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.None,
-            ImageRefreshMode = MetadataRefreshMode.None,
-            ReplaceAllImages = false,
-            ReplaceAllMetadata = false,
-            ForceSave = true,
-        };
-
-        // Refresh just the parent show so children are re-scanned
-        await _provider.RefreshFullItem(seriesItem, options, CancellationToken.None);
-        await seriesItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-
-        // _log.LogInformation($"Gelato: done sync series");
-        return seriesItem;
+        return series;
     }
 }

@@ -479,6 +479,12 @@ public static class ActionContextExtensions
     public static bool IsSearchAction(this ActionExecutingContext ctx) =>
         ctx.GetActionName() is string actionName && SearchActionNames.Contains(actionName);
 
+    public static bool IsInsertableAction(this HttpContext ctx)
+    {
+        var actionName = ctx.GetActionName(); // if you have this helper
+        return actionName != null && InsertableActionNames.Contains(actionName);
+    }
+
     public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
         ctx.GetActionName() is string actionName && InsertableActionNames.Contains(actionName);
 
