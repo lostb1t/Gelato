@@ -638,14 +638,7 @@ public class GelatoManager
                 };
                 season.SetProviderId("Stremio", $"{series.GetProviderId("Stremio")}:{seasonIndex}");
                 series.AddChild(season);
-                await season
-                    .RefreshMetadata(
-                        new MetadataRefreshOptions(new DirectoryService(_fileSystem)),
-                        CancellationToken.None
-                    )
-                    .ConfigureAwait(false);
                 _log.LogDebug($"created season with id {season.Id}.");
-                //  await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
             }
 
             var existingEpisodes = _library
@@ -704,6 +697,18 @@ public class GelatoManager
                 _log.LogDebug($"created episode.");
             }
         }
+        var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+        {
+            MetadataRefreshMode = MetadataRefreshMode.None,
+            ImageRefreshMode = MetadataRefreshMode.None,
+            ReplaceAllImages = false,
+            ReplaceAllMetadata = false,
+            ForceSave = true,
+        };
+
+        // Refresh just the parent show so children are re-scanned
+        await _provider.RefreshFullItem(series, options, CancellationToken.None);
+        await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
 
         return series;
     }

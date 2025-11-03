@@ -123,7 +123,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             async ct =>
             {
                 meta.Guid = guid;
-                (baseItem, created) = await _manager.InsertMeta(root, meta, false, true, ct);
+                (baseItem, created) = await _manager.InsertMeta(root, meta, false, false, ct);
             }
         );
 
