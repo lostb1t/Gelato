@@ -63,12 +63,7 @@ public sealed class GelatoItemRepository : IItemRepository
         var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
 
-        if (
-            ctx is not null
-            && ctx.IsApiRequest()
-            && !ctx.IsInsertableAction()
-            && filter.IsDeadPerson is null
-        )
+        if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
         {
             filter.IsDeadPerson = null;
 

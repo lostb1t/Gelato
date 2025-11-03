@@ -451,6 +451,22 @@ public static class ActionContextExtensions
         "GetItemsByUserIdLegacy",
     };
 
+    private static readonly HashSet<string> BaseItemListActionNames = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "GetItems",
+        "GetItemsByUserIdLegacy",
+        "NextUp",
+        "GetResumeItems",
+        "GetNextUp",
+        "GetEpisodes",
+        "GetSimilarItems",
+        "GetLatestMedia",
+        "GetUpcomingEpisodes",
+        "GetRecommendedItems",
+    };
+
     private static readonly HashSet<string> InsertableActionNames = new(
         StringComparer.OrdinalIgnoreCase
     )
@@ -474,14 +490,20 @@ public static class ActionContextExtensions
     public static bool IsApiRequest(this HttpContext ctx) => ctx.GetActionName() is not null;
 
     public static bool IsApiListing(this ActionExecutingContext ctx) =>
-        ctx.GetActionName() is string actionName && SearchActionNames.Contains(actionName);
+        ctx.GetActionName() is string actionName && BaseItemListActionNames.Contains(actionName);
 
-    public static bool IsSearchAction(this ActionExecutingContext ctx) =>
+    public static bool IsApiListing(this HttpContext ctx)
+    {
+        var actionName = ctx.GetActionName();
+        return actionName != null && BaseItemListActionNames.Contains(actionName);
+    }
+
+    public static bool IsApiSearchAction(this ActionExecutingContext ctx) =>
         ctx.GetActionName() is string actionName && SearchActionNames.Contains(actionName);
 
     public static bool IsInsertableAction(this HttpContext ctx)
     {
-        var actionName = ctx.GetActionName(); // if you have this helper
+        var actionName = ctx.GetActionName();
         return actionName != null && InsertableActionNames.Contains(actionName);
     }
 
