@@ -185,7 +185,7 @@ namespace Gelato.Filters
         {
             var options = new DtoOptions
             {
-                Fields = new[] { ItemFields.PrimaryImageAspectRatio },
+                Fields = new[] { ItemFields.ProviderIds, ItemFields.PrimaryImageAspectRatio },
                 EnableImages = true,
                 EnableUserData = false,
             };

@@ -472,6 +472,11 @@ public class GelatoManager
         return !item.IsVirtualItem;
         // return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
+    
+    public bool IsStream(Video item)
+    {
+        return IsGelato(item) && item.IsVirtualItem;
+    }
 
     private static bool IsLocalFile(string? path)
     {
@@ -627,7 +632,6 @@ public class GelatoManager
                 );
                 seriesItem.AddChild(seasonItem);
                 await seasonItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
-                //_provider.QueueRefresh(seasonItem.Id, new MetadataRefreshOptions(new DirectoryService(_fileSystem)), RefreshPriority.High);
             }
 
             var existing = _library
@@ -637,9 +641,12 @@ public class GelatoManager
                         ParentId = seasonItem.Id,
                         IncludeItemTypes = new[] { BaseItemKind.Episode },
                         Recursive = false,
+                        IsDeadPerson = true,
+                        IsVirtualItem = false
                     }
                 )
                 .OfType<Episode>()
+                .Where(x => !IsStream(x))
                 .ToDictionary(e => e.Path, e => e);
 
             var desiredIds = new HashSet<Guid>();
@@ -656,6 +663,7 @@ public class GelatoManager
 
                 if (existing.GetValueOrDefault(epPath) is not null)
                 {
+                    _log.LogDebug($"existing episode found for {epMeta.Name} with path {epPath}");
                     continue;
                 }
 
@@ -678,6 +686,7 @@ public class GelatoManager
                 epItem.SetProviderId("Stremio", $"{seasonItem.GetProviderId("Stremio")}:{index}");
                 seasonItem.AddChild(epItem);
                 await epItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+                _log.LogDebug($"created episode found for {epItem.Name} with path {epItem.Path}");
             }
         }
 
