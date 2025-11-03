@@ -1,6 +1,7 @@
 #pragma warning disable SA1611, SA1591, SA1615, CS0165
 
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -24,13 +25,33 @@ public sealed class GelatoApiController : ControllerBase
     private readonly ILogger<GelatoApiController> _log;
     private readonly IApplicationPaths _appPaths;
     private readonly string _downloadPath;
+    private readonly GelatoStremioProvider _stremio;
 
-    public GelatoApiController(ILogger<GelatoApiController> log, IApplicationPaths appPaths)
+    public GelatoApiController(
+        ILogger<GelatoApiController> log,
+        GelatoStremioProvider stremio,
+        IApplicationPaths appPaths
+    )
     {
         _log = log;
         _appPaths = appPaths;
+        _stremio = stremio;
         _downloadPath = Path.Combine(_appPaths.CachePath, "gelato-torrents");
         Directory.CreateDirectory(_downloadPath);
+    }
+
+    [HttpGet("meta/{stremioMetaType}/{Id}")]
+    public async Task<ActionResult<StremioMeta>> Meta(
+        [FromRoute, Required] StremioMediaType stremioMetaType,
+        [FromRoute, Required] string id
+    )
+    {
+        var meta = await _stremio.GetMetaAsync(id, stremioMetaType);
+        if (meta is null)
+        {
+            return NotFound();
+        }
+        return meta;
     }
 
     [HttpGet("stream")]

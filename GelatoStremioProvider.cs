@@ -481,8 +481,8 @@ namespace Gelato
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
-        public string Name { get; set; }
-        public string Title { get; set; }
+        public string? Name { get; set; }
+        public string? Title { get; set; }
         public string? Poster { get; set; }
         public List<string>? Genres { get; set; }
         public string? ImdbRating { get; set; }
