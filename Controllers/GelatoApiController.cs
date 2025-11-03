@@ -41,6 +41,7 @@ public sealed class GelatoApiController : ControllerBase
     }
 
     [HttpGet("meta/{stremioMetaType}/{Id}")]
+    [Authorize]
     public async Task<ActionResult<StremioMeta>> Meta(
         [FromRoute, Required] StremioMediaType stremioMetaType,
         [FromRoute, Required] string id
