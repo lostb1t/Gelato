@@ -58,7 +58,7 @@ namespace Gelato.Tasks
             var query = new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
-                Recursive = false,
+                Recursive = true,
                 HasAnyProviderId = new()
                 {
                     { "Stremio", string.Empty },
@@ -102,10 +102,7 @@ namespace Gelato.Tasks
             DeleteEmptyStremioContainers();
             _manager.ClearCache();
             progress?.Report(100.0);
-            //await _library.ValidateMediaLibrary(
-            //    progress: new Progress<double>(),
-            //    cancellationToken
-            //);
+            
             _log.LogInformation("purge completed");
         }
 
