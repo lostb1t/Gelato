@@ -346,17 +346,26 @@ namespace Gelato
             // NOTICE: do this only for show and movie. cause the parent imdb is used for season abd episodes
             if (!string.IsNullOrWhiteSpace(Id))
             {
-                if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
+                var providerMappings = new (string Prefix, string Provider, bool StripPrefix)[]
                 {
-                    item.SetProviderId(MetadataProvider.Tmdb, Id.Substring("tmdb:".Length));
-                }
-                if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+                    ("tmdb:", MetadataProvider.Tmdb.ToString(), true),
+                    ("tt", MetadataProvider.Imdb.ToString(), false),
+                    ("anidb:", "AniDB", true),
+                    ("kitsu:", "Kitsu", true),
+                    ("mal:", "Mal", true),
+                    ("anilist:", "Anilist", true),
+                    ("tvdb:", MetadataProvider.Tvdb.ToString(), true),
+                    ("tvmaze:", MetadataProvider.TvMaze.ToString(), true),
+                };
+
+                foreach (var (prefix, provider, stripPrefix) in providerMappings)
                 {
-                    item.SetProviderId(MetadataProvider.Imdb, Id);
-                }
-                if (Id.StartsWith("anidb", StringComparison.OrdinalIgnoreCase))
-                {
-                    item.SetProviderId("AniDB", Id);
+                    if (Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var providerId = stripPrefix ? Id.Substring(prefix.Length) : Id;
+                        item.SetProviderId(provider, providerId);
+                        break;
+                    }
                 }
             }
 

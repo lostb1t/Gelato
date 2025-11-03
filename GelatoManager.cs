@@ -472,7 +472,7 @@ public class GelatoManager
         return !item.IsVirtualItem;
         // return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
-    
+
     public bool IsStream(Video item)
     {
         return IsGelato(item) && item.IsVirtualItem;
@@ -642,7 +642,7 @@ public class GelatoManager
                         IncludeItemTypes = new[] { BaseItemKind.Episode },
                         Recursive = false,
                         IsDeadPerson = true,
-                        IsVirtualItem = false
+                        IsVirtualItem = false,
                     }
                 )
                 .OfType<Episode>()

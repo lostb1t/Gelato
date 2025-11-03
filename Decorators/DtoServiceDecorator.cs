@@ -95,11 +95,11 @@ namespace Gelato.Decorators
                 && manager.CanDelete(item, user)
             )
             {
-               // dto.CanDelete = true;
+                // dto.CanDelete = true;
             }
             if (IsStremio(dto))
             {
-             //   dto.CanDownload = true;
+                //   dto.CanDownload = true;
 
                 // clean name (legacy)
                 var parts = dto.Name.Split(":::");
