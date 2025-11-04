@@ -91,15 +91,15 @@ namespace Gelato.Decorators
             if (
                 item is not null
                 && user is not null
-                && IsStremio(dto)
+                && IsGelato(dto)
                 && manager.CanDelete(item, user)
             )
             {
-                // dto.CanDelete = true;
+                dto.CanDelete = true;
             }
-            if (IsStremio(dto))
+            if (IsGelato(dto))
             {
-                //   dto.CanDownload = true;
+                dto.CanDownload = true;
 
                 // clean name (legacy)
                 var parts = dto.Name.Split(":::");
