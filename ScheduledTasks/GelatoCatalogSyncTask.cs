@@ -108,6 +108,7 @@ namespace Gelato.Tasks
                                     baseItemKind == BaseItemKind.Series ? seriesFolder
                                     : baseItemKind == BaseItemKind.Movie ? movieFolder
                                     : null;
+
                                 if (root is null)
                                 {
                                     _log.LogWarning(
@@ -117,7 +118,7 @@ namespace Gelato.Tasks
                                     );
                                     return;
                                 }
-                                if (_meta.ImdbId is null)
+                                if (_meta.ImdbId is null || (baseItemKind == BaseItemKind.Series && !_meta.Videos.Any()))
                                 {
                                     meta = await _stremio
                                         .GetMetaAsync(_meta.ImdbId ?? _meta.Id, MediaType)
