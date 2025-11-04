@@ -759,71 +759,65 @@ public class GelatoManager
 
         return series;
     }
-    
+
     public async Task SyncSeries(
-            bool runningOnly,
-            IProgress<double> progress,
-            CancellationToken cancellationToken
-        )
+        bool runningOnly,
+        IProgress<double> progress,
+        CancellationToken cancellationToken
+    )
+    {
+        var seriesFolder = TryGetSeriesFolder();
+        var seriesItems = _library
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { BaseItemKind.Series },
+                    SeriesStatuses = new[] { SeriesStatus.Continuing },
+                }
+            )
+            .OfType<Series>()
+            .ToList();
+
+        _log.LogInformation(
+            "found {Count} continuing series under TV libraries.",
+            seriesItems.Count
+        );
+
+        var processed = 0;
+        foreach (var series in seriesItems)
         {
-            var seriesFolder = TryGetSeriesFolder();
-            var seriesItems = _library
-                .GetItemList(
-                    new InternalItemsQuery
-                    {
-                        IncludeItemTypes = new[] { BaseItemKind.Series },
-                        SeriesStatuses = new[] { SeriesStatus.Continuing },
-                    }
-                )
-                .OfType<Series>()
-                .ToList();
-
-            _log.LogInformation(
-                "found {Count} continuing series under TV libraries.",
-                seriesItems.Count
-            );
-
-            var processed = 0;
-            foreach (var series in seriesItems)
+            cancellationToken.ThrowIfCancellationRequested();
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    _log.LogDebug(
-                        "SyncSeries: syncing series trees for {Name} ({Id})",
-                        series.Name,
-                        series.Id
-                    );
+                _log.LogDebug(
+                    "SyncSeries: syncing series trees for {Name} ({Id})",
+                    series.Name,
+                    series.Id
+                );
 
-                    var meta = await _stremioProvider.GetMetaAsync(series).ConfigureAwait(false);
-                    if (meta is null)
-                    {
-                        _log.LogWarning(
-                            "SyncRunningSeries: skipping {Name} ({Id}) - no metadata found",
-                            series.Name,
-                            series.Id
-                        );
-                        continue;
-                    }
-                    await SyncSeriesTreesAsync(seriesFolder, meta, cancellationToken);
-                    processed++;
-                }
-                catch (Exception ex)
+                var meta = await _stremioProvider.GetMetaAsync(series).ConfigureAwait(false);
+                if (meta is null)
                 {
-                    _log.LogError(
-                        ex,
-                        "SyncSeries: failed for {Name} ({Id})",
+                    _log.LogWarning(
+                        "SyncRunningSeries: skipping {Name} ({Id}) - no metadata found",
                         series.Name,
                         series.Id
                     );
+                    continue;
                 }
+                await SyncSeriesTreesAsync(seriesFolder, meta, cancellationToken);
+                processed++;
             }
-
-            _log.LogInformation(
-                "SyncSeries completed. Processed {Processed}/{Total} series.",
-                processed,
-                seriesItems.Count
-            );
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "SyncSeries: failed for {Name} ({Id})", series.Name, series.Id);
+            }
         }
-    
+
+        _log.LogInformation(
+            "SyncSeries completed. Processed {Processed}/{Total} series.",
+            processed,
+            seriesItems.Count
+        );
+    }
 }
