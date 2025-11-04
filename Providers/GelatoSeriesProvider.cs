@@ -35,7 +35,7 @@ namespace Gelato.Providers
             _stremio = stremio;
         }
 
-        public string Name => "Gelato Series Sync";
+        public string Name => "Gelato Missing Season/Episode fetcher";
 
         public int Order => 0;
 
@@ -65,7 +65,7 @@ namespace Gelato.Providers
                 _log.LogWarning("skipping {Name} - no metadata found", info.Name);
                 return result;
             }
-            Console.Write("URIDEI");
+
             await _manager.SyncSeriesTreesAsync(seriesFolder, meta, cancellationToken);
 
             return result;

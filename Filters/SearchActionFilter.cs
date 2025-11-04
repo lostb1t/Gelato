@@ -87,6 +87,13 @@ namespace Gelato.Filters
             ctx.TryGetActionArgument("limit", out var limit, 25);
 
             var metas = await SearchMetasAsync(searchTerm, requestedTypes);
+            var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
+            var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
+
+            if (filterUnreleased)
+            {
+                metas = metas.Where(x => x.IsReleased(bufferDays)).ToList();
+            }
 
             _log.LogInformation(
                 "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
