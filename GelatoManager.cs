@@ -232,9 +232,9 @@ public class GelatoManager
         {
             var lookupId = meta.ImdbId ?? meta.Id;
 
-            meta = await _stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+            meta = await _stremioProvider.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
-            if (refreshed is null)
+            if (meta is null)
             {
                 _log.LogWarning(
                     "InsertMeta: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",
