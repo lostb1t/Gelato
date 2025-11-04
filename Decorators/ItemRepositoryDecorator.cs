@@ -83,7 +83,11 @@ public sealed class GelatoItemRepository : IItemRepository
                 }
                 if (filter.MaxPremiereDate is null && filterUnreleased)
                 {
-                    filter.MaxPremiereDate = DateTime.Today.AddDays((double)bufferDays);
+                    // we dont have access to the query so can make a proper statement.
+                    var days = filter.IncludeItemTypes.Contains(BaseItemKind.Series)
+                        ? 0
+                        : bufferDays;
+                    filter.MaxPremiereDate = DateTime.Today.AddDays((double)days);
                 }
             }
         }

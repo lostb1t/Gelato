@@ -87,13 +87,6 @@ namespace Gelato.Filters
             ctx.TryGetActionArgument("limit", out var limit, 25);
 
             var metas = await SearchMetasAsync(searchTerm, requestedTypes);
-            var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
-            var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
-
-            if (filterUnreleased)
-            {
-                metas = metas.Where(x => x.IsReleased(bufferDays)).ToList();
-            }
 
             _log.LogInformation(
                 "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
@@ -184,8 +177,19 @@ namespace Gelato.Filters
                 _log.LogWarning("No series folder found, skipping search");
             }
 
-            var results = await Task.WhenAll(tasks);
-            return results.SelectMany(r => r).ToList();
+            var results = (await Task.WhenAll(tasks)).SelectMany(r => r).ToList();
+
+            var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
+            var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
+
+            if (filterUnreleased)
+            {
+                results = results
+                    .Where(x => x.IsReleased(StremioMediaType.Movie == x.Type ? bufferDays : 0))
+                    .ToList();
+            }
+
+            return results;
         }
 
         private List<BaseItemDto> ConvertMetasToDtos(List<StremioMeta> metas)

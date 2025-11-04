@@ -512,7 +512,9 @@ namespace Gelato
         [JsonPropertyName("imdb_id")]
         public string? ImdbId { get; set; }
         public DateTime? Released { get; set; }
-        public string? Status { get; set; }
+
+        [JsonConverter(typeof(SafeStringEnumConverter<StremioStatus>))]
+        public StremioStatus? Status { get; set; } = StremioStatus.Unknown;
 
         [JsonConverter(typeof(NullableIntLenientConverter))]
         public int? Year { get; set; }
@@ -633,6 +635,18 @@ namespace Gelato
             if (FirstAired.HasValue)
             {
                 return FirstAired.Value <= now;
+            }
+
+            if (Status is not null)
+            {
+                if (Status == StremioStatus.Upcoming)
+                {
+                    return false;
+                }
+                if (Status == StremioStatus.Ended || Status == StremioStatus.Continuing)
+                {
+                    return true;
+                }
             }
 
             // Fall back to year-based check
@@ -809,6 +823,14 @@ namespace Gelato
         Other,
         Tv,
         Events,
+    }
+
+    public enum StremioStatus
+    {
+        Unknown = 0,
+        Upcoming,
+        Ended,
+        Continuing,
     }
 
     public class SafeStringEnumConverter<T> : JsonConverter<T>

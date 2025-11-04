@@ -54,12 +54,12 @@
 
         <div class="inputContainer">
           <input is="emby-input" type="checkbox" id="chkFilterUnreleased" label="Filter unreleased items" />
-          <span>If enabled, only items that have been released will be shown in search results and catalog imports</span>
+          <span>If enabled, only items that have been released will be shown in search results (only with aiometadata) and catalog imports</span>
         </div>
 
         <div class="inputContainer">
           <input is="emby-input" type="number" id="txtBufferDays" label="Release buffer days for movies:" />
-          <span>Number of days to wait after premiere date before showing (accounts for home release delay). Default: 30 days. Set to 0 for no buffer.</span>
+          <span>Number of days to wait after premiere date before showing (accounts for home release delay). Default: 30 days. Set to 0 for no buffer. (NOTICE: filtering search results only works with aiometadata not the tmdb addon) </span>
         </div>
 
         <hr class="solid">
