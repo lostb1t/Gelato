@@ -62,7 +62,7 @@ namespace Gelato.Tasks
             var query = new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
-                Recursive = false,
+                Recursive = true,
                 HasAnyProviderId = new()
                 {
                     { "Stremio", string.Empty },
@@ -70,12 +70,14 @@ namespace Gelato.Tasks
                 },
                 // skip filters marker
                 IsDeadPerson = true,
+                // streams only
+                IsVirtualItem = true
             };
 
             var streams = _library
                 .GetItemList(query)
                 .OfType<Video>()
-                .Where(v => !v.IsFileProtocol && v.IsVirtualItem == true)
+                .Where(v => _manager.IsStream(v))
                 .ToArray();
 
             int total = streams.Length;
@@ -100,25 +102,8 @@ namespace Gelato.Tasks
                 progress?.Report(pct);
             }
 
-            // reset primary
-            query = new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
-                Recursive = false,
-                HasAnyProviderId = new()
-                {
-                    { "Stremio", string.Empty },
-                    { "stremio", string.Empty },
-                },
-                IsVirtualItem = false,
-            };
-
             progress?.Report(100.0);
             _manager.ClearCache();
-            //await _library.ValidateMediaLibrary(
-            //    progress: new Progress<double>(),
-            //     cancellationToken
-            //);
 
             _log.LogInformation("stream purge completed");
         }
