@@ -208,6 +208,11 @@ namespace Gelato.Decorators
                 .ToList();
 
             sources.AddRange(gelatoStreams);
+            
+            // failsafe. mediasources cannot be null
+            if (sources.Count == 0) {
+               sources.Add(GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default));
+            }
 
             if (sources.Count > 0)
                 sources[0].Type = MediaSourceType.Default;

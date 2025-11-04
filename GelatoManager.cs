@@ -566,11 +566,6 @@ public class GelatoManager
             return null;
         }
 
-        //var providerIds = seriesMeta.GetProviderIds();
-        //if (providerIds is null || providerIds.Count == 0){
-        //     _log.LogWarning($"no providers found for {seriesMeta.Id} {seriesMeta.Name}, skipping creation");
-        //    return null;
-        //}
         var groups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode)
