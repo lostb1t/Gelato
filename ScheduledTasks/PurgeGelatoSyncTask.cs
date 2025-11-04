@@ -27,7 +27,8 @@ namespace Gelato.Tasks
             ILibraryManager libraryManager,
             ILogger<PurgeGelatoSyncTask> log,
             GelatoStremioProvider stremio,
-            GelatoManager manager)
+            GelatoManager manager
+        )
         {
             _log = log;
             _library = libraryManager;
@@ -40,57 +41,61 @@ namespace Gelato.Tasks
         public string Description => "Removes all stremio items (local items are kept)";
         public string Category => "Gelato Maintenance";
 
-        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => 
-            Array.Empty<TaskTriggerInfo>();
+        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
-{
-    _log.LogInformation("purging");
-    
-    var movie = _manager.TryGetMovieFolder();
-    var series = _manager.TryGetSeriesFolder();
-    
-    var allChildren = new List<BaseItem>();
-    
-    if (movie != null)
-    {
-        allChildren.AddRange(movie.GetRecursiveChildren());
-    }
-    
-    if (series != null)
-    {
-        allChildren.AddRange(series.GetRecursiveChildren());
-    }
-    
-    int total = allChildren.Count;
-    int deleted = 0;
-    
-    foreach (var child in allChildren)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        if (child.IsFileProtocol) {
-          continue;
-        }
-        try
+        public async Task ExecuteAsync(
+            IProgress<double> progress,
+            CancellationToken cancellationToken
+        )
         {
-            _library.DeleteItem(
-                child,
-                new DeleteOptions { DeleteFileLocation = false },
-                true);
-            deleted++;
+            _log.LogInformation("purging");
+
+            var movie = _manager.TryGetMovieFolder();
+            var series = _manager.TryGetSeriesFolder();
+
+            var allChildren = new List<BaseItem>();
+
+            if (movie != null)
+            {
+                allChildren.AddRange(movie.GetRecursiveChildren());
+            }
+
+            if (series != null)
+            {
+                allChildren.AddRange(series.GetRecursiveChildren());
+            }
+
+            int total = allChildren.Count;
+            int deleted = 0;
+
+            foreach (var child in allChildren)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (child.IsFileProtocol)
+                {
+                    continue;
+                }
+                try
+                {
+                    _library.DeleteItem(
+                        child,
+                        new DeleteOptions { DeleteFileLocation = false },
+                        true
+                    );
+                    deleted++;
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "Failed to delete item {ItemId}", child.Id);
+                }
+
+                progress?.Report(Math.Min(100.0, (double)deleted / total * 100.0));
+            }
+
+            _manager.ClearCache();
+            progress?.Report(100.0);
+
+            _log.LogInformation("purge completed: deleted {Count} items", deleted);
         }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "Failed to delete item {ItemId}", child.Id);
-        }
-        
-        progress?.Report(Math.Min(100.0, (double)deleted / total * 100.0));
     }
-    
-    _manager.ClearCache();
-    progress?.Report(100.0);
-    
-    _log.LogInformation("purge completed: deleted {Count} items", deleted);
-}
-}
 }

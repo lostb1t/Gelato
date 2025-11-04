@@ -71,7 +71,7 @@ namespace Gelato.Tasks
                 // skip filters marker
                 IsDeadPerson = true,
                 // streams only
-                IsVirtualItem = true
+                IsVirtualItem = true,
             };
 
             var streams = _library

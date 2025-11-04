@@ -118,28 +118,11 @@ namespace Gelato.Tasks
                                     );
                                     return;
                                 }
-                                if (_meta.ImdbId is null || (baseItemKind == BaseItemKind.Series && !_meta.Videos.Any()))
-                                {
-                                    meta = await _stremio
-                                        .GetMetaAsync(_meta.ImdbId ?? _meta.Id, MediaType)
-                                        .ConfigureAwait(false);
-
-                                    if (meta is null)
-                                    {
-                                        _log.LogWarning(
-                                            "{CatId}: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",
-                                            cat.Id,
-                                            _meta.Id,
-                                            MediaType
-                                        );
-                                        continue;
-                                    }
-                                }
 
                                 try
                                 {
                                     var _ = await _manager
-                                        .InsertMeta(root, meta, true, false, ct)
+                                        .InsertMeta(root, meta, true, true, false, ct)
                                         .ConfigureAwait(false);
                                 }
                                 catch (Exception ex)

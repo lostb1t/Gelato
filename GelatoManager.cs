@@ -198,28 +198,65 @@ public class GelatoManager
     }
 
     /// <summary>
-    /// Inserts metadata into the library. Skip if exists
+    /// Inserts metadata into the library. Skip if it already exists.
     /// </summary>
-    /// <param name="meta"></param>
-    /// <param name="ct"></param>
-    /// <returns></returns>
-    public async Task<(BaseItem?, bool)> InsertMeta(
+    public async Task<(BaseItem? Item, bool Created)> InsertMeta(
         Folder parent,
         StremioMeta meta,
+        bool allowRemoteRefresh,
         bool refreshItem,
         bool queueRefreshItem,
         CancellationToken ct
     )
     {
+        var mediaType = meta.Type;
+
+        if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series))
+        {
+            _log.LogWarning("type {Type} is not valid, skipping", mediaType);
+            return (null, false);
+        }
+
+        var baseItemKind = mediaType.ToBaseItem();
+
+        if (
+            allowRemoteRefresh
+            && (
+                meta.ImdbId is null
+                || (
+                    baseItemKind == BaseItemKind.Series
+                    && (meta.Videos is null || !meta.Videos.Any())
+                )
+            )
+        )
+        {
+            var lookupId = meta.ImdbId ?? meta.Id;
+
+            meta = await _stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+
+            if (refreshed is null)
+            {
+                _log.LogWarning(
+                    "InsertMeta: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",
+                    lookupId,
+                    mediaType
+                );
+                return (null, false);
+            }
+
+            mediaType = meta.Type;
+            baseItemKind = mediaType.ToBaseItem();
+        }
+
         if (!meta.IsValid())
         {
             _log.LogWarning("meta for {Name} is not valid, skipping", meta.Name);
             return (null, false);
         }
 
-        if (meta.Type is not (StremioMediaType.Movie or StremioMediaType.Series))
+        if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series))
         {
-            _log.LogWarning("type {Type} is not valid, skipping", meta.Type);
+            _log.LogWarning("type {Type} is not valid after refresh, skipping", mediaType);
             return (null, false);
         }
 
@@ -230,27 +267,38 @@ public class GelatoManager
             return (null, false);
         }
 
-        var found = GetByProviderIds(baseItem.ProviderIds, baseItem.GetBaseItemKind());
-        if (found is not null)
+        var kind = baseItem.GetBaseItemKind();
+        var existing = GetByProviderIds(baseItem.ProviderIds, kind);
+        if (existing is not null)
         {
             _log.LogDebug(
                 "found existing {Kind}: {Id} for {Name}",
-                found.GetBaseItemKind(),
-                found.Id,
+                existing.GetBaseItemKind(),
+                existing.Id,
                 baseItem.Name
             );
-            return (found, false);
+            return (existing, false);
         }
 
-        if (meta.Type == StremioMediaType.Movie)
-            parent.AddChild(baseItem);
-        else
-            baseItem = await SyncSeriesTreesAsync(parent, meta, ct);
-
-        if (baseItem is not null)
+        if (mediaType == StremioMediaType.Movie)
         {
-            _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
+            parent.AddChild(baseItem);
+        }
+        else
+        {
+            baseItem = await SyncSeriesTreesAsync(parent, meta, ct).ConfigureAwait(false);
+        }
 
+        if (baseItem is null)
+        {
+            _log.LogWarning("InsertMeta: failed to create {Type} for {Name}", mediaType, meta.Name);
+            return (null, false);
+        }
+
+        _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
+
+        if (queueRefreshItem || refreshItem)
+        {
             var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
@@ -261,9 +309,13 @@ public class GelatoManager
             };
 
             if (queueRefreshItem)
+            {
                 _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-            else if (refreshItem)
-                await _provider.RefreshFullItem(baseItem, options, ct);
+            }
+            else
+            {
+                await _provider.RefreshFullItem(baseItem, options, ct).ConfigureAwait(false);
+            }
         }
 
         return (baseItem, true);

@@ -64,7 +64,7 @@ public sealed class GelatoItemRepository : IItemRepository
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
 
         if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
-        {      
+        {
             filter.IsDeadPerson = null;
             if (
                 (
@@ -86,8 +86,10 @@ public sealed class GelatoItemRepository : IItemRepository
                     filter.MaxPremiereDate = DateTime.Today.AddDays((double)bufferDays);
                 }
             }
-        } else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person)) { 
-          filter.IsDeadPerson = null;
+        }
+        else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person))
+        {
+            filter.IsDeadPerson = null;
         }
         return filter;
     }

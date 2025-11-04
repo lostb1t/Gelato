@@ -77,7 +77,10 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Fetch full metadata
-        var meta = await _stremioProvider.GetMetaAsync(stremioMeta.ImdbId ?? stremioMeta.Id, stremioMeta.Type);
+        var meta = await _stremioProvider.GetMetaAsync(
+            stremioMeta.ImdbId ?? stremioMeta.Id,
+            stremioMeta.Type
+        );
         if (meta is null)
         {
             _log.LogError(
@@ -123,7 +126,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             async ct =>
             {
                 meta.Guid = guid;
-                (baseItem, created) = await _manager.InsertMeta(root, meta, false, true, ct);
+                (baseItem, created) = await _manager.InsertMeta(root, meta, false, false, true, ct);
             }
         );
 

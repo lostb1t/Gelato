@@ -91,13 +91,6 @@ namespace Gelato.Tasks
                         series.Id
                     );
 
-                    // var imdbId = series.GetProviderId("Imdb");
-                    // if (imdbId is null)
-                    // {
-                    //     _log.LogWarning("SyncRunningSeries: skipping {Name} ({Id}) - no IMDB id", series.Name, series.Id);
-                    //     continue;
-                    // }
-
                     var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
                     if (meta is null)
                     {
