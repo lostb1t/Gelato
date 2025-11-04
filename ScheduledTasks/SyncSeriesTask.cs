@@ -62,64 +62,7 @@ namespace Gelato.Tasks
             CancellationToken cancellationToken
         )
         {
-            var seriesFolder = _manager.TryGetSeriesFolder();
-            var seriesItems = _library
-                .GetItemList(
-                    new InternalItemsQuery
-                    {
-                        IncludeItemTypes = new[] { BaseItemKind.Series },
-                        SeriesStatuses = new[] { SeriesStatus.Continuing },
-                    }
-                )
-                .OfType<Series>()
-                .ToList();
-
-            _log.LogInformation(
-                "found {Count} continuing series under TV libraries.",
-                seriesItems.Count
-            );
-
-            var processed = 0;
-            foreach (var series in seriesItems)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                try
-                {
-                    _log.LogDebug(
-                        "SyncRunningSeries: syncing series trees for {Name} ({Id})",
-                        series.Name,
-                        series.Id
-                    );
-
-                    var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
-                    if (meta is null)
-                    {
-                        _log.LogWarning(
-                            "SyncRunningSeries: skipping {Name} ({Id}) - no metadata found",
-                            series.Name,
-                            series.Id
-                        );
-                        continue;
-                    }
-                    await _manager.SyncSeriesTreesAsync(seriesFolder, meta, cancellationToken);
-                    processed++;
-                }
-                catch (Exception ex)
-                {
-                    _log.LogError(
-                        ex,
-                        "SyncRunningSeries: failed for {Name} ({Id})",
-                        series.Name,
-                        series.Id
-                    );
-                }
-            }
-
-            _log.LogInformation(
-                "SyncRunningSeries completed. Processed {Processed}/{Total} series.",
-                processed,
-                seriesItems.Count
-            );
+          await _manager.SyncSeries(true, progress, cancellationToken);
         }
     }
 }
