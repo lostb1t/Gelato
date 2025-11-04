@@ -73,26 +73,37 @@ namespace Gelato
 
         private async Task<T?> GetJsonAsync<T>(string url)
         {
-            _log.LogDebug("GetJsonAsync: requesting {url}", url);
-            //   try
-            //   {
-            using var c = NewClient();
-            using var resp = await c.GetAsync(url);
-            if (!resp.IsSuccessStatusCode)
+            _log.LogDebug("GetJsonAsync: requesting {Url}", url);
+
+            try
             {
-                _log.LogDebug(
-                    "external fetch failed: {Url} | status code: {StatusCode}",
-                    url,
-                    resp.StatusCode
-                );
-                throw new HttpRequestException(
-                    $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
-                    null,
-                    resp.StatusCode
-                );
+                using var c = NewClient();
+                using var resp = await c.GetAsync(url).ConfigureAwait(false);
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _log.LogWarning(
+                        "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
+                        url,
+                        resp.StatusCode,
+                        resp.ReasonPhrase
+                    );
+
+                    throw new HttpRequestException(
+                        $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
+                        null,
+                        resp.StatusCode
+                    );
+                }
+
+                await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
             }
-            await using var s = await resp.Content.ReadAsStreamAsync();
-            return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts);
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
+                throw;
+            }
         }
 
         public async Task<StremioManifest?> GetManifestAsync(bool force = false)
