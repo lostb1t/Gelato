@@ -63,7 +63,7 @@ namespace Gelato.Decorators
         }
 
         // Not bulletproof, but providerIds are often not available
-        static bool IsStremio(BaseItemDto dto)
+        static bool IsGelato(BaseItemDto dto)
         {
             return dto.LocationType == LocationType.Remote
                 && (
