@@ -77,7 +77,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Fetch full metadata
-        var meta = await _stremioProvider.GetMetaAsync(stremioMeta.Id, stremioMeta.Type);
+        var meta = await _stremioProvider.GetMetaAsync(stremioMeta.ImdbId ?? stremioMeta.Id, stremioMeta.Type);
         if (meta is null)
         {
             _log.LogError(

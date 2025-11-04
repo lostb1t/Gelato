@@ -68,7 +68,9 @@ namespace Gelato.Tasks
     foreach (var child in allChildren)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        
+        if (child.IsFileProtocol) {
+          continue;
+        }
         try
         {
             _library.DeleteItem(

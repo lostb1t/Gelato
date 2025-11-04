@@ -42,7 +42,7 @@ public sealed class GelatoApiController : ControllerBase
 
     [HttpGet("meta/{stremioMetaType}/{Id}")]
     [Authorize]
-    public async Task<ActionResult<StremioMeta>> Meta(
+    public async Task<ActionResult<StremioMeta>> GelatoMeta(
         [FromRoute, Required] StremioMediaType stremioMetaType,
         [FromRoute, Required] string id
     )
@@ -56,7 +56,7 @@ public sealed class GelatoApiController : ControllerBase
     }
 
     [HttpGet("stream")]
-    public async Task<IActionResult> Stream(
+    public async Task<IActionResult> TorrentStream(
         [FromQuery] string ih,
         [FromQuery] int? idx,
         [FromQuery] string? filename,
