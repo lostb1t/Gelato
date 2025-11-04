@@ -59,11 +59,11 @@ namespace Gelato.Tasks
             {
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
                 Recursive = true,
-                HasAnyProviderId = new()
-                {
-                    { "Stremio", string.Empty },
-                    { "stremio", string.Empty },
-                },
+               // HasAnyProviderId = new()
+              //  {
+              //      { "Stremio", string.Empty },
+               //     { "stremio", string.Empty },
+              //  },
                 IsDeadPerson = true,
             };
 
@@ -72,7 +72,7 @@ namespace Gelato.Tasks
                 .OfType<Video>()
                 .Where(v => !v.IsFileProtocol)
                 //.Where(v => v.ProviderIds.TryGetValue("Stremio", out var id) && !string.IsNullOrWhiteSpace(id) && !v.IsFileProtocol)
-                .ToArray();
+                .ToArray(); 
 
             int total = items.Length;
 

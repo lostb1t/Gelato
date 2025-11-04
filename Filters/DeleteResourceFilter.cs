@@ -101,7 +101,7 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         var sources = _library.GetItemList(query).OfType<Video>();
         foreach (var alt in sources)
         {
-            _log.LogInformation("Deleting alternate version {Name} ({Id})", alt.Name, alt.Id);
+            _log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
             _library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = false }, true);
         }
     }
