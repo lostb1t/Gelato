@@ -91,3 +91,4 @@ namespace Gelato.Tasks
     _log.LogInformation("purge completed: deleted {Count} items", deleted);
 }
 }
+}
