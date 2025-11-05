@@ -6,6 +6,9 @@ using System.Threading.Tasks;
 using Gelato;
 using Gelato.Common;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Collections;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Tasks;
@@ -19,9 +22,11 @@ namespace Gelato.Tasks
         private readonly GelatoStremioProvider _stremio;
         private readonly GelatoManager _manager;
         private readonly ILibraryManager _library;
+        private readonly ICollectionManager _collections;
 
         public GelatoCatalogItemsSyncTask(
             ILibraryManager libraryManager,
+            ICollectionManager collections,
             ILogger<GelatoCatalogItemsSyncTask> log,
             GelatoStremioProvider stremio,
             GelatoManager manager
@@ -31,9 +36,10 @@ namespace Gelato.Tasks
             _library = libraryManager;
             _stremio = stremio;
             _manager = manager;
+            _collections = collections;
         }
 
-        public string Name => "Gelato: Import catalog items";
+        public string Name => "Gelato: Catalogs import";
         public string Key => "GelatoCatalogItemsSync";
         public string Description =>
             "Loads all Stremio catalogs items and inserts/updates items in the Jellyfin database.";
@@ -60,6 +66,8 @@ namespace Gelato.Tasks
             var maxPerCatalog = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
             var seriesFolder = _manager.TryGetSeriesFolder();
             var movieFolder = _manager.TryGetMovieFolder();
+            var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
+            var collectionMaxItems = 100;
 
             // Progress counters
             var total = Math.Max(1, catalogs.Count * maxPerCatalog);
@@ -82,6 +90,7 @@ namespace Gelato.Tasks
                     {
                         var skip = 0;
                         var processed = 0;
+                        var addToCollectionIds = new List<Guid>();
 
                         while (processed < maxPerCatalog)
                         {
@@ -96,13 +105,12 @@ namespace Gelato.Tasks
                                 break;
                             }
 
-                            foreach (var _meta in page)
+                            foreach (var meta in page)
                             {
                                 ct.ThrowIfCancellationRequested();
-                                var meta = _meta;
 
-                                var MediaType = meta.Type;
-                                var baseItemKind = MediaType.ToBaseItem();
+                                var mediaType = meta.Type;
+                                var baseItemKind = mediaType.ToBaseItem();
 
                                 var root =
                                     baseItemKind == BaseItemKind.Series ? seriesFolder
@@ -113,17 +121,26 @@ namespace Gelato.Tasks
                                 {
                                     _log.LogWarning(
                                         "Catalog task: No {Type} root folder found; skipping {Type}/{Id}",
-                                        MediaType,
+                                        mediaType,
                                         cat.Id
                                     );
-                                    return;
+                                    continue;
                                 }
 
                                 try
                                 {
-                                    var _ = await _manager
+                                    var (item, created) = await _manager
                                         .InsertMeta(root, meta, true, true, false, ct)
                                         .ConfigureAwait(false);
+
+                                    if (
+                                        item != null
+                                        && createCollections
+                                        && addToCollectionIds.Count < collectionMaxItems
+                                    )
+                                    {
+                                        addToCollectionIds.Add(item.Id);
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
@@ -141,10 +158,45 @@ namespace Gelato.Tasks
                                 progress.Report(Math.Min(100, (current / (double)total) * 100.0));
 
                                 if (processed >= maxPerCatalog)
+                                {
                                     break;
+                                }
                             }
 
                             skip += page.Count;
+                        }
+
+                        // Create/update collection after processing all items (max 100 items)
+                        if (createCollections && addToCollectionIds.Count > 0)
+                        {
+                            var collection = await GetOrCreateBoxSetByIdAsync(cat.Id, cat.Name)
+                                .ConfigureAwait(false);
+                            if (collection != null)
+                            {
+                                var childrenIds = _library
+                                    .GetItemList(
+                                        new InternalItemsQuery
+                                        {
+                                            Parent = collection,
+                                            Recursive = false,
+                                        }
+                                    )
+                                    .Select(i => i.Id)
+                                    .ToList();
+                                //var children = collection.GetChildren(null, true, new InternalItemsQuery());
+                                await _collections
+                                    .RemoveFromCollectionAsync(collection.Id, childrenIds)
+                                    .ConfigureAwait(false);
+                                await _collections
+                                    .AddToCollectionAsync(collection.Id, addToCollectionIds)
+                                    .ConfigureAwait(false);
+
+                                _log.LogInformation(
+                                    "{Id}: added {Count} items to collection",
+                                    cat.Id,
+                                    addToCollectionIds.Count
+                                );
+                            }
                         }
 
                         _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
@@ -155,12 +207,54 @@ namespace Gelato.Tasks
                     }
                     catch (Exception ex)
                     {
-                        _log.LogWarning(ex, "Catalog sync failed for {Id}", cat.Id);
+                        _log.LogError(
+                            ex,
+                            "Catalog sync failed for {Id}: {Message}",
+                            cat.Id,
+                            ex.Message
+                        );
                     }
                 }
             );
 
             _log.LogInformation("Catalog sync completed");
+        }
+
+        private async Task<BoxSet?> GetOrCreateBoxSetByIdAsync(string id, string name)
+        {
+            var collection = _library
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+                        CollapseBoxSetItems = false,
+                        Recursive = true,
+                        HasAnyProviderId = new Dictionary<string, string>
+                        {
+                            { "GelatoCatalogId", id },
+                        },
+                    }
+                )
+                .Select(b => b as BoxSet)
+                .FirstOrDefault();
+
+            if (collection is null)
+            {
+                collection = await _collections
+                    .CreateCollectionAsync(
+                        new CollectionCreationOptions
+                        {
+                            Name = name,
+                            ProviderIds = new Dictionary<string, string>
+                            {
+                                { "GelatoCatalogId", id },
+                            },
+                        }
+                    )
+                    .ConfigureAwait(false);
+            }
+
+            return collection;
         }
     }
 }

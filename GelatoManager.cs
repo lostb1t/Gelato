@@ -100,46 +100,60 @@ public class GelatoManager
     // jf preferes path but we want to match on id.
     private void OnItemsAddedToCollection(object sender, CollectionModifiedEventArgs e)
     {
-        // Just iterate all LinkedChildren and fix any with URL paths
         var collection = e.Collection;
+        var addedItems = e.ItemsChanged;
+
+        if (addedItems == null || addedItems.Count == 0)
+            return;
+
+        // Filter only Gelato items
+        var gelatoItems = addedItems.Where(IsGelato).ToList();
+
+        if (gelatoItems.Count == 0)
+            return;
+
         var needsFix = false;
 
         for (int i = 0; i < collection.LinkedChildren.Length; i++)
         {
             var linkedChild = collection.LinkedChildren[i];
 
-            // Check if it has a path but no LibraryItemId (and path is a URL)
+            // Check if this LinkedChild has a path but no LibraryItemId (newly added)
             if (
                 string.IsNullOrEmpty(linkedChild.LibraryItemId)
                 && !string.IsNullOrEmpty(linkedChild.Path)
-                && linkedChild.Path.StartsWith("http")
             )
             {
-                // Try to find the item by path to get its ID
-                var item = _library.FindByPath(linkedChild.Path, false);
-                if (item == null)
-                {
-                    // Path lookup failed, try recent additions
-                    // This is hacky but works
-                    continue;
-                }
-
-                _log.LogDebug(
-                    "Fixing LinkedChild - replacing Path with LibraryItemId for item {Id}",
-                    item.Id
+                // Try to match it to one of the Gelato items by path
+                var matchingItem = gelatoItems.FirstOrDefault(item =>
+                    item.Path == linkedChild.Path
                 );
 
-                collection.LinkedChildren[i] = new LinkedChild
+                if (matchingItem != null)
                 {
-                    LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                    Type = LinkedChildType.Manual,
-                };
-                needsFix = true;
+                    _log.LogDebug(
+                        "Fixing Gelato LinkedChild with path {Path} for item {Id}",
+                        linkedChild.Path,
+                        matchingItem.Id
+                    );
+
+                    collection.LinkedChildren[i] = new LinkedChild
+                    {
+                        LibraryItemId = matchingItem.Id.ToString("N", CultureInfo.InvariantCulture),
+                        Type = LinkedChildType.Manual,
+                    };
+                    needsFix = true;
+                }
             }
         }
 
         if (needsFix)
         {
+            _log.LogInformation(
+                "Fixed {Count} Gelato items in collection {Name}",
+                gelatoItems.Count,
+                collection.Name
+            );
             collection
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                 .GetAwaiter()

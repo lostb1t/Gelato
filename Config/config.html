@@ -37,6 +37,10 @@
         <div class="inputContainer">
           <input is="emby-input" type="number" id="txtCatalogMaxItems" label="Max items per catalog import:" />
         </div>
+        
+                <div class="inputContainer">
+          <input is="emby-input" type="checkbox" id="chkCreateCollections" label="Create collections from catalogs" />
+        </div>
 
         <div class="inputContainer">
           <input is="emby-input" type="number" id="txtStreamTTL" label="TTL for streams in seconds" />
@@ -117,6 +121,7 @@
         const txtMoviePath = document.querySelector('#txtMoviePath');
         const txtSeriesPath = document.querySelector('#txtSeriesPath');
         const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
+        const chkCreateCollections = document.querySelector('#chkCreateCollections');
         const txtStreamTTL = document.querySelector('#txtStreamTTL');
         const chkEnableSubs = document.querySelector('#chkEnableSubs');
         const chkEnableMixed = document.querySelector('#chkEnableMixed');
@@ -144,6 +149,7 @@
             txtMoviePath.value = cfg.MoviePath || "";
             txtSeriesPath.value = cfg.SeriesPath || "";
             txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
+             chkCreateCollections.checked = cfg.CreateCollections || false;
             txtStreamTTL.value = cfg.StreamTTL || 3600;
             chkEnableSubs.checked = cfg.EnableSubs || false;
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
@@ -173,6 +179,7 @@
 cfg.MoviePath = txtMoviePath.value.trim() || null;
             cfg.SeriesPath = txtSeriesPath.value.trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
+                        cfg.CreateCollections = !!chkCreateCollections.checked;
             cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
             cfg.EnableSubs = !!chkEnableSubs.checked;
             cfg.EnableMixed = !!chkEnableMixed.checked;
