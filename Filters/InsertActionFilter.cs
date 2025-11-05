@@ -53,7 +53,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Check if already exists
-        var item = _stremioProvider.IntoBaseItem(stremioMeta);
+        var item = _manager.IntoBaseItem(stremioMeta);
         var existing = FindExistingItem(item);
         if (existing is not null)
         {

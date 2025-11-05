@@ -102,7 +102,7 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
         foreach (var alt in sources)
         {
             _log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
-            _library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = false }, true);
+            _library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = true }, true);
         }
     }
 }

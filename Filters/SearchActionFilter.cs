@@ -194,9 +194,11 @@ namespace Gelato.Filters
 
         private List<BaseItemDto> ConvertMetasToDtos(List<StremioMeta> metas)
         {
+            // theres a reason i initally disabled all fields but forgot....
+            // infuse breaks if we do a small subset. Not sure which field it needs. Prolly mediasources
             var options = new DtoOptions
             {
-                Fields = new[] { ItemFields.ProviderIds, ItemFields.PrimaryImageAspectRatio },
+                //Fields = new[] { ItemFields.ProviderIds, ItemFields.PrimaryImageAspectRatio },
                 EnableImages = true,
                 EnableUserData = false,
             };
@@ -205,7 +207,7 @@ namespace Gelato.Filters
 
             foreach (var meta in metas)
             {
-                var baseItem = _provider.IntoBaseItem(meta);
+                var baseItem = _manager.IntoBaseItem(meta);
                 if (baseItem is null)
                     continue;
 

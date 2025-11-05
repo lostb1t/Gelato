@@ -174,11 +174,11 @@ namespace Gelato.Decorators
 
             var sources = _inner
                 .GetStaticMediaSources(item, enablePathSubstitution, user)
-                //  .Where(x => x.Protocol == MediaProtocol.File)
-                .Where(x => x.Protocol != MediaProtocol.Http)
+                .Where(x => x.Protocol == MediaProtocol.File)
+                // .Where(x => x.ExternalId is not null)
                 .ToList();
 
-            // dont use jellyfins alternate versions crap. So we have to load it ourselves
+            // we dont use jellyfins alternate versions crap. So we have to load it ourselves
             var query = new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { item.GetBaseItemKind() },
@@ -395,8 +395,6 @@ namespace Gelato.Decorators
             {
                 var v = owner.IsVirtualItem;
                 owner.IsVirtualItem = false;
-                //owner.IsShortcut = true;
-                //owner.IsShortcut = true;
                 await owner
                     .RefreshMetadata(
                         new MetadataRefreshOptions(_directoryService)
@@ -534,14 +532,13 @@ namespace Gelato.Decorators
         {
             ArgumentNullException.ThrowIfNull(item);
 
-            var protocol = item.PathProtocol;
             var parts = (item.ExternalId ?? "").Split(":::");
             var Name = parts.Length > 1 ? parts[^1] : item.Name;
 
             var info = new MediaSourceInfo
             {
                 Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                Protocol = protocol ?? MediaProtocol.Http,
+                Protocol = MediaProtocol.Http,
                 MediaStreams = _inner.GetMediaStreams(item.Id),
                 MediaAttachments = _inner.GetMediaAttachments(item.Id),
                 Name = Name,

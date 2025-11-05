@@ -315,99 +315,6 @@ namespace Gelato
 
             return (type, null);
         }
-
-        public BaseItem IntoBaseItem(StremioMeta meta)
-        {
-            BaseItem item;
-
-            var Id = meta.Id;
-
-            switch (meta.Type)
-            {
-                case StremioMediaType.Series:
-                    item = new Series
-                    {
-                        Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)),
-                    };
-                    break;
-
-                case StremioMediaType.Movie:
-                    item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
-
-                    break;
-
-                // case "episode":
-                //     item = new Episode
-                //    {
-                //        Id = _library.GetNewItemId(Id, typeof(Episode)),
-                //        RunTimeTicks = Utils.ParseToTicks(meta.Runtime)
-                //    };
-                //    break;
-                default:
-                    _log.LogWarning("unsupported type {type}", meta.Type);
-                    return null;
-            }
-            ;
-            item.Name = meta.GetName();
-            if (!string.IsNullOrWhiteSpace(meta.Runtime))
-                item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
-            if (!string.IsNullOrWhiteSpace(meta.Description))
-                item.Overview = meta.Description;
-
-            // NOTICE: do this only for show and movie. cause the parent imdb is used for season abd episodes
-            if (!string.IsNullOrWhiteSpace(Id))
-            {
-                var providerMappings = new (string Prefix, string Provider, bool StripPrefix)[]
-                {
-                    ("tmdb:", MetadataProvider.Tmdb.ToString(), true),
-                    ("tt", MetadataProvider.Imdb.ToString(), false),
-                    ("anidb:", "AniDB", true),
-                    ("kitsu:", "Kitsu", true),
-                    ("mal:", "Mal", true),
-                    ("anilist:", "Anilist", true),
-                    ("tvdb:", MetadataProvider.Tvdb.ToString(), true),
-                    ("tvmaze:", MetadataProvider.TvMaze.ToString(), true),
-                };
-
-                foreach (var (prefix, provider, stripPrefix) in providerMappings)
-                {
-                    if (Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var providerId = stripPrefix ? Id.Substring(prefix.Length) : Id;
-                        item.SetProviderId(provider, providerId);
-                        break;
-                    }
-                }
-            }
-
-            if (!string.IsNullOrWhiteSpace(meta.ImdbId))
-            {
-                item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
-            }
-
-            var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
-            item.SetProviderId("Stremio", stremioUri.ExternalId);
-
-            // path is needed otherwise its set as placeholder and you cant play
-            item.Path = stremioUri.ToString();
-            item.IsVirtualItem = false;
-            item.ProductionYear = meta.GetYear();
-            item.PremiereDate = meta.GetPremiereDate();
-            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            item.Overview = meta.Description;
-
-            if (!string.IsNullOrWhiteSpace(meta.Runtime))
-                item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
-
-            if (!string.IsNullOrWhiteSpace(meta.Poster))
-            {
-                item.ImageInfos = new List<ItemImageInfo>
-                {
-                    new ItemImageInfo { Type = ImageType.Primary, Path = meta.Poster },
-                }.ToArray();
-            }
-            return item;
-        }
     }
 
     public class StremioManifest
@@ -817,6 +724,7 @@ namespace Gelato
         Unknown = 0,
         Movie,
         Series,
+        Episode, // doesnt exist in stremio. But we wanna know
         Channel,
         Collections,
         Anime,
