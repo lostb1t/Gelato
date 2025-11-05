@@ -5,16 +5,19 @@
 
 using System.Collections.Generic;
 using System.Globalization;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Gelato.Common;
 using Gelato.Decorators;
+using Jellyfin.Data.Enums;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -58,6 +61,7 @@ public class GelatoManager
     private IMemoryCache _memoryCache;
     private readonly IServerConfigurationManager _serverConfig;
     private readonly IMediaStreamRepository _mediaStreams;
+    private readonly ICollectionManager _collectionManager;
 
     public GelatoManager(
         ILoggerFactory loggerFactory,
@@ -70,12 +74,14 @@ public class GelatoManager
         GelatoItemRepository repo,
         IFileSystem fileSystem,
         IMemoryCache memoryCache,
+        ICollectionManager collectionManager,
         IServerConfigurationManager serverConfig,
         ILibraryManager libraryManager
     )
     {
         _loggerFactory = loggerFactory;
         _memoryCache = memoryCache;
+        _collectionManager = collectionManager;
         _log = loggerFactory.CreateLogger<GelatoManager>();
         _provider = provider;
         _mediaStreams = mediaStreams;
@@ -87,6 +93,58 @@ public class GelatoManager
         _user = userManager;
         _library = libraryManager;
         _fileSystem = fileSystem;
+
+        _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
+    }
+
+    // jf preferes path but we want to match on id.
+    private void OnItemsAddedToCollection(object sender, CollectionModifiedEventArgs e)
+    {
+        // Just iterate all LinkedChildren and fix any with URL paths
+        var collection = e.Collection;
+        var needsFix = false;
+
+        for (int i = 0; i < collection.LinkedChildren.Length; i++)
+        {
+            var linkedChild = collection.LinkedChildren[i];
+
+            // Check if it has a path but no LibraryItemId (and path is a URL)
+            if (
+                string.IsNullOrEmpty(linkedChild.LibraryItemId)
+                && !string.IsNullOrEmpty(linkedChild.Path)
+                && linkedChild.Path.StartsWith("http")
+            )
+            {
+                // Try to find the item by path to get its ID
+                var item = _library.FindByPath(linkedChild.Path, false);
+                if (item == null)
+                {
+                    // Path lookup failed, try recent additions
+                    // This is hacky but works
+                    continue;
+                }
+
+                _log.LogDebug(
+                    "Fixing LinkedChild - replacing Path with LibraryItemId for item {Id}",
+                    item.Id
+                );
+
+                collection.LinkedChildren[i] = new LinkedChild
+                {
+                    LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
+                    Type = LinkedChildType.Manual,
+                };
+                needsFix = true;
+            }
+        }
+
+        if (needsFix)
+        {
+            collection
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+        }
     }
 
     public int GetHttpPort()
