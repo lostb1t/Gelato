@@ -1023,7 +1023,10 @@ public class GelatoManager
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "SyncSeries: failed for {Name} ({Id})", series.Name, series.Id);
+_log.LogError(ex, "SyncSeries: failed for {Name} ({Id}). Error: {ErrorMessage}", 
+    series.Name, 
+    series.Id, 
+    ex.Message);
             }
         }
 
