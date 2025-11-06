@@ -836,8 +836,23 @@ public class GelatoManager
         }
     )
     .OfType<Season>()
-    .Where(s => s.IndexNumber.HasValue)
+  .Where(s => s.IndexNumber.HasValue)
     .GroupBy(s => s.IndexNumber!.Value)
+    .Select(g =>
+    {
+        if (g.Count() > 1)
+        {
+            _log.LogWarning(
+                "Duplicate seasons found for series {SeriesName} ({SeriesId})! Season {SeasonNum} exists {Count} times. IDs: {Ids}",
+                series.Name,
+                series.Id,
+                g.Key,
+                g.Count(),
+                string.Join(", ", g.Select(s => s.Id))
+            );
+        }
+        return g;
+    })
     .ToDictionary(g => g.Key, g => g.First())
 
         int seasonsInserted = 0;
