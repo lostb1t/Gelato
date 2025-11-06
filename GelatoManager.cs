@@ -861,7 +861,7 @@ public class GelatoManager
                     seasonIndex
                 );
 
-                season = new Season
+                var season = new Season
                 {
                     Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
