@@ -876,7 +876,7 @@ if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
                     seasonIndex
                 );
 
-                new Season
+                season = new Season
                 {
                     Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
