@@ -96,7 +96,7 @@ namespace Gelato.Tasks
                         var shouldCreateCollection = cat.Extra?.Any(e =>
                             string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase) &&
 e.IsRequired
-                        ) && createCollections && !collectionCommited;
+                        ) == true && createCollections && !collectionCommited;
 
                         while (processed < maxPerCatalog)
                         {
