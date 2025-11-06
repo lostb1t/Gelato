@@ -825,20 +825,20 @@ public class GelatoManager
             seriesRootFolder.AddChild(series);
         }
 
-        var existingSeasonNumbers = _library
-            .GetItemList(
-                new InternalItemsQuery
-                {
-                    ParentId = series.Id,
-                    IncludeItemTypes = new[] { BaseItemKind.Season },
-                    Recursive = true,
-                    IsDeadPerson = true,
-                }
-            )
-            .OfType<Season>()
+        var existingSeasonsDict = _library
+    .GetItemList(
+        new InternalItemsQuery
+        {
+            ParentId = series.Id,
+            IncludeItemTypes = new[] { BaseItemKind.Season },
+            Recursive = true,
+            IsDeadPerson = true,
+        }
+    )
+    .OfType<Season>()
     .Where(s => s.IndexNumber.HasValue)
-    .Select(s => s.IndexNumber!.Value)
-    .ToHashSet();
+    .GroupBy(s => s.IndexNumber!.Value)
+    .ToDictionary(g => g.Key, g => g.First())
 
         int seasonsInserted = 0;
         int episodesInserted = 0;
@@ -853,7 +853,7 @@ public class GelatoManager
             var seasonIndex = seasonGroup.Key;
             var seasonPath = $"{series.Path}:{seasonIndex}";
 
-            if (!existingSeasonNumbers.Contains(seasonIndex))
+if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
             {
                 _log.LogTrace(
                     "Creating series {SeriesName} season {SeasonIndex:D2}",
@@ -861,7 +861,7 @@ public class GelatoManager
                     seasonIndex
                 );
 
-                var season = new Season
+                new Season
                 {
                     Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
