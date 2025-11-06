@@ -208,7 +208,7 @@ e.IsRequired
                         );
                     }
                 }
-            );
+            
 
             _log.LogInformation("Catalog sync completed");
         }
