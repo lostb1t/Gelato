@@ -103,7 +103,7 @@ e.IsRequired
 
                         while (processed < maxPerCatalog)
                         {
-                            ct.ThrowIfCancellationRequested();
+                            //ct.ThrowIfCancellationRequested();
 
                             var page = await _stremio
                                 .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
