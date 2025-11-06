@@ -67,7 +67,7 @@ namespace Gelato.Tasks
             var seriesFolder = _manager.TryGetSeriesFolder();
             var movieFolder = _manager.TryGetMovieFolder();
             var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
-            var collectionMaxItems = 100;
+            var collectionMaxItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
 
             // Progress counters
             var total = Math.Max(1, catalogs.Count * maxPerCatalog);
@@ -90,6 +90,7 @@ namespace Gelato.Tasks
                     {
                         var skip = 0;
                         var processed = 0;
+                        var collectionCommited = false;
                         var addToCollectionIds = new List<Guid>();
 
                         while (processed < maxPerCatalog)
@@ -133,11 +134,7 @@ namespace Gelato.Tasks
                                         .InsertMeta(root, meta, true, true, false, ct)
                                         .ConfigureAwait(false);
 
-                                    if (
-                                        item != null
-                                        && createCollections
-                                        && addToCollectionIds.Count < collectionMaxItems
-                                    )
+                                    if (item != null && createCollections && !collectionCommited)
                                     {
                                         addToCollectionIds.Add(item.Id);
                                     }
@@ -157,6 +154,18 @@ namespace Gelato.Tasks
                                 var current = Interlocked.Increment(ref done);
                                 progress.Report(Math.Min(100, (current / (double)total) * 100.0));
 
+                                if (
+                                    createCollections
+                                    && !collectionCommited
+                                    && addToCollectionIds.Count >= collectionMaxItems
+                                )
+                                {
+                                    await SaveCollection(cat, addToCollectionIds)
+                                        .ConfigureAwait(false);
+                                    addToCollectionIds.Clear();
+                                    collectionCommited = true;
+                                }
+
                                 if (processed >= maxPerCatalog)
                                 {
                                     break;
@@ -166,37 +175,14 @@ namespace Gelato.Tasks
                             skip += page.Count;
                         }
 
-                        // Create/update collection after processing all items (max 100 items)
-                        if (createCollections && addToCollectionIds.Count > 0)
+                        if (
+                            createCollections
+                            && addToCollectionIds.Count != 0
+                            && !collectionCommited
+                        )
                         {
-                            var collection = await GetOrCreateBoxSetByIdAsync(cat.Id, cat.Name)
-                                .ConfigureAwait(false);
-                            if (collection != null)
-                            {
-                                var childrenIds = _library
-                                    .GetItemList(
-                                        new InternalItemsQuery
-                                        {
-                                            Parent = collection,
-                                            Recursive = false,
-                                        }
-                                    )
-                                    .Select(i => i.Id)
-                                    .ToList();
-                                //var children = collection.GetChildren(null, true, new InternalItemsQuery());
-                                await _collections
-                                    .RemoveFromCollectionAsync(collection.Id, childrenIds)
-                                    .ConfigureAwait(false);
-                                await _collections
-                                    .AddToCollectionAsync(collection.Id, addToCollectionIds)
-                                    .ConfigureAwait(false);
-
-                                _log.LogInformation(
-                                    "{Id}: added {Count} items to collection",
-                                    cat.Id,
-                                    addToCollectionIds.Count
-                                );
-                            }
+                            await SaveCollection(cat, addToCollectionIds).ConfigureAwait(false);
+                            addToCollectionIds.Clear();
                         }
 
                         _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
@@ -255,6 +241,26 @@ namespace Gelato.Tasks
             }
 
             return collection;
+        }
+
+        private async Task SaveCollection(StremioCatalog cat, List<Guid> ids)
+        {
+            var collection = await GetOrCreateBoxSetByIdAsync(cat.Id, cat.Name)
+                .ConfigureAwait(false);
+            if (collection != null)
+            {
+                var childrenIds = _library
+                    .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
+                    .Select(i => i.Id)
+                    .ToList();
+
+                await _collections
+                    .RemoveFromCollectionAsync(collection.Id, childrenIds)
+                    .ConfigureAwait(false);
+                await _collections.AddToCollectionAsync(collection.Id, ids).ConfigureAwait(false);
+
+                _log.LogInformation("{Id}: added {Count} items to collection", cat.Id, ids.Count);
+            }
         }
     }
 }

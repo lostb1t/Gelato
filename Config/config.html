@@ -40,6 +40,12 @@
         
                 <div class="inputContainer">
           <input is="emby-input" type="checkbox" id="chkCreateCollections" label="Create collections from catalogs" />
+       <span>NOTICE: disable the "cleanup and collections and playlist" from startup because of the following <a target="_blank" href="https://github.com/jellyfin/jellyfin/pull/15406">bug</a>
+       
+        </div>
+        
+               <div class="inputContainer">
+          <input is="emby-input" type="number" id="txtMaxCollectionItems" label="Maximum amount of items to add to an collection" />
         </div>
 
         <div class="inputContainer">
@@ -122,7 +128,8 @@
         const txtSeriesPath = document.querySelector('#txtSeriesPath');
         const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
         const chkCreateCollections = document.querySelector('#chkCreateCollections');
-        const txtStreamTTL = document.querySelector('#txtStreamTTL');
+        const txtMaxCollectionItems = document.querySelector('#txtMaxCollectionItems');
+               const txtStreamTTL = document.querySelector('#txtStreamTTL');
         const chkEnableSubs = document.querySelector('#chkEnableSubs');
         const chkEnableMixed = document.querySelector('#chkEnableMixed');
         const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
@@ -150,7 +157,8 @@
             txtSeriesPath.value = cfg.SeriesPath || "";
             txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
              chkCreateCollections.checked = cfg.CreateCollections || false;
-            txtStreamTTL.value = cfg.StreamTTL || 3600;
+                       txtMaxCollectionItems.value = cfg.MaxCollectionItems || 3600;
+             txtStreamTTL.value = cfg.StreamTTL || 3600;
             chkEnableSubs.checked = cfg.EnableSubs || false;
             chkEnableMixed.checked = cfg.EnableMixed ?? true;
             chkFilterUnreleased.checked = cfg.FilterUnreleased ?? false;
@@ -180,7 +188,9 @@ cfg.MoviePath = txtMoviePath.value.trim() || null;
             cfg.SeriesPath = txtSeriesPath.value.trim() || null;
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
                         cfg.CreateCollections = !!chkCreateCollections.checked;
-            cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
+            
+                        cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 3600;            
+                        cfg.StreamTTL = parseInt(txtStreamTTL.value) || 250;
             cfg.EnableSubs = !!chkEnableSubs.checked;
             cfg.EnableMixed = !!chkEnableMixed.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked ?? false;
