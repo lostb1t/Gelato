@@ -25,7 +25,7 @@ namespace Gelato.Configuration
         public string FFmpegAnalyzeDuration { get; set; } = "5M";
         public string FFmpegProbeSize { get; set; } = "40M";
         public bool CreateCollections { get; set; } = false;
-        public int MaxCollectionItems { get; set; } = 250;
+        public int MaxCollectionItems { get; set; } = 100;
 
         public string GetBaseUrl()
         {

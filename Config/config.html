@@ -1,226 +1,257 @@
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>External Media</title>
 </head>
 
 <body>
-  <div data-role="page" id="externalmediaConfigurationPage"
-    class="page type-interior pluginConfigurationPage fullWidthContent">
-    <div class="content-primary">
+  <div data-role="page" id="externalmediaConfigurationPage" class="page type-interior pluginConfigurationPage">
+    <div data-role="content">
+      <div class="content-primary">
+        <form id="externalmediaForm">
+          <div class="verticalSection">
+            <div class="sectionTitleContainer flex align-items-center">
+              <h2 class="sectionTitle">External Media</h2>
+            </div>
+            <p style="margin-top: 1em;"><i>Note:</i> Click Save after changing settings.</p>
+          </div>
+
+
       <div class="verticalSection">
-        <div class="sectionTitleContainer">
-          <h2 class="sectionTitle">External Media</h2>
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtUrl">Stremio URL (manifest or base):</label>
+          <input is="emby-input" type="text" id="txtUrl" required="required" class="emby-input" />
+          <div class="fieldDescription">Paste the manifest URL or base endpoint. <code>GetBaseUrl()</code> will strip <code>/manifest.json</code> automatically.</div>
         </div>
-        <p><i>Note:</i> Click Save after changing settings.</p>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtMoviePath">Movies path:</label>
+          <input is="emby-input" type="text" id="txtMoviePath" class="emby-input" />
+          <div class="fieldDescription">Filesystem path for movie items. Use this path as library folder.</div>
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtSeriesPath">Series path:</label>
+          <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
+          <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtCatalogMaxItems">Max items per catalog import:</label>
+          <input is="emby-input" type="number" id="txtCatalogMaxItems" class="emby-input" />
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input is="emby-checkbox" type="checkbox" id="chkCreateCollections" />
+            <span>Create collections from catalogs</span>
+          </label>
+          <div class="fieldDescription">NOTICE: disable the "cleanup and collections and playlist" from startup because of the following <a target="_blank" href="https://github.com/jellyfin/jellyfin/pull/15406">bug</a></div>
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum amount of items to add to a collection:</label>
+          <input is="emby-input" type="number" id="txtMaxCollectionItems" class="emby-input" />
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">TTL for streams in seconds:</label>
+          <input is="emby-input" type="number" id="txtStreamTTL" class="emby-input" />
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input is="emby-checkbox" type="checkbox" id="chkEnableSubs" />
+            <span>Enable remote subtitles from addons</span>
+          </label>
+          <div class="fieldDescription">Currently breaks until <a href="https://github.com/jellyfin/jellyfin/pull/14809" target="_blank">https://github.com/jellyfin/jellyfin/pull/14809</a> is merged.</div>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
+            <span>Enable stremio results and local files</span>
+          </label>
+          <div class="fieldDescription">If enabled, stremio streams and local sources are merged</div>
+        </div>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
+            <span>Filter unreleased items</span>
+          </label>
+          <div class="fieldDescription">If enabled, only items that have been released will be shown in search results (only with aiometadata) and catalog imports</div>
+        </div>
+
+        <div class="inputContainer">
+          <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days for movies:</label>
+          <input is="emby-input" type="number" id="txtBufferDays" class="emby-input" />
+          <div class="fieldDescription">Number of days to wait after premiere date before showing (accounts for home release delay). Default: 30 days. Set to 0 for no buffer. (NOTICE: filtering search results only works with aiometadata not the tmdb addon)</div>
+        </div>
       </div>
-      <hr class="solid">
 
-      <form id="externalmediaForm">
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtUrl" required="required" label="Stremio URL (manifest or base):" />
-          <span>Paste the manifest URL or base endpoint. <code>GetBaseUrl()</code> will strip
-            <code>/manifest.json</code> automatically.</span>
-        </div>
+      <div class="verticalSection">
+        <h3 class="sectionTitle">FFmpeg (probe & analyze)</h3>
 
         <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtMoviePath" label="Movies path:" />
-          <span>Filesystem path for movie items. Use this path as library folder.</span>
+          <label class="inputLabel inputLabelUnfocused" for="txtFFmpegAnalyzeDuration">FFmpeg analyzeduration:</label>
+          <input is="emby-input" type="text" id="txtFFmpegAnalyzeDuration" class="emby-input" />
+          <div class="fieldDescription">Max analyze duration passed to FFmpeg (e.g., <code>5M</code>, <code>2M</code>, or microseconds). Default: <code>5M</code>.</div>
         </div>
 
         <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtSeriesPath" label="Series path:" />
-          <span>Filesystem path for series items. Use this path as library folder.</span>
+          <label class="inputLabel inputLabelUnfocused" for="txtFFmpegProbeSize">FFmpeg probesize:</label>
+          <input is="emby-input" type="text" id="txtFFmpegProbeSize" class="emby-input" />
+          <div class="fieldDescription">Max probe size passed to FFmpeg (e.g., <code>25M</code>, <code>10M</code>, or bytes). Default: <code>25M</code>.</div>
+        </div>
+      </div>
+
+      <div class="verticalSection">
+        <h3 class="sectionTitle">P2P streaming (BETA)</h3>
+
+        <div class="checkboxContainer checkboxContainer-withDescription">
+          <label>
+            <input is="emby-checkbox" type="checkbox" id="chkP2PEnabled" />
+            <span>Enable P2P engine</span>
+          </label>
+          <div class="fieldDescription">Turn on P2P streaming.</div>
         </div>
 
         <div class="inputContainer">
-          <input is="emby-input" type="number" id="txtCatalogMaxItems" label="Max items per catalog import:" />
-        </div>
-        
-                <div class="inputContainer">
-          <input is="emby-input" type="checkbox" id="chkCreateCollections" label="Create collections from catalogs" />
-       <span>NOTICE: disable the "cleanup and collections and playlist" from startup because of the following <a target="_blank" href="https://github.com/jellyfin/jellyfin/pull/15406">bug</a>
-       
-        </div>
-        
-               <div class="inputContainer">
-          <input is="emby-input" type="number" id="txtMaxCollectionItems" label="Maximum amount of items to add to an collection" />
+          <label class="inputLabel inputLabelUnfocused" for="txtP2PDLSpeed">Max download speed (kB/s, 0 = unlimited):</label>
+          <input is="emby-input" type="number" id="txtP2PDLSpeed" class="emby-input" />
         </div>
 
         <div class="inputContainer">
-          <input is="emby-input" type="number" id="txtStreamTTL" label="TTL for streams in seconds" />
+          <label class="inputLabel inputLabelUnfocused" for="txtP2PULSpeed">Max upload speed (kB/s, 0 = unlimited):</label>
+          <input is="emby-input" type="number" id="txtP2PULSpeed" class="emby-input" />
         </div>
+      </div>
 
-        <div class="inputContainer">
-          <input is="emby-input" type="checkbox" id="chkEnableSubs" label="Enable remote subtitles from addons" />
-          <span>Currently breaks untill https://github.com/jellyfin/jellyfin/pull/14809 is merged.</span>
-        </div>
+      <div class="verticalSection">
+        <p>Want to support me? Use one of my referral codes
+          <a target="_blank" href="https://github.com/lostb1t/Gelato/tree/main?tab=readme-ov-file#support">Support link</a>
+        </p>
+      </div>
 
-        <div class="inputContainer">
-          <input is="emby-input" type="checkbox" id="chkEnableMixed" label="Enable stremio results and local files" />
-          <span>If enabled, stremio streams and local sources are merged</span>
-        </div>
-
-        <div class="inputContainer">
-          <input is="emby-input" type="checkbox" id="chkFilterUnreleased" label="Filter unreleased items" />
-          <span>If enabled, only items that have been released will be shown in search results (only with aiometadata) and catalog imports</span>
-        </div>
-
-        <div class="inputContainer">
-          <input is="emby-input" type="number" id="txtBufferDays" label="Release buffer days for movies:" />
-          <span>Number of days to wait after premiere date before showing (accounts for home release delay). Default: 30 days. Set to 0 for no buffer. (NOTICE: filtering search results only works with aiometadata not the tmdb addon) </span>
-        </div>
-
-        <hr class="solid">
-        <div class="sectionTitleContainer">
-          <h3 class="sectionTitle">FFmpeg (probe & analyze)</h3>
-        </div>
-
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtFFmpegAnalyzeDuration" label="FFmpeg analyzeduration:" />
-          <span>Max analyze duration passed to FFmpeg (e.g., <code>5M</code>, <code>2M</code>, or microseconds). Default: <code>5M</code>.</span>
-        </div>
-
-        <div class="inputContainer">
-          <input is="emby-input" type="text" id="txtFFmpegProbeSize" label="FFmpeg probesize:" />
-          <span>Max probe size passed to FFmpeg (e.g., <code>25M</code>, <code>10M</code>, or bytes). Default: <code>25M</code>.</span>
-        </div>
-
-        <hr class="solid">
-        <div class="sectionTitleContainer">
-          <h3 class="sectionTitle">P2P streaming (BETA)</h3>
-        </div>
-
-        <div class="inputContainer">
-          <input is="emby-input" type="checkbox" id="chkP2PEnabled" label="Enable P2P engine" />
-          <span>Turn on P2P streaming.</span>
-        </div>
-
-        <div class="inputContainer">
-          <input is="emby-input" type="number" id="txtP2PDLSpeed" label="Max download speed (kB/s, 0 = unlimited)" />
-        </div>
-
-        <div class="inputContainer">
-          <input is="emby-input" type="number" id="txtP2PULSpeed" label="Max upload speed (kB/s, 0 = unlimited)" />
-        </div>
-
-        <br />
-        Want to support me? Use one of my referral codes
-        <a target="_blank"
-          href="https://github.com/lostb1t/Gelato/tree/main?tab=readme-ov-file#support">Support link</a>
-        <br /><br />
-
-        <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block">
+      <div>
+        <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block emby-button">
           <span>Save</span>
         </button>
-      </form>
-    </div>
+      </div>
+    </form>
+  </div>
+</div>
 
-    <script type="text/javascript">
-      (function () {
-        const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A";
-        const page = document.querySelector('#externalmediaConfigurationPage');
-        const form = document.querySelector('#externalmediaForm');
+<script type="text/javascript">
+  (function () {
+    const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A";
+    const page = document.querySelector('#externalmediaConfigurationPage');
+    const form = document.querySelector('#externalmediaForm');
 
-        const txtUrl = document.querySelector('#txtUrl');
-        const txtMoviePath = document.querySelector('#txtMoviePath');
-        const txtSeriesPath = document.querySelector('#txtSeriesPath');
-        const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
-        const chkCreateCollections = document.querySelector('#chkCreateCollections');
-        const txtMaxCollectionItems = document.querySelector('#txtMaxCollectionItems');
-               const txtStreamTTL = document.querySelector('#txtStreamTTL');
-        const chkEnableSubs = document.querySelector('#chkEnableSubs');
-        const chkEnableMixed = document.querySelector('#chkEnableMixed');
-        const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
-        const txtBufferDays = document.querySelector('#txtBufferDays');
+    const txtUrl = document.querySelector('#txtUrl');
+    const txtMoviePath = document.querySelector('#txtMoviePath');
+    const txtSeriesPath = document.querySelector('#txtSeriesPath');
+    const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
+    const chkCreateCollections = document.querySelector('#chkCreateCollections');
+    const txtMaxCollectionItems = document.querySelector('#txtMaxCollectionItems');
+    const txtStreamTTL = document.querySelector('#txtStreamTTL');
+    const chkEnableSubs = document.querySelector('#chkEnableSubs');
+    const chkEnableMixed = document.querySelector('#chkEnableMixed');
+    const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
+    const txtBufferDays = document.querySelector('#txtBufferDays');
 
-        const txtFFmpegAnalyzeDuration = document.querySelector('#txtFFmpegAnalyzeDuration');
-        const txtFFmpegProbeSize = document.querySelector('#txtFFmpegProbeSize');
+    const txtFFmpegAnalyzeDuration = document.querySelector('#txtFFmpegAnalyzeDuration');
+    const txtFFmpegProbeSize = document.querySelector('#txtFFmpegProbeSize');
 
-        const chkP2PEnabled = document.querySelector('#chkP2PEnabled');
-        const txtP2PDLSpeed = document.querySelector('#txtP2PDLSpeed');
-        const txtP2PULSpeed = document.querySelector('#txtP2PULSpeed');
+    const chkP2PEnabled = document.querySelector('#chkP2PEnabled');
+    const txtP2PDLSpeed = document.querySelector('#txtP2PDLSpeed');
+    const txtP2PULSpeed = document.querySelector('#txtP2PULSpeed');
 
-        function toggleP2PFields() {
-          const disabled = !chkP2PEnabled.checked;
-          txtP2PDLSpeed.disabled = disabled;
-          txtP2PULSpeed.disabled = disabled;
-        }
+    function toggleP2PFields() {
+      const disabled = !chkP2PEnabled.checked;
+      txtP2PDLSpeed.disabled = disabled;
+      txtP2PULSpeed.disabled = disabled;
+    }
 
-        async function loadConfig() {
-          Dashboard.showLoadingMsg();
-          try {
-            const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            txtUrl.value = cfg.Url || "";
-            txtMoviePath.value = cfg.MoviePath || "";
-            txtSeriesPath.value = cfg.SeriesPath || "";
-            txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
-             chkCreateCollections.checked = cfg.CreateCollections || false;
-                       txtMaxCollectionItems.value = cfg.MaxCollectionItems || 3600;
-             txtStreamTTL.value = cfg.StreamTTL || 3600;
-            chkEnableSubs.checked = cfg.EnableSubs || false;
-            chkEnableMixed.checked = cfg.EnableMixed ?? true;
-            chkFilterUnreleased.checked = cfg.FilterUnreleased ?? false;
-            txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 30;
+    async function loadConfig() {
+      Dashboard.showLoadingMsg();
+      try {
+        const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
+        txtUrl.value = cfg.Url || "";
+        txtMoviePath.value = cfg.MoviePath || "";
+        txtSeriesPath.value = cfg.SeriesPath || "";
+        txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
+        chkCreateCollections.checked = cfg.CreateCollections || false;
+        txtMaxCollectionItems.value = cfg.MaxCollectionItems || 3600;
+        txtStreamTTL.value = cfg.StreamTTL || 3600;
+        chkEnableSubs.checked = cfg.EnableSubs || false;
+        chkEnableMixed.checked = cfg.EnableMixed ?? true;
+        chkFilterUnreleased.checked = cfg.FilterUnreleased ?? false;
+        txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 30;
 
-            txtFFmpegAnalyzeDuration.value = (cfg.FFmpegAnalyzeDuration || "5M");
-            txtFFmpegProbeSize.value = (cfg.FFmpegProbeSize || "40M");
+        txtFFmpegAnalyzeDuration.value = (cfg.FFmpegAnalyzeDuration || "5M");
+        txtFFmpegProbeSize.value = (cfg.FFmpegProbeSize || "40M");
 
-            chkP2PEnabled.checked = cfg.P2PEnabled ?? true;
-            txtP2PDLSpeed.value = (cfg.P2PDLSpeed ?? 0).toString();
-            txtP2PULSpeed.value = (cfg.P2PULSpeed ?? 0).toString();
-            toggleP2PFields();
-          } catch (e) {
-            console.error(e);
-          } finally {
-            Dashboard.hideLoadingMsg();
-          }
-        }
+        chkP2PEnabled.checked = cfg.P2PEnabled ?? true;
+        txtP2PDLSpeed.value = (cfg.P2PDLSpeed ?? 0).toString();
+        txtP2PULSpeed.value = (cfg.P2PULSpeed ?? 0).toString();
+        toggleP2PFields();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        Dashboard.hideLoadingMsg();
+      }
+    }
 
-        async function saveConfig(e) {
-          e.preventDefault();
-          Dashboard.showLoadingMsg();
-          try {
-            const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            cfg.Url = (txtUrl.value || "").trim();
-cfg.MoviePath = txtMoviePath.value.trim() || null;
-            cfg.SeriesPath = txtSeriesPath.value.trim() || null;
-            cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
-                        cfg.CreateCollections = !!chkCreateCollections.checked;
-            
-                        cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 3600;            
-                        cfg.StreamTTL = parseInt(txtStreamTTL.value) || 250;
-            cfg.EnableSubs = !!chkEnableSubs.checked;
-            cfg.EnableMixed = !!chkEnableMixed.checked;
-            cfg.FilterUnreleased = chkFilterUnreleased.checked ?? false;
-            cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) ?? 30;
+    async function saveConfig(e) {
+      e.preventDefault();
+      Dashboard.showLoadingMsg();
+      try {
+        const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
+        cfg.Url = (txtUrl.value || "").trim();
+        cfg.MoviePath = txtMoviePath.value.trim() || null;
+        cfg.SeriesPath = txtSeriesPath.value.trim() || null;
+        cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
+        cfg.CreateCollections = !!chkCreateCollections.checked;
+        cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 3600;
+        cfg.StreamTTL = parseInt(txtStreamTTL.value) || 250;
+        cfg.EnableSubs = !!chkEnableSubs.checked;
+        cfg.EnableMixed = !!chkEnableMixed.checked;
+        cfg.FilterUnreleased = chkFilterUnreleased.checked ?? false;
+        cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) ?? 30;
 
-            cfg.FFmpegAnalyzeDuration = (txtFFmpegAnalyzeDuration.value || "5M").trim();
-            cfg.FFmpegProbeSize = (txtFFmpegProbeSize.value || "40M").trim();
+        cfg.FFmpegAnalyzeDuration = (txtFFmpegAnalyzeDuration.value || "5M").trim();
+        cfg.FFmpegProbeSize = (txtFFmpegProbeSize.value || "40M").trim();
 
-            cfg.P2PEnabled = !!chkP2PEnabled.checked;
-            cfg.P2PDLSpeed = parseInt(txtP2PDLSpeed.value) || 0;
-            cfg.P2PULSpeed = parseInt(txtP2PULSpeed.value) || 0;
+        cfg.P2PEnabled = !!chkP2PEnabled.checked;
+        cfg.P2PDLSpeed = parseInt(txtP2PDLSpeed.value) || 0;
+        cfg.P2PULSpeed = parseInt(txtP2PULSpeed.value) || 0;
 
-            await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
-            Dashboard.processPluginConfigurationUpdateResult();
-          } catch (e) {
-            console.error(e);
-          } finally {
-            Dashboard.hideLoadingMsg();
-          }
-        }
+        await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
+        Dashboard.processPluginConfigurationUpdateResult();
+      } catch (e) {
+        console.error(e);
+      } finally {
+        Dashboard.hideLoadingMsg();
+      }
+    }
 
-        function init() {
-          form.addEventListener("submit", saveConfig);
-          chkP2PEnabled.addEventListener("change", toggleP2PFields);
-          loadConfig();
-        }
+    function init() {
+      form.addEventListener("submit", saveConfig);
+      chkP2PEnabled.addEventListener("change", toggleP2PFields);
+      loadConfig();
+    }
 
-        page.addEventListener("pageshow", init);
-      })();
-    </script>
+    page.addEventListener("pageshow", init);
+  })();
+</script>
+
+
   </div>
 </body>
 
