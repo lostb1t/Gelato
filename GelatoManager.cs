@@ -853,7 +853,7 @@ public class GelatoManager
         }
         return g;
     })
-    .ToDictionary(g => g.Key, g => g.First())
+    .ToDictionary(g => g.Key, g => g.First());
 
         int seasonsInserted = 0;
         int episodesInserted = 0;
