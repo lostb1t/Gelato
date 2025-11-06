@@ -76,7 +76,7 @@ namespace Gelato.Tasks
 
             var opts = new ParallelOptions
             {
-                MaxDegreeOfParallelism = 5,
+                MaxDegreeOfParallelism = 4,
                 CancellationToken = cancellationToken,
             };
 
