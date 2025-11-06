@@ -825,7 +825,7 @@ public class GelatoManager
             seriesRootFolder.AddChild(series);
         }
 
-        var existingSeasonsDict = _library
+        var existingSeasonNumbers = _library
             .GetItemList(
                 new InternalItemsQuery
                 {
@@ -836,8 +836,9 @@ public class GelatoManager
                 }
             )
             .OfType<Season>()
-            .Where(s => s.IndexNumber.HasValue)
-            .ToDictionary(s => s.IndexNumber!.Value, s => s);
+    .Where(s => s.IndexNumber.HasValue)
+    .Select(s => s.IndexNumber!.Value)
+    .ToHashSet();
 
         int seasonsInserted = 0;
         int episodesInserted = 0;
@@ -852,7 +853,7 @@ public class GelatoManager
             var seasonIndex = seasonGroup.Key;
             var seasonPath = $"{series.Path}:{seasonIndex}";
 
-            if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
+            if (!existingSeasonNumbers.Contains(seasonIndex))
             {
                 _log.LogTrace(
                     "Creating series {SeriesName} season {SeasonIndex:D2}",
@@ -879,20 +880,20 @@ public class GelatoManager
             }
 
             // Get existing episodes once per season and create dictionary
-            var existingEpisodesDict = _library
-                .GetItemList(
-                    new InternalItemsQuery
-                    {
-                        ParentId = season.Id,
-                        IncludeItemTypes = new[] { BaseItemKind.Episode },
-                        Recursive = true,
-                        IsDeadPerson = true,
-                    }
-                )
-                .OfType<Episode>()
-                .Where(x => !IsStream(x) && x.IndexNumber.HasValue)
-                .ToDictionary(e => e.IndexNumber!.Value, e => e);
-
+            var existingEpisodeNumbers = _library
+    .GetItemList(
+        new InternalItemsQuery
+        {
+            ParentId = season.Id,
+            IncludeItemTypes = new[] { BaseItemKind.Episode },
+            Recursive = true,
+            IsDeadPerson = true,
+        }
+    )
+    .OfType<Episode>()
+    .Where(x => !IsStream(x) && x.IndexNumber.HasValue)
+    .Select(e => e.IndexNumber!.Value)
+    .ToHashSet();
             var seasonStremioId = season.GetProviderId("Stremio");
 
             foreach (var epMeta in seasonGroup)
@@ -911,7 +912,7 @@ public class GelatoManager
                     continue;
                 }
 
-                if (existingEpisodesDict.ContainsKey(index.Value))
+if (existingEpisodeNumbers.Contains(index.Value))
                 {
                     _log.LogDebug(
                         "Episode {EpisodeName} already exists, skipping",
