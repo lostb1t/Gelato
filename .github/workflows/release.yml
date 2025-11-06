@@ -1,0 +1,30 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.17.10.0)'
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure Git
+        run: |
+          git config user.name "${{ github.repository_owner }}"
+          git config user.email "${{ github.event.pusher.email || format('{0}@users.noreply.github.com', github.repository_owner) }}"
+      
+      - name: Run make release
+        run: make release VERSION=${{ inputs.version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
