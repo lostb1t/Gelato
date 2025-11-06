@@ -74,16 +74,19 @@ namespace Gelato.Tasks
             var total = Math.Max(1, catalogs.Count * maxPerCatalog);
             long done = 0;
 
-            var opts = new ParallelOptions
-            {
-                MaxDegreeOfParallelism = 4,
-                CancellationToken = cancellationToken,
-            };
+            //var opts = new ParallelOptions
+           // {
+           //     MaxDegreeOfParallelism = 4,
+           //     CancellationToken = cancellationToken,
+            //};
 
-            await Parallel.ForEachAsync(
-                catalogs,
-                opts,
-                async (cat, ct) =>
+            //await Parallel.ForEachAsync(
+             //   catalogs,
+             //   opts,
+             //   async (cat, ct) =>
+
+// dont do parallel because it can lead to dupes
+foreach (var cat in catalogs)
                 {
                     _log.LogInformation("Processing catalog: {Type} / {Id}", cat.Type, cat.Id);
 
@@ -113,7 +116,7 @@ e.IsRequired
 
                             foreach (var meta in page)
                             {
-                                ct.ThrowIfCancellationRequested();
+                                //ct.ThrowIfCancellationRequested();
 
                                 var mediaType = meta.Type;
                                 var baseItemKind = mediaType.ToBaseItem();
@@ -136,7 +139,7 @@ e.IsRequired
                                 try
                                 {
                                     var (item, created) = await _manager
-                                        .InsertMeta(root, meta, true, true, false, ct)
+                                        .InsertMeta(root, meta, true, true, false, cancellationToken)
                                         .ConfigureAwait(false);
 
                                     if (item != null && shouldCreateCollection)
