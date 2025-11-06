@@ -68,6 +68,7 @@ namespace Gelato.Tasks
             var movieFolder = _manager.TryGetMovieFolder();
             var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
             var collectionMaxItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
+  
 
             // Progress counters
             var total = Math.Max(1, catalogs.Count * maxPerCatalog);
@@ -92,6 +93,10 @@ namespace Gelato.Tasks
                         var processed = 0;
                         var collectionCommited = false;
                         var addToCollectionIds = new List<Guid>();
+                        var shouldCreateCollection = cat.Extra?.Any(e =>
+                            string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase) &&
+e.IsRequired
+                        ) && createCollections && !collectionCommited;
 
                         while (processed < maxPerCatalog)
                         {
@@ -134,7 +139,7 @@ namespace Gelato.Tasks
                                         .InsertMeta(root, meta, true, true, false, ct)
                                         .ConfigureAwait(false);
 
-                                    if (item != null && createCollections && !collectionCommited)
+                                    if (item != null && shouldCreateCollection)
                                     {
                                         addToCollectionIds.Add(item.Id);
                                     }
@@ -155,8 +160,7 @@ namespace Gelato.Tasks
                                 progress.Report(Math.Min(100, (current / (double)total) * 100.0));
 
                                 if (
-                                    createCollections
-                                    && !collectionCommited
+                                    shouldCreateCollection
                                     && addToCollectionIds.Count >= collectionMaxItems
                                 )
                                 {
