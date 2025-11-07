@@ -12,6 +12,7 @@ using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Data.Events;
+using Gelato.Common;
 
 namespace Gelato.Providers
 {
@@ -26,6 +27,7 @@ namespace Gelato.Providers
         private readonly IProviderManager _provider;
         private readonly ConcurrentDictionary<Guid, DateTime> _syncCache = new();
         private static readonly TimeSpan CacheExpiry = TimeSpan.FromMinutes(2);
+        private readonly KeyLock _lock = new();
         
         public GelatoSeriesProvider(
             ILogger<GelatoSeriesProvider> logger,
@@ -56,6 +58,7 @@ namespace Gelato.Providers
                 _log.LogWarning("gelato is not ready");
                 return;
             }
+
             if (!IsEnabledForLibrary(genericEventArgs.Argument))
             {
                 _log.LogInformation("{ProviderName} not enabled for {InputName}", ProviderName, genericEventArgs.Argument.Name);
@@ -79,6 +82,9 @@ namespace Gelato.Providers
                     return;
                 }
             }
+            
+            // Update cache before syncing
+            _syncCache[series.Id] = now;
 
             var seriesFolder = _manager.TryGetSeriesFolder();
             if (seriesFolder is null)
@@ -86,6 +92,12 @@ namespace Gelato.Providers
                 _log.LogWarning("No series folder found");
                 return;
             }
+            
+              //   await _lock
+              //      .RunSingleFlightAsync(
+               //         series.Id,
+               //         async ct =>
+               //         {
             try {
             var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
             if (meta is null)
@@ -94,13 +106,11 @@ namespace Gelato.Providers
                 return;
             }
 
-            // Update cache before syncing
-            _syncCache[series.Id] = now;
-
             await _manager.SyncSeriesTreesAsync(seriesFolder, meta, CancellationToken.None);
             } catch (Exception ex) {
                 _log.LogError(ex, "failed sync series for {Name}", series.Name);
             }
+          //  });
             _log.LogInformation("synced series tree for {Name}", series.Name);
         }
         
