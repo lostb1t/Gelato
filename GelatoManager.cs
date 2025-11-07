@@ -94,8 +94,11 @@ public class GelatoManager
         _library = libraryManager;
         _fileSystem = fileSystem;
 
-        _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
+        
+
     }
+
+    
 
     // jf preferes path but we want to match on id.
     private void OnItemsAddedToCollection(object sender, CollectionModifiedEventArgs e)
