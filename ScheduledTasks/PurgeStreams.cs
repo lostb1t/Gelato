@@ -42,7 +42,7 @@ namespace Gelato.Tasks
             _repo = repo;
         }
 
-        public string Name => "Gelato: purge all streams";
+        public string Name => "Purge streams";
         public string Key => "PurgeGelatoStreamsTask";
         public string Description => "Removes all stremio streams";
         public string Category => "Gelato Maintenance";
