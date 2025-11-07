@@ -72,39 +72,39 @@ namespace Gelato
         }
 
         private async Task<T?> GetJsonAsync<T>(string url)
+{
+    _log.LogDebug("GetJsonAsync: requesting {Url}", url);
+
+    try
+    {
+        var c = NewClient();
+        var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
+        
+        if (!resp.IsSuccessStatusCode)
         {
-            _log.LogDebug("GetJsonAsync: requesting {Url}", url);
+            _log.LogWarning(
+                "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
+                url,
+                resp.StatusCode,
+                resp.ReasonPhrase
+            );
 
-            try
-            {
-                using var c = NewClient();
-                using var resp = await c.GetAsync(url).ConfigureAwait(false);
-
-                if (!resp.IsSuccessStatusCode)
-                {
-                    _log.LogWarning(
-                        "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
-                        url,
-                        resp.StatusCode,
-                        resp.ReasonPhrase
-                    );
-
-                    throw new HttpRequestException(
-                        $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
-                        null,
-                        resp.StatusCode
-                    );
-                }
-
-                await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
-                throw;
-            }
+            throw new HttpRequestException(
+                $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
+                null,
+                resp.StatusCode
+            );
         }
+
+        await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
+    }
+    catch (Exception ex)
+    {
+        _log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
+        throw;
+    }
+}
 
         public async Task<StremioManifest?> GetManifestAsync(bool force = false)
         {
@@ -120,7 +120,7 @@ namespace Gelato
             {
                 MovieSearchCatalog = m
                     .Catalogs.Where(c =>
-                        c.Type == StremioMediaType.Movie
+                        c.Type.ToLower() == StremioMediaType.Movie.ToString().ToLower()
                         && c.Extra?.Any(e =>
                             string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
                         ) == true
@@ -132,7 +132,7 @@ namespace Gelato
 
                 SeriesSearchCatalog = m
                     .Catalogs.Where(c =>
-                        c.Type == StremioMediaType.Series
+                        c.Type.ToLower() == StremioMediaType.Series.ToString().ToLower()
                         && c.Extra?.Any(e =>
                             string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
                         ) == true
@@ -245,7 +245,7 @@ namespace Gelato
 
         public async Task<IReadOnlyList<StremioMeta>> GetCatalogMetasAsync(
             string id,
-            StremioMediaType mediaType,
+            string mediaType,
             string? search = null,
             int? skip = null
         )
@@ -255,7 +255,9 @@ namespace Gelato
                 extras.Add($"search={Uri.EscapeDataString(search)}");
             if (skip is > 0)
                 extras.Add($"skip={skip}");
-            var url = BuildUrl(new[] { "catalog", mediaType.ToString().ToLower(), id }, extras);
+            
+            // seen maybe one type thats capital, but thats their issue
+            var url = BuildUrl(new[] { "catalog", mediaType.ToLower(), id }, extras);
             var r = await GetJsonAsync<StremioCatalogResponse>(url);
             return r?.Metas ?? new();
         }
@@ -284,7 +286,7 @@ namespace Gelato
             }
             ;
 
-            return await GetCatalogMetasAsync(catalog.Id, mediaType, query, skip);
+            return await GetCatalogMetasAsync(catalog.Id, mediaType.ToString(), query, skip);
         }
 
         private static (string? type, string? extId) ResolveKey(BaseItem entity)
@@ -326,8 +328,11 @@ namespace Gelato
 
     public class StremioCatalog
     {
-        [JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
-        public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
+        //[JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
+        //public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
+        
+        // we dont cast to enum cause types is not a static set
+        public string Type { get; set; } = "";
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public List<StremioExtra> Extra { get; set; } = new();
