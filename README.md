@@ -41,6 +41,9 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 4. Add the configured base paths to the Jellyfin library of your choice. After adding them, start a library scan.
 
+4.5 For shows, enable the "Gelato missing season/episode fetcher" and put
+it on too of the metadata downloaders.
+
 5. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
 
 For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/discussions/40)
