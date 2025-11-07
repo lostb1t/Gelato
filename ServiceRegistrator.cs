@@ -38,7 +38,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
             sp.GetRequiredService<GelatoManager>()
         ));
-        services.AddHostedService<FFmpegConfigSetter>();
+        services.AddHostedService<GelatoService>();
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
@@ -55,15 +55,17 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         });
     }
 
-    public class FFmpegConfigSetter : IHostedService
+    public class GelatoService : IHostedService
     {
         private readonly IConfiguration _config;
-        private readonly ILogger<FFmpegConfigSetter> _log;
+        private readonly ILogger<GelatoService> _log;
+private readonly GelatoStremioProvider _provider;
 
-        public FFmpegConfigSetter(IConfiguration config, ILogger<FFmpegConfigSetter> log)
+        public GelatoService(IConfiguration config, ILogger<GelatoService> log, GelatoStremioProvider provider)
         {
             _config = config;
             _log = log;
+ _provider = provider;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -79,6 +81,9 @@ public class ServiceRegistrator : IPluginServiceRegistrator
                 probe,
                 analyze
             );
+
+            // warmup cache
+            await _provider.IsReady();
             return Task.CompletedTask;
         }
 
