@@ -66,6 +66,6 @@ GelatoStremioProvider provider,
         _manager.ClearCache();
         _manager.TryGetMovieFolder();
         _manager.TryGetSeriesFolder();
-await _provider.GetManifestAsync(true);
+        _ = _provider.GetManifestAsync(true);
     }
 }
