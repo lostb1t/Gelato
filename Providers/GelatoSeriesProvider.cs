@@ -52,6 +52,10 @@ namespace Gelato.Providers
 
         private async void OnProviderManagerRefreshStarted(object? sender, GenericEventArgs<BaseItem> genericEventArgs)
         {
+            if (!_manager.IsReady()) {
+                _log.LogWarning("gelato is not ready");
+                return;
+            }
             if (!IsEnabledForLibrary(genericEventArgs.Argument))
             {
                 _log.LogInformation("{ProviderName} not enabled for {InputName}", ProviderName, genericEventArgs.Argument.Name);

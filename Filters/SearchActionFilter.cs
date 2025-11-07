@@ -54,7 +54,6 @@ namespace Gelato.Filters
             ActionExecutionDelegate next
         )
         {
-            // Pass through if not ready, not a search action, or no search term
             if (
                 !await _provider.IsReady()
                 || GelatoPlugin.Instance.Configuration.DisableSearch

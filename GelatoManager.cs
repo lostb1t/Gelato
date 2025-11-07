@@ -294,7 +294,8 @@ public class GelatoManager
         }
 
         var baseItemKind = mediaType.ToBaseItem();
-
+        
+        // load in full metadata if needed.
         if (
             allowRemoteRefresh
             && (

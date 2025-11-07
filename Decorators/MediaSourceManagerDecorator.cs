@@ -85,6 +85,7 @@ namespace Gelato.Decorators
                 || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, "GetDownload", StringComparison.OrdinalIgnoreCase)  
                 || string.Equals(name, "GetSubtitleWithTicks", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(
                     name,
