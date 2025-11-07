@@ -171,15 +171,7 @@ namespace Gelato
 
         public async Task<bool> IsReady()
         {
-            try
-            {
-                var manifest = await GetManifestAsync();
-                return manifest != null;
-            }
-            catch
-            {
-                return false;
-            }
+            return _manifest != null;
         }
 
         public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)
