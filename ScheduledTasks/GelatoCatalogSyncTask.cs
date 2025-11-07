@@ -63,16 +63,35 @@ namespace Gelato.Tasks
                 return;
             }
 
+            
             var maxPerCatalog = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
             var seriesFolder = _manager.TryGetSeriesFolder();
             var movieFolder = _manager.TryGetMovieFolder();
             var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
             var collectionMaxItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
   
+                       if (seriesFolder is null)
+                                {
 
+                                    _log.LogWarning(
+                                        "No series root folder found"
+                                          
+                                    );
+                                }
+
+                                                       if (movieFolder is null)
+                                {
+
+                                    _log.LogWarning(
+                                        "No movie root folder found"
+                                          
+                                    );
+                                }
+                                
             // Progress counters
             var total = Math.Max(1, catalogs.Count * maxPerCatalog);
             long done = 0;
+            progress.Report(done);
 
             //var opts = new ParallelOptions
            // {
@@ -120,21 +139,18 @@ e.IsRequired
 
                                 var mediaType = meta.Type;
                                 var baseItemKind = mediaType.ToBaseItem();
-
+                                
+                                // catalog dan contain multiple types.
+                                
                                 var root =
                                     baseItemKind == BaseItemKind.Series ? seriesFolder
                                     : baseItemKind == BaseItemKind.Movie ? movieFolder
                                     : null;
 
-                                if (root is null)
+                                if (root is not null)
                                 {
-                                    _log.LogWarning(
-                                        "Catalog task: No {Type} root folder found; skipping {Type}/{Id}",
-                                        mediaType,
-                                        cat.Id
-                                    );
-                                    continue;
-                                }
+                                  
+                                  
 
                                 try
                                 {
@@ -157,11 +173,13 @@ e.IsRequired
                                         ex.StackTrace
                                     );
                                 }
-
+}
                                 processed++;
                                 var current = Interlocked.Increment(ref done);
                                 progress.Report(Math.Min(100, (current / (double)total) * 100.0));
-
+                                
+                                // commit the collection if needed
+ 
                                 if (
                                     shouldCreateCollection
                                     && addToCollectionIds.Count >= collectionMaxItems

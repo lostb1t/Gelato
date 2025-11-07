@@ -61,7 +61,7 @@ namespace Gelato.Providers
             var series = genericEventArgs.Argument as Series;
             if (series is null)
             {
-                _log.LogWarning("{Name} is not a Series", genericEventArgs.Argument.Name);
+                _log.LogDebug("{Name} is not a Series", genericEventArgs.Argument.Name);
                 return;
             }
 
