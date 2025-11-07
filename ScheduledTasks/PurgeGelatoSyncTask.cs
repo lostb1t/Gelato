@@ -36,7 +36,7 @@ namespace Gelato.Tasks
             _manager = manager;
         }
 
-        public string Name => "Gelato: WARNING purge all items";
+        public string Name => "WARNING purge all gelato items";
         public string Key => "PurgeGelatoSyncTask";
         public string Description => "Removes all stremio items (local items are kept)";
         public string Category => "Gelato Maintenance";
