@@ -52,7 +52,7 @@ namespace Gelato.Providers
 
         private async void OnProviderManagerRefreshStarted(object? sender, GenericEventArgs<BaseItem> genericEventArgs)
         {
-            if (!_manager.IsReady()) {
+            if (!await _stremio.IsReady()) {
                 _log.LogWarning("gelato is not ready");
                 return;
             }
