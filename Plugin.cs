@@ -15,10 +15,12 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly ILogger<GelatoPlugin> _log;
     private readonly ILibraryManager _library;
     private readonly GelatoManager _manager;
+private readonly GelatoStremioProvider _provider;
 
     public GelatoPlugin(
         IApplicationPaths applicationPaths,
         GelatoManager manager,
+GelatoStremioProvider provider,
         IXmlSerializer xmlSerializer,
         ILogger<GelatoPlugin> log,
         ILibraryManager library
@@ -29,6 +31,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _log = log;
         _library = library;
         _manager = manager;
+        _provider = provider;
 
         //  _manager.TryGetMovieFolder();
         //  _manager.TryGetSeriesFolder();
@@ -63,5 +66,6 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _manager.ClearCache();
         _manager.TryGetMovieFolder();
         _manager.TryGetSeriesFolder();
+await _provider.GetManifestAsync(true);
     }
 }
