@@ -287,7 +287,7 @@ namespace Gelato
 
             if (catalog == null)
             {
-                _log.LogError("SearchAsync: {mediaType} has no search catalog", mediaType);
+                _log.LogError("SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.", mediaType);
                 return Array.Empty<StremioMeta>();
             }
             ;
