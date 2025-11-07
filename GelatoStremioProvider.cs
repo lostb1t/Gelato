@@ -110,7 +110,7 @@ namespace Gelato
         {
             if (!force && _manifest is not null)
                 return _manifest;
-
+try {
             var baseUrl = GetBaseUrlOrThrow();
             var url = $"{baseUrl}/manifest.json";
             var m = await GetJsonAsync<StremioManifest>(url);
@@ -167,6 +167,11 @@ namespace Gelato
                 );
             }
             return m;
+             }   catch (Exception ex)
+    {
+        _log.LogError(ex, "GetManifestAsync: error getting manifest");
+        return null;
+    }
         }
 
         public async Task<bool> IsReady()
