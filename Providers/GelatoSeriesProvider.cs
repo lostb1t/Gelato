@@ -86,7 +86,7 @@ namespace Gelato.Providers
                 _log.LogWarning("No series folder found");
                 return;
             }
-
+            try {
             var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
             if (meta is null)
             {
@@ -98,8 +98,10 @@ namespace Gelato.Providers
             _syncCache[series.Id] = now;
 
             await _manager.SyncSeriesTreesAsync(seriesFolder, meta, CancellationToken.None);
-            
-            _log.LogInformation("Synced series tree for {Name}", series.Name);
+            } catch (Exception ex) {
+                _log.LogError(ex, "failed sync series for {Name}", series.Name);
+            }
+            _log.LogInformation("synced series tree for {Name}", series.Name);
         }
         
         public async Task<MetadataResult<Series>> GetMetadata(
