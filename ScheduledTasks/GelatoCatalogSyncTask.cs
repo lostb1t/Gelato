@@ -39,7 +39,7 @@ namespace Gelato.Tasks
             _collections = collections;
         }
 
-        public string Name => "Gelato: Catalogs import";
+        public string Name => "Import catalogs";
         public string Key => "GelatoCatalogItemsSync";
         public string Description =>
             "Loads all Stremio catalogs items and inserts/updates items in the Jellyfin database.";
