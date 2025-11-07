@@ -169,7 +169,7 @@ try {
             return m;
              }   catch (Exception ex)
     {
-        _log.LogError(ex, "GetManifestAsync: error getting manifest");
+        _log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
         return null;
     }
         }

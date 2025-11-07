@@ -57,6 +57,7 @@ namespace Gelato.Filters
             // Pass through if not ready, not a search action, or no search term
             if (
                 !await _provider.IsReady()
+                || GelatoPlugin.Instance.Configuration.DisableSearch
                 || !ctx.IsApiSearchAction()
                 || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
             )

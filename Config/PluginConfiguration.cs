@@ -26,6 +26,7 @@ namespace Gelato.Configuration
         public string FFmpegProbeSize { get; set; } = "40M";
         public bool CreateCollections { get; set; } = false;
         public int MaxCollectionItems { get; set; } = 100;
+        public bool DisableSearch { get; set; } = false;
 
         public string GetBaseUrl()
         {

@@ -326,7 +326,7 @@ public class GelatoManager
 
         if (!meta.IsValid())
         {
-            _log.LogWarning("meta for {Name} is not valid, skipping", meta.Name);
+            _log.LogWarning("meta for {Id} is not valid {Name} , skipping", meta.Id, meta.GetName());
             return (null, false);
         }
 
