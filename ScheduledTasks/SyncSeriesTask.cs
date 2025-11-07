@@ -39,7 +39,7 @@ namespace Gelato.Tasks
             _stremio = stremio;
         }
 
-        public string Name => "Gelato: Sync running series";
+        public string Name => "Gelato: Missing season/episode fetcher";
         public string Key => "SyncRunningSeries";
         public string Description =>
             "Scans all TV libraries for continuing series and builds their series trees.";
