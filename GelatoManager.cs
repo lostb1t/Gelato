@@ -94,7 +94,7 @@ public class GelatoManager
         _library = libraryManager;
         _fileSystem = fileSystem;
 
-        
+        _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
 
     }
 

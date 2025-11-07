@@ -13,6 +13,14 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Configuration;
+using MediaBrowser.Model.Entities;
 
 namespace Gelato.Tasks
 {
@@ -64,6 +72,24 @@ namespace Gelato.Tasks
             {
                 allChildren.AddRange(series.GetRecursiveChildren());
             }
+            
+            var query = new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+                Recursive = true,
+                HasAnyProviderId = new()
+                {
+                    { "GelatoCatalogId", string.Empty },
+                },
+                // skip filters marker
+                IsDeadPerson = true,
+            };
+
+var collections = _library
+                .GetItemList(query)
+                .OfType<BoxSet>()
+                .ToArray();
+          allChildren.AddRange(collections);
 
             int total = allChildren.Count;
             int deleted = 0;
@@ -91,6 +117,8 @@ namespace Gelato.Tasks
 
                 progress?.Report(Math.Min(100.0, (double)deleted / total * 100.0));
             }
+            
+            // collections
 
             _manager.ClearCache();
             progress?.Report(100.0);

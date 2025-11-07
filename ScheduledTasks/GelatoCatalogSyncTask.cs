@@ -115,11 +115,12 @@ foreach (var cat in catalogs)
                         var processed = 0;
                         var collectionCommited = false;
                         var addToCollectionIds = new List<Guid>();
-                        var shouldCreateCollection = cat.Extra?.Any(e =>
-                            string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase) &&
-e.IsRequired
-                        ) == true && createCollections && !collectionCommited;
+var genreExtra = cat.Extra?.FirstOrDefault(e =>
+    string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase));
 
+var shouldCreateCollection = !(genreExtra?.IsRequired == true) 
+    && createCollections 
+    && !collectionCommited; 
                         while (processed < maxPerCatalog)
                         {
                             //ct.ThrowIfCancellationRequested();
@@ -201,11 +202,11 @@ e.IsRequired
                         }
 
                         if (
-                            createCollections
+                            shouldCreateCollection
                             && addToCollectionIds.Count != 0
-                            && !collectionCommited
                         )
                         {
+
                             await SaveCollection(cat, addToCollectionIds).ConfigureAwait(false);
                             addToCollectionIds.Clear();
                         }
@@ -272,8 +273,10 @@ e.IsRequired
         {
             var collection = await GetOrCreateBoxSetByIdAsync(cat.Id, cat.Name)
                 .ConfigureAwait(false);
+
             if (collection != null)
             {
+
                 var childrenIds = _library
                     .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
                     .Select(i => i.Id)
@@ -282,6 +285,7 @@ e.IsRequired
                 await _collections
                     .RemoveFromCollectionAsync(collection.Id, childrenIds)
                     .ConfigureAwait(false);
+
                 await _collections.AddToCollectionAsync(collection.Id, ids).ConfigureAwait(false);
 
                 _log.LogInformation("{Id}: added {Count} items to collection", cat.Id, ids.Count);
