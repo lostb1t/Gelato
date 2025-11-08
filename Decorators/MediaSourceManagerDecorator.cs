@@ -20,6 +20,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Controller.Entities.TV;
 
 namespace Gelato.Decorators
 {
@@ -180,7 +181,26 @@ namespace Gelato.Decorators
                 .ToList();
 
             // we dont use jellyfins alternate versions crap. So we have to load it ourselves
-            var query = new InternalItemsQuery
+            
+            InternalItemsQuery query;
+
+if (item.GetBaseItemKind() == BaseItemKind.Episode)
+{
+var episode = (Episode)item;
+            query = new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                ParentId = episode.SeasonId,
+                Recursive = false,
+                GroupByPresentationUniqueKey = false,
+                GroupBySeriesPresentationUniqueKey = false,
+                CollapseBoxSetItems = false,
+                IsDeadPerson = true,
+                  IndexNumber = episode.IndexNumber
+            };
+          } else {
+            
+            query = new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { item.GetBaseItemKind() },
                 HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
@@ -190,7 +210,9 @@ namespace Gelato.Decorators
                 CollapseBoxSetItems = false,
                 IsDeadPerson = true,
             };
-
+          }
+            
+            
             var gelatoStreams = _repo
                 .GetItemList(query)
                 .OfType<Video>()
