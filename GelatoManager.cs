@@ -234,13 +234,13 @@ public class GelatoManager
     public static void SeedFolder(string path)
     {
         Directory.CreateDirectory(path);
-        var seed = System.IO.Path.Combine(path, ".ignore");
-        //if (!File.Exists(seed))
-        //    File.Create(seed).Close();
-        File.WriteAllText(
+        var seed = System.IO.Path.Combine(path, "stub.txt");
+        if (!File.Exists(seed)) {
+          File.WriteAllText(
             seed,
             "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
         );
+}
     }
 
     public Folder? TryGetMovieFolder()
