@@ -241,6 +241,8 @@ public class GelatoManager
             "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
         );
 }
+        var ignore = System.IO.Path.Combine(path, ".ignore");
+File.Delete(ignore);
     }
 
     public Folder? TryGetMovieFolder()
