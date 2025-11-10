@@ -9,6 +9,7 @@ using Gelato.Common;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
@@ -20,7 +21,6 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using MediaBrowser.Controller.Entities.TV;
 
 namespace Gelato.Decorators
 {
@@ -86,7 +86,7 @@ namespace Gelato.Decorators
                 || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetDownload", StringComparison.OrdinalIgnoreCase)  
+                || string.Equals(name, "GetDownload", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(name, "GetSubtitleWithTicks", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(
                     name,
@@ -181,38 +181,38 @@ namespace Gelato.Decorators
                 .ToList();
 
             // we dont use jellyfins alternate versions crap. So we have to load it ourselves
-            
+
             InternalItemsQuery query;
 
-if (item.GetBaseItemKind() == BaseItemKind.Episode)
-{
-var episode = (Episode)item;
-            query = new InternalItemsQuery
+            if (item.GetBaseItemKind() == BaseItemKind.Episode)
             {
-                IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                ParentId = episode.SeasonId,
-                Recursive = false,
-                GroupByPresentationUniqueKey = false,
-                GroupBySeriesPresentationUniqueKey = false,
-                CollapseBoxSetItems = false,
-                IsDeadPerson = true,
-                  IndexNumber = episode.IndexNumber
-            };
-          } else {
-            
-            query = new InternalItemsQuery
+                var episode = (Episode)item;
+                query = new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                    ParentId = episode.SeasonId,
+                    Recursive = false,
+                    GroupByPresentationUniqueKey = false,
+                    GroupBySeriesPresentationUniqueKey = false,
+                    CollapseBoxSetItems = false,
+                    IsDeadPerson = true,
+                    IndexNumber = episode.IndexNumber,
+                };
+            }
+            else
             {
-                IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
-                Recursive = false,
-                GroupByPresentationUniqueKey = false,
-                GroupBySeriesPresentationUniqueKey = false,
-                CollapseBoxSetItems = false,
-                IsDeadPerson = true,
-            };
-          }
-            
-            
+                query = new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                    HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
+                    Recursive = false,
+                    GroupByPresentationUniqueKey = false,
+                    GroupBySeriesPresentationUniqueKey = false,
+                    CollapseBoxSetItems = false,
+                    IsDeadPerson = true,
+                };
+            }
+
             var gelatoStreams = _repo
                 .GetItemList(query)
                 .OfType<Video>()

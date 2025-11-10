@@ -56,38 +56,42 @@ public class ServiceRegistrator : IPluginServiceRegistrator
     }
 
     public class GelatoService : IHostedService
-{
-    private readonly IConfiguration _config;
-    private readonly ILogger<GelatoService> _log;
-    private readonly GelatoStremioProvider _provider;
-
-    public GelatoService(IConfiguration config, ILogger<GelatoService> log, GelatoStremioProvider provider)
     {
-        _config = config;
-        _log = log;
-        _provider = provider;
+        private readonly IConfiguration _config;
+        private readonly ILogger<GelatoService> _log;
+        private readonly GelatoStremioProvider _provider;
+
+        public GelatoService(
+            IConfiguration config,
+            ILogger<GelatoService> log,
+            GelatoStremioProvider provider
+        )
+        {
+            _config = config;
+            _log = log;
+            _provider = provider;
+        }
+
+        public async Task StartAsync(CancellationToken cancellationToken)
+        {
+            var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
+            var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "40M";
+
+            _config["FFmpeg:probesize"] = probe;
+            _config["FFmpeg:analyzeduration"] = analyze;
+
+            _log.LogInformation(
+                "Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}",
+                probe,
+                analyze
+            );
+
+            // warmup cache
+            await _provider.GetManifestAsync(true);
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
-
-    public async Task StartAsync(CancellationToken cancellationToken)
-    {
-        var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
-        var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "40M";
-
-        _config["FFmpeg:probesize"] = probe;
-        _config["FFmpeg:analyzeduration"] = analyze;
-
-        _log.LogInformation(
-            "Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}",
-            probe,
-            analyze
-        );
-
-        // warmup cache
-        await _provider.GetManifestAsync(true);
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
 }
 
 public static class ServiceCollectionDecorationExtensions

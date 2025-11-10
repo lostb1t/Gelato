@@ -63,100 +63,97 @@ namespace Gelato.Tasks
                 return;
             }
 
-            
             var maxPerCatalog = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
             var seriesFolder = _manager.TryGetSeriesFolder();
             var movieFolder = _manager.TryGetMovieFolder();
             var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
             var collectionMaxItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
-  
-                       if (seriesFolder is null)
-                                {
 
-                                    _log.LogWarning(
-                                        "No series root folder found"
-                                          
-                                    );
-                                }
+            if (seriesFolder is null)
+            {
+                _log.LogWarning("No series root folder found");
+            }
 
-                                                       if (movieFolder is null)
-                                {
+            if (movieFolder is null)
+            {
+                _log.LogWarning("No movie root folder found");
+            }
 
-                                    _log.LogWarning(
-                                        "No movie root folder found"
-                                          
-                                    );
-                                }
-                                
             // Progress counters
             var total = Math.Max(1, catalogs.Count * maxPerCatalog);
             long done = 0;
             progress.Report(done);
 
             //var opts = new ParallelOptions
-           // {
-           //     MaxDegreeOfParallelism = 4,
-           //     CancellationToken = cancellationToken,
+            // {
+            //     MaxDegreeOfParallelism = 4,
+            //     CancellationToken = cancellationToken,
             //};
 
             //await Parallel.ForEachAsync(
-             //   catalogs,
-             //   opts,
-             //   async (cat, ct) =>
+            //   catalogs,
+            //   opts,
+            //   async (cat, ct) =>
 
-// dont do parallel because it can lead to dupes
-foreach (var cat in catalogs)
+            // dont do parallel because it can lead to dupes
+            foreach (var cat in catalogs)
+            {
+                _log.LogInformation("Processing catalog: {Type} / {Id}", cat.Type, cat.Id);
+
+                try
                 {
-                    _log.LogInformation("Processing catalog: {Type} / {Id}", cat.Type, cat.Id);
+                    var skip = 0;
+                    var processed = 0;
+                    var collectionCommited = false;
+                    var addToCollectionIds = new List<Guid>();
+                    var genreExtra = cat.Extra?.FirstOrDefault(e =>
+                        string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase)
+                    );
 
-                    try
+                    var shouldCreateCollection =
+                        !(genreExtra?.IsRequired == true)
+                        && createCollections
+                        && !collectionCommited;
+                    while (processed < maxPerCatalog)
                     {
-                        var skip = 0;
-                        var processed = 0;
-                        var collectionCommited = false;
-                        var addToCollectionIds = new List<Guid>();
-var genreExtra = cat.Extra?.FirstOrDefault(e =>
-    string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase));
+                        //ct.ThrowIfCancellationRequested();
 
-var shouldCreateCollection = !(genreExtra?.IsRequired == true) 
-    && createCollections 
-    && !collectionCommited; 
-                        while (processed < maxPerCatalog)
+                        var page = await _stremio
+                            .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
+                            .ConfigureAwait(false);
+
+                        if (page is null || page.Count == 0)
+                        {
+                            break;
+                        }
+
+                        foreach (var meta in page)
                         {
                             //ct.ThrowIfCancellationRequested();
 
-                            var page = await _stremio
-                                .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
-                                .ConfigureAwait(false);
+                            var mediaType = meta.Type;
+                            var baseItemKind = mediaType.ToBaseItem();
 
-                            if (page is null || page.Count == 0)
+                            // catalog dan contain multiple types.
+
+                            var root =
+                                baseItemKind == BaseItemKind.Series ? seriesFolder
+                                : baseItemKind == BaseItemKind.Movie ? movieFolder
+                                : null;
+
+                            if (root is not null)
                             {
-                                break;
-                            }
-
-                            foreach (var meta in page)
-                            {
-                                //ct.ThrowIfCancellationRequested();
-
-                                var mediaType = meta.Type;
-                                var baseItemKind = mediaType.ToBaseItem();
-                                
-                                // catalog dan contain multiple types.
-                                
-                                var root =
-                                    baseItemKind == BaseItemKind.Series ? seriesFolder
-                                    : baseItemKind == BaseItemKind.Movie ? movieFolder
-                                    : null;
-
-                                if (root is not null)
-                                {
-                                  
-                                  
-
                                 try
                                 {
                                     var (item, created) = await _manager
-                                        .InsertMeta(root, meta, true, true, false, cancellationToken)
+                                        .InsertMeta(
+                                            root,
+                                            meta,
+                                            true,
+                                            true,
+                                            false,
+                                            cancellationToken
+                                        )
                                         .ConfigureAwait(false);
 
                                     if (item != null && shouldCreateCollection)
@@ -174,60 +171,54 @@ var shouldCreateCollection = !(genreExtra?.IsRequired == true)
                                         ex.StackTrace
                                     );
                                 }
-}
-                                processed++;
-                                var current = Interlocked.Increment(ref done);
-                                progress.Report(Math.Min(100, (current / (double)total) * 100.0));
-                                
-                                // commit the collection if needed
- 
-                                if (
-                                    shouldCreateCollection
-                                    && addToCollectionIds.Count >= collectionMaxItems
-                                )
-                                {
-                                    await SaveCollection(cat, addToCollectionIds)
-                                        .ConfigureAwait(false);
-                                    addToCollectionIds.Clear();
-                                    collectionCommited = true;
-                                }
+                            }
+                            processed++;
+                            var current = Interlocked.Increment(ref done);
+                            progress.Report(Math.Min(100, (current / (double)total) * 100.0));
 
-                                if (processed >= maxPerCatalog)
-                                {
-                                    break;
-                                }
+                            // commit the collection if needed
+
+                            if (
+                                shouldCreateCollection
+                                && addToCollectionIds.Count >= collectionMaxItems
+                            )
+                            {
+                                await SaveCollection(cat, addToCollectionIds).ConfigureAwait(false);
+                                addToCollectionIds.Clear();
+                                collectionCommited = true;
                             }
 
-                            skip += page.Count;
+                            if (processed >= maxPerCatalog)
+                            {
+                                break;
+                            }
                         }
 
-                        if (
-                            shouldCreateCollection
-                            && addToCollectionIds.Count != 0
-                        )
-                        {
+                        skip += page.Count;
+                    }
 
-                            await SaveCollection(cat, addToCollectionIds).ConfigureAwait(false);
-                            addToCollectionIds.Clear();
-                        }
+                    if (shouldCreateCollection && addToCollectionIds.Count != 0)
+                    {
+                        await SaveCollection(cat, addToCollectionIds).ConfigureAwait(false);
+                        addToCollectionIds.Clear();
+                    }
 
-                        _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.LogError(
-                            ex,
-                            "Catalog sync failed for {Id}: {Message}",
-                            cat.Id,
-                            ex.Message
-                        );
-                    }
+                    _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
                 }
-            
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(
+                        ex,
+                        "Catalog sync failed for {Id}: {Message}",
+                        cat.Id,
+                        ex.Message
+                    );
+                }
+            }
 
             _log.LogInformation("Catalog sync completed");
         }
@@ -243,6 +234,8 @@ var shouldCreateCollection = !(genreExtra?.IsRequired == true)
                         Recursive = true,
                         HasAnyProviderId = new Dictionary<string, string>
                         {
+                            { "Stremio", id },
+                            // deprecated
                             { "GelatoCatalogId", id },
                         },
                     }
@@ -257,10 +250,7 @@ var shouldCreateCollection = !(genreExtra?.IsRequired == true)
                         new CollectionCreationOptions
                         {
                             Name = name,
-                            ProviderIds = new Dictionary<string, string>
-                            {
-                                { "GelatoCatalogId", id },
-                            },
+                            ProviderIds = new Dictionary<string, string> { { "Stremio", id } },
                         }
                     )
                     .ConfigureAwait(false);
@@ -276,7 +266,6 @@ var shouldCreateCollection = !(genreExtra?.IsRequired == true)
 
             if (collection != null)
             {
-
                 var childrenIds = _library
                     .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
                     .Select(i => i.Id)

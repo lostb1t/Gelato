@@ -7,20 +7,20 @@ using Gelato;
 using Gelato.Common;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
-using MediaBrowser.Model.Tasks;
-using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Querying;
+using MediaBrowser.Model.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Tasks
 {
@@ -58,53 +58,69 @@ namespace Gelato.Tasks
         {
             _log.LogInformation("purging");
 
-            var movie = _manager.TryGetMovieFolder();
-            var series = _manager.TryGetSeriesFolder();
+            //var movie = _manager.TryGetMovieFolder();
+            //var series = _manager.TryGetSeriesFolder();
 
-            var allChildren = new List<BaseItem>();
-
-            if (movie != null)
+            var q = new InternalItemsQuery
             {
-                allChildren.AddRange(movie.GetRecursiveChildren());
-            }
-
-            if (series != null)
-            {
-                allChildren.AddRange(series.GetRecursiveChildren());
-            }
-            
-            var query = new InternalItemsQuery
-            {
-                IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+                IncludeItemTypes = new[]
+                {
+                    BaseItemKind.Movie,
+                    BaseItemKind.Episode,
+                    BaseItemKind.BoxSet,
+                    BaseItemKind.Series,
+                    BaseItemKind.Season,
+                },
                 Recursive = true,
                 HasAnyProviderId = new()
                 {
+                    { "Stremio", string.Empty },
+                    { "stremio", string.Empty },
                     { "GelatoCatalogId", string.Empty },
                 },
-                // skip filters marker
+                GroupByPresentationUniqueKey = false,
+                GroupBySeriesPresentationUniqueKey = false,
+                CollapseBoxSetItems = false,
+                // skip filter marker
                 IsDeadPerson = true,
             };
 
-var collections = _library
-                .GetItemList(query)
-                .OfType<BoxSet>()
-                .ToArray();
-          allChildren.AddRange(collections);
+            var items = _library
+                .GetItemList(q)
+                .OfType<BaseItem>()
+                .OrderBy(item =>
+                {
+                    if (item is Series)
+                        return 2; // Absolute last
+                    if (item is Season)
+                        return 1; // Second last
+                    return 0;
+                });
 
-            int total = allChildren.Count;
+            int total = items.Count();
             int deleted = 0;
 
-            foreach (var child in allChildren)
+            foreach (var item in items)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!_manager.IsGelato(child))
+                if (!_manager.IsGelato(item))
                 {
                     continue;
                 }
+
+                if (
+                    (item is Season || item is Series)
+                    && item is Folder folder
+                    && folder.GetRecursiveChildren().Any()
+                )
+                {
+                    continue;
+                }
+
                 try
                 {
                     _library.DeleteItem(
-                        child,
+                        item,
                         new DeleteOptions { DeleteFileLocation = false },
                         true
                     );
@@ -112,13 +128,14 @@ var collections = _library
                 }
                 catch (Exception ex)
                 {
-                    _log.LogWarning(ex, "Failed to delete item {ItemId}", child.Id);
+                    _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
                 }
 
                 progress?.Report(Math.Min(100.0, (double)deleted / total * 100.0));
             }
-            
-            // collections
+
+            // delete empty series
+            //series.GetRecursiveChildren()
 
             _manager.ClearCache();
             progress?.Report(100.0);

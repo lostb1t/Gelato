@@ -63,6 +63,9 @@ public class GelatoManager
     private readonly IMediaStreamRepository _mediaStreams;
     private readonly ICollectionManager _collectionManager;
 
+    private readonly Folder? _seriesFolder;
+    private readonly Folder? _movieFolder;
+
     public GelatoManager(
         ILoggerFactory loggerFactory,
         IProviderManager provider,
@@ -95,10 +98,7 @@ public class GelatoManager
         _fileSystem = fileSystem;
 
         _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
-
     }
-
-    
 
     // jf preferes path but we want to match on id.
     private void OnItemsAddedToCollection(object sender, CollectionModifiedEventArgs e)
@@ -235,14 +235,15 @@ public class GelatoManager
     {
         Directory.CreateDirectory(path);
         var seed = System.IO.Path.Combine(path, "stub.txt");
-        if (!File.Exists(seed)) {
-          File.WriteAllText(
-            seed,
-            "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
-        );
-}
+        if (!File.Exists(seed))
+        {
+            File.WriteAllText(
+                seed,
+                "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
+            );
+        }
         var ignore = System.IO.Path.Combine(path, ".ignore");
-File.Delete(ignore);
+        File.Delete(ignore);
     }
 
     public Folder? TryGetMovieFolder()
@@ -296,7 +297,7 @@ File.Delete(ignore);
         }
 
         var baseItemKind = mediaType.ToBaseItem();
-        
+
         // load in full metadata if needed.
         if (
             allowRemoteRefresh
@@ -329,7 +330,11 @@ File.Delete(ignore);
 
         if (!meta.IsValid())
         {
-            _log.LogWarning("meta for {Id} is not valid {Name} , skipping", meta.Id, meta.GetName());
+            _log.LogWarning(
+                "meta for {Id} is not valid {Name} , skipping",
+                meta.Id,
+                meta.GetName()
+            );
             return (null, false);
         }
 
@@ -692,7 +697,7 @@ File.Delete(ignore);
     public bool IsGelato(BaseItem item)
     {
         var stremioId = item.GetProviderId("Stremio");
-        if (!string.IsNullOrWhiteSpace(stremioId))
+        if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
             return true;
         return false;
     }
@@ -832,34 +837,34 @@ File.Delete(ignore);
         }
 
         var existingSeasonsDict = _library
-    .GetItemList(
-        new InternalItemsQuery
-        {
-            ParentId = series.Id,
-            IncludeItemTypes = new[] { BaseItemKind.Season },
-            Recursive = true,
-            IsDeadPerson = true,
-        }
-    )
-    .OfType<Season>()
-  .Where(s => s.IndexNumber.HasValue)
-    .GroupBy(s => s.IndexNumber!.Value)
-    .Select(g =>
-    {
-        if (g.Count() > 1)
-        {
-            _log.LogWarning(
-                "Duplicate seasons found for series {SeriesName} ({SeriesId})! Season {SeasonNum} exists {Count} times. IDs: {Ids}",
-                series.Name,
-                series.Id,
-                g.Key,
-                g.Count(),
-                string.Join(", ", g.Select(s => s.Id))
-            );
-        }
-        return g;
-    })
-    .ToDictionary(g => g.Key, g => g.First());
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    ParentId = series.Id,
+                    IncludeItemTypes = new[] { BaseItemKind.Season },
+                    Recursive = true,
+                    IsDeadPerson = true,
+                }
+            )
+            .OfType<Season>()
+            .Where(s => s.IndexNumber.HasValue)
+            .GroupBy(s => s.IndexNumber!.Value)
+            .Select(g =>
+            {
+                if (g.Count() > 1)
+                {
+                    _log.LogWarning(
+                        "Duplicate seasons found for series {SeriesName} ({SeriesId})! Season {SeasonNum} exists {Count} times. IDs: {Ids}",
+                        series.Name,
+                        series.Id,
+                        g.Key,
+                        g.Count(),
+                        string.Join(", ", g.Select(s => s.Id))
+                    );
+                }
+                return g;
+            })
+            .ToDictionary(g => g.Key, g => g.First());
 
         int seasonsInserted = 0;
         int episodesInserted = 0;
@@ -874,7 +879,7 @@ File.Delete(ignore);
             var seasonIndex = seasonGroup.Key;
             var seasonPath = $"{series.Path}:{seasonIndex}";
 
-if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
+            if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
             {
                 _log.LogTrace(
                     "Creating series {SeriesName} season {SeasonIndex:D2}",
@@ -902,19 +907,19 @@ if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
 
             // Get existing episodes once per season and create dictionary
             var existingEpisodeNumbers = _library
-    .GetItemList(
-        new InternalItemsQuery
-        {
-            ParentId = season.Id,
-            IncludeItemTypes = new[] { BaseItemKind.Episode },
-            Recursive = true,
-            IsDeadPerson = true,
-        }
-    )
-    .OfType<Episode>()
-    .Where(x => !IsStream(x) && x.IndexNumber.HasValue)
-    .Select(e => e.IndexNumber!.Value)
-    .ToHashSet();
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        ParentId = season.Id,
+                        IncludeItemTypes = new[] { BaseItemKind.Episode },
+                        Recursive = true,
+                        IsDeadPerson = true,
+                    }
+                )
+                .OfType<Episode>()
+                .Where(x => !IsStream(x) && x.IndexNumber.HasValue)
+                .Select(e => e.IndexNumber!.Value)
+                .ToHashSet();
             var seasonStremioId = season.GetProviderId("Stremio");
 
             foreach (var epMeta in seasonGroup)
@@ -933,7 +938,7 @@ if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
                     continue;
                 }
 
-if (existingEpisodeNumbers.Contains(index.Value))
+                if (existingEpisodeNumbers.Contains(index.Value))
                 {
                     _log.LogDebug(
                         "Episode {EpisodeName} already exists, skipping",
@@ -1045,10 +1050,13 @@ if (existingEpisodeNumbers.Contains(index.Value))
             }
             catch (Exception ex)
             {
-_log.LogError(ex, "SyncSeries: failed for {Name} ({Id}). Error: {ErrorMessage}", 
-    series.Name, 
-    series.Id, 
-    ex.Message);
+                _log.LogError(
+                    ex,
+                    "SyncSeries: failed for {Name} ({Id}). Error: {ErrorMessage}",
+                    series.Name,
+                    series.Id,
+                    ex.Message
+                );
             }
         }
 

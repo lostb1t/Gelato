@@ -15,12 +15,12 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly ILogger<GelatoPlugin> _log;
     private readonly ILibraryManager _library;
     private readonly GelatoManager _manager;
-private readonly GelatoStremioProvider _provider;
+    private readonly GelatoStremioProvider _provider;
 
     public GelatoPlugin(
         IApplicationPaths applicationPaths,
         GelatoManager manager,
-GelatoStremioProvider provider,
+        GelatoStremioProvider provider,
         IXmlSerializer xmlSerializer,
         ILogger<GelatoPlugin> log,
         ILibraryManager library

@@ -72,106 +72,110 @@ namespace Gelato
         }
 
         private async Task<T?> GetJsonAsync<T>(string url)
-{
-    _log.LogDebug("GetJsonAsync: requesting {Url}", url);
-
-    try
-    {
-        var c = NewClient();
-        var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
-        
-        if (!resp.IsSuccessStatusCode)
         {
-            _log.LogWarning(
-                "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
-                url,
-                resp.StatusCode,
-                resp.ReasonPhrase
-            );
+            _log.LogDebug("GetJsonAsync: requesting {Url}", url);
 
-            throw new HttpRequestException(
-                $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
-                null,
-                resp.StatusCode
-            );
+            try
+            {
+                var c = NewClient();
+                var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _log.LogWarning(
+                        "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
+                        url,
+                        resp.StatusCode,
+                        resp.ReasonPhrase
+                    );
+
+                    throw new HttpRequestException(
+                        $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
+                        null,
+                        resp.StatusCode
+                    );
+                }
+
+                await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
+                throw;
+            }
         }
-
-        await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
-    }
-    catch (Exception ex)
-    {
-        _log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
-        throw;
-    }
-}
 
         public async Task<StremioManifest?> GetManifestAsync(bool force = false)
         {
             if (!force && _manifest is not null)
                 return _manifest;
-try {
-            var baseUrl = GetBaseUrlOrThrow();
-            var url = $"{baseUrl}/manifest.json";
-            var m = await GetJsonAsync<StremioManifest>(url);
-            _manifest = m;
+            try
+            {
+                var baseUrl = GetBaseUrlOrThrow();
+                var url = $"{baseUrl}/manifest.json";
+                var m = await GetJsonAsync<StremioManifest>(url);
+                _manifest = m;
 
-            if (m?.Catalogs != null)
-            {
-                MovieSearchCatalog = m
-                    .Catalogs.Where(c =>
-                        c.Type.ToLower() == StremioMediaType.Movie.ToString().ToLower()
-                        && c.Extra?.Any(e =>
-                            string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
-                        ) == true
-                    )
-                    .OrderByDescending(c =>
-                        c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true
-                    )
-                    .FirstOrDefault();
+                if (m?.Catalogs != null)
+                {
+                    MovieSearchCatalog = m
+                        .Catalogs.Where(c =>
+                            c.Type.ToLower() == StremioMediaType.Movie.ToString().ToLower()
+                            && c.Extra?.Any(e =>
+                                string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
+                            ) == true
+                        )
+                        .OrderByDescending(c =>
+                            c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase)
+                            == true
+                        )
+                        .FirstOrDefault();
 
-                SeriesSearchCatalog = m
-                    .Catalogs.Where(c =>
-                        c.Type.ToLower() == StremioMediaType.Series.ToString().ToLower()
-                        && c.Extra?.Any(e =>
-                            string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
-                        ) == true
-                    )
-                    .OrderByDescending(c =>
-                        c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase) == true
-                    )
-                    .FirstOrDefault();
-            }
+                    SeriesSearchCatalog = m
+                        .Catalogs.Where(c =>
+                            c.Type.ToLower() == StremioMediaType.Series.ToString().ToLower()
+                            && c.Extra?.Any(e =>
+                                string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
+                            ) == true
+                        )
+                        .OrderByDescending(c =>
+                            c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase)
+                            == true
+                        )
+                        .FirstOrDefault();
+                }
 
-            if (MovieSearchCatalog == null)
-            {
-                _log.LogWarning("manifest has no search-capable movie catalog", url);
-            }
-            else
-            {
-                _log.LogInformation(
-                    "manifest uses movie search catalog: {Id}",
-                    MovieSearchCatalog.Id
-                );
-            }
+                if (MovieSearchCatalog == null)
+                {
+                    _log.LogWarning("manifest has no search-capable movie catalog", url);
+                }
+                else
+                {
+                    _log.LogInformation(
+                        "manifest uses movie search catalog: {Id}",
+                        MovieSearchCatalog.Id
+                    );
+                }
 
-            if (SeriesSearchCatalog == null)
-            {
-                _log.LogWarning("manifest has no search-capable series catalog", url);
+                if (SeriesSearchCatalog == null)
+                {
+                    _log.LogWarning("manifest has no search-capable series catalog", url);
+                }
+                else
+                {
+                    _log.LogInformation(
+                        "manifest uses series search catalog: {Id}",
+                        SeriesSearchCatalog.Id
+                    );
+                }
+                return m;
             }
-            else
+            catch (Exception ex)
             {
-                _log.LogInformation(
-                    "manifest uses series search catalog: {Id}",
-                    SeriesSearchCatalog.Id
-                );
+                _log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
+                return null;
             }
-            return m;
-             }   catch (Exception ex)
-    {
-        _log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
-        return null;
-    }
         }
 
         public async Task<bool> IsReady()
@@ -260,7 +264,7 @@ try {
                 extras.Add($"search={Uri.EscapeDataString(search)}");
             if (skip is > 0)
                 extras.Add($"skip={skip}");
-            
+
             // seen maybe one type thats capital, but thats their issue
             var url = BuildUrl(new[] { "catalog", mediaType.ToLower(), id }, extras);
             var r = await GetJsonAsync<StremioCatalogResponse>(url);
@@ -286,7 +290,10 @@ try {
 
             if (catalog == null)
             {
-                _log.LogError("SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.", mediaType);
+                _log.LogError(
+                    "SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.",
+                    mediaType
+                );
                 return Array.Empty<StremioMeta>();
             }
             ;
@@ -335,7 +342,7 @@ try {
     {
         //[JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
         //public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
-        
+
         // we dont cast to enum cause types is not a static set
         public string Type { get; set; } = "";
         public string Id { get; set; } = "";
