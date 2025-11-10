@@ -65,7 +65,7 @@ namespace Gelato.Providers
 
             if (!IsEnabledForLibrary(genericEventArgs.Argument))
             {
-                _log.LogInformation(
+                _log.LogDebug(
                     "{ProviderName} not enabled for {InputName}",
                     ProviderName,
                     genericEventArgs.Argument.Name

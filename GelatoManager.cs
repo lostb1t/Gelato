@@ -352,7 +352,16 @@ public class GelatoManager
         }
 
         var kind = baseItem.GetBaseItemKind();
-        var existing = GetByProviderIds(baseItem.ProviderIds, kind);
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { kind },
+            HasAnyProviderId = baseItem.ProviderIds,
+            Recursive = true,
+            IsDeadPerson = true,
+        };
+
+        var existing = _library.GetItemList(query).OfType<BaseItem>().FirstOrDefault();
+        //var existing = GetByProviderIds(baseItem.ProviderIds, kind, parent);
         if (existing is not null)
         {
             _log.LogDebug(
@@ -408,13 +417,15 @@ public class GelatoManager
 
     public IEnumerable<BaseItem> FindByProviderIds(
         Dictionary<string, string> providerIds,
-        BaseItemKind kind
+        BaseItemKind kind,
+        Folder parent
     )
     {
         var q = new InternalItemsQuery
         {
             IncludeItemTypes = new[] { kind },
             Recursive = true,
+            ParentId = parent.Id,
             HasAnyProviderId = providerIds
                 .ExceptBy([MetadataProvider.TmdbCollection.ToString()], kvp => kvp.Key)
                 .ToDictionary(),
@@ -428,15 +439,13 @@ public class GelatoManager
         return _library.GetItemList(q).OfType<BaseItem>();
     }
 
-    public BaseItem? GetByProviderIds(Dictionary<string, string> providerIds, BaseItemKind kind)
+    public BaseItem? GetByProviderIds(
+        Dictionary<string, string> providerIds,
+        BaseItemKind kind,
+        Folder parent
+    )
     {
-        return FindByProviderIds(providerIds, kind).FirstOrDefault();
-    }
-
-    public BaseItem? GetExisting(StremioMeta meta)
-    {
-        var item = IntoBaseItem(meta);
-        return GetByProviderIds(item.ProviderIds, item.GetBaseItemKind());
+        return FindByProviderIds(providerIds, kind, parent).FirstOrDefault();
     }
 
     /// <summary>
@@ -826,7 +835,11 @@ public class GelatoManager
             return null;
         }
 
-        var series = (Series)GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind());
+        var series = (Series)GetByProviderIds(
+            tmpSeries.ProviderIds,
+            tmpSeries.GetBaseItemKind(),
+            seriesRootFolder
+        );
         if (series is null)
         {
             series = tmpSeries;
@@ -1013,6 +1026,11 @@ public class GelatoManager
                 {
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     SeriesStatuses = new[] { SeriesStatus.Continuing },
+                    HasAnyProviderId = new()
+                    {
+                        { "Stremio", string.Empty },
+                        { "stremio", string.Empty },
+                    },
                 }
             )
             .OfType<Series>()
