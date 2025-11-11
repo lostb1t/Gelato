@@ -174,11 +174,7 @@ namespace Gelato.Decorators
                 item = _libraryManager.GetItemById(item.Id);
             }
 
-            var sources = _inner
-                .GetStaticMediaSources(item, enablePathSubstitution, user)
-                .Where(x => x.Protocol == MediaProtocol.File)
-                // .Where(x => x.ExternalId is not null)
-                .ToList();
+            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
 
             // we dont use jellyfins alternate versions crap. So we have to load it ourselves
 
@@ -213,7 +209,7 @@ namespace Gelato.Decorators
                 };
             }
 
-            var gelatoStreams = _repo
+            var gelatoSources = _repo
                 .GetItemList(query)
                 .OfType<Video>()
                 .Where(x => manager.IsGelato(x))
@@ -230,7 +226,8 @@ namespace Gelato.Decorators
                 })
                 .ToList();
 
-            sources.AddRange(gelatoStreams);
+            sources = sources.Where(k => !gelatoSources.Select(x => x.Id).Contains(k.Id)).ToList();
+            sources.AddRange(gelatoSources);
 
             // failsafe. mediasources cannot be null
             if (sources.Count == 0)
