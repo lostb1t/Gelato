@@ -71,7 +71,7 @@ public sealed class GelatoItemRepository : IItemRepository
                     !filter.IncludeItemTypes.Any()
                     || filter
                         .IncludeItemTypes.Intersect(
-                            new[] { BaseItemKind.Movie, BaseItemKind.Series }
+                            new[] { BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode }
                         )
                         .Any()
                 )
@@ -84,9 +84,13 @@ public sealed class GelatoItemRepository : IItemRepository
                 if (filter.MaxPremiereDate is null && filterUnreleased)
                 {
                     // we dont have access to the query so can make a proper statement.
-                    var days = filter.IncludeItemTypes.Contains(BaseItemKind.Series)
-                        ? 0
-                        : bufferDays;
+                    var days =
+                        (
+                            filter.IncludeItemTypes.Contains(BaseItemKind.Series)
+                            || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
+                        )
+                            ? 0
+                            : bufferDays;
                     filter.MaxPremiereDate = DateTime.Today.AddDays((double)days);
                 }
             }
