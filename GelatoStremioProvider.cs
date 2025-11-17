@@ -30,8 +30,10 @@ namespace Gelato
             PropertyNameCaseInsensitive = true,
         };
         private readonly ILibraryManager _library;
+        private readonly string _manifestUrl;
 
         public GelatoStremioProvider(
+            string manifestUrl,
             ILibraryManager library,
             IHttpClientFactory http,
             ILogger<GelatoStremioProvider> log,
@@ -41,6 +43,7 @@ namespace Gelato
             _http = http;
             _log = log;
             _library = library;
+            _manifestUrl = manifestUrl;
         }
 
         private HttpClient NewClient()
@@ -52,7 +55,8 @@ namespace Gelato
 
         private string GetBaseUrlOrThrow()
         {
-            var u = GelatoPlugin.Instance!.Configuration.GetBaseUrl()?.Trim().TrimEnd('/');
+            //var u = GelatoPlugin.Instance!.Configuration.GetBaseUrl()?.Trim().TrimEnd('/');
+
             if (string.IsNullOrWhiteSpace(u))
                 throw new InvalidOperationException("Gelato Url not configured.");
             return u;

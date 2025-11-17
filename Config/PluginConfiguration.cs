@@ -28,6 +28,8 @@ namespace Gelato.Configuration
         public int MaxCollectionItems { get; set; } = 100;
         public bool DisableSearch { get; set; } = false;
 
+        public List<UserConfig> UserConfigs { get; set; } = new List<UserConfig>();
+
         public string GetBaseUrl()
         {
             if (string.IsNullOrWhiteSpace(Url))
@@ -39,6 +41,57 @@ namespace Gelato.Configuration
                 u = u[..^"/manifest.json".Length];
 
             return u;
+        }
+
+        /// <summary>
+        /// Get effective configuration for a specific user
+        /// </summary>
+        public PluginConfiguration GetEffectiveConfig(Guid? userId)
+        {
+            var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
+
+            return userConfig.ApplyOverrides(this);
+        }
+    }
+
+    public class UserConfig
+    {
+        public Guid UserId { get; set; }
+        public string? Url { get; set; }
+        public string? MoviePath { get; set; }
+        public string? SeriesPath { get; set; }
+        public bool? DisableSearch { get; set; }
+
+        /// <summary>
+        /// Apply user overrides to base configuration
+        /// </summary>
+        public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig)
+        {
+            return new PluginConfiguration
+            {
+                // User overridable fields
+                Url = Url ?? baseConfig.Url,
+                MoviePath = MoviePath ?? baseConfig.MoviePath,
+                SeriesPath = SeriesPath ?? baseConfig.SeriesPath,
+                DisableSearch = DisableSearch ?? baseConfig.DisableSearch,
+
+                // All other fields from base config
+                StreamTTL = baseConfig.StreamTTL,
+                CatalogMaxItems = baseConfig.CatalogMaxItems,
+                EnableSubs = baseConfig.EnableSubs,
+                EnableMixed = baseConfig.EnableMixed,
+                FilterUnreleased = baseConfig.FilterUnreleased,
+                FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
+                DisableSourceCount = baseConfig.DisableSourceCount,
+                P2PEnabled = baseConfig.P2PEnabled,
+                P2PDLSpeed = baseConfig.P2PDLSpeed,
+                P2PULSpeed = baseConfig.P2PULSpeed,
+                FFmpegAnalyzeDuration = baseConfig.FFmpegAnalyzeDuration,
+                FFmpegProbeSize = baseConfig.FFmpegProbeSize,
+                CreateCollections = baseConfig.CreateCollections,
+                MaxCollectionItems = baseConfig.MaxCollectionItems,
+                UserConfigs = baseConfig.UserConfigs,
+            };
         }
     }
 }
