@@ -476,6 +476,7 @@ public static class ActionContextExtensions
         "GetItemLegacy",
         "GetItemsByUserIdLegacy",
         "GetPlaybackInfo",
+        "GetPostedPlaybackInfo",
     };
 
     public static string? GetActionName(this ActionExecutingContext ctx) =>

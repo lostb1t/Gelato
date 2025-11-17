@@ -217,7 +217,12 @@ namespace Gelato.Decorators
                 .ThenBy(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
                 .Select(s =>
                 {
-                    var k = GetVersionInfo(enablePathSubstitution, s, MediaSourceType.Grouping);
+                    var k = GetVersionInfo(
+                        enablePathSubstitution,
+                        s,
+                        MediaSourceType.Grouping,
+                        ctx
+                    );
                     if (user is not null)
                     {
                         _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
@@ -232,7 +237,9 @@ namespace Gelato.Decorators
             // failsafe. mediasources cannot be null
             if (sources.Count == 0)
             {
-                sources.Add(GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default));
+                sources.Add(
+                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx)
+                );
             }
 
             if (sources.Count > 0)
@@ -547,7 +554,8 @@ namespace Gelato.Decorators
         private MediaSourceInfo GetVersionInfo(
             bool enablePathSubstitution,
             BaseItem item,
-            MediaSourceType type
+            MediaSourceType type,
+            HttpContext ctx
         )
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -584,6 +592,14 @@ namespace Gelato.Decorators
                 info.Video3DFormat = video.Video3DFormat;
                 info.Timestamp = video.Timestamp;
                 info.IsRemote = true;
+            }
+
+            // massive cheat. clients will direct play remote files directly. But we always want to proxy it.
+            // just fake a real file.
+            if (ctx.GetActionName() == "GetPostedPlaybackInfo")
+            {
+                info.IsRemote = false;
+                info.Protocol = MediaProtocol.File;
             }
 
             info.Bitrate = item.TotalBitrate;
