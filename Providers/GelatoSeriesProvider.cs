@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Gelato.Common;
+using Gelato.Configuration;
 using Jellyfin.Data.Enums;
 using Jellyfin.Data.Events;
 using MediaBrowser.Controller.Entities;
@@ -23,7 +24,7 @@ namespace Gelato.Providers
         private readonly ILogger<GelatoSeriesProvider> _log;
         private readonly ILibraryManager _libraryManager;
         private readonly GelatoManager _manager;
-        private readonly GelatoStremioProvider _stremio;
+        private readonly GelatoStremioProviderFactory _stremioFactory;
         private readonly IProviderManager _provider;
         private readonly ConcurrentDictionary<Guid, DateTime> _syncCache = new();
         private static readonly TimeSpan CacheExpiry = TimeSpan.FromMinutes(2);
@@ -32,15 +33,16 @@ namespace Gelato.Providers
         public GelatoSeriesProvider(
             ILogger<GelatoSeriesProvider> logger,
             ILibraryManager libraryManager,
-            GelatoStremioProvider stremio,
+            GelatoStremioProviderFactory stremioFactory,
             IProviderManager provider,
             GelatoManager manager
         )
         {
             _log = logger;
             _libraryManager = libraryManager;
+            _stremioFactory = stremioFactory;
             _manager = manager;
-            _stremio = stremio;
+
             _provider = provider;
 
             _provider.RefreshStarted += OnProviderManagerRefreshStarted;
@@ -57,7 +59,8 @@ namespace Gelato.Providers
             GenericEventArgs<BaseItem> genericEventArgs
         )
         {
-            if (!await _stremio.IsReady())
+            var stremio = _stremioFactory.Create(null);
+            if (!await stremio.IsReady())
             {
                 _log.LogWarning("gelato is not ready");
                 return;
@@ -112,7 +115,7 @@ namespace Gelato.Providers
             //         {
             try
             {
-                var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
+                var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
                 if (meta is null)
                 {
                     _log.LogWarning("Skipping {Name} - no metadata found", series.Name);
