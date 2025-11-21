@@ -1,4 +1,5 @@
 using System.Reflection;
+using Gelato.Configuration;
 using Gelato.Decorators;
 using Gelato.Filters;
 using Gelato.Tasks;
@@ -23,7 +24,6 @@ public class ServiceRegistrator : IPluginServiceRegistrator
 {
     public void RegisterServices(IServiceCollection services, IServerApplicationHost host)
     {
-        services.AddSingleton<GelatoStremioProvider>();
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
@@ -34,7 +34,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         // services.DecorateSingle<ISubtitleManager, GelatoSubtitleManager>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
-
+        services.AddSingleton<GelatoStremioProviderFactory>();
         services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
             sp.GetRequiredService<GelatoManager>()
         ));
@@ -59,17 +59,11 @@ public class ServiceRegistrator : IPluginServiceRegistrator
     {
         private readonly IConfiguration _config;
         private readonly ILogger<GelatoService> _log;
-        private readonly GelatoStremioProvider _provider;
 
-        public GelatoService(
-            IConfiguration config,
-            ILogger<GelatoService> log,
-            GelatoStremioProvider provider
-        )
+        public GelatoService(IConfiguration config, ILogger<GelatoService> log)
         {
             _config = config;
             _log = log;
-            _provider = provider;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -85,9 +79,6 @@ public class ServiceRegistrator : IPluginServiceRegistrator
                 probe,
                 analyze
             );
-
-            // warmup cache
-            await _provider.GetManifestAsync(true);
         }
 
         public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

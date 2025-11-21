@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Gelato.Common;
+using Gelato.Configuration;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
@@ -34,7 +35,7 @@ namespace Gelato.Decorators
         private readonly Lazy<GelatoManager> _manager;
         private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
-        private readonly GelatoStremioProvider _stremio;
+        private readonly GelatoStremioProviderFactory _stremioFactory;
         private readonly KeyLock _lock = new();
 
         public MediaSourceManagerDecorator(
@@ -44,7 +45,7 @@ namespace Gelato.Decorators
             IHttpContextAccessor http,
             GelatoItemRepository repo,
             IDirectoryService directoryService,
-            GelatoStremioProvider stremioProvider,
+            GelatoStremioProviderFactory stremioFactory,
             Lazy<GelatoManager> manager
         )
         {
@@ -54,7 +55,7 @@ namespace Gelato.Decorators
             _manager = manager;
             _libraryManager = libraryManager;
             _directoryService = directoryService;
-            _stremio = stremioProvider;
+            _stremioFactory = stremioFactory;
             _repo = repo;
         }
 
@@ -129,7 +130,7 @@ namespace Gelato.Decorators
                 ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
             var isItemsAction = IsItemsActionName(actionName ?? string.Empty);
             var isListAction = IsList(actionName ?? string.Empty);
-
+            ctx.TryGetUserId(out var userId);
             var allowSync = isItemsAction && (!isListAction || IsSingleItemList(ctx, item.Id));
 
             var video = item as Video;
@@ -158,7 +159,7 @@ namespace Gelato.Decorators
                             );
                             try
                             {
-                                await manager.SyncStreams(item, ct).ConfigureAwait(false);
+                                await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
                                 manager.SetStreamSync(cacheKey);
                             }
                             catch (Exception ex)
@@ -279,7 +280,8 @@ namespace Gelato.Decorators
                 Uri u = new Uri(source.Path);
                 string filename = System.IO.Path.GetFileName(u.LocalPath);
 
-                subtitles = await _stremio.GetSubtitlesAsync(uri, filename).ConfigureAwait(false);
+                var stremio = _stremioFactory.Create(null);
+                subtitles = await stremio.GetSubtitlesAsync(uri, filename).ConfigureAwait(false);
                 manager.SetStremioSubtitlesCache(item.Id, subtitles);
             }
 
