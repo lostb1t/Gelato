@@ -9,6 +9,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using Gelato.Common;
+using Gelato.Configuration;
 using Gelato.Decorators;
 using Jellyfin.Data.Enums;
 using Jellyfin.Data.Enums;
@@ -50,7 +51,7 @@ public class GelatoManager
     private readonly ILoggerFactory _loggerFactory;
 
     // private readonly IFileSystem _fileSystem;
-    private readonly GelatoStremioProvider _stremioProvider;
+    //private readonly GelatoStremioProvider _stremioProvider;
     private readonly IServerConfigurationManager _config;
     private readonly IUserManager _user;
     private readonly ILibraryManager _library;
@@ -62,14 +63,15 @@ public class GelatoManager
     private readonly IServerConfigurationManager _serverConfig;
     private readonly IMediaStreamRepository _mediaStreams;
     private readonly ICollectionManager _collectionManager;
-
+    private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly Folder? _seriesFolder;
     private readonly Folder? _movieFolder;
 
     public GelatoManager(
         ILoggerFactory loggerFactory,
         IProviderManager provider,
-        GelatoStremioProvider stremioProvider,
+        GelatoStremioProviderFactory stremioFactory,
+        //GelatoStremioProvider stremioProvider,
         IDtoService dtoService,
         IMediaStreamRepository mediaStreams,
         IServerConfigurationManager config,
@@ -88,7 +90,7 @@ public class GelatoManager
         _log = loggerFactory.CreateLogger<GelatoManager>();
         _provider = provider;
         _mediaStreams = mediaStreams;
-        _stremioProvider = stremioProvider;
+        _stremioFactory = stremioFactory;
         _dtoService = dtoService;
         _serverConfig = serverConfig;
         _config = config;
@@ -282,6 +284,7 @@ public class GelatoManager
     public async Task<(BaseItem? Item, bool Created)> InsertMeta(
         Folder parent,
         StremioMeta meta,
+        Guid? userId,
         bool allowRemoteRefresh,
         bool refreshItem,
         bool queueRefreshItem,
@@ -311,8 +314,8 @@ public class GelatoManager
         )
         {
             var lookupId = meta.ImdbId ?? meta.Id;
-
-            meta = await _stremioProvider.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+            var stremio = _stremioFactory.Create(userId);
+            meta = await stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
             if (meta is null)
             {
@@ -453,7 +456,7 @@ public class GelatoManager
     /// sorting. We make sure to keep a one stable version based on primaryversionid
     /// </summary>
     /// <returns></returns>
-    public async Task SyncStreams(BaseItem item, CancellationToken ct)
+    public async Task SyncStreams(BaseItem item, Guid? userId, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
 
@@ -480,8 +483,8 @@ public class GelatoManager
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
         providerIds.TryAdd("Stremio", uri.ExternalId);
-
-        var streams = await _stremioProvider.GetStreamsAsync(uri).ConfigureAwait(false);
+        var stremio = _stremioFactory.Create(userId);
+        var streams = await stremio.GetStreamsAsync(uri).ConfigureAwait(false);
         var primary = (Video)item;
         var httpPort = GetHttpPort();
         var seriesFolder = TryGetSeriesFolder();
@@ -1015,6 +1018,7 @@ public class GelatoManager
 
     public async Task SyncSeries(
         bool runningOnly,
+        Guid? userId,
         IProgress<double> progress,
         CancellationToken cancellationToken
     )
@@ -1040,6 +1044,7 @@ public class GelatoManager
             "found {Count} continuing series under TV libraries.",
             seriesItems.Count
         );
+        var stremio = _stremioFactory.Create(userId);
 
         var processed = 0;
         foreach (var series in seriesItems)
@@ -1053,7 +1058,7 @@ public class GelatoManager
                     series.Id
                 );
 
-                var meta = await _stremioProvider.GetMetaAsync(series).ConfigureAwait(false);
+                var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
                 if (meta is null)
                 {
                     _log.LogWarning(

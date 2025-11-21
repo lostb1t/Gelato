@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Gelato.Common;
+using Gelato.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -17,7 +18,7 @@ namespace Gelato.Filters;
 public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 {
     private readonly ILibraryManager _library;
-    private readonly GelatoStremioProvider _stremioProvider;
+    private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly ILogger<InsertActionFilter> _log;
     private readonly GelatoManager _manager;
     private readonly KeyLock _lock = new();
@@ -27,12 +28,12 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
     public InsertActionFilter(
         ILibraryManager library,
         GelatoManager manager,
-        GelatoStremioProvider stremioProvider,
+        GelatoStremioProviderFactory stremioFactory,
         ILogger<InsertActionFilter> log
     )
     {
         _library = library;
-        _stremioProvider = stremioProvider;
+        _stremioFactory = stremioFactory;
         _manager = manager;
         _log = log;
     }
@@ -77,7 +78,9 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Fetch full metadata
-        var meta = await _stremioProvider.GetMetaAsync(
+        ctx.TryGetUserId(out var userId);
+        var stremio = _stremioFactory.Create(userId);
+        var meta = await stremio.GetMetaAsync(
             stremioMeta.ImdbId ?? stremioMeta.Id,
             stremioMeta.Type
         );
@@ -93,7 +96,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Insert the item
-        var baseItem = await InsertMetaAsync(guid, root, meta);
+        var baseItem = await InsertMetaAsync(guid, root, meta, userId);
         if (baseItem is not null)
         {
             ctx.ReplaceGuid(baseItem.Id);
@@ -116,7 +119,12 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         return _library.GetItemList(query).OfType<BaseItem>().FirstOrDefault();
     }
 
-    public async Task<BaseItem?> InsertMetaAsync(Guid guid, Folder root, StremioMeta meta)
+    public async Task<BaseItem?> InsertMetaAsync(
+        Guid guid,
+        Folder root,
+        StremioMeta meta,
+        Guid? userId
+    )
     {
         BaseItem? baseItem = null;
         var created = false;
@@ -126,7 +134,15 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             async ct =>
             {
                 meta.Guid = guid;
-                (baseItem, created) = await _manager.InsertMeta(root, meta, false, false, true, ct);
+                (baseItem, created) = await _manager.InsertMeta(
+                    root,
+                    meta,
+                    userId,
+                    false,
+                    false,
+                    true,
+                    ct
+                );
             }
         );
 

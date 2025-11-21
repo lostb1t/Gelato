@@ -22,13 +22,11 @@ namespace Gelato.Tasks
         private readonly ILogger<SyncRunningSeriesTask> _log;
         private readonly IFileSystem _fs;
         private readonly GelatoManager _manager;
-        private readonly GelatoStremioProvider _stremio;
 
         public SyncRunningSeriesTask(
             ILibraryManager library,
             ILogger<SyncRunningSeriesTask> log,
             IFileSystem fs,
-            GelatoStremioProvider stremio,
             GelatoManager manager
         )
         {
@@ -36,7 +34,6 @@ namespace Gelato.Tasks
             _log = log;
             _fs = fs;
             _manager = manager;
-            _stremio = stremio;
         }
 
         public string Name => "Fetch missing season/episodes";
@@ -62,7 +59,7 @@ namespace Gelato.Tasks
             CancellationToken cancellationToken
         )
         {
-            await _manager.SyncSeries(true, progress, cancellationToken);
+            await _manager.SyncSeries(true, null, progress, cancellationToken);
         }
     }
 }

@@ -22,7 +22,7 @@ namespace Gelato.Tasks
     public sealed class PurgeGelatoStreamsTask : IScheduledTask
     {
         private readonly ILogger<PurgeGelatoStreamsTask> _log;
-        private readonly GelatoStremioProvider _stremio;
+
         private readonly GelatoManager _manager;
         private readonly ILibraryManager _library;
         private readonly IItemRepository _repo;
@@ -30,14 +30,13 @@ namespace Gelato.Tasks
         public PurgeGelatoStreamsTask(
             ILibraryManager libraryManager,
             ILogger<PurgeGelatoStreamsTask> log,
-            GelatoStremioProvider stremio,
             IItemRepository repo,
             GelatoManager manager
         )
         {
             _log = log;
             _library = libraryManager;
-            _stremio = stremio;
+
             _manager = manager;
             _repo = repo;
         }

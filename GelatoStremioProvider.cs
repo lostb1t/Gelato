@@ -30,10 +30,10 @@ namespace Gelato
             PropertyNameCaseInsensitive = true,
         };
         private readonly ILibraryManager _library;
-        private readonly string _manifestUrl;
+        private readonly string _baseUrl;
 
         public GelatoStremioProvider(
-            string manifestUrl,
+            string baseUrl,
             ILibraryManager library,
             IHttpClientFactory http,
             ILogger<GelatoStremioProvider> log,
@@ -43,7 +43,7 @@ namespace Gelato
             _http = http;
             _log = log;
             _library = library;
-            _manifestUrl = manifestUrl;
+            _baseUrl = baseUrl;
         }
 
         private HttpClient NewClient()
@@ -53,23 +53,13 @@ namespace Gelato
             return c;
         }
 
-        private string GetBaseUrlOrThrow()
-        {
-            //var u = GelatoPlugin.Instance!.Configuration.GetBaseUrl()?.Trim().TrimEnd('/');
-
-            if (string.IsNullOrWhiteSpace(u))
-                throw new InvalidOperationException("Gelato Url not configured.");
-            return u;
-        }
-
         private string BuildUrl(string[] segments, IEnumerable<string>? extras = null)
         {
-            var baseUrl = GetBaseUrlOrThrow();
             var parts = segments.Select(s => s == null ? "" : Uri.EscapeDataString(s)).ToArray();
             var path = string.Join("/", parts);
             var extrasPart =
                 (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
-            var url = $"{baseUrl}/{path}{extrasPart}.json";
+            var url = $"{_baseUrl}/{path}{extrasPart}.json";
             url = url.Replace("%3A", ":").Replace("%3a", ":");
             // Console.Write(url);
             return url;
@@ -116,8 +106,7 @@ namespace Gelato
                 return _manifest;
             try
             {
-                var baseUrl = GetBaseUrlOrThrow();
-                var url = $"{baseUrl}/manifest.json";
+                var url = $"{_baseUrl}/manifest.json";
                 var m = await GetJsonAsync<StremioManifest>(url);
                 _manifest = m;
 

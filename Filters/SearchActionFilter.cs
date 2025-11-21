@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Gelato.Common;
+using Gelato.Configuration;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -24,7 +25,7 @@ namespace Gelato.Filters
         private readonly IItemRepository _repo;
         private readonly IMediaSourceManager _mediaSources;
         private readonly IDtoService _dtoService;
-        private readonly GelatoStremioProvider _provider;
+        private readonly GelatoStremioProviderFactory _stremioFactory;
         private readonly ILogger<SearchActionFilter> _log;
         private readonly GelatoManager _manager;
 
@@ -34,7 +35,7 @@ namespace Gelato.Filters
             IMediaSourceManager mediaSources,
             IDtoService dtoService,
             GelatoManager manager,
-            GelatoStremioProvider provider,
+            GelatoStremioProviderFactory stremioFactory,
             ILogger<SearchActionFilter> log
         )
         {
@@ -43,7 +44,7 @@ namespace Gelato.Filters
             _repo = repo;
             _mediaSources = mediaSources;
             _dtoService = dtoService;
-            _provider = provider;
+            _stremioFactory = stremioFactory;
             _log = log;
         }
 
@@ -54,8 +55,10 @@ namespace Gelato.Filters
             ActionExecutionDelegate next
         )
         {
+            ctx.TryGetUserId(out var userId);
+            var stremio = _stremioFactory.Create(userId);
             if (
-                !await _provider.IsReady()
+                !await stremio.IsReady()
                 || GelatoPlugin.Instance.Configuration.DisableSearch
                 || !ctx.IsApiSearchAction()
                 || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
@@ -86,7 +89,7 @@ namespace Gelato.Filters
             ctx.TryGetActionArgument("startIndex", out var start, 0);
             ctx.TryGetActionArgument("limit", out var limit, 25);
 
-            var metas = await SearchMetasAsync(searchTerm, requestedTypes);
+            var metas = await SearchMetasAsync(searchTerm, requestedTypes, stremio);
 
             _log.LogInformation(
                 "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
@@ -148,7 +151,8 @@ namespace Gelato.Filters
 
         private async Task<List<StremioMeta>> SearchMetasAsync(
             string searchTerm,
-            HashSet<BaseItemKind> requestedTypes
+            HashSet<BaseItemKind> requestedTypes,
+            GelatoStremioProvider stremio
         )
         {
             var tasks = new List<Task<IReadOnlyList<StremioMeta>>>();
@@ -158,7 +162,7 @@ namespace Gelato.Filters
                 && _manager.TryGetMovieFolder() is not null
             )
             {
-                tasks.Add(_provider.SearchAsync(searchTerm, StremioMediaType.Movie));
+                tasks.Add(stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
             }
             else if (requestedTypes.Contains(BaseItemKind.Movie))
             {
@@ -170,7 +174,7 @@ namespace Gelato.Filters
                 && _manager.TryGetSeriesFolder() is not null
             )
             {
-                tasks.Add(_provider.SearchAsync(searchTerm, StremioMediaType.Series));
+                tasks.Add(stremio.SearchAsync(searchTerm, StremioMediaType.Series));
             }
             else if (requestedTypes.Contains(BaseItemKind.Series))
             {
