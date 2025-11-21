@@ -7,8 +7,14 @@ using System.Threading;
 using System.Threading.Tasks;
 using Gelato.Common;
 using Gelato.Configuration;
+using Jellyfin.Data;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Database.Implementations.Enums;
+using Jellyfin.Database.Implementations.Enums;
+using Jellyfin.Extensions;
+using MediaBrowser.Common.Extensions;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.IO;
@@ -20,6 +26,7 @@ using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
+using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -218,7 +225,12 @@ namespace Gelato.Decorators
                 .ThenBy(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
                 .Select(s =>
                 {
-                    var k = GetVersionInfo(enablePathSubstitution, s, MediaSourceType.Grouping);
+                    var k = GetVersionInfo(
+                        enablePathSubstitution,
+                        s,
+                        MediaSourceType.Grouping,
+                        user
+                    );
                     if (user is not null)
                     {
                         _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
@@ -233,7 +245,9 @@ namespace Gelato.Decorators
             // failsafe. mediasources cannot be null
             if (sources.Count == 0)
             {
-                sources.Add(GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default));
+                sources.Add(
+                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, user)
+                );
             }
 
             if (sources.Count > 0)
@@ -549,7 +563,8 @@ namespace Gelato.Decorators
         private MediaSourceInfo GetVersionInfo(
             bool enablePathSubstitution,
             BaseItem item,
-            MediaSourceType type
+            MediaSourceType type,
+            User user = null
         )
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -569,9 +584,14 @@ namespace Gelato.Decorators
                 Container = item.Container,
                 Size = item.Size,
                 Type = type,
-                SupportsDirectStream = true,
-                SupportsDirectPlay = true,
+                //SupportsDirectStream = true,
+                //SupportsDirectPlay = true,
             };
+
+            info.SupportsTranscoding = user.HasPermission(
+                PermissionKind.EnableVideoPlaybackTranscoding
+            );
+            info.SupportsDirectStream = user.HasPermission(PermissionKind.EnablePlaybackRemuxing);
 
             if (string.IsNullOrEmpty(info.Path))
             {
