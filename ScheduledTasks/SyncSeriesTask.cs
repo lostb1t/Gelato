@@ -59,7 +59,7 @@ namespace Gelato.Tasks
             CancellationToken cancellationToken
         )
         {
-            await _manager.SyncSeries(true, null, progress, cancellationToken);
+            await _manager.SyncSeries(true, Guid.Empty, progress, cancellationToken);
         }
     }
 }

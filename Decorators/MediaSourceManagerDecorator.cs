@@ -42,7 +42,6 @@ namespace Gelato.Decorators
         private readonly Lazy<GelatoManager> _manager;
         private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
-        private readonly GelatoStremioProviderFactory _stremioFactory;
         private readonly KeyLock _lock = new();
 
         public MediaSourceManagerDecorator(
@@ -52,7 +51,6 @@ namespace Gelato.Decorators
             IHttpContextAccessor http,
             GelatoItemRepository repo,
             IDirectoryService directoryService,
-            GelatoStremioProviderFactory stremioFactory,
             Lazy<GelatoManager> manager
         )
         {
@@ -62,7 +60,6 @@ namespace Gelato.Decorators
             _manager = manager;
             _libraryManager = libraryManager;
             _directoryService = directoryService;
-            _stremioFactory = stremioFactory;
             _repo = repo;
         }
 
@@ -122,22 +119,32 @@ namespace Gelato.Decorators
             var manager = _manager.Value;
 
             _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
+            var ctx = _http?.HttpContext;
+            Guid userId;
+            if (user != null)
+            {
+                userId = user.Id;
+            }
+            else
+            {
+                ctx.TryGetUserId(out userId);
+            }
 
+            var cfg = GelatoPlugin.Instance!.GetConfig(userId);
             if (
-                (!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsGelato(item))
+                (!cfg.EnableMixed && !manager.IsGelato(item))
                 || (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
             )
             {
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }
 
-            var ctx = _http?.HttpContext;
             var uri = StremioUri.FromBaseItem(item);
             var actionName =
                 ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
             var isItemsAction = IsItemsActionName(actionName ?? string.Empty);
             var isListAction = IsList(actionName ?? string.Empty);
-            ctx.TryGetUserId(out var userId);
+            //ctx.TryGetUserId(out var userId);
             var allowSync = isItemsAction && (!isListAction || IsSingleItemList(ctx, item.Id));
 
             var video = item as Video;
@@ -288,8 +295,10 @@ namespace Gelato.Decorators
                 Uri u = new Uri(source.Path);
                 string filename = System.IO.Path.GetFileName(u.LocalPath);
 
-                var stremio = _stremioFactory.Create(null);
-                subtitles = await stremio.GetSubtitlesAsync(uri, filename).ConfigureAwait(false);
+                var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+                subtitles = await cfg
+                    .stremio.GetSubtitlesAsync(uri, filename)
+                    .ConfigureAwait(false);
                 manager.SetStremioSubtitlesCache(item.Id, subtitles);
             }
 
@@ -586,15 +595,19 @@ namespace Gelato.Decorators
                 Container = item.Container,
                 Size = item.Size,
                 Type = type,
-                //SupportsDirectStream = true,
-                //SupportsDirectPlay = true,
+                SupportsDirectStream = true,
+                SupportsDirectPlay = true,
             };
 
-            info.SupportsTranscoding = user.HasPermission(
-                PermissionKind.EnableVideoPlaybackTranscoding
-            );
-            info.SupportsDirectStream = user.HasPermission(PermissionKind.EnablePlaybackRemuxing);
-
+            if (user is not null)
+            {
+                info.SupportsTranscoding = user.HasPermission(
+                    PermissionKind.EnableVideoPlaybackTranscoding
+                );
+                info.SupportsDirectStream = user.HasPermission(
+                    PermissionKind.EnablePlaybackRemuxing
+                );
+            }
             if (string.IsNullOrEmpty(info.Path))
             {
                 info.Type = MediaSourceType.Placeholder;

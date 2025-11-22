@@ -20,7 +20,6 @@ namespace Gelato.Tasks
     public sealed class GelatoCatalogItemsSyncTask : IScheduledTask
     {
         private readonly ILogger<GelatoCatalogItemsSyncTask> _log;
-        private readonly GelatoStremioProviderFactory _stremioFactory;
         private readonly GelatoManager _manager;
         private readonly ILibraryManager _library;
         private readonly ICollectionManager _collections;
@@ -29,13 +28,11 @@ namespace Gelato.Tasks
             ILibraryManager libraryManager,
             ICollectionManager collections,
             ILogger<GelatoCatalogItemsSyncTask> log,
-            GelatoStremioProviderFactory stremioFactory,
             GelatoManager manager
         )
         {
             _log = log;
             _library = libraryManager;
-            _stremioFactory = stremioFactory;
             _manager = manager;
             _collections = collections;
         }
@@ -54,7 +51,8 @@ namespace Gelato.Tasks
         )
         {
             _log.LogInformation("catalog sync started");
-            var stremio = _stremioFactory.Create(null);
+            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+            var stremio = cfg.stremio;
             var manifest = await stremio.GetManifestAsync().ConfigureAwait(false);
             var catalogs = manifest?.Catalogs.Where(c => !c.IsSearchCapable()).ToList() ?? new();
             if (catalogs.Count == 0)
@@ -65,8 +63,8 @@ namespace Gelato.Tasks
             }
 
             var maxPerCatalog = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
-            var seriesFolder = _manager.TryGetSeriesFolder();
-            var movieFolder = _manager.TryGetMovieFolder();
+            var seriesFolder = _manager.TryGetSeriesFolder(Guid.Empty);
+            var movieFolder = _manager.TryGetMovieFolder(Guid.Empty);
             var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
             var collectionMaxItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
 
@@ -150,7 +148,7 @@ namespace Gelato.Tasks
                                         .InsertMeta(
                                             root,
                                             meta,
-                                            null,
+                                            Guid.Empty,
                                             true,
                                             true,
                                             false,
