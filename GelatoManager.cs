@@ -248,14 +248,28 @@ public class GelatoManager
         File.Delete(ignore);
     }
 
-    public Folder? TryGetMovieFolder()
+    public Folder? TryGetMovieFolder(Guid userId)
     {
-        return TryGetFolder(GelatoPlugin.Instance!.Configuration.MoviePath);
+        return TryGetFolder(
+            GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).MoviePath
+        );
     }
 
-    public Folder? TryGetSeriesFolder()
+    public Folder? TryGetSeriesFolder(Guid userId)
     {
-        return TryGetFolder(GelatoPlugin.Instance!.Configuration.SeriesPath);
+        return TryGetFolder(
+            GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).SeriesPath
+        );
+    }
+
+    public Folder? TryGetMovieFolder(PluginConfiguration cfg)
+    {
+        return TryGetFolder(cfg.MoviePath);
+    }
+
+    public Folder? TryGetSeriesFolder(PluginConfiguration cfg)
+    {
+        return TryGetFolder(cfg.SeriesPath);
     }
 
     public Folder? TryGetFolder(string path)
@@ -284,7 +298,7 @@ public class GelatoManager
     public async Task<(BaseItem? Item, bool Created)> InsertMeta(
         Folder parent,
         StremioMeta meta,
-        Guid? userId,
+        Guid userId,
         bool allowRemoteRefresh,
         bool refreshItem,
         bool queueRefreshItem,
@@ -456,7 +470,7 @@ public class GelatoManager
     /// sorting. We make sure to keep a one stable version based on primaryversionid
     /// </summary>
     /// <returns></returns>
-    public async Task SyncStreams(BaseItem item, Guid? userId, CancellationToken ct)
+    public async Task SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
 
@@ -467,7 +481,7 @@ public class GelatoManager
         }
 
         var isEpisode = item is Episode;
-        var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder();
+        var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder(userId);
         if (parent is null)
         {
             _log.LogWarning($"SyncStreams: no parent, skipping");
@@ -487,8 +501,8 @@ public class GelatoManager
         var streams = await stremio.GetStreamsAsync(uri).ConfigureAwait(false);
         var primary = (Video)item;
         var httpPort = GetHttpPort();
-        var seriesFolder = TryGetSeriesFolder();
-        var movieFolder = TryGetMovieFolder();
+        var seriesFolder = TryGetSeriesFolder(userId);
+        var movieFolder = TryGetMovieFolder(userId);
 
         // Get existing virtual items
         var query = new InternalItemsQuery
@@ -1018,12 +1032,12 @@ public class GelatoManager
 
     public async Task SyncSeries(
         bool runningOnly,
-        Guid? userId,
+        Guid userId,
         IProgress<double> progress,
         CancellationToken cancellationToken
     )
     {
-        var seriesFolder = TryGetSeriesFolder();
+        var seriesFolder = TryGetSeriesFolder(userId);
         var seriesItems = _library
             .GetItemList(
                 new InternalItemsQuery

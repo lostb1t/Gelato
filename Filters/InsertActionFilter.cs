@@ -67,9 +67,13 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
+        ctx.TryGetUserId(out var userId);
+
         // Get root folder
         var isSeries = stremioMeta.Type == StremioMediaType.Series;
-        var root = isSeries ? _manager.TryGetSeriesFolder() : _manager.TryGetMovieFolder();
+        var root = isSeries
+            ? _manager.TryGetSeriesFolder(userId)
+            : _manager.TryGetMovieFolder(userId);
         if (root is null)
         {
             _log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
@@ -78,9 +82,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Fetch full metadata
-        ctx.TryGetUserId(out var userId);
-        var stremio = _stremioFactory.Create(userId);
-        var meta = await stremio.GetMetaAsync(
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+        var meta = await cfg.stremio.GetMetaAsync(
             stremioMeta.ImdbId ?? stremioMeta.Id,
             stremioMeta.Type
         );
@@ -123,7 +126,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         Guid guid,
         Folder root,
         StremioMeta meta,
-        Guid? userId
+        Guid userId
     )
     {
         BaseItem? baseItem = null;

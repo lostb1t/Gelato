@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Gelato.Configuration;
 using MediaBrowser.Common.Configuration;
@@ -15,12 +16,17 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly ILogger<GelatoPlugin> _log;
     private readonly ILibraryManager _library;
     private readonly GelatoManager _manager;
+    public ConcurrentDictionary<Guid, PluginConfiguration> UserConfigs { get; } = new();
+    private readonly IHttpClientFactory _http;
+    private readonly GelatoStremioProviderFactory _stremioFactory;
 
     public GelatoPlugin(
         IApplicationPaths applicationPaths,
         GelatoManager manager,
         IXmlSerializer xmlSerializer,
         ILogger<GelatoPlugin> log,
+        IHttpClientFactory http,
+        GelatoStremioProviderFactory stremioFactory,
         ILibraryManager library
     )
         : base(applicationPaths, xmlSerializer)
@@ -29,6 +35,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _log = log;
         _library = library;
         _manager = manager;
+        _http = http;
+        _stremioFactory = stremioFactory;
 
         //  _manager.TryGetMovieFolder();
         //  _manager.TryGetSeriesFolder();
@@ -61,7 +69,37 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         base.UpdateConfiguration(cfg);
 
         _manager.ClearCache();
-        _manager.TryGetMovieFolder();
-        _manager.TryGetSeriesFolder();
+        UserConfigs.Clear();
+    }
+
+    public PluginConfiguration GetConfig(Guid userId)
+    {
+        var cfg = Instance.Configuration;
+
+        if (userId == Guid.Empty)
+        {
+            var stremio = _stremioFactory.Create(cfg);
+            cfg.stremio = stremio;
+            cfg.MovieFolder = _manager.TryGetMovieFolder(cfg);
+            cfg.SeriesFolder = _manager.TryGetSeriesFolder(cfg);
+            return cfg;
+        }
+
+        return UserConfigs.GetOrAdd(
+            userId,
+            _ =>
+            {
+                var userConfig = Instance.Configuration.UserConfigs.FirstOrDefault(u =>
+                    u.UserId == userId
+                );
+                var cfg =
+                    userConfig?.ApplyOverrides(Instance.Configuration) ?? Instance.Configuration;
+                var stremio = _stremioFactory.Create(cfg);
+                cfg.stremio = stremio;
+                cfg.MovieFolder = _manager.TryGetMovieFolder(cfg);
+                cfg.SeriesFolder = _manager.TryGetSeriesFolder(cfg);
+                return cfg;
+            }
+        );
     }
 }

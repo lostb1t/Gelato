@@ -12,7 +12,6 @@ using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
@@ -29,20 +28,16 @@ namespace Gelato
         {
             PropertyNameCaseInsensitive = true,
         };
-        private readonly ILibraryManager _library;
         private readonly string _baseUrl;
 
         public GelatoStremioProvider(
             string baseUrl,
-            ILibraryManager library,
             IHttpClientFactory http,
-            ILogger<GelatoStremioProvider> log,
-            MediaBrowser.Controller.Persistence.IItemRepository repo
+            ILogger<GelatoStremioProvider> log
         )
         {
             _http = http;
             _log = log;
-            _library = library;
             _baseUrl = baseUrl;
         }
 
@@ -173,7 +168,8 @@ namespace Gelato
 
         public async Task<bool> IsReady()
         {
-            return _manifest != null;
+            var m = await GetManifestAsync();
+            return m is not null;
         }
 
         public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)

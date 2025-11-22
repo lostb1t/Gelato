@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Reflection;
+using System.Text.Json.Serialization;
+using System.Xml.Serialization;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -58,17 +61,25 @@ namespace Gelato.Configuration
             return u;
         }
 
-        /// <summary>
-        /// Get effective configuration for a specific user
-        /// </summary>
-        public PluginConfiguration GetEffectiveConfig(Guid? userId)
+        [JsonIgnore]
+        [XmlIgnore]
+        public GelatoStremioProvider? stremio;
+
+        [JsonIgnore]
+        [XmlIgnore]
+        public Folder? MovieFolder;
+
+        [JsonIgnore]
+        [XmlIgnore]
+        public Folder? SeriesFolder;
+
+        public PluginConfiguration GetEffectiveConfig(Guid userId)
         {
-            if (userId is null)
+            var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
+            if (userConfig is null)
             {
                 return this;
             }
-            var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
-
             return userConfig.ApplyOverrides(this);
         }
     }
@@ -119,30 +130,34 @@ namespace Gelato.Configuration
         private readonly ILibraryManager _library;
         private readonly IHttpClientFactory _http;
         private readonly ILoggerFactory _log;
-        private readonly IItemRepository _repo;
 
         public GelatoStremioProviderFactory(
             ILibraryManager library,
             IHttpClientFactory http,
-            ILoggerFactory log,
-            IItemRepository repo
+            ILoggerFactory log
         )
         {
             _library = library;
             _http = http;
             _log = log;
-            _repo = repo;
         }
 
-        public GelatoStremioProvider Create(Guid? userId)
+        public GelatoStremioProvider Create(Guid userId)
         {
             var cfg = GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId);
             return new GelatoStremioProvider(
                 cfg.GetBaseUrl(),
-                _library,
                 _http,
-                _log.CreateLogger<GelatoStremioProvider>(),
-                _repo
+                _log.CreateLogger<GelatoStremioProvider>()
+            );
+        }
+
+        public GelatoStremioProvider Create(PluginConfiguration cfg)
+        {
+            return new GelatoStremioProvider(
+                cfg.GetBaseUrl(),
+                _http,
+                _log.CreateLogger<GelatoStremioProvider>()
             );
         }
     }
