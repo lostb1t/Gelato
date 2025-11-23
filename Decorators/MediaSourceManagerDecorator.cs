@@ -148,7 +148,14 @@ namespace Gelato.Decorators
             var allowSync = isItemsAction && (!isListAction || IsSingleItemList(ctx, item.Id));
 
             var video = item as Video;
-            Guid cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id) ? id : item.Id;
+            string cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
+                ? id.ToString()
+                : item.Id.ToString();
+
+            if (userId != Guid.Empty)
+            {
+                cacheKey = $"{userId}:{cacheKey}";
+            }
 
             if (!allowSync)
             {
@@ -201,12 +208,14 @@ namespace Gelato.Decorators
                 query = new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                    HasAnyProviderId = new() { { "GelatoUserId", userId.ToString() } },
                     ParentId = episode.SeasonId,
                     Recursive = false,
                     GroupByPresentationUniqueKey = false,
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
+                    IsVirtualItem = true,
                     IndexNumber = episode.IndexNumber,
                 };
             }
@@ -215,12 +224,17 @@ namespace Gelato.Decorators
                 query = new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                    HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
+                    HasAnyProviderId = new()
+                    {
+                        { "Stremio", item.GetProviderId("Stremio") },
+                        { "GelatoUserId", userId.ToString() },
+                    },
                     Recursive = false,
                     GroupByPresentationUniqueKey = false,
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
+                    IsVirtualItem = true,
                 };
             }
 
@@ -228,8 +242,8 @@ namespace Gelato.Decorators
                 .GetItemList(query)
                 .OfType<Video>()
                 .Where(x => manager.IsGelato(x))
-                .OrderByDescending(x => manager.IsPrimaryVersion(x) ? 1 : 0)
-                .ThenBy(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
+                // .OrderByDescending(x => manager.IsPrimaryVersion(x) ? 1 : 0)
+                .OrderByDescending(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
                 .Select(s =>
                 {
                     var k = GetVersionInfo(
@@ -247,8 +261,18 @@ namespace Gelato.Decorators
                 })
                 .ToList();
 
-            sources = sources.Where(k => !gelatoSources.Select(x => x.Id).Contains(k.Id)).ToList();
+            //var c = gelatoSources.Count;
+            //sources = sources.Where(k => c != 0 && manager.Is(k.Id)).ToList();
+            //sources = sources.Where(k => !gelatoSources.Select(x => x.Id).Contains(k.Id)).ToList();
             sources.AddRange(gelatoSources);
+
+            // remove primary from list when there are streams
+            if (sources.Count > 1)
+            {
+                sources = sources
+                    .Where(k => !k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
 
             // failsafe. mediasources cannot be null
             if (sources.Count == 0)

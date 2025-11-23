@@ -192,7 +192,7 @@ public class GelatoManager
         return _memoryCache.TryGetValue($"uri:{guid}", out var value) ? value as StremioUri : null;
     }
 
-    public void SetStreamSync(Guid guid)
+    public void SetStreamSync(string guid)
     {
         _memoryCache.Set(
             $"streamsync:{guid}",
@@ -201,7 +201,7 @@ public class GelatoManager
         );
     }
 
-    public bool HasStreamSync(Guid guid)
+    public bool HasStreamSync(string guid)
     {
         return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
     }
@@ -497,12 +497,15 @@ public class GelatoManager
 
         var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
         providerIds.TryAdd("Stremio", uri.ExternalId);
-        var stremio = _stremioFactory.Create(userId);
+        providerIds.TryAdd("GelatoUserId", userId.ToString());
+
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+        var stremio = cfg.stremio;
         var streams = await stremio.GetStreamsAsync(uri).ConfigureAwait(false);
         var primary = (Video)item;
         var httpPort = GetHttpPort();
-        var seriesFolder = TryGetSeriesFolder(userId);
-        var movieFolder = TryGetMovieFolder(userId);
+        var seriesFolder = cfg.SeriesFolder;
+        var movieFolder = cfg.MovieFolder;
 
         // Get existing virtual items
         var query = new InternalItemsQuery
@@ -529,7 +532,7 @@ public class GelatoManager
                     return null;
                 }
 
-                if (!GelatoPlugin.Instance!.Configuration.P2PEnabled && s.IsTorrent())
+                if (!cfg.P2PEnabled && s.IsTorrent())
                 {
                     _log.LogDebug($"P2P stream, skipping {s.Name}");
                     return null;
@@ -541,13 +544,13 @@ public class GelatoManager
             .ToList();
 
         // Handle case with no streams
-        if (acceptable.Count == 0 && IsGelato(primary))
-        {
-            primary.Path = uri.ToString();
-            await primary
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                .ConfigureAwait(false);
-        }
+        // if (acceptable.Count == 0 && IsGelato(primary))
+        // {
+        primary.Path = uri.ToString();
+        await primary
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+            .ConfigureAwait(false);
+        //}
 
         var newVideos = new List<Video>();
 
@@ -571,24 +574,20 @@ public class GelatoManager
             var isNew = target is null;
 
             // First stream updates the primary item
-            if (i == 0 && IsGelato(primary))
-            {
-                //primary.Path = GetGelatoLocalPath(primary);
-                primary.Path = path;
-                primary.ExternalId = externalId;
-                //primary.IsShortcut = true;
-                //primary.ShortcutPath = path;
-                //CreateStrmFile(primary.Path, path);
-                await primary
-                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                    .ConfigureAwait(false);
-                _mediaStreams.SaveMediaStreams(
-                    primary.Id,
-                    _mediaStreams.GetMediaStreams(new MediaStreamQuery { ItemId = id }),
-                    ct
-                );
-                continue;
-            }
+            //if (i == 0 && IsGelato(primary))
+            //{
+            //    primary.Path = path;
+            //    primary.ExternalId = externalId;
+            //    await primary
+            //        .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+            //        .ConfigureAwait(false);
+            //    _mediaStreams.SaveMediaStreams(
+            //        primary.Id,
+            //        _mediaStreams.GetMediaStreams(new MediaStreamQuery { ItemId = id }),
+            //        ct
+            //    );
+            //    continue;
+            //}
 
             if (isNew)
             {
@@ -611,17 +610,12 @@ public class GelatoManager
             target.ExternalId = externalId;
             target.Name = primary.Name;
             target.Path = path;
-            //target.Path = GetGelatoLocalPath(target);
-            //target.IsShortcut = true;
-            //target.ShortcutPath = path;
             target.IsVirtualItem = true;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.Tags = primary.Tags;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
             target.SetPrimaryVersionId(null);
-
-            //CreateStrmFile(target.Path, path);
 
             if (isNew)
             {
@@ -638,11 +632,6 @@ public class GelatoManager
         }
 
         var stale = existing.Values.Where(m => !newVideos.Any(x => x.Id == m.Id)).ToList();
-
-        //foreach (var m in stale)
-        //{
-        //    File.Delete(m.Path);
-        //}
 
         if (stale.Any())
         {
