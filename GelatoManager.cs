@@ -1037,7 +1037,8 @@ public class GelatoManager
         CancellationToken cancellationToken
     )
     {
-        var seriesFolder = TryGetSeriesFolder(userId);
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+        // var seriesFolder = cfg.SeriesFolder;
         var seriesItems = _library
             .GetItemList(
                 new InternalItemsQuery
@@ -1058,7 +1059,8 @@ public class GelatoManager
             "found {Count} continuing series under TV libraries.",
             seriesItems.Count
         );
-        var stremio = _stremioFactory.Create(userId);
+
+        var stremio = cfg.stremio;
 
         var processed = 0;
         foreach (var series in seriesItems)
@@ -1082,7 +1084,7 @@ public class GelatoManager
                     );
                     continue;
                 }
-                await SyncSeriesTreesAsync(seriesFolder, meta, cancellationToken);
+                await SyncSeriesTreesAsync(series.GetParent() as Folder, meta, cancellationToken);
                 processed++;
             }
             catch (Exception ex)

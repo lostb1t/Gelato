@@ -87,23 +87,23 @@ namespace Gelato.Configuration
     public class UserConfig
     {
         public Guid UserId { get; set; }
-        public string? Url { get; set; }
-        public string? MoviePath { get; set; }
-        public string? SeriesPath { get; set; }
-        public bool? DisableSearch { get; set; }
+        public string Url { get; set; } = "";
+        public string MoviePath { get; set; } = "";
+        public string SeriesPath { get; set; } = "";
+        public bool DisableSearch { get; set; } = false;
 
         /// <summary>
-        /// Apply user overrides to base configuration
+        /// Apply user overrides to base configuration - replaces all overridable fields
         /// </summary>
         public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig)
         {
             return new PluginConfiguration
             {
-                // User overridable fields
-                Url = Url ?? baseConfig.Url,
-                MoviePath = MoviePath ?? baseConfig.MoviePath,
-                SeriesPath = SeriesPath ?? baseConfig.SeriesPath,
-                DisableSearch = DisableSearch ?? baseConfig.DisableSearch,
+                // User overridable fields - all required, no fallback to baseConfig
+                Url = Url,
+                MoviePath = MoviePath,
+                SeriesPath = SeriesPath,
+                DisableSearch = DisableSearch,
 
                 // All other fields from base config
                 StreamTTL = baseConfig.StreamTTL,
