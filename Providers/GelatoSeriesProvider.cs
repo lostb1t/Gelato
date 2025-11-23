@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Gelato.Common;
+using Gelato.Configuration;
 using Jellyfin.Data.Enums;
 using Jellyfin.Data.Events;
 using MediaBrowser.Controller.Entities;
@@ -23,7 +24,7 @@ namespace Gelato.Providers
         private readonly ILogger<GelatoSeriesProvider> _log;
         private readonly ILibraryManager _libraryManager;
         private readonly GelatoManager _manager;
-        private readonly GelatoStremioProvider _stremio;
+        private readonly GelatoStremioProviderFactory _stremioFactory;
         private readonly IProviderManager _provider;
         private readonly ConcurrentDictionary<Guid, DateTime> _syncCache = new();
         private static readonly TimeSpan CacheExpiry = TimeSpan.FromMinutes(2);
@@ -32,15 +33,16 @@ namespace Gelato.Providers
         public GelatoSeriesProvider(
             ILogger<GelatoSeriesProvider> logger,
             ILibraryManager libraryManager,
-            GelatoStremioProvider stremio,
+            GelatoStremioProviderFactory stremioFactory,
             IProviderManager provider,
             GelatoManager manager
         )
         {
             _log = logger;
             _libraryManager = libraryManager;
+            _stremioFactory = stremioFactory;
             _manager = manager;
-            _stremio = stremio;
+
             _provider = provider;
 
             _provider.RefreshStarted += OnProviderManagerRefreshStarted;
@@ -57,7 +59,8 @@ namespace Gelato.Providers
             GenericEventArgs<BaseItem> genericEventArgs
         )
         {
-            if (!await _stremio.IsReady())
+            var stremio = _stremioFactory.Create(Guid.Empty);
+            if (!await stremio.IsReady())
             {
                 _log.LogWarning("gelato is not ready");
                 return;
@@ -98,32 +101,42 @@ namespace Gelato.Providers
             // Update cache before syncing
             _syncCache[series.Id] = now;
 
-            var seriesFolder = _manager.TryGetSeriesFolder();
-            if (seriesFolder is null)
-            {
-                _log.LogWarning("No series folder found");
-                return;
-            }
+            var userIds = GelatoPlugin
+                .Instance!.Configuration.UserConfigs.Select(x => x.UserId)
+                .ToList();
 
-            //   await _lock
-            //      .RunSingleFlightAsync(
-            //         series.Id,
-            //         async ct =>
-            //         {
-            try
+            // main settings
+            userIds.Add(Guid.Empty);
+
+            foreach (var userId in userIds)
             {
-                var meta = await _stremio.GetMetaAsync(series).ConfigureAwait(false);
-                if (meta is null)
+                var seriesFolder = _manager.TryGetSeriesFolder(userId);
+                if (seriesFolder is null)
                 {
-                    _log.LogWarning("Skipping {Name} - no metadata found", series.Name);
+                    _log.LogWarning("No series folder found");
                     return;
                 }
 
-                await _manager.SyncSeriesTreesAsync(seriesFolder, meta, CancellationToken.None);
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "failed sync series for {Name}", series.Name);
+                //   await _lock
+                //      .RunSingleFlightAsync(
+                //         series.Id,
+                //         async ct =>
+                //         {
+                try
+                {
+                    var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+                    if (meta is null)
+                    {
+                        _log.LogWarning("Skipping {Name} - no metadata found", series.Name);
+                        return;
+                    }
+
+                    await _manager.SyncSeriesTreesAsync(seriesFolder, meta, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex, "failed sync series for {Name}", series.Name);
+                }
             }
             //  });
             _log.LogInformation("synced series tree for {Name}", series.Name);

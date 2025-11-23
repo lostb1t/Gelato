@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Gelato.Common;
+using Gelato.Configuration;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -24,7 +25,6 @@ namespace Gelato.Filters
         private readonly IItemRepository _repo;
         private readonly IMediaSourceManager _mediaSources;
         private readonly IDtoService _dtoService;
-        private readonly GelatoStremioProvider _provider;
         private readonly ILogger<SearchActionFilter> _log;
         private readonly GelatoManager _manager;
 
@@ -34,7 +34,6 @@ namespace Gelato.Filters
             IMediaSourceManager mediaSources,
             IDtoService dtoService,
             GelatoManager manager,
-            GelatoStremioProvider provider,
             ILogger<SearchActionFilter> log
         )
         {
@@ -43,7 +42,6 @@ namespace Gelato.Filters
             _repo = repo;
             _mediaSources = mediaSources;
             _dtoService = dtoService;
-            _provider = provider;
             _log = log;
         }
 
@@ -54,11 +52,13 @@ namespace Gelato.Filters
             ActionExecutionDelegate next
         )
         {
+            ctx.TryGetUserId(out var userId);
+            var cfg = GelatoPlugin.Instance!.GetConfig(userId);
             if (
-                !await _provider.IsReady()
-                || GelatoPlugin.Instance.Configuration.DisableSearch
+                cfg.DisableSearch
                 || !ctx.IsApiSearchAction()
                 || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
+                || !await cfg.stremio.IsReady()
             )
             {
                 await next();
@@ -86,7 +86,7 @@ namespace Gelato.Filters
             ctx.TryGetActionArgument("startIndex", out var start, 0);
             ctx.TryGetActionArgument("limit", out var limit, 25);
 
-            var metas = await SearchMetasAsync(searchTerm, requestedTypes);
+            var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, userId);
 
             _log.LogInformation(
                 "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
@@ -148,29 +148,25 @@ namespace Gelato.Filters
 
         private async Task<List<StremioMeta>> SearchMetasAsync(
             string searchTerm,
-            HashSet<BaseItemKind> requestedTypes
+            HashSet<BaseItemKind> requestedTypes,
+            PluginConfiguration cfg,
+            Guid userId
         )
         {
             var tasks = new List<Task<IReadOnlyList<StremioMeta>>>();
 
-            if (
-                requestedTypes.Contains(BaseItemKind.Movie)
-                && _manager.TryGetMovieFolder() is not null
-            )
+            if (requestedTypes.Contains(BaseItemKind.Movie) && cfg.MovieFolder is not null)
             {
-                tasks.Add(_provider.SearchAsync(searchTerm, StremioMediaType.Movie));
+                tasks.Add(cfg.stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
             }
             else if (requestedTypes.Contains(BaseItemKind.Movie))
             {
                 _log.LogWarning("No movie folder found, skipping search");
             }
 
-            if (
-                requestedTypes.Contains(BaseItemKind.Series)
-                && _manager.TryGetSeriesFolder() is not null
-            )
+            if (requestedTypes.Contains(BaseItemKind.Series) && cfg.SeriesFolder is not null)
             {
-                tasks.Add(_provider.SearchAsync(searchTerm, StremioMediaType.Series));
+                tasks.Add(cfg.stremio.SearchAsync(searchTerm, StremioMediaType.Series));
             }
             else if (requestedTypes.Contains(BaseItemKind.Series))
             {
@@ -179,8 +175,8 @@ namespace Gelato.Filters
 
             var results = (await Task.WhenAll(tasks)).SelectMany(r => r).ToList();
 
-            var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
-            var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
+            var filterUnreleased = cfg.FilterUnreleased;
+            var bufferDays = cfg.FilterUnreleasedBufferDays;
 
             if (filterUnreleased)
             {

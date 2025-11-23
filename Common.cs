@@ -586,6 +586,17 @@ public static class ActionContextExtensions
         return Guid.TryParse(userIdStr, out userId);
     }
 
+    public static bool TryGetUserId(this HttpContext ctx, out Guid userId)
+    {
+        userId = Guid.Empty;
+
+        var userIdStr = ctx
+            .User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")
+            ?.Value;
+
+        return Guid.TryParse(userIdStr, out userId);
+    }
+
     public static bool TryGetActionArgument<T>(
         this ActionExecutingContext ctx,
         string key,

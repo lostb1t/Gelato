@@ -8,6 +8,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Gelato.Configuration;
 using MediaBrowser.Common.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -25,17 +26,11 @@ public sealed class GelatoApiController : ControllerBase
     private readonly ILogger<GelatoApiController> _log;
     private readonly IApplicationPaths _appPaths;
     private readonly string _downloadPath;
-    private readonly GelatoStremioProvider _stremio;
 
-    public GelatoApiController(
-        ILogger<GelatoApiController> log,
-        GelatoStremioProvider stremio,
-        IApplicationPaths appPaths
-    )
+    public GelatoApiController(ILogger<GelatoApiController> log, IApplicationPaths appPaths)
     {
         _log = log;
         _appPaths = appPaths;
-        _stremio = stremio;
         _downloadPath = Path.Combine(_appPaths.CachePath, "gelato-torrents");
         Directory.CreateDirectory(_downloadPath);
     }
@@ -47,7 +42,8 @@ public sealed class GelatoApiController : ControllerBase
         [FromRoute, Required] string id
     )
     {
-        var meta = await _stremio.GetMetaAsync(id, stremioMetaType);
+        var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+        var meta = await cfg.stremio.GetMetaAsync(id, stremioMetaType);
         if (meta is null)
         {
             return NotFound();

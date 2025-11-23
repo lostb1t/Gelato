@@ -6,8 +6,15 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Gelato.Common;
+using Gelato.Configuration;
+using Jellyfin.Data;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Database.Implementations.Enums;
+using Jellyfin.Database.Implementations.Enums;
+using Jellyfin.Extensions;
+using MediaBrowser.Common.Extensions;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.IO;
@@ -19,6 +26,7 @@ using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
+using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -34,7 +42,6 @@ namespace Gelato.Decorators
         private readonly Lazy<GelatoManager> _manager;
         private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
-        private readonly GelatoStremioProvider _stremio;
         private readonly KeyLock _lock = new();
 
         public MediaSourceManagerDecorator(
@@ -44,7 +51,6 @@ namespace Gelato.Decorators
             IHttpContextAccessor http,
             GelatoItemRepository repo,
             IDirectoryService directoryService,
-            GelatoStremioProvider stremioProvider,
             Lazy<GelatoManager> manager
         )
         {
@@ -54,7 +60,6 @@ namespace Gelato.Decorators
             _manager = manager;
             _libraryManager = libraryManager;
             _directoryService = directoryService;
-            _stremio = stremioProvider;
             _repo = repo;
         }
 
@@ -114,22 +119,32 @@ namespace Gelato.Decorators
             var manager = _manager.Value;
 
             _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
+            var ctx = _http?.HttpContext;
+            Guid userId;
+            if (user != null)
+            {
+                userId = user.Id;
+            }
+            else
+            {
+                ctx.TryGetUserId(out userId);
+            }
 
+            var cfg = GelatoPlugin.Instance!.GetConfig(userId);
             if (
-                (!GelatoPlugin.Instance!.Configuration.EnableMixed && !manager.IsGelato(item))
+                (!cfg.EnableMixed && !manager.IsGelato(item))
                 || (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
             )
             {
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }
 
-            var ctx = _http?.HttpContext;
             var uri = StremioUri.FromBaseItem(item);
             var actionName =
                 ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
             var isItemsAction = IsItemsActionName(actionName ?? string.Empty);
             var isListAction = IsList(actionName ?? string.Empty);
-
+            //ctx.TryGetUserId(out var userId);
             var allowSync = isItemsAction && (!isListAction || IsSingleItemList(ctx, item.Id));
 
             var video = item as Video;
@@ -158,7 +173,7 @@ namespace Gelato.Decorators
                             );
                             try
                             {
-                                await manager.SyncStreams(item, ct).ConfigureAwait(false);
+                                await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
                                 manager.SetStreamSync(cacheKey);
                             }
                             catch (Exception ex)
@@ -221,7 +236,8 @@ namespace Gelato.Decorators
                         enablePathSubstitution,
                         s,
                         MediaSourceType.Grouping,
-                        ctx
+                        ctx,
+                        user
                     );
                     if (user is not null)
                     {
@@ -238,7 +254,7 @@ namespace Gelato.Decorators
             if (sources.Count == 0)
             {
                 sources.Add(
-                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx)
+                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
                 );
             }
 
@@ -279,7 +295,10 @@ namespace Gelato.Decorators
                 Uri u = new Uri(source.Path);
                 string filename = System.IO.Path.GetFileName(u.LocalPath);
 
-                subtitles = await _stremio.GetSubtitlesAsync(uri, filename).ConfigureAwait(false);
+                var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+                subtitles = await cfg
+                    .stremio.GetSubtitlesAsync(uri, filename)
+                    .ConfigureAwait(false);
                 manager.SetStremioSubtitlesCache(item.Id, subtitles);
             }
 
@@ -555,7 +574,8 @@ namespace Gelato.Decorators
             bool enablePathSubstitution,
             BaseItem item,
             MediaSourceType type,
-            HttpContext ctx
+            HttpContext ctx,
+            User user = null
         )
         {
             ArgumentNullException.ThrowIfNull(item);
@@ -579,6 +599,15 @@ namespace Gelato.Decorators
                 SupportsDirectPlay = true,
             };
 
+            if (user is not null)
+            {
+                info.SupportsTranscoding = user.HasPermission(
+                    PermissionKind.EnableVideoPlaybackTranscoding
+                );
+                info.SupportsDirectStream = user.HasPermission(
+                    PermissionKind.EnablePlaybackRemuxing
+                );
+            }
             if (string.IsNullOrEmpty(info.Path))
             {
                 info.Type = MediaSourceType.Placeholder;

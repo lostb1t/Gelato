@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Gelato;
 using Gelato.Common;
+using Gelato.Configuration;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
@@ -19,7 +20,6 @@ namespace Gelato.Tasks
     public sealed class GelatoCatalogItemsSyncTask : IScheduledTask
     {
         private readonly ILogger<GelatoCatalogItemsSyncTask> _log;
-        private readonly GelatoStremioProvider _stremio;
         private readonly GelatoManager _manager;
         private readonly ILibraryManager _library;
         private readonly ICollectionManager _collections;
@@ -28,13 +28,11 @@ namespace Gelato.Tasks
             ILibraryManager libraryManager,
             ICollectionManager collections,
             ILogger<GelatoCatalogItemsSyncTask> log,
-            GelatoStremioProvider stremio,
             GelatoManager manager
         )
         {
             _log = log;
             _library = libraryManager;
-            _stremio = stremio;
             _manager = manager;
             _collections = collections;
         }
@@ -53,8 +51,9 @@ namespace Gelato.Tasks
         )
         {
             _log.LogInformation("catalog sync started");
-
-            var manifest = await _stremio.GetManifestAsync().ConfigureAwait(false);
+            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+            var stremio = cfg.stremio;
+            var manifest = await stremio.GetManifestAsync().ConfigureAwait(false);
             var catalogs = manifest?.Catalogs.Where(c => !c.IsSearchCapable()).ToList() ?? new();
             if (catalogs.Count == 0)
             {
@@ -64,8 +63,8 @@ namespace Gelato.Tasks
             }
 
             var maxPerCatalog = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
-            var seriesFolder = _manager.TryGetSeriesFolder();
-            var movieFolder = _manager.TryGetMovieFolder();
+            var seriesFolder = _manager.TryGetSeriesFolder(Guid.Empty);
+            var movieFolder = _manager.TryGetMovieFolder(Guid.Empty);
             var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
             var collectionMaxItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
 
@@ -118,7 +117,7 @@ namespace Gelato.Tasks
                     {
                         //ct.ThrowIfCancellationRequested();
 
-                        var page = await _stremio
+                        var page = await stremio
                             .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
                             .ConfigureAwait(false);
 
@@ -149,6 +148,7 @@ namespace Gelato.Tasks
                                         .InsertMeta(
                                             root,
                                             meta,
+                                            Guid.Empty,
                                             true,
                                             true,
                                             false,
