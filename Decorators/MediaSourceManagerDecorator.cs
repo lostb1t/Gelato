@@ -242,8 +242,7 @@ namespace Gelato.Decorators
                 .GetItemList(query)
                 .OfType<Video>()
                 .Where(x => manager.IsGelato(x))
-                // .OrderByDescending(x => manager.IsPrimaryVersion(x) ? 1 : 0)
-                .OrderByDescending(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
+                .OrderBy(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
                 .Select(s =>
                 {
                     var k = GetVersionInfo(
