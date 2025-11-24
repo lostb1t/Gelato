@@ -654,9 +654,9 @@ namespace Gelato
         public Guid GetGuid()
         {
             //var size = BehaviorHints?.VideoSize?.ToString() ?? "0";
-            var filename = BehaviorHints?.Filename ?? string.Empty;
-            var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
-            var key = $"{bingeGroup}{filename}";
+            //var filename = BehaviorHints?.Filename ?? string.Empty;
+            // var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
+            var key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename ?? Url ?? InfoHash}";
 
             using var md5 = System.Security.Cryptography.MD5.Create();
             var bytes = System.Text.Encoding.UTF8.GetBytes(key);
@@ -664,30 +664,9 @@ namespace Gelato
             return new Guid(hash);
         }
 
-        public string GetKey()
-        {
-            var filename = BehaviorHints?.Filename ?? string.Empty;
-            var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
-            return $"{bingeGroup}{filename}";
-        }
-
-        public string GetShortId()
-        {
-            var key = GetKey();
-            using var md5 = System.Security.Cryptography.MD5.Create();
-            var bytes = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(key));
-            return BitConverter.ToUInt32(bytes, 0).ToString("X8");
-        }
-
         public bool IsValid()
         {
-            //var size = BehaviorHints?.VideoSize?.ToString();
-            //var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
-            var filename = BehaviorHints?.Filename;
-            return !string.IsNullOrWhiteSpace(filename)
-                // && !string.IsNullOrWhiteSpace(size)
-                && !string.IsNullOrWhiteSpace(GetName())
-                && (!string.IsNullOrWhiteSpace(Url) || !string.IsNullOrWhiteSpace(InfoHash));
+            return (!string.IsNullOrWhiteSpace(Url) || !string.IsNullOrWhiteSpace(InfoHash));
         }
 
         public bool IsFile()
