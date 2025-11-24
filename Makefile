@@ -4,16 +4,16 @@ release:
 	@echo "Bumping version with git-cliff..."
 	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
 	@echo "New version will be: $(NEW_VERSION)"
+	@echo "Generating changelog..."
+	@git cliff --unreleased --strip all > /tmp/release_notes.md
 	@echo "Updating version in build.yaml..."
 	sed -i 's/^version: .*/version: "$(NEW_VERSION:v%=%)"/' build.yaml
 	git add build.yaml
 	git commit -m "chore(release): bump version to $(NEW_VERSION)"
-	@echo "Generating changelog..."
-	$(eval CHANGELOG := $(shell git cliff --unreleased))
 	@echo "Pushing to git..."
 	git push
 	@echo "Creating GitHub release..."
-	gh release create $(NEW_VERSION) --title "$(NEW_VERSION)" --notes "$(CHANGELOG)"
+	gh release create $(NEW_VERSION) --title "$(NEW_VERSION)" --notes-file /tmp/release_notes.md
 	@echo "Release $(NEW_VERSION) created successfully!"
 
 test:
@@ -23,9 +23,7 @@ test:
 	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
 	@echo "New version will be: $(NEW_VERSION)"
 	@echo "Generating changelog..."
-	$(eval CHANGELOG := $(shell git cliff --unreleased))
-	@echo "$(CHANGELOG)"
+	@git cliff --unreleased --strip all > /tmp/release_notes.md
+	@cat /tmp/release_notes.md
 
 .PHONY: release test
-
-
