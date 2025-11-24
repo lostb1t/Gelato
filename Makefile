@@ -1,4 +1,6 @@
 release:
+	@echo "Fetching tags..."
+	git fetch --tags
 	@echo "Bumping version with git-cliff..."
 	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
 	@echo "New version will be: $(NEW_VERSION)"
