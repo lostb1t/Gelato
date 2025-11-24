@@ -240,12 +240,12 @@
         "version": "0.20.4.0"
       },
       {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/v0.20.2.0...v0.20.3.0",
-        "checksum": "",
-        "sourceUrl": "",
+        "changelog": null,
+        "checksum": "3913ac9b5861b8775021ce58384720ac",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.1.0/gelato_0.1.0.0.zip",
         "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-06T14:13:34Z",
-        "version": "0.20.3.0"
+        "timestamp": "2025-11-24T16:25:55Z",
+        "version": "0.1.0"
       }
     ]
   }
