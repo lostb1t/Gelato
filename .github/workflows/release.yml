@@ -26,6 +26,6 @@ jobs:
         uses: kenji-miyake/setup-git-cliff@v1
 
       - name: Run make release
-        run: make test
+        run: make release
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
