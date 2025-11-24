@@ -17,5 +17,13 @@ release:
 	gh release create $(NEW_VERSION) --title "$(NEW_VERSION)" --notes "$(CHANGELOG)"
 	@echo "Release $(NEW_VERSION) created successfully!"
 
+test:
+	@echo "Fetching tags..."
+	git fetch --tags
+	@echo "Bumping version with git-cliff..."
+	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
+	@echo "New version will be: $(NEW_VERSION)"
+
+  
 .PHONY: release
 
