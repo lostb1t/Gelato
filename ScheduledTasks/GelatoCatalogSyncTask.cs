@@ -47,7 +47,6 @@ namespace Gelato.Tasks
 
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
         {
-            _log.LogInformation("catalog sync started");
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
             var stremio = cfg.stremio;
             var manifest = await stremio.GetManifestAsync().ConfigureAwait(false);
@@ -58,6 +57,8 @@ namespace Gelato.Tasks
                 _log.LogInformation("No catalogs found");
                 return;
             }
+
+            _log.LogInformation("processing {Count} catalogs", catalogs.Count);
 
             var maxPerCatalog = cfg.CatalogMaxItems;
             var seriesFolder = cfg.SeriesFolder;

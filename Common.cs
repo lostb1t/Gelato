@@ -638,3 +638,42 @@ public static class StringExtensions
         return kinds;
     }
 }
+
+public static class BaseItemExtensions
+{
+    public static string GelatoData(this BaseItem item, string key)
+    {
+        if (string.IsNullOrEmpty(item.ExternalId))
+            return string.Empty;
+
+        try
+        {
+            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(item.ExternalId);
+            return data?.GetValueOrDefault(key) ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    public static void SetGelatoData(this BaseItem item, string key, string value)
+    {
+        Dictionary<string, string> data;
+
+        try
+        {
+            data = string.IsNullOrEmpty(item.ExternalId)
+                ? new Dictionary<string, string>()
+                : JsonSerializer.Deserialize<Dictionary<string, string>>(item.ExternalId)
+                    ?? new Dictionary<string, string>();
+        }
+        catch
+        {
+            data = new Dictionary<string, string>();
+        }
+
+        data[key] = value;
+        item.ExternalId = JsonSerializer.Serialize(data);
+    }
+}

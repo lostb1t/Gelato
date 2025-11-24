@@ -517,32 +517,27 @@ public class GelatoManager
             return;
         }
 
-        var providerIds = item.ProviderIds ?? new Dictionary<string, string>();
+        var primary = (Video)item;
+
+        primary.Path = uri.ToString();
+        if (primary.ProviderIds.ContainsKey("GelatoUserId"))
+        {
+            primary.ProviderIds.Remove("GelatoUserId");
+        }
+
+        await primary
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+            .ConfigureAwait(false);
+
+        var providerIds = primary.ProviderIds ?? new Dictionary<string, string>();
         providerIds.TryAdd("Stremio", uri.ExternalId);
-        providerIds.TryAdd("GelatoUserId", userId.ToString());
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         var stremio = cfg.stremio;
         var streams = await stremio.GetStreamsAsync(uri).ConfigureAwait(false);
-        var primary = (Video)item;
         var httpPort = GetHttpPort();
         var seriesFolder = cfg.SeriesFolder;
         var movieFolder = cfg.MovieFolder;
-
-        // Get existing virtual items
-        var query = new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
-            HasAnyProviderId = providerIds,
-            Recursive = true,
-            IsDeadPerson = true,
-        };
-
-        var existing = _repo
-            .GetItemList(query)
-            .OfType<Video>()
-            .Where(v => IsStream(v))
-            .ToDictionary(v => v.Id);
 
         // Filter valid streams
         var acceptable = streams
@@ -565,18 +560,23 @@ public class GelatoManager
             .Where(s => s is not null)
             .ToList();
 
-        // Handle case with no streams
-        // if (acceptable.Count == 0 && IsGelato(primary))
-        // {
-        primary.Path = uri.ToString();
-        await primary
-            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-            .ConfigureAwait(false);
-        //}
+        // Get existing streams
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
+            HasAnyProviderId = providerIds,
+            Recursive = true,
+            IsDeadPerson = true,
+        };
+
+        var existing = _repo
+            .GetItemList(query)
+            .OfType<Video>()
+            .Where(v => IsStream(v) && v.GelatoData("userId") == userId.ToString())
+            .ToDictionary(v => v.Id);
 
         var newVideos = new List<Video>();
 
-        // Process all streams - first one updates primary, rest create virtual items
         for (int i = 0; i < acceptable.Count; i++)
         {
             var s = acceptable[i];
@@ -590,26 +590,11 @@ public class GelatoManager
                             ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}"
                             : ""
                     );
-            var externalId = $"{index:D3}:::{s.Name}";
-            var id = s.GetGuid();
+
+            //var id = s.GetGuid();
+            var id = Guid.NewGuid();
             var target = existing.GetValueOrDefault(id);
             var isNew = target is null;
-
-            // First stream updates the primary item
-            //if (i == 0 && IsGelato(primary))
-            //{
-            //    primary.Path = path;
-            //    primary.ExternalId = externalId;
-            //    await primary
-            //        .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-            //        .ConfigureAwait(false);
-            //    _mediaStreams.SaveMediaStreams(
-            //        primary.Id,
-            //        _mediaStreams.GetMediaStreams(new MediaStreamQuery { ItemId = id }),
-            //        ct
-            //    );
-            //    continue;
-            //}
 
             if (isNew)
             {
@@ -629,7 +614,7 @@ public class GelatoManager
                         : new Movie { Id = id };
             }
 
-            target.ExternalId = externalId;
+            // target.ExternalId = externalId;
             target.Name = primary.Name;
             target.Path = path;
             target.IsVirtualItem = true;
@@ -638,6 +623,9 @@ public class GelatoManager
             target.Tags = primary.Tags;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
             target.SetPrimaryVersionId(null);
+            target.SetGelatoData("userId", userId.ToString());
+            target.SetGelatoData("name", s.Name);
+            target.SetGelatoData("index", $"{index:D3}");
 
             if (isNew)
             {
@@ -662,7 +650,7 @@ public class GelatoManager
         }
 
         _log.LogInformation(
-            $"SyncStreams finished for {item.Name}: {newVideos.Count} streams, {stale.Count} deleted"
+            $"SyncStreams finished for {item.Name} and userId {userId}: {newVideos.Count} streams, {stale.Count} deleted"
         );
     }
 

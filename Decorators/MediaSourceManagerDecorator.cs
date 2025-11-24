@@ -154,7 +154,7 @@ namespace Gelato.Decorators
 
             if (userId != Guid.Empty)
             {
-                cacheKey = $"{userId}:{cacheKey}";
+                cacheKey = $"{userId.ToString()}:{cacheKey}";
             }
 
             if (!allowSync)
@@ -208,7 +208,6 @@ namespace Gelato.Decorators
                 query = new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                    HasAnyProviderId = new() { { "GelatoUserId", userId.ToString() } },
                     ParentId = episode.SeasonId,
                     Recursive = false,
                     GroupByPresentationUniqueKey = false,
@@ -224,11 +223,7 @@ namespace Gelato.Decorators
                 query = new InternalItemsQuery
                 {
                     IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                    HasAnyProviderId = new()
-                    {
-                        { "Stremio", item.GetProviderId("Stremio") },
-                        { "GelatoUserId", userId.ToString() },
-                    },
+                    HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
                     Recursive = false,
                     GroupByPresentationUniqueKey = false,
                     GroupBySeriesPresentationUniqueKey = false,
@@ -241,8 +236,8 @@ namespace Gelato.Decorators
             var gelatoSources = _repo
                 .GetItemList(query)
                 .OfType<Video>()
-                .Where(x => manager.IsGelato(x))
-                .OrderBy(s => (s.ExternalId ?? "").Split(":::").FirstOrDefault() ?? "")
+                .Where(x => manager.IsGelato(x) && x.GelatoData("userId") == userId.ToString())
+                .OrderBy(s => s.GelatoData("index"))
                 .Select(s =>
                 {
                     var k = GetVersionInfo(
@@ -260,9 +255,6 @@ namespace Gelato.Decorators
                 })
                 .ToList();
 
-            //var c = gelatoSources.Count;
-            //sources = sources.Where(k => c != 0 && manager.Is(k.Id)).ToList();
-            //sources = sources.Where(k => !gelatoSources.Select(x => x.Id).Contains(k.Id)).ToList();
             sources.AddRange(gelatoSources);
 
             // remove primary from list when there are streams
@@ -603,16 +595,13 @@ namespace Gelato.Decorators
         {
             ArgumentNullException.ThrowIfNull(item);
 
-            var parts = (item.ExternalId ?? "").Split(":::");
-            var Name = parts.Length > 1 ? parts[^1] : item.Name;
-
             var info = new MediaSourceInfo
             {
                 Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
                 Protocol = MediaProtocol.Http,
                 MediaStreams = _inner.GetMediaStreams(item.Id),
                 MediaAttachments = _inner.GetMediaAttachments(item.Id),
-                Name = Name,
+                Name = item.GelatoData("name"),
                 Path = item.Path,
                 RunTimeTicks = item.RunTimeTicks,
                 Container = item.Container,
