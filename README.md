@@ -19,6 +19,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - **Realtime Streaming** – Streams are resolved on demand and play instantly
 - **Database Integration** – Stremio items appear like native Jellyfin items
 - **Act as an proxy** - Streams are proxied through Jellyfin, so debrid sees everything as a single IP.
+- **Per user settings** - Users can have their own manifest, perfect for age restricted accounts.
 - **More Content, Less Hassle** – Expand Jellyfin with community-driven Stremio catalogs
 
 **NOTICE: ONLY SUPPORTS JELLYFIN 10.11**
