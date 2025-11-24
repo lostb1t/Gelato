@@ -23,7 +23,11 @@ test:
 	@echo "Bumping version with git-cliff..."
 	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
 	@echo "New version will be: $(NEW_VERSION)"
+	@echo "Generating changelog..."
+	$(eval PREV_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo ""))
+	$(eval CHANGELOG := $(shell git cliff $(PREV_TAG)..HEAD --strip all))
+	@echo "$(CHANGELOG)"
 
-  
-.PHONY: release
+.PHONY: release test
+
 
