@@ -238,14 +238,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-06T14:20:20Z",
         "version": "0.20.4.0"
-      },
-      {
-        "changelog": null,
-        "checksum": "3913ac9b5861b8775021ce58384720ac",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/0.1.0/gelato_0.1.0.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-24T16:25:55Z",
-        "version": "0.1.0"
       }
     ]
   }
