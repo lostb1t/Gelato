@@ -9,8 +9,7 @@ release:
 	git add build.yaml
 	git commit -m "chore(release): bump version to $(NEW_VERSION)"
 	@echo "Generating changelog..."
-	$(eval PREV_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo ""))
-	$(eval CHANGELOG := $(shell git cliff $(PREV_TAG)..HEAD --strip all))
+	$(eval CHANGELOG := $(shell git cliff --unreleased))
 	@echo "Pushing to git..."
 	git push
 	@echo "Creating GitHub release..."
@@ -24,8 +23,7 @@ test:
 	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
 	@echo "New version will be: $(NEW_VERSION)"
 	@echo "Generating changelog..."
-	$(eval PREV_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo ""))
-	$(eval CHANGELOG := $(shell git cliff $(PREV_TAG)..HEAD --strip all))
+	$(eval CHANGELOG := $(shell git cliff --unreleased))
 	@echo "$(CHANGELOG)"
 
 .PHONY: release test
