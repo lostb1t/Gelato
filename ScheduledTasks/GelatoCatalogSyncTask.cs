@@ -45,10 +45,7 @@ namespace Gelato.Tasks
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
-        public async Task ExecuteAsync(
-            IProgress<double> progress,
-            CancellationToken cancellationToken
-        )
+        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
         {
             _log.LogInformation("catalog sync started");
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
@@ -62,11 +59,11 @@ namespace Gelato.Tasks
                 return;
             }
 
-            var maxPerCatalog = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
-            var seriesFolder = _manager.TryGetSeriesFolder(Guid.Empty);
-            var movieFolder = _manager.TryGetMovieFolder(Guid.Empty);
-            var createCollections = GelatoPlugin.Instance!.Configuration.CreateCollections;
-            var collectionMaxItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
+            var maxPerCatalog = cfg.CatalogMaxItems;
+            var seriesFolder = cfg.SeriesFolder;
+            var movieFolder = cfg.MovieFolder;
+            var createCollections = cfg.CreateCollections;
+            var collectionMaxItems = cfg.MaxCollectionItems;
 
             if (seriesFolder is null)
             {
@@ -115,7 +112,7 @@ namespace Gelato.Tasks
                         && !collectionCommited;
                     while (processed < maxPerCatalog)
                     {
-                        //ct.ThrowIfCancellationRequested();
+                        ct.ThrowIfCancellationRequested();
 
                         var page = await stremio
                             .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
@@ -145,15 +142,7 @@ namespace Gelato.Tasks
                                 try
                                 {
                                     var (item, created) = await _manager
-                                        .InsertMeta(
-                                            root,
-                                            meta,
-                                            Guid.Empty,
-                                            true,
-                                            true,
-                                            false,
-                                            cancellationToken
-                                        )
+                                        .InsertMeta(root, meta, Guid.Empty, true, true, false, ct)
                                         .ConfigureAwait(false);
 
                                     if (item != null && shouldCreateCollection)

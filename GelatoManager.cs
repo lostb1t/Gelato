@@ -292,6 +292,28 @@ public class GelatoManager
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
+    public BaseItem? Exist(StremioMeta meta)
+    {
+        var baseItem = IntoBaseItem(meta);
+        if (baseItem?.ProviderIds is not { Count: > 0 })
+        {
+            _log.LogWarning("Gelato: Missing provider ids, skipping");
+            return null;
+        }
+
+        var kind = baseItem.GetBaseItemKind();
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = new[] { kind },
+            HasAnyProviderId = baseItem.ProviderIds,
+            Recursive = true,
+            IsDeadPerson = true,
+        };
+
+        var existing = _library.GetItemList(query).OfType<BaseItem>().FirstOrDefault();
+        return existing;
+    }
+
     /// <summary>
     /// Inserts metadata into the library. Skip if it already exists.
     /// </summary>
@@ -306,6 +328,7 @@ public class GelatoManager
     )
     {
         var mediaType = meta.Type;
+        BaseItem? existing;
 
         if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series))
         {
@@ -327,9 +350,22 @@ public class GelatoManager
             )
         )
         {
+            // do a prechexk as loading metadata is expensive
+            existing = Exist(meta);
+
+            if (existing is not null)
+            {
+                _log.LogDebug(
+                    "found existing {Kind}: {Id} for {Name}",
+                    existing.GetBaseItemKind(),
+                    existing.Id,
+                    existing.Name
+                );
+                return (existing, false);
+            }
             var lookupId = meta.ImdbId ?? meta.Id;
-            var stremio = _stremioFactory.Create(userId);
-            meta = await stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+            var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+            meta = await cfg.stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
             if (meta is null)
             {
@@ -361,34 +397,20 @@ public class GelatoManager
             return (null, false);
         }
 
-        var baseItem = IntoBaseItem(meta);
-        if (baseItem?.ProviderIds is not { Count: > 0 })
-        {
-            _log.LogWarning("Gelato: Missing provider ids, skipping");
-            return (null, false);
-        }
+        existing = Exist(meta);
 
-        var kind = baseItem.GetBaseItemKind();
-        var query = new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { kind },
-            HasAnyProviderId = baseItem.ProviderIds,
-            Recursive = true,
-            IsDeadPerson = true,
-        };
-
-        var existing = _library.GetItemList(query).OfType<BaseItem>().FirstOrDefault();
-        //var existing = GetByProviderIds(baseItem.ProviderIds, kind, parent);
         if (existing is not null)
         {
             _log.LogDebug(
                 "found existing {Kind}: {Id} for {Name}",
                 existing.GetBaseItemKind(),
                 existing.Id,
-                baseItem.Name
+                existing.Name
             );
             return (existing, false);
         }
+
+        var baseItem = IntoBaseItem(meta);
 
         if (mediaType == StremioMediaType.Movie)
         {

@@ -59,7 +59,8 @@ namespace Gelato.Providers
             GenericEventArgs<BaseItem> genericEventArgs
         )
         {
-            var stremio = _stremioFactory.Create(Guid.Empty);
+            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+            var stremio = cfg.stremio;
             if (!await stremio.IsReady())
             {
                 _log.LogWarning("gelato is not ready");
@@ -101,43 +102,43 @@ namespace Gelato.Providers
             // Update cache before syncing
             _syncCache[series.Id] = now;
 
-            var userIds = GelatoPlugin
-                .Instance!.Configuration.UserConfigs.Select(x => x.UserId)
-                .ToList();
+            //var userIds = GelatoPlugin
+            //    .Instance!.Configuration.UserConfigs.Select(x => x.UserId)
+            //    .ToList();
 
             // main settings
-            userIds.Add(Guid.Empty);
+            // userIds.Add(Guid.Empty);
 
-            foreach (var userId in userIds)
+            //foreach (var userId in userIds)
+            //{
+            var seriesFolder = cfg.SeriesFolder;
+            if (seriesFolder is null)
             {
-                var seriesFolder = _manager.TryGetSeriesFolder(userId);
-                if (seriesFolder is null)
+                _log.LogWarning("No series folder found");
+                return;
+            }
+
+            //   await _lock
+            //      .RunSingleFlightAsync(
+            //         series.Id,
+            //         async ct =>
+            //         {
+            try
+            {
+                var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+                if (meta is null)
                 {
-                    _log.LogWarning("No series folder found");
+                    _log.LogWarning("Skipping {Name} - no metadata found", series.Name);
                     return;
                 }
 
-                //   await _lock
-                //      .RunSingleFlightAsync(
-                //         series.Id,
-                //         async ct =>
-                //         {
-                try
-                {
-                    var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
-                    if (meta is null)
-                    {
-                        _log.LogWarning("Skipping {Name} - no metadata found", series.Name);
-                        return;
-                    }
-
-                    await _manager.SyncSeriesTreesAsync(seriesFolder, meta, CancellationToken.None);
-                }
-                catch (Exception ex)
-                {
-                    _log.LogError(ex, "failed sync series for {Name}", series.Name);
-                }
+                await _manager.SyncSeriesTreesAsync(seriesFolder, meta, CancellationToken.None);
             }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "failed sync series for {Name}", series.Name);
+            }
+            //   }
             //  });
             _log.LogInformation("synced series tree for {Name}", series.Name);
         }
