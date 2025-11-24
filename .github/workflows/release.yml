@@ -2,11 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 0.17.10.0)'
-        required: true
-        type: string
 
 jobs:
   release:
@@ -26,6 +21,9 @@ jobs:
           git config user.name "${{ github.repository_owner }}"
           git config user.email "${{ github.event.pusher.email || format('{0}@users.noreply.github.com', github.repository_owner) }}"
       
+      - name: Set up git-cliff
+        uses: kenji-miyake/setup-git-cliff@v1
+
       - name: Run make release
         run: make release VERSION=${{ inputs.version }}
         env:
