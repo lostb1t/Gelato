@@ -996,9 +996,7 @@ public class GelatoManager
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
                 episode.SetProviderId("Stremio", $"{seasonStremioId}:{index}");
-                //episode.Path = GetGelatoLocalPath(episode);
-                //episode.Path = GetGelatoLocalPath(episode);
-                //CreateStrmFile(episode.Path, episode.ShortcutPath);
+
                 season.AddChild(episode);
                 episodesInserted++;
 

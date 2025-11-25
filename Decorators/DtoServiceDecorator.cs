@@ -85,9 +85,6 @@ namespace Gelato.Decorators
         {
             var manager = _manager.Value;
 
-            //dto.MediaSourceCount = 1;
-            //dto.Container = null;
-
             if (
                 item is not null
                 && user is not null
@@ -101,16 +98,13 @@ namespace Gelato.Decorators
             {
                 dto.CanDownload = true;
 
-                // clean name (legacy)
-                var parts = dto.Name.Split(":::");
-                dto.Name = parts.Length > 1 ? parts[1] : dto.Name;
-
-                // mark unplayable
+                // mark unplayable if placeholder
                 if (
                     !IsList
                         && dto.MediaSources?.Length == 1
                         && dto.Path is not null
-                        && dto.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
+                        && dto.MediaSources[0]
+                            .Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
                     || (!IsList && item is not null && item.IsUnaired)
                 )
                 {
