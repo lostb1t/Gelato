@@ -5,7 +5,7 @@ release:
 	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
 	@echo "New version will be: $(NEW_VERSION)"
 	@echo "Generating changelog..."
-	@git cliff --unreleased --strip all > /tmp/release_notes.md
+	@git cliff --unreleased --tag $(NEW_VERSION) --strip all > /tmp/release_notes.md
 	@echo "Updating version in build.yaml..."
 	sed -i 's/^version: .*/version: "$(NEW_VERSION:v%=%)"/' build.yaml
 	git add build.yaml
@@ -23,7 +23,7 @@ test:
 	$(eval NEW_VERSION := $(shell git cliff --bumped-version))
 	@echo "New version will be: $(NEW_VERSION)"
 	@echo "Generating changelog..."
-	@git cliff --unreleased --strip all > /tmp/release_notes.md
+	@git cliff --unreleased --tag $(NEW_VERSION) --strip all > /tmp/release_notes.md
 	@cat /tmp/release_notes.md
 
 .PHONY: release test
