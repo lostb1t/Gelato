@@ -73,6 +73,7 @@ namespace Gelato.Tasks
                 {
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
+                    // deprecated
                     { "GelatoCatalogId", string.Empty },
                 },
                 GroupByPresentationUniqueKey = false,
@@ -130,9 +131,6 @@ namespace Gelato.Tasks
 
                 progress?.Report(Math.Min(100.0, (double)deleted / total * 100.0));
             }
-
-            // delete empty series
-            //series.GetRecursiveChildren()
 
             _manager.ClearCache();
             progress?.Report(100.0);

@@ -722,8 +722,19 @@ public class GelatoManager
     public bool IsGelato(BaseItem item)
     {
         var stremioId = item.GetProviderId("Stremio");
-        if (!string.IsNullOrWhiteSpace(stremioId) && !item.IsFileProtocol)
+        if (
+            !string.IsNullOrWhiteSpace(stremioId)
+            // failsafe. local file is never gelato
+            && !(
+                (
+                    item.GetBaseItemKind() == BaseItemKind.Movie
+                    || item.GetBaseItemKind() == BaseItemKind.Episode
+                ) && item.IsFileProtocol
+            )
+        )
+        {
             return true;
+        }
         return false;
     }
 
