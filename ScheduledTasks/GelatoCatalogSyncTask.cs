@@ -95,7 +95,8 @@ namespace Gelato.Tasks
                     var skip = 0;
                     var processed = 0;
                     var collectionCommited = false;
-                    var addToCollectionIds = new List<Guid>();
+                    var addToCollectionIds =
+                        new System.Collections.Concurrent.ConcurrentBag<Guid>();
                     var genreExtra = cat.Extra?.FirstOrDefault(e =>
                         string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase)
                     );
@@ -181,7 +182,8 @@ namespace Gelato.Tasks
 
                     if (shouldCreateCollection && addToCollectionIds.Count != 0)
                     {
-                        await SaveCollection(cat, addToCollectionIds).ConfigureAwait(false);
+                        await SaveCollection(cat, addToCollectionIds.ToList())
+                            .ConfigureAwait(false);
                         addToCollectionIds.Clear();
                     }
 
