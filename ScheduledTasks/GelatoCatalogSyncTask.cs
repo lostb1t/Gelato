@@ -213,8 +213,9 @@ namespace Gelato.Tasks
             );
         }
 
-        private async Task<BoxSet?> GetOrCreateBoxSetByIdAsync(string id, string name)
+        private async Task<BoxSet?> GetOrCreateBoxSetByIdAsync(StremioCatalog cat)
         {
+            var id = $"{cat.Type.ToString()}.{cat.Id}";
             var collection = _library
                 .GetItemList(
                     new InternalItemsQuery
@@ -222,12 +223,7 @@ namespace Gelato.Tasks
                         IncludeItemTypes = new[] { BaseItemKind.BoxSet },
                         CollapseBoxSetItems = false,
                         Recursive = true,
-                        HasAnyProviderId = new Dictionary<string, string>
-                        {
-                            { "Stremio", id },
-                            // deprecated
-                            { "GelatoCatalogId", id },
-                        },
+                        HasAnyProviderId = new Dictionary<string, string> { { "Stremio", id } },
                     }
                 )
                 .Select(b => b as BoxSet)
@@ -239,7 +235,7 @@ namespace Gelato.Tasks
                     .CreateCollectionAsync(
                         new CollectionCreationOptions
                         {
-                            Name = name,
+                            Name = cat.Name,
                             ProviderIds = new Dictionary<string, string> { { "Stremio", id } },
                         }
                     )
@@ -251,8 +247,7 @@ namespace Gelato.Tasks
 
         private async Task SaveCollection(StremioCatalog cat, List<Guid> ids)
         {
-            var collection = await GetOrCreateBoxSetByIdAsync(cat.Id, cat.Name)
-                .ConfigureAwait(false);
+            var collection = await GetOrCreateBoxSetByIdAsync(cat).ConfigureAwait(false);
 
             if (collection != null)
             {
