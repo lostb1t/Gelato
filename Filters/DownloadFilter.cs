@@ -22,12 +22,14 @@ public sealed class DownloadFilter : IAsyncActionFilter
     private readonly GelatoManager _manager;
     private readonly IUserManager _userManager;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IMediaSourceManager _mediaSourceManager;
 
     public DownloadFilter(
         ILibraryManager library,
         IHttpClientFactory http,
         GelatoManager manager,
         IUserManager userManager,
+        IMediaSourceManager mediaSourceManager,
         IHttpClientFactory httpClientFactory,
         ILogger<DownloadFilter> log
     )
@@ -35,6 +37,7 @@ public sealed class DownloadFilter : IAsyncActionFilter
         _library = library;
         _http = http;
         _log = log;
+        _mediaSourceManager = mediaSourceManager;
         _manager = manager;
         _httpClientFactory = httpClientFactory;
         _userManager = userManager;
@@ -72,56 +75,60 @@ public sealed class DownloadFilter : IAsyncActionFilter
 
         if (user is not null)
         {
-            var mediaSourceId = Guid.TryParse(
-                ctx.HttpContext.Items["MediaSourceId"] as string,
-                out var parsed
-            )
-                ? parsed
-                : guid;
-            var item = _library.GetItemById<BaseItem>(mediaSourceId, user);
-            if (item is not null)
+            var mediaSourceIdStr = ctx.HttpContext.Items["MediaSourceId"] as string;
+            var hasMediaSourceId = Guid.TryParse(mediaSourceIdStr, out var mediaSourceId);
+
+            var item = _library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
+
+            if (_manager.IsStremio(item))
             {
-                if (_manager.IsStremio(item))
+                var path = item.Path;
+
+                // some clients do not send mediasource id. the use the itemid in the query
+                if (!hasMediaSourceId || !_manager.IsStream(item))
                 {
-                    var client = _httpClientFactory.CreateClient();
-
-                    var resp = await client.GetAsync(
-                        item.Path,
-                        HttpCompletionOption.ResponseHeadersRead,
-                        CancellationToken.None
-                    );
-
-                    resp.EnsureSuccessStatusCode();
-
-                    ctx.HttpContext.Response.RegisterForDispose(resp);
-
-                    var stream = await resp.Content.ReadAsStreamAsync(CancellationToken.None);
-
-                    var contentType =
-                        resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-
-                    var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
-                    if (string.IsNullOrWhiteSpace(fileName))
-                    {
-                        var uri = new Uri(item.Path);
-                        fileName = Path.GetFileName(uri.AbsolutePath);
-                        if (string.IsNullOrWhiteSpace(fileName))
-                            fileName = "download";
-                    }
-
-                    if (resp.Content.Headers.ContentLength is long len)
-                    {
-                        ctx.HttpContext.Response.ContentLength = len;
-                    }
-
-                    ctx.Result = new FileStreamResult(stream, contentType)
-                    {
-                        FileDownloadName = fileName,
-                        EnableRangeProcessing = true,
-                    };
-                    return;
+                    path = _mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
                 }
+
+                var client = _httpClientFactory.CreateClient();
+
+                var resp = await client.GetAsync(
+                    path,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    CancellationToken.None
+                );
+
+                resp.EnsureSuccessStatusCode();
+
+                ctx.HttpContext.Response.RegisterForDispose(resp);
+
+                var stream = await resp.Content.ReadAsStreamAsync(CancellationToken.None);
+
+                var contentType =
+                    resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+
+                var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    var uri = new Uri(path);
+                    fileName = Path.GetFileName(uri.AbsolutePath);
+                    if (string.IsNullOrWhiteSpace(fileName))
+                        fileName = "download";
+                }
+
+                if (resp.Content.Headers.ContentLength is long len)
+                {
+                    ctx.HttpContext.Response.ContentLength = len;
+                }
+
+                ctx.Result = new FileStreamResult(stream, contentType)
+                {
+                    FileDownloadName = fileName,
+                    EnableRangeProcessing = true,
+                };
+                return;
             }
+            // }
         }
 
         await next();
