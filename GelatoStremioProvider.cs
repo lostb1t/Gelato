@@ -404,6 +404,7 @@ namespace Gelato
         public string? ImdbRating { get; set; }
         public string? ReleaseInfo { get; set; }
         public string? Description { get; set; }
+        public string? Overview { get; set; }
         public List<StremioTrailer>? Trailers { get; set; }
         public List<StremioLink>? Links { get; set; }
         public string? Background { get; set; }

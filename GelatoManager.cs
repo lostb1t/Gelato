@@ -1195,7 +1195,7 @@ public class GelatoManager
         item.ProductionYear = meta.GetYear();
         item.PremiereDate = meta.GetPremiereDate();
         // item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-        item.Overview = meta.Description;
+        item.Overview = meta.Description ?? meta.Overview;
 
         if (!string.IsNullOrWhiteSpace(meta.Poster))
         {
