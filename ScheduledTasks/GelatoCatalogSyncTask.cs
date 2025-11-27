@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,18 +82,10 @@ namespace Gelato.Tasks
             long done = 0;
             progress.Report(done);
 
-            //var opts = new ParallelOptions
-            // {
-            //     MaxDegreeOfParallelism = 4,
-            //     CancellationToken = cancellationToken,
-            //};
+            var opts = new ParallelOptions { MaxDegreeOfParallelism = 10, CancellationToken = ct };
 
-            //await Parallel.ForEachAsync(
-            //   catalogs,
-            //   opts,
-            //   async (cat, ct) =>
+            var stopwatch = Stopwatch.StartNew();
 
-            // dont do parallel because it can lead to dupes
             foreach (var cat in catalogs)
             {
                 _log.LogInformation("Processing catalog: {Type} / {Id}", cat.Type, cat.Id);
@@ -124,65 +117,64 @@ namespace Gelato.Tasks
                             break;
                         }
 
-                        foreach (var meta in page)
-                        {
-                            //ct.ThrowIfCancellationRequested();
-
-                            var mediaType = meta.Type;
-                            var baseItemKind = mediaType.ToBaseItem();
-
-                            // catalog dan contain multiple types.
-
-                            var root =
-                                baseItemKind == BaseItemKind.Series ? seriesFolder
-                                : baseItemKind == BaseItemKind.Movie ? movieFolder
-                                : null;
-
-                            if (root is not null)
+                        await Parallel.ForEachAsync(
+                            page,
+                            opts,
+                            async (meta, ct) =>
                             {
-                                try
+                                var p = Interlocked.Increment(ref processed);
+                                ct.ThrowIfCancellationRequested();
+                                if (p > maxPerCatalog)
                                 {
-                                    var (item, created) = await _manager
-                                        .InsertMeta(root, meta, Guid.Empty, true, true, false, ct)
-                                        .ConfigureAwait(false);
+                                    return;
+                                }
+                                var mediaType = meta.Type;
+                                var baseItemKind = mediaType.ToBaseItem();
 
-                                    if (item != null && shouldCreateCollection)
+                                // catalog can contain multiple types.
+
+                                var root =
+                                    baseItemKind == BaseItemKind.Series ? seriesFolder
+                                    : baseItemKind == BaseItemKind.Movie ? movieFolder
+                                    : null;
+
+                                if (root is not null)
+                                {
+                                    try
                                     {
-                                        addToCollectionIds.Add(item.Id);
+                                        var (item, created) = await _manager
+                                            .InsertMeta(
+                                                root,
+                                                meta,
+                                                Guid.Empty,
+                                                true,
+                                                true,
+                                                true,
+                                                ct
+                                            )
+                                            .ConfigureAwait(false);
+
+                                        if (item != null && shouldCreateCollection)
+                                        {
+                                            addToCollectionIds.Add(item.Id);
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _log.LogError(
+                                            "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                            cat.Id,
+                                            meta?.Id,
+                                            ex.Message,
+                                            ex.StackTrace
+                                        );
                                     }
                                 }
-                                catch (Exception ex)
-                                {
-                                    _log.LogError(
-                                        "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
-                                        cat.Id,
-                                        meta?.Id,
-                                        ex.Message,
-                                        ex.StackTrace
-                                    );
-                                }
-                            }
-                            processed++;
-                            var current = Interlocked.Increment(ref done);
-                            progress.Report(Math.Min(100, (current / (double)total) * 100.0));
 
-                            // commit the collection if needed
-
-                            if (
-                                shouldCreateCollection
-                                && addToCollectionIds.Count >= collectionMaxItems
-                            )
-                            {
-                                await SaveCollection(cat, addToCollectionIds).ConfigureAwait(false);
-                                addToCollectionIds.Clear();
-                                collectionCommited = true;
+                                var current = Interlocked.Increment(ref done);
+                                progress.Report(Math.Min(100, (current / (double)total) * 100.0));
                             }
-
-                            if (processed >= maxPerCatalog)
-                            {
-                                break;
-                            }
-                        }
+                        );
 
                         skip += page.Count;
                     }
@@ -209,8 +201,14 @@ namespace Gelato.Tasks
                     );
                 }
             }
-
-            _log.LogInformation("Catalog sync completed");
+            ;
+            stopwatch.Stop();
+            _log.LogInformation(
+                "Catalog sync completed in {Minutes}m {Seconds}s ({TotalSeconds:F2}s total)",
+                (int)stopwatch.Elapsed.TotalMinutes,
+                stopwatch.Elapsed.Seconds,
+                stopwatch.Elapsed.TotalSeconds
+            );
         }
 
         private async Task<BoxSet?> GetOrCreateBoxSetByIdAsync(string id, string name)

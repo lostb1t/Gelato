@@ -438,7 +438,7 @@ public class GelatoManager
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = true,
                 ReplaceAllMetadata = true,
-                ForceSave = true,
+                // ForceSave = true,
             };
 
             if (queueRefreshItem)
@@ -980,7 +980,7 @@ public class GelatoManager
 
                 if (existingEpisodeNumbers.Contains(index.Value))
                 {
-                    _log.LogDebug(
+                    _log.LogTrace(
                         "Episode {EpisodeName} already exists, skipping",
                         epMeta.GetName()
                     );
@@ -1026,7 +1026,7 @@ public class GelatoManager
         };
 
         await _provider.RefreshFullItem(series, options, CancellationToken.None);
-        await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+        //await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
 
         _log.LogInformation(
             "Sync completed for {SeriesName}: {SeasonsInserted} season(s) and {EpisodesInserted} episode(s) inserted",

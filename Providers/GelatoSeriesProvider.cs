@@ -69,7 +69,7 @@ namespace Gelato.Providers
 
             if (!IsEnabledForLibrary(genericEventArgs.Argument))
             {
-                _log.LogDebug(
+                _log.LogTrace(
                     "{ProviderName} not enabled for {InputName}",
                     ProviderName,
                     genericEventArgs.Argument.Name
@@ -80,24 +80,29 @@ namespace Gelato.Providers
             var series = genericEventArgs.Argument as Series;
             if (series is null)
             {
-                _log.LogDebug("{Name} is not a Series", genericEventArgs.Argument.Name);
+                _log.LogTrace("{Name} is not a Series", genericEventArgs.Argument.Name);
                 return;
             }
 
             // Check cache
             var now = DateTime.UtcNow;
-            if (_syncCache.TryGetValue(series.Id, out var lastSync))
+            if (!_syncCache.TryGetValue(series.Id, out var lastSync))
             {
-                if (now - lastSync < CacheExpiry)
-                {
-                    _log.LogDebug(
-                        "Skipping {Name} - synced {Seconds} seconds ago",
-                        series.Name,
-                        (now - lastSync).TotalSeconds
-                    );
-                    return;
-                }
+                lastSync = genericEventArgs.Argument.DateLastSaved;
             }
+
+            //  if (_syncCache.TryGetValue(series.Id, out var lastSync))
+            //  {
+            if (now - lastSync < CacheExpiry)
+            {
+                _log.LogDebug(
+                    "Skipping {Name} - synced {Seconds} seconds ago",
+                    series.Name,
+                    (now - lastSync).TotalSeconds
+                );
+                return;
+            }
+            //}
 
             // Update cache before syncing
             _syncCache[series.Id] = now;
@@ -111,6 +116,7 @@ namespace Gelato.Providers
 
             //foreach (var userId in userIds)
             //{
+
             var seriesFolder = cfg.SeriesFolder;
             if (seriesFolder is null)
             {
@@ -183,7 +189,7 @@ namespace Gelato.Providers
 
             if (series == null)
             {
-                _log.LogDebug(
+                _log.LogTrace(
                     "Given input is not in {@ValidTypes}: {Type}",
                     new[] { nameof(Series), nameof(Season), nameof(Episode) },
                     item.GetType()
