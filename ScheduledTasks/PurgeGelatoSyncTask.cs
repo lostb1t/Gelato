@@ -41,22 +41,16 @@ namespace Gelato.Tasks
             _manager = manager;
         }
 
-        public string Name => "WARNING purge all gelato items";
+        public string Name => "WARNING: purge all gelato items";
         public string Key => "PurgeGelatoSyncTask";
         public string Description => "Removes all stremio items (local items are kept)";
         public string Category => "Gelato Maintenance";
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
-        public async Task ExecuteAsync(
-            IProgress<double> progress,
-            CancellationToken cancellationToken
-        )
+        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
         {
             _log.LogInformation("purging");
-
-            //var movie = _manager.TryGetMovieFolder();
-            //var series = _manager.TryGetSeriesFolder();
 
             var q = new InternalItemsQuery
             {
@@ -73,8 +67,6 @@ namespace Gelato.Tasks
                 {
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
-                    // deprecated
-                    { "GelatoCatalogId", string.Empty },
                 },
                 GroupByPresentationUniqueKey = false,
                 GroupBySeriesPresentationUniqueKey = false,
@@ -98,39 +90,44 @@ namespace Gelato.Tasks
             int total = items.Count();
             int deleted = 0;
 
-            foreach (var item in items)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!_manager.IsGelato(item))
-                {
-                    continue;
-                }
+            var opts = new ParallelOptions { MaxDegreeOfParallelism = 50, CancellationToken = ct };
 
-                if (
-                    (item is Season || item is Series)
-                    && item is Folder folder
-                    && folder.GetRecursiveChildren().Any()
-                )
+            await Parallel.ForEachAsync(
+                items,
+                opts,
+                async (item, ct) =>
                 {
-                    continue;
-                }
+                    ct.ThrowIfCancellationRequested();
+                    if (!_manager.IsGelato(item))
+                    {
+                        return;
+                    }
 
-                try
-                {
-                    _library.DeleteItem(
-                        item,
-                        new DeleteOptions { DeleteFileLocation = false },
-                        true
-                    );
-                    deleted++;
-                }
-                catch (Exception ex)
-                {
-                    _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
-                }
+                    // if (
+                    //     (item is Season || item is Series)
+                    //     && item is Folder folder
+                    //     && folder.GetRecursiveChildren().Any()
+                    // )
+                    // {
+                    //     return;
+                    // }
 
-                progress?.Report(Math.Min(100.0, (double)deleted / total * 100.0));
-            }
+                    try
+                    {
+                        _library.DeleteItem(
+                            item,
+                            new DeleteOptions { DeleteFileLocation = false },
+                            true
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
+                    }
+                    var d = Interlocked.Increment(ref deleted);
+                    progress?.Report(Math.Min(100.0, (double)d / total * 100.0));
+                }
+            );
 
             _manager.ClearCache();
             progress?.Report(100.0);
