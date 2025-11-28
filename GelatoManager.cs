@@ -496,9 +496,9 @@ public class GelatoManager
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
 
-        if (item.IsVirtualItem)
+        if (IsStream(item as Video))
         {
-            _log.LogWarning($"SyncStreams: item is virtual, skipping");
+            _log.LogWarning($"SyncStreams: item is a stream, skipping");
             return;
         }
 
@@ -519,15 +519,19 @@ public class GelatoManager
 
         var primary = (Video)item;
 
-        primary.Path = uri.ToString();
-        if (primary.ProviderIds.ContainsKey("GelatoUserId"))
+        // primary can be a local file
+        if (IsGelato(primary))
         {
-            primary.ProviderIds.Remove("GelatoUserId");
-        }
+            primary.Path = uri.ToString();
+            if (primary.ProviderIds.ContainsKey("GelatoUserId"))
+            {
+                primary.ProviderIds.Remove("GelatoUserId");
+            }
 
-        await primary
-            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-            .ConfigureAwait(false);
+            await primary
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+                .ConfigureAwait(false);
+        }
 
         var providerIds = primary.ProviderIds ?? new Dictionary<string, string>();
         providerIds.TryAdd("Stremio", uri.ExternalId);
@@ -567,6 +571,7 @@ public class GelatoManager
             HasAnyProviderId = providerIds,
             Recursive = true,
             IsDeadPerson = true,
+            IsVirtualItem = true,
         };
 
         var existing = _repo
