@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.24.5.4] - 2025-11-28\n\n### 🐛 Bug Fixes\n\n- Take into account local files on stream sync\n",
+        "checksum": "bfc4a5a1901d176d015c099dd3a7f9f2",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.5.4/gelato_0.24.5.4.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-11-28T09:34:46Z",
+        "version": "0.24.5.4"
+      },
+      {
         "changelog": "## [0.24.5.3] - 2025-11-28\n\n### ⚡ Performance\n\n- Make purge delete in parallel\n",
         "checksum": "e0f132d8f9ae718917e90c877bce889f",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.5.3/gelato_0.24.5.3.zip",
@@ -222,14 +230,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-07T13:32:06Z",
         "version": "0.20.16.0"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/v0.20.14.0...v0.20.15.0",
-        "checksum": "9ac69e8f3c22f777bda227aec7a1eaaa",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.20.15.0/gelato_0.20.15.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-07T13:13:15Z",
-        "version": "0.20.15.0"
       }
     ]
   }
