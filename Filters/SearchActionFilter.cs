@@ -161,7 +161,9 @@ namespace Gelato.Filters
             }
             else if (requestedTypes.Contains(BaseItemKind.Movie))
             {
-                _log.LogWarning("No movie folder found, skipping search");
+                _log.LogWarning(
+                    "No movie folder found, please add your gelato path to a library and rescan. skipping search"
+                );
             }
 
             if (requestedTypes.Contains(BaseItemKind.Series) && cfg.SeriesFolder is not null)
@@ -170,7 +172,9 @@ namespace Gelato.Filters
             }
             else if (requestedTypes.Contains(BaseItemKind.Series))
             {
-                _log.LogWarning("No series folder found, skipping search");
+                _log.LogWarning(
+                    "No series folder found, please add your gelato path to a library and rescan. skipping search"
+                );
             }
 
             var results = (await Task.WhenAll(tasks)).SelectMany(r => r).ToList();

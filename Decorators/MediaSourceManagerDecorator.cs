@@ -336,7 +336,8 @@ namespace Gelato.Decorators
                         Language = s.Lang,
                         Codec = GuessSubtitleCodec(s.Url),
                         IsExternal = true,
-                        SupportsExternalStream = true,
+                        // subtitle urls usually dont end with an extension. Breaking some clients cause they fucking check the extension instead of thr codec field.
+                        SupportsExternalStream = false,
                         Path = s.Url,
                         DeliveryMethod = SubtitleDeliveryMethod.External,
                     }
@@ -389,6 +390,9 @@ namespace Gelato.Decorators
             CancellationToken ct
         )
         {
+            var pathAndQuery =
+                _http.HttpContext.Request.Path + _http.HttpContext.Request.QueryString;
+
             if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
                 return await _inner
                     .GetPlaybackMediaSources(
@@ -403,8 +407,12 @@ namespace Gelato.Decorators
             var manager = _manager.Value;
             var ctx = _http.HttpContext;
 
+            // probe when theres no video info or when runtime is low (then we assume we got an placeholder)
             static bool NeedsProbe(MediaSourceInfo s) =>
-                s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true;
+                (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true);
+            //  (s.RuntimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
+
+            // mediaStreamRepository.SaveMediaStreams(video.Id, mediaStreams, cancellationToken);
 
             BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
                 Guid.TryParse(s.Id, out var g)

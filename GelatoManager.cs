@@ -520,6 +520,7 @@ public class GelatoManager
         var primary = (Video)item;
 
         // primary can be a local file
+        // todo: this is just here to for backwards compat tho. Should remove at one point
         if (IsGelato(primary))
         {
             primary.Path = uri.ToString();
