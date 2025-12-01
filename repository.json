@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.24.5.6] - 2025-12-01\n\n### 🐛 Bug Fixes\n\n- Try to fix play next\n\n### 🚜 Refactor\n\n- Limit external subtitles to 2 per language\n",
+        "checksum": "69dffa5972981010456389b669a75ffa",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.5.6/gelato_0.24.5.6.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-12-01T10:22:40Z",
+        "version": "0.24.5.6"
+      },
+      {
         "changelog": "## [0.24.5.5] - 2025-11-29\n\n### 🐛 Bug Fixes\n\n- Try to take userid from query if necessary\n",
         "checksum": "6c7a937b6b934ecbbcd8f77a2b51e220",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.5.5/gelato_0.24.5.5.zip",
@@ -222,14 +230,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-07T16:46:27Z",
         "version": "0.21.1.0"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/v0.20.16.0...v0.21.0.0",
-        "checksum": "17673f0b0dcd91f2768cfe3dba373607",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.21.0.0/gelato_0.21.0.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-07T15:09:15Z",
-        "version": "0.21.0.0"
       }
     ]
   }
