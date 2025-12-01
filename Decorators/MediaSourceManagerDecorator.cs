@@ -63,53 +63,6 @@ namespace Gelato.Decorators
             _repo = repo;
         }
 
-        private static bool IsSingleItemList(HttpContext? ctx, Guid expectedId)
-        {
-            if (ctx?.Request?.Query is null)
-                return false;
-
-            var q = ctx.Request.Query;
-            if (!q.TryGetValue("ids", out var idsRaw))
-                return false;
-
-            var ids = idsRaw
-                .SelectMany(v =>
-                    v.ToString()
-                        .Split(
-                            ',',
-                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-                        )
-                )
-                .ToArray();
-
-            return ids.Length == 1;
-        }
-
-        public bool IsItemsActionName(string name)
-        {
-            return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetItem", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetItemLegacy", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetVideoStream", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetDownload", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(name, "GetSubtitleWithTicks", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(
-                    name,
-                    "GetItemsByUserIdLegacy",
-                    StringComparison.OrdinalIgnoreCase
-                );
-        }
-
-        public bool IsList(string name)
-        {
-            return string.Equals(name, "GetItems", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(
-                    name,
-                    "GetItemsByUserIdLegacy",
-                    StringComparison.OrdinalIgnoreCase
-                );
-        }
-
         public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
             BaseItem item,
             bool enablePathSubstitution,
@@ -142,10 +95,8 @@ namespace Gelato.Decorators
             var uri = StremioUri.FromBaseItem(item);
             var actionName =
                 ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
-            var isItemsAction = IsItemsActionName(actionName ?? string.Empty);
-            var isListAction = IsList(actionName ?? string.Empty);
-            //ctx.TryGetUserId(out var userId);
-            var allowSync = isItemsAction && (!isListAction || IsSingleItemList(ctx, item.Id));
+
+            var allowSync = ctx.IsInsertableAction();
 
             var video = item as Video;
             string cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
@@ -160,9 +111,8 @@ namespace Gelato.Decorators
             if (!allowSync)
             {
                 _log.LogDebug(
-                    "GetStaticMediaSources not a sync-eligible call. action={Action} list={IsList} uri={Uri}",
+                    "GetStaticMediaSources not a sync-eligible call. action={Action} uri={Uri}",
                     actionName,
-                    isListAction,
                     uri?.ToString()
                 );
             }

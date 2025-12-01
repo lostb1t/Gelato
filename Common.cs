@@ -477,6 +477,17 @@ public static class ActionContextExtensions
         "GetItemsByUserIdLegacy",
         "GetPlaybackInfo",
         "GetPostedPlaybackInfo",
+        "GetVideoStream",
+        "GetDownload",
+        "GetSubtitleWithTicks",
+    };
+
+    private static readonly HashSet<string> InsertableListActionNames = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "GetItems",
+        "GetItemsByUserIdLegacy",
     };
 
     public static string? GetActionName(this ActionExecutingContext ctx) =>
@@ -505,11 +516,39 @@ public static class ActionContextExtensions
     public static bool IsInsertableAction(this HttpContext ctx)
     {
         var actionName = ctx.GetActionName();
-        return actionName != null && InsertableActionNames.Contains(actionName);
+        return actionName != null
+            && InsertableActionNames.Contains(actionName)
+            && (
+                !InsertableListActionNames.Contains(actionName)
+                || InsertableListActionNames.Contains(actionName) && IsSingleItemList(ctx)
+            );
     }
 
     public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
-        ctx.GetActionName() is string actionName && InsertableActionNames.Contains(actionName);
+        IsInsertableAction(ctx.HttpContext);
+
+    //private static bool IsSingleItemList(this HttpContext ctx, Guid expectedId)
+    private static bool IsSingleItemList(HttpContext ctx)
+    {
+        if (ctx?.Request?.Query is null)
+            return false;
+
+        var q = ctx.Request.Query;
+        if (!q.TryGetValue("ids", out var idsRaw))
+            return false;
+
+        var ids = idsRaw
+            .SelectMany(v =>
+                v.ToString()
+                    .Split(
+                        ',',
+                        StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
+                    )
+            )
+            .ToArray();
+
+        return ids.Length == 1;
+    }
 
     public static bool TryGetRouteGuid(this ActionExecutingContext ctx, out Guid value)
     {
