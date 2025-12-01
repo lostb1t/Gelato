@@ -326,7 +326,8 @@ namespace Gelato.Decorators
             }
 
             var index = 0; // Start from 0 since this is a new list
-            foreach (var s in subtitles)
+            var limitedSubtitles = subtitles.GroupBy(s => s.Lang).SelectMany(g => g.Take(2));
+            foreach (var s in limitedSubtitles)
             {
                 streams.Add(
                     new MediaStream
