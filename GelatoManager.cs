@@ -620,7 +620,6 @@ public class GelatoManager
                         : new Movie { Id = id };
             }
 
-            // target.ExternalId = externalId;
             target.Name = primary.Name;
             target.Path = path;
             target.IsVirtualItem = true;
