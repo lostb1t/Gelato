@@ -116,10 +116,14 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             IncludeItemTypes = new[] { item.GetBaseItemKind() },
             HasAnyProviderId = item.ProviderIds,
             Recursive = true,
+            IsVirtualItem = false,
             IsDeadPerson = true, // skip filter marker
         };
 
-        return _library.GetItemList(query).OfType<BaseItem>().FirstOrDefault();
+        return _library
+            .GetItemList(query)
+            .OfType<BaseItem>()
+            .FirstOrDefault(x => !_manager.IsStream(x as Video));
     }
 
     public async Task<BaseItem?> InsertMetaAsync(
