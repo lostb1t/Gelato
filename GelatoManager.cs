@@ -154,15 +154,27 @@ public class GelatoManager
 
         if (needsFix)
         {
-            _log.LogInformation(
-                "Fixed {Count} Gelato items in collection {Name}",
+            _log.LogDebug(
+                "Fixing {Count} Gelato items in collection {Name}",
                 gelatoItems.Count,
                 collection.Name
             );
-            collection
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                .GetAwaiter()
-                .GetResult();
+            try
+            {
+                collection
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(5));
+
+                collection
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
         }
     }
 
