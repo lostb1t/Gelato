@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -95,8 +96,7 @@ namespace Gelato.Tasks
                     var skip = 0;
                     var processed = 0;
                     var collectionCommited = false;
-                    var addToCollectionIds =
-                        new System.Collections.Concurrent.ConcurrentBag<Guid>();
+                    var addToCollectionIds = new ConcurrentDictionary<Guid, byte>();
                     var genreExtra = cat.Extra?.FirstOrDefault(e =>
                         string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase)
                     );
@@ -157,7 +157,7 @@ namespace Gelato.Tasks
 
                                         if (item != null && shouldCreateCollection)
                                         {
-                                            addToCollectionIds.Add(item.Id);
+                                            addToCollectionIds.TryAdd(item.Id, 0);
                                         }
                                     }
                                     catch (Exception ex)
@@ -182,7 +182,7 @@ namespace Gelato.Tasks
 
                     if (shouldCreateCollection && addToCollectionIds.Count != 0)
                     {
-                        await SaveCollection(cat, addToCollectionIds.ToList())
+                        await SaveCollection(cat, addToCollectionIds.Keys.ToList())
                             .ConfigureAwait(false);
                         addToCollectionIds.Clear();
                     }
