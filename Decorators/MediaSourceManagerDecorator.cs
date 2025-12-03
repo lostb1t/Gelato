@@ -207,12 +207,20 @@ namespace Gelato.Decorators
 
             sources.AddRange(gelatoSources);
 
-            // remove primary from list when there are streams
             if (sources.Count > 1)
             {
+                var p = sources.FirstOrDefault(k =>
+                    k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
+                );
+
+                // remove primary from list when there are streams
                 sources = sources
                     .Where(k => !k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
                     .ToList();
+
+                // use primary id for first result. This is needed as some dlients dont listen to static media sources and ust use the primary id
+                // yes this gives other issues. but im tired
+                sources[0].Id = p.Id;
             }
 
             // failsafe. mediasources cannot be null
@@ -345,6 +353,8 @@ namespace Gelato.Decorators
                 _http.HttpContext.Request.Path + _http.HttpContext.Request.QueryString;
 
             if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+            {
+                _log.LogDebug("GetPlaybackMediaSources wrong thpe");
                 return await _inner
                     .GetPlaybackMediaSources(
                         item,
@@ -354,7 +364,7 @@ namespace Gelato.Decorators
                         ct
                     )
                     .ConfigureAwait(false);
-
+            }
             var manager = _manager.Value;
             var ctx = _http.HttpContext;
 
