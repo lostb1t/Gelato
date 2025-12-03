@@ -95,17 +95,19 @@ namespace Gelato.Tasks
                 {
                     var skip = 0;
                     var processed = 0;
-                    var collectionCommited = false;
-                    var addToCollectionIds = new ConcurrentDictionary<Guid, byte>();
+                    // var collectionCommited = false;
+                    var ids = new ConcurrentDictionary<Guid, byte>();
+                    var meta_ids = new ConcurrentDictionary<String, byte>();
+                    //var addToCollectionIds = new ConcurrentDictionary<Guid, byte>();
                     var genreExtra = cat.Extra?.FirstOrDefault(e =>
                         string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase)
                     );
+                    var q = false;
 
                     var shouldCreateCollection =
-                        !(genreExtra?.IsRequired == true)
-                        && createCollections
-                        && !collectionCommited;
-                    while (processed < maxPerCatalog)
+                        !(genreExtra?.IsRequired == true) && createCollections;
+
+                    while (processed < maxPerCatalog && !q)
                     {
                         ct.ThrowIfCancellationRequested();
 
@@ -123,12 +125,20 @@ namespace Gelato.Tasks
                             opts,
                             async (meta, ct) =>
                             {
+                                // yeah skip doesnt seem to work for some badly programmed addons
+                                if (meta_ids.Keys.ToList().Contains(meta.Id))
+                                {
+                                    q = true;
+                                    return;
+                                }
                                 var p = Interlocked.Increment(ref processed);
                                 ct.ThrowIfCancellationRequested();
                                 if (p > maxPerCatalog)
                                 {
                                     return;
                                 }
+
+                                meta_ids.TryAdd(meta.Id, 0);
                                 var mediaType = meta.Type;
                                 var baseItemKind = mediaType.ToBaseItem();
 
@@ -155,9 +165,9 @@ namespace Gelato.Tasks
                                             )
                                             .ConfigureAwait(false);
 
-                                        if (item != null && shouldCreateCollection)
+                                        if (item != null)
                                         {
-                                            addToCollectionIds.TryAdd(item.Id, 0);
+                                            ids.TryAdd(item.Id, 0);
                                         }
                                     }
                                     catch (Exception ex)
@@ -180,11 +190,11 @@ namespace Gelato.Tasks
                         skip += page.Count;
                     }
 
-                    if (shouldCreateCollection && addToCollectionIds.Count != 0)
+                    if (shouldCreateCollection && ids.Count != 0)
                     {
-                        await SaveCollection(cat, addToCollectionIds.Keys.ToList())
+                        await SaveCollection(cat, ids.Keys.Take(maxPerCatalog).ToList())
                             .ConfigureAwait(false);
-                        addToCollectionIds.Clear();
+                        ids.Clear();
                     }
 
                     _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
