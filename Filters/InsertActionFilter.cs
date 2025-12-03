@@ -122,8 +122,18 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
 
         return _library
             .GetItemList(query)
-            .OfType<BaseItem>()
-            .FirstOrDefault(x => !_manager.IsStream(x as Video));
+            .FirstOrDefault(x =>
+            {
+                if (x is null)
+                    return false;
+
+                if (x is Video v)
+                {
+                    return !_manager.IsStream(v);
+                }
+
+                return true;
+            });
     }
 
     public async Task<BaseItem?> InsertMetaAsync(

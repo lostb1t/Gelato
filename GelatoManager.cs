@@ -168,7 +168,8 @@ public class GelatoManager
             }
             catch (Exception)
             {
-                Thread.Sleep(TimeSpan.FromSeconds(5));
+                _log.LogWarning("error saving collection, retrying in 5 seconds.");
+                Thread.Sleep(TimeSpan.FromSeconds(10));
 
                 collection
                     .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
