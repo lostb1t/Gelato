@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.24.7.1] - 2025-12-04\n\n### 🚜 Refactor\n\n- Proxy search images instead of redirect\n",
+        "checksum": "55d9dd01925ed2249cb43c8dfaa02b2c",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.1/gelato_0.24.7.1.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-12-04T19:11:12Z",
+        "version": "0.24.7.1"
+      },
+      {
         "changelog": "## [0.24.7.0] - 2025-12-04\n\n### 🚀 Features\n\n- Run stream purge weekly by eefault\n\n### 🚜 Refactor\n\n- Speedup purge\n",
         "checksum": "257cd770f2d9baba88345cfc3c246677",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.0/gelato_0.24.7.0.zip",
@@ -222,14 +230,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-17T17:32:49Z",
         "version": "0.23.1.0"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/v0.22.1.0...v0.23.0.0",
-        "checksum": "c4d80faaed49aa463ce5eec2ffc29c5b",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.23.0.0/gelato_0.23.0.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-12T11:13:47Z",
-        "version": "0.23.0.0"
       }
     ]
   }
