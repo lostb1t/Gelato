@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -50,17 +51,15 @@ namespace Gelato.Tasks
 
         public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
         {
-            _log.LogInformation("purging");
+            var stats = new ConcurrentDictionary<BaseItemKind, int>();
 
-            var q = new InternalItemsQuery
+            var parentQuery = new InternalItemsQuery
             {
                 IncludeItemTypes = new[]
                 {
                     BaseItemKind.Movie,
-                    BaseItemKind.Episode,
-                    BaseItemKind.BoxSet,
                     BaseItemKind.Series,
-                    BaseItemKind.Season,
+                    BaseItemKind.BoxSet,
                 },
                 Recursive = true,
                 HasAnyProviderId = new()
@@ -71,46 +70,71 @@ namespace Gelato.Tasks
                 GroupByPresentationUniqueKey = false,
                 GroupBySeriesPresentationUniqueKey = false,
                 CollapseBoxSetItems = false,
-                // skip filter marker
                 IsDeadPerson = true,
             };
 
-            var items = _library
-                .GetItemList(q)
+            var parentItems = _library
+                .GetItemList(parentQuery)
                 .OfType<BaseItem>()
-                .OrderBy(item =>
-                {
-                    if (item is Series)
-                        return 2; // Absolute last
-                    if (item is Season)
-                        return 1; // Second last
-                    return 0;
-                });
+                .Where(i => _manager.IsGelato(i))
+                .ToList();
 
-            int total = items.Count();
-            int deleted = 0;
+            await DeleteItemsAsync(parentItems, progress, stats, ct);
+
+            var childQuery = new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Season, BaseItemKind.Episode },
+                Recursive = true,
+                HasAnyProviderId = new()
+                {
+                    { "Stremio", string.Empty },
+                    { "stremio", string.Empty },
+                },
+                GroupByPresentationUniqueKey = false,
+                GroupBySeriesPresentationUniqueKey = false,
+                CollapseBoxSetItems = false,
+                IsDeadPerson = true,
+            };
+
+            var childItems = _library
+                .GetItemList(childQuery)
+                .OfType<BaseItem>()
+                .Where(i => _manager.IsGelato(i))
+                .ToList();
+
+            await DeleteItemsAsync(childItems, progress, stats, ct);
+
+            _manager.ClearCache();
+            progress?.Report(100.0);
+
+            var ordered = stats.OrderBy(k => k.Key.ToString());
+            var parts = ordered.Select(kv => $"{kv.Key}={kv.Value}");
+            var line = string.Join(", ", parts);
+
+            _log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
+        }
+
+        private async Task DeleteItemsAsync(
+            IReadOnlyCollection<BaseItem> items,
+            IProgress<double> progress,
+            ConcurrentDictionary<BaseItemKind, int> stats,
+            CancellationToken ct
+        )
+        {
+            if (items.Count == 0)
+                return;
+
+            var deleted = 0;
+            var total = items.Count;
 
             var opts = new ParallelOptions { MaxDegreeOfParallelism = 50, CancellationToken = ct };
 
             await Parallel.ForEachAsync(
                 items,
                 opts,
-                async (item, ct) =>
+                async (item, ct2) =>
                 {
-                    ct.ThrowIfCancellationRequested();
-                    if (!_manager.IsGelato(item))
-                    {
-                        return;
-                    }
-
-                    // if (
-                    //     (item is Season || item is Series)
-                    //     && item is Folder folder
-                    //     && folder.GetRecursiveChildren().Any()
-                    // )
-                    // {
-                    //     return;
-                    // }
+                    ct2.ThrowIfCancellationRequested();
 
                     try
                     {
@@ -119,20 +143,20 @@ namespace Gelato.Tasks
                             new DeleteOptions { DeleteFileLocation = false },
                             true
                         );
+
+                        stats.AddOrUpdate(item.GetBaseItemKind(), 1, (_, old) => old + 1);
                     }
                     catch (Exception ex)
                     {
                         _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
                     }
+
                     var d = Interlocked.Increment(ref deleted);
                     progress?.Report(Math.Min(100.0, (double)d / total * 100.0));
+
+                    await Task.CompletedTask;
                 }
             );
-
-            _manager.ClearCache();
-            progress?.Report(100.0);
-
-            _log.LogInformation("purge completed: deleted {Count} items", deleted);
         }
     }
 }
