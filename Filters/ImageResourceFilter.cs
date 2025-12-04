@@ -64,12 +64,46 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
         }
 
         var stremioMeta = _manager.GetStremioMeta(guid);
-        if (stremioMeta is null || stremioMeta.Poster is null)
+        if (stremioMeta?.Poster is null)
         {
             await next();
             return;
         }
 
-        ctx.HttpContext.Response.Redirect(stremioMeta.Poster, permanent: false);
+        var url = stremioMeta.Poster;
+
+        try
+        {
+            var client = _http.CreateClient();
+            using var res = await client.GetAsync(
+                url,
+                HttpCompletionOption.ResponseHeadersRead,
+                ctx.HttpContext.RequestAborted
+            );
+
+            if (!res.IsSuccessStatusCode)
+            {
+                await next();
+                return;
+            }
+
+            var contentType = res.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
+            ctx.HttpContext.Response.ContentType = contentType;
+
+            await using var responseStream = await res.Content.ReadAsStreamAsync(
+                ctx.HttpContext.RequestAborted
+            );
+            await responseStream.CopyToAsync(
+                ctx.HttpContext.Response.Body,
+                ctx.HttpContext.RequestAborted
+            );
+
+            return;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);
+            await next();
+        }
     }
 }
