@@ -48,7 +48,14 @@ namespace Gelato.Tasks
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
-            return Array.Empty<TaskTriggerInfo>();
+            return new[]
+            {
+                new TaskTriggerInfo
+                {
+                    Type = TaskTriggerInfoType.IntervalTrigger,
+                    IntervalTicks = TimeSpan.FromDays(7).Ticks,
+                },
+            };
         }
 
         public async Task ExecuteAsync(
