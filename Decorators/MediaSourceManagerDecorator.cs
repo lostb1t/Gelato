@@ -209,18 +209,10 @@ namespace Gelato.Decorators
 
             if (sources.Count > 1)
             {
-                var p = sources.FirstOrDefault(k =>
-                    k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
-                );
-
                 // remove primary from list when there are streams
                 sources = sources
                     .Where(k => !k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
                     .ToList();
-
-                // use primary id for first result. This is needed as some dlients dont listen to static media sources and ust use the primary id
-                // yes this gives other issues. but im tired
-                sources[0].Id = p.Id;
             }
 
             // failsafe. mediasources cannot be null
@@ -354,7 +346,6 @@ namespace Gelato.Decorators
 
             if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
             {
-                _log.LogDebug("GetPlaybackMediaSources wrong thpe");
                 return await _inner
                     .GetPlaybackMediaSources(
                         item,
@@ -365,10 +356,10 @@ namespace Gelato.Decorators
                     )
                     .ConfigureAwait(false);
             }
+
             var manager = _manager.Value;
             var ctx = _http.HttpContext;
 
-            // probe when theres no video info or when runtime is low (then we assume we got an placeholder)
             static bool NeedsProbe(MediaSourceInfo s) =>
                 (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
                 || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
@@ -378,26 +369,31 @@ namespace Gelato.Decorators
                     ? (_libraryManager.GetItemById(g) ?? fallback)
                     : fallback;
 
-            static MediaSourceInfo? SelectByIdOrFirst(
-                IReadOnlyList<MediaSourceInfo> list,
-                string? id
-            ) =>
-                string.IsNullOrEmpty(id)
-                    ? list.FirstOrDefault()
-                    : list.FirstOrDefault(s =>
-                        string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase)
+            static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
+            {
+                if (!id.HasValue)
+                    return list.FirstOrDefault();
+
+                var target = id.Value;
+
+                return list.FirstOrDefault(s =>
+                        !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
                     ) ?? list.FirstOrDefault();
+            }
 
             var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
 
-            var mediaSourceId =
+            Guid? mediaSourceId =
                 ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true
                 && idObj is string idStr
-                    ? idStr
+                && Guid.TryParse(idStr, out var fromCtx)
+                    ? fromCtx
                     : (
-                        manager.IsPrimaryVersion(item as Video) && sources.Count > 0
-                            ? sources[0].Id
-                            : null
+                        manager.IsPrimaryVersion(item as Video)
+                        && sources.Count > 0
+                        && Guid.TryParse(sources[0].Id, out var fromSource)
+                            ? fromSource
+                            : (Guid?)null
                     );
 
             _log.LogDebug(
@@ -414,7 +410,7 @@ namespace Gelato.Decorators
             if (owner.Id != item.Id)
             {
                 sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
-                selected = SelectByIdOrFirst(sources, selected.Id);
+                selected = SelectByIdOrFirst(sources, mediaSourceId);
                 if (selected is null)
                     return sources;
             }
@@ -423,6 +419,7 @@ namespace Gelato.Decorators
             {
                 var v = owner.IsVirtualItem;
                 owner.IsVirtualItem = false;
+
                 await owner
                     .RefreshMetadata(
                         new MetadataRefreshOptions(_directoryService)
@@ -433,14 +430,18 @@ namespace Gelato.Decorators
                         ct
                     )
                     .ConfigureAwait(false);
+
                 owner.IsVirtualItem = v;
+
                 await owner
                     .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                     .ConfigureAwait(false);
+
                 var refreshed = GetStaticMediaSources(owner, enablePathSubstitution, user);
-                selected = SelectByIdOrFirst(refreshed, selected.Id);
+                selected = SelectByIdOrFirst(refreshed, mediaSourceId);
                 if (selected is null)
                     return refreshed;
+
                 sources = refreshed;
             }
 
@@ -448,7 +449,7 @@ namespace Gelato.Decorators
             {
                 var subtitleStreams = await GetSubtitleStreams(item, selected)
                     .ConfigureAwait(false);
-                ;
+
                 var streams = selected.MediaStreams?.ToList() ?? new List<MediaStream>();
 
                 var index = streams.LastOrDefault()?.Index ?? -1;
@@ -467,6 +468,13 @@ namespace Gelato.Decorators
                 item.RunTimeTicks = selected.RunTimeTicks;
                 await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                     .ConfigureAwait(false);
+            }
+
+            if (mediaSourceId == item.Id)
+            {
+                // use primary id for first result. This is needed as some dlients dont listen to static media sources and ust use the primary id
+                // yes this gives other issues. but im tired
+                selected.Id = mediaSourceId.Value.ToString("N");
             }
 
             return new[] { selected };
