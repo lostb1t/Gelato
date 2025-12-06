@@ -226,6 +226,14 @@ namespace Gelato.Decorators
             if (sources.Count > 0)
                 sources[0].Type = MediaSourceType.Default;
 
+            //  if (mediaSourceId == item.Id)
+            //  {
+            // use primary id for first result. This is needed as some dlients dont listen to static media sources and ust use the primary id
+            // yes this gives other issues. but im tired
+            // sources[0].ETag = sources[0].Id;
+            sources[0].Id = item.Id.ToString("N");
+            //}
+
             return sources;
         }
 
@@ -364,8 +372,13 @@ namespace Gelato.Decorators
                 (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
                 || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
 
+            //BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
+            //    Guid.TryParse(s.Id, out var g)
+            //        ? (_libraryManager.GetItemById(g) ?? fallback)
+            //        : fallback;
+
             BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
-                Guid.TryParse(s.Id, out var g)
+                Guid.TryParse(s.ETag, out var g)
                     ? (_libraryManager.GetItemById(g) ?? fallback)
                     : fallback;
 
@@ -407,10 +420,11 @@ namespace Gelato.Decorators
                 return sources;
 
             var owner = ResolveOwnerFor(selected, item);
-            if (owner.Id != item.Id)
+            if (manager.IsPrimaryVersion(owner as Video) && owner.Id != item.Id)
             {
                 sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
                 selected = SelectByIdOrFirst(sources, mediaSourceId);
+                Console.Write("Not same");
                 if (selected is null)
                     return sources;
             }
@@ -437,8 +451,9 @@ namespace Gelato.Decorators
                     .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                     .ConfigureAwait(false);
 
-                var refreshed = GetStaticMediaSources(owner, enablePathSubstitution, user);
+                var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
                 selected = SelectByIdOrFirst(refreshed, mediaSourceId);
+
                 if (selected is null)
                     return refreshed;
 
@@ -468,13 +483,6 @@ namespace Gelato.Decorators
                 item.RunTimeTicks = selected.RunTimeTicks;
                 await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                     .ConfigureAwait(false);
-            }
-
-            if (mediaSourceId == item.Id)
-            {
-                // use primary id for first result. This is needed as some dlients dont listen to static media sources and ust use the primary id
-                // yes this gives other issues. but im tired
-                selected.Id = mediaSourceId.Value.ToString("N");
             }
 
             return new[] { selected };
@@ -573,6 +581,7 @@ namespace Gelato.Decorators
             var info = new MediaSourceInfo
             {
                 Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
+                ETag = item.Id.ToString("N", CultureInfo.InvariantCulture),
                 Protocol = MediaProtocol.Http,
                 MediaStreams = _inner.GetMediaStreams(item.Id),
                 MediaAttachments = _inner.GetMediaAttachments(item.Id),

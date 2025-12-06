@@ -43,20 +43,21 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
         ActionExecutionDelegate next
     )
     {
-        if (ctx.GetActionName() == "GetItemSegments" && ctx.TryGetRouteGuid(out var guid))
-        {
-            var item = _library.GetItemById<Video>(guid);
-            if (item is not null && _manager.IsGelato(item) && _manager.IsPrimaryVersion(item))
-            {
-                var mediaSources = _sources.GetStaticMediaSources(item, false);
-                var sourceId = mediaSources[0].Id;
+        //  if (ctx.GetActionName() == "GetItemSegments" && ctx.TryGetRouteGuid(out var guid)) {
 
-                if (Guid.TryParse(sourceId, out var sourceGuid))
-                {
-                    ctx.ReplaceGuid(sourceGuid);
-                }
-            }
-        }
+        //     var item = _library.GetItemById<Video>(guid);
+        //     if (item is not null && _manager.IsGelato(item) && _manager.IsPrimaryVersion(item)) {
+        //       var mediaSources = _sources.GetStaticMediaSources(item, false);
+        //var sourceId = mediaSources[0].Id;
+
+        //if (Guid.TryParse(sourceId, out var sourceGuid))
+        //{
+
+        //    ctx.ReplaceGuid(sourceGuid);
+        //}
+        //        }
+
+        //      }
         if (ctx.ActionDescriptor is ControllerActionDescriptor cad)
             ctx.HttpContext.Items["actionName"] = cad.ActionName;
 
