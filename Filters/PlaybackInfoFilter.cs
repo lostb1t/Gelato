@@ -2,6 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Gelato.Common;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.MediaEncoding;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -19,11 +23,40 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter
     private const string ItemsKey = "MediaSourceId";
     private static readonly string[] InputKeys = new[] { "MediaSourceId", "RouteMediaSourceId" };
 
+    private readonly ILibraryManager _library;
+    private readonly GelatoManager _manager;
+    private readonly IMediaSourceManager _sources;
+
+    public PlaybackInfoFilter(
+        ILibraryManager library,
+        IMediaSourceManager sources,
+        GelatoManager manager
+    )
+    {
+        _library = library;
+        _sources = sources;
+        _manager = manager;
+    }
+
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
     )
     {
+        if (ctx.GetActionName() == "GetItemSegments" && ctx.TryGetRouteGuid(out var guid))
+        {
+            var item = _library.GetItemById<Video>(guid);
+            if (item is not null && _manager.IsGelato(item) && _manager.IsPrimaryVersion(item))
+            {
+                var mediaSources = _sources.GetStaticMediaSources(item, false);
+                var sourceId = mediaSources[0].Id;
+
+                if (Guid.TryParse(sourceId, out var sourceGuid))
+                {
+                    ctx.ReplaceGuid(sourceGuid);
+                }
+            }
+        }
         if (ctx.ActionDescriptor is ControllerActionDescriptor cad)
             ctx.HttpContext.Items["actionName"] = cad.ActionName;
 
