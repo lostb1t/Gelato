@@ -111,6 +111,11 @@ namespace Gelato.Decorators
                     dto.LocationType = LocationType.Virtual;
                     dto.Path = null;
                 }
+
+                if (dto.MediaSources?.Any() == true)
+                {
+                    dto.MediaSources[0].Id = dto.Id.ToString("N");
+                }
             }
         }
     }
