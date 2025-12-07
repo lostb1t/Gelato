@@ -451,7 +451,7 @@ public class GelatoManager
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = true,
                 ReplaceAllMetadata = true,
-                // ForceSave = true,
+                ForceSave = true,
             };
 
             if (queueRefreshItem)
