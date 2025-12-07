@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.24.7.5] - 2025-12-07\n\n### 🐛 Bug Fixes\n\n- Force save for metadata refresh on insert\n",
+        "checksum": "bbc4a62faf6a6cea428e0f9dc078ab43",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.5/gelato_0.24.7.5.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-12-07T00:40:56Z",
+        "version": "0.24.7.5"
+      },
+      {
         "changelog": "## [0.24.7.4] - 2025-12-06\n\n### 🐛 Bug Fixes\n\n- Always use primary id for first media source\n",
         "checksum": "63714cf34592ea611c27d7755a1ec847",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.4/gelato_0.24.7.4.zip",
@@ -222,14 +230,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-24T09:01:43Z",
         "version": "0.24.3.0"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/v0.24.1.0...v0.24.2.0",
-        "checksum": "335e3e0919ae297031948282b150bf5f",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.2.0/gelato_0.24.2.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-23T18:45:25Z",
-        "version": "0.24.2.0"
       }
     ]
   }
