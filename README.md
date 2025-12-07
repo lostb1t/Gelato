@@ -66,3 +66,13 @@ Here's a [video demo](https://www.youtube.com/watch?v=t_5Guc5YOoM) recorded by o
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - Stream cache can be cleared by restarting the server
+
+# Support me
+
+Want to support me? Use my referral codes
+
+- <a target="_blank"
+          href="https://www.torbox.app/subscription?referral=abe1a9d9-53c9-449a-9d85-ab3dfb5d188d">Torbox referral link</a> </br> Or use my referral code: abe1a9d9-53c9-449a-9d85-ab3dfb5d188d
+- <a target="_blank"
+          href="http://real-debrid.com/?id=10148658">RealDebrid Signup</a> </br>
+  Or use my referral code: 10148658
