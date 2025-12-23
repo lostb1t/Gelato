@@ -456,7 +456,39 @@ public class GelatoManager
 
             if (queueRefreshItem)
             {
-                _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
+                if (baseItem is Series series)
+                {
+                    // Non-blocking, and critically: DO NOT refresh episodes.
+                    QueueRefreshSeriesAndSeasonsOnly(series, options, CancellationToken.None);
+                }
+                else
+                {
+                    // Existing background behavior (if you don’t have a real queue yet, fire-and-forget full refresh)
+                    _ = Task.Run(
+                        async () =>
+                        {
+                            try
+                            {
+                                await _provider
+                                    .RefreshFullItem(baseItem, options, CancellationToken.None)
+                                    .ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _log.LogError(
+                                    ex,
+                                    "Background refresh failed for {ItemId} {Name}",
+                                    baseItem.Id,
+                                    baseItem.Name
+                                );
+                            }
+                        },
+                        CancellationToken.None
+                    );
+
+                    // Or if/when you re-enable your real queue:
+                    // _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
+                }
             }
             else
             {
@@ -465,6 +497,46 @@ public class GelatoManager
         }
 
         return (baseItem, true);
+    }
+
+    // heres the deal. jellyfin removes all relariins on refresh when peofiderids do nit match
+    // so untill refresh is done rhere are no episodes. So skip them wirh this when needed
+    private void QueueRefreshSeriesAndSeasonsOnly(
+        Series series,
+        MetadataRefreshOptions options,
+        CancellationToken pluginShutdownToken = default
+    )
+    {
+        _ = Task.Run(
+            async () =>
+            {
+                try
+                {
+                    await series
+                        .RefreshMetadata(options, pluginShutdownToken)
+                        .ConfigureAwait(false);
+
+                    var seasons = series.GetChildren(null, true, null).OfType<Season>();
+
+                    foreach (var season in seasons)
+                    {
+                        await season
+                            .RefreshMetadata(options, pluginShutdownToken)
+                            .ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(
+                        ex,
+                        "Background refresh (series+seasons only) failed for {SeriesId} {Name}",
+                        series.Id,
+                        series.Name
+                    );
+                }
+            },
+            CancellationToken.None
+        );
     }
 
     public IEnumerable<BaseItem> FindByProviderIds(
@@ -479,7 +551,13 @@ public class GelatoManager
             Recursive = true,
             ParentId = parent.Id,
             HasAnyProviderId = providerIds
-                .ExceptBy([MetadataProvider.TmdbCollection.ToString()], kvp => kvp.Key)
+                .Where(kvp =>
+                    kvp.Key == MetadataProvider.Tmdb.ToString()
+                    || kvp.Key == MetadataProvider.Tvdb.ToString()
+                    || kvp.Key == MetadataProvider.TvRage.ToString()
+                    || kvp.Key == "Stremio"
+                    || kvp.Key == MetadataProvider.Imdb.ToString()
+                )
                 .ToDictionary(),
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,
@@ -953,6 +1031,7 @@ public class GelatoManager
                     SeriesId = series.Id,
                     SeriesName = series.Name,
                     Path = seasonPath,
+                    DateLastRefreshed = DateTime.UtcNow,
                     SeriesPresentationUniqueKey = seriesPresentationKey,
                 };
 
@@ -1156,8 +1235,11 @@ public class GelatoManager
             case StremioMediaType.Episode:
                 item = new Episode { Id = _library.GetNewItemId(Id, typeof(Episode)) };
 
-                //item.IsShortcut = true;
-                //item.ShortcutPath = $"gelato://stub/{item.Id}";
+                //var tvdbId = meta.TvdbEpisodeId();
+
+                //if (!string.IsNullOrWhiteSpace(tvdbId)) {
+                //                    item.SetProviderId("Tvdb", tvdbId);
+                //                  }
                 break;
             default:
                 _log.LogWarning("unsupported type {type}", meta.Type);
@@ -1205,21 +1287,19 @@ public class GelatoManager
 
         var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
-
-        // path is needed otherwise its set as placeholder and you cant play
-        //item.Path = stremioUri.ToString();
-
+        item.DateLastRefreshed = DateTime.UtcNow;
         item.IsVirtualItem = false;
         item.ProductionYear = meta.GetYear();
         item.PremiereDate = meta.GetPremiereDate();
         // item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         item.Overview = meta.Description ?? meta.Overview;
 
-        if (!string.IsNullOrWhiteSpace(meta.Poster))
+        var primary = meta.Poster ?? meta.Thumbnail;
+        if (!string.IsNullOrWhiteSpace(primary))
         {
             item.ImageInfos = new List<ItemImageInfo>
             {
-                new ItemImageInfo { Type = ImageType.Primary, Path = meta.Poster },
+                new ItemImageInfo { Type = ImageType.Primary, Path = primary },
             }.ToArray();
         }
         return item;

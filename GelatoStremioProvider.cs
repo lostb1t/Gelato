@@ -434,6 +434,19 @@ namespace Gelato
         public DateTime? FirstAired { get; set; }
         public Guid? Guid { get; set; }
 
+        public string? TvdbEpisodeId()
+        {
+            if (!Uri.TryCreate(Thumbnail, UriKind.Absolute, out var uri))
+                return null;
+
+            if (!uri.Host.Contains("thetvdb.com", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            var lastSegment = uri.Segments.Last().TrimEnd('/');
+
+            return int.TryParse(lastSegment, out _) ? lastSegment : null;
+        }
+
         public string GetName()
         {
             if (!string.IsNullOrWhiteSpace(Title))
