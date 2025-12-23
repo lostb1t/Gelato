@@ -8,6 +8,22 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.24.7.8] - 2025-12-23\n\n### 🐛 Bug Fixes\n\n- Dont refresh metadata for episodes on insert\n",
+        "checksum": "584ef732068c31eaad1a89e26916ea8b",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.8/gelato_0.24.7.8.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-12-23T11:35:35Z",
+        "version": "0.24.7.8"
+      },
+      {
+        "changelog": "## [0.24.7.7] - 2025-12-23\n\n### 🐛 Bug Fixes\n\n- Dont refresh metadata for episodes on insert\n",
+        "checksum": "774e3f454f938d7b15bfc7c89c8c51c4",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.7/gelato_0.24.7.7.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2025-12-23T10:03:53Z",
+        "version": "0.24.7.7"
+      },
+      {
         "changelog": "## [0.24.7.6] - 2025-12-10\n\n### 🐛 Bug Fixes\n\n- Add movie recommended\n",
         "checksum": "89824303a14beb6dc79b5e42fe1a2103",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.6/gelato_0.24.7.6.zip",
@@ -230,22 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-24T16:53:08Z",
         "version": "0.24.3.1"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/v0.24.2.0...v0.24.3.0",
-        "checksum": "fd2be495ff890c9e0cc92c8e1c4a487d",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.3.0/gelato_0.24.3.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-24T09:01:43Z",
-        "version": "0.24.3.0"
-      },
-      {
-        "changelog": "<!-- Release notes generated using configuration in .github/release.yml at main -->\n\n\n\n**Full Changelog**: https://github.com/lostb1t/Gelato/compare/v0.24.1.0...v0.24.2.0",
-        "checksum": "335e3e0919ae297031948282b150bf5f",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.2.0/gelato_0.24.2.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-23T18:45:25Z",
-        "version": "0.24.2.0"
       }
     ]
   }
