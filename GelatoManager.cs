@@ -348,7 +348,7 @@ public class GelatoManager
             _log.LogWarning("type {Type} is not valid, skipping", mediaType);
             return (null, false);
         }
-
+        _log.LogDebug("inserting  {Name}", meta.Name);
         var baseItemKind = mediaType.ToBaseItem();
 
         // load in full metadata if needed.
@@ -427,7 +427,6 @@ public class GelatoManager
 
         if (mediaType == StremioMediaType.Movie)
         {
-            //CreateStrmFile(baseItem.Path, baseItem.ShortcutPath);
             parent.AddChild(baseItem);
         }
         else
@@ -441,9 +440,7 @@ public class GelatoManager
             return (null, false);
         }
 
-        _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
-
-        if (queueRefreshItem || refreshItem)
+        if (refreshItem)
         {
             var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
@@ -456,55 +453,28 @@ public class GelatoManager
 
             if (queueRefreshItem)
             {
-                if (baseItem is Series series)
-                {
-                    // Non-blocking, and critically: DO NOT refresh episodes.
-                    QueueRefreshSeriesAndSeasonsOnly(series, options, CancellationToken.None);
-                }
-                else
-                {
-                    // Existing background behavior (if you don’t have a real queue yet, fire-and-forget full refresh)
-                    _ = Task.Run(
-                        async () =>
-                        {
-                            try
-                            {
-                                await _provider
-                                    .RefreshFullItem(baseItem, options, CancellationToken.None)
-                                    .ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                _log.LogError(
-                                    ex,
-                                    "Background refresh failed for {ItemId} {Name}",
-                                    baseItem.Id,
-                                    baseItem.Name
-                                );
-                            }
-                        },
-                        CancellationToken.None
-                    );
-
-                    // Or if/when you re-enable your real queue:
-                    // _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-                }
+                _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
             }
             else
             {
-                await _provider.RefreshFullItem(baseItem, options, ct).ConfigureAwait(false);
+                await baseItem.RefreshMetadata(options, ct).ConfigureAwait(false);
+
+                if (baseItem is Series series)
+                {
+                    QueueRefreshSeasonsOnly(series, options, ct);
+                }
             }
         }
-
+        _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
         return (baseItem, true);
     }
 
     // heres the deal. jellyfin removes all relariins on refresh when peofiderids do nit match
     // so untill refresh is done rhere are no episodes. So skip them wirh this when needed
-    private void QueueRefreshSeriesAndSeasonsOnly(
+    private void QueueRefreshSeasonsOnly(
         Series series,
         MetadataRefreshOptions options,
-        CancellationToken pluginShutdownToken = default
+        CancellationToken ct = default
     )
     {
         _ = Task.Run(
@@ -512,17 +482,11 @@ public class GelatoManager
             {
                 try
                 {
-                    await series
-                        .RefreshMetadata(options, pluginShutdownToken)
-                        .ConfigureAwait(false);
-
                     var seasons = series.GetChildren(null, true, null).OfType<Season>();
 
                     foreach (var season in seasons)
                     {
-                        await season
-                            .RefreshMetadata(options, pluginShutdownToken)
-                            .ConfigureAwait(false);
+                        await season.RefreshMetadata(options, ct).ConfigureAwait(false);
                     }
                 }
                 catch (Exception ex)
@@ -1107,7 +1071,6 @@ public class GelatoManager
 
                 season.AddChild(episode);
                 episodesInserted++;
-
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
             }
         }
@@ -1123,7 +1086,7 @@ public class GelatoManager
         };
 
         await _provider.RefreshFullItem(series, options, CancellationToken.None);
-        //await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+        // await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
 
         _log.LogInformation(
             "Sync completed for {SeriesName}: {SeasonsInserted} season(s) and {EpisodesInserted} episode(s) inserted",
