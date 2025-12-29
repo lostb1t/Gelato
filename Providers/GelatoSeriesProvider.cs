@@ -59,11 +59,19 @@ namespace Gelato.Providers
             GenericEventArgs<BaseItem> genericEventArgs
         )
         {
-            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-            var stremio = cfg.stremio;
-            if (!await stremio.IsReady())
+            var cfg = GelatoPlugin.Instance?.GetConfig(Guid.Empty);
+            var stremio = cfg?.stremio;
+            if (stremio == null)
             {
-                _log.LogWarning("gelato is not ready");
+                _log.LogWarning(
+                    "Gelato not configured (stremio provider missing); skipping refresh."
+                );
+                return;
+            }
+
+            if (!await stremio.IsReady().ConfigureAwait(false))
+            {
+                _log.LogWarning("Gelato is not ready");
                 return;
             }
 
