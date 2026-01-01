@@ -521,6 +521,9 @@ namespace Gelato
 
         public DateTime? GetPremiereDate()
         {
+            if (Released is DateTime dt)
+                return dt;
+
             var year = GetYear();
             if (year is null)
             {
