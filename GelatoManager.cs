@@ -652,8 +652,8 @@ public class GelatoManager
                             : ""
                     );
 
-            //var id = s.GetGuid();
-            var id = Guid.NewGuid();
+            var id = s.GetGuid();
+            //var id = Guid.NewGuid();
             var target = existing.GetValueOrDefault(id);
             var isNew = target is null;
 

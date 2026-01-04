@@ -670,10 +670,23 @@ namespace Gelato
 
         public Guid GetGuid()
         {
-            //var size = BehaviorHints?.VideoSize?.ToString() ?? "0";
-            //var filename = BehaviorHints?.Filename ?? string.Empty;
-            // var bingeGroup = BehaviorHints?.BingeGroup ?? string.Empty;
-            var key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename ?? Url ?? InfoHash}";
+            string key;
+
+            if (!string.IsNullOrEmpty(InfoHash))
+            {
+                key = InfoHash;
+            }
+            else if (
+                !string.IsNullOrEmpty(BehaviorHints?.BingeGroup)
+                && !string.IsNullOrEmpty(BehaviorHints?.Filename)
+            )
+            {
+                key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename}";
+            }
+            else
+            {
+                key = Url;
+            }
 
             using var md5 = System.Security.Cryptography.MD5.Create();
             var bytes = System.Text.Encoding.UTF8.GetBytes(key);
