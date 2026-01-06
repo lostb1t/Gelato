@@ -146,9 +146,7 @@ namespace Gelato.Decorators
                 item = _libraryManager.GetItemById(item.Id);
             }
 
-            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
-
-            // we dont use jellyfins alternate versions crap. So we have to load it ourselves
+            //var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
 
             InternalItemsQuery query;
 
@@ -164,7 +162,6 @@ namespace Gelato.Decorators
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    IsVirtualItem = true,
                     IndexNumber = episode.IndexNumber,
                 };
             }
@@ -179,11 +176,10 @@ namespace Gelato.Decorators
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    IsVirtualItem = true,
                 };
             }
 
-            var gelatoSources = _repo
+            var sources = _repo
                 .GetItemList(query)
                 .OfType<Video>()
                 .Where(x => manager.IsGelato(x) && x.GelatoData("userId") == userId.ToString())
@@ -205,7 +201,7 @@ namespace Gelato.Decorators
                 })
                 .ToList();
 
-            sources.AddRange(gelatoSources);
+            //sources.AddRange(gelatoSources);
 
             if (sources.Count > 1)
             {

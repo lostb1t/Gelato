@@ -116,7 +116,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             IncludeItemTypes = new[] { item.GetBaseItemKind() },
             HasAnyProviderId = item.ProviderIds,
             Recursive = true,
-            IsVirtualItem = false,
+            // IsVirtualItem = false,
             IsDeadPerson = true, // skip filter marker
         };
 
