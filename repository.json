@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.0.0] - 2026-01-06\n\n### 🐛 Bug Fixes\n\n- [**breaking**] Use jellyfins alternate versions schematics\n",
+        "checksum": "21c15178c7c16c5e0fca0a212d9cbf9b",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.0.0/gelato_0.25.0.0.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-01-06T09:30:46Z",
+        "version": "0.25.0.0"
+      },
+      {
         "changelog": "## [0.24.7.11] - 2026-01-04\n\n### 🐛 Bug Fixes\n\n- Create stable guid for streams\n",
         "checksum": "6077d7fc1d1d7d53e97690e084bca756",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.11/gelato_0.24.7.11.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-27T07:58:43Z",
         "version": "0.24.4.0"
-      },
-      {
-        "changelog": "## [unreleased]\n\n### 🐛 Bug Fixes\n\n- Collection purge\n",
-        "checksum": "9b52e0f65ecb51ca3e8811a54f605e35",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.3.4/gelato_0.24.3.4.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-26T11:13:13Z",
-        "version": "0.24.3.4"
       }
     ]
   }
