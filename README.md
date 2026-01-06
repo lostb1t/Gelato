@@ -54,10 +54,6 @@ For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/
 - Only **AIOStreams** is supported
 - **P2P currently in beta**
 
-## Demo :tv:
-
-Here's a [video demo](https://www.youtube.com/watch?v=t_5Guc5YOoM) recorded by our friends at [ElfHosted](https://elfhosted.com). You can trial a [JellyGoblin](https://store.elfhosted.com/product/jellygoblin/) setup from ElfHosted for 7 days (*hosted Jellyfin+AIOStreams, bundled with a TorBox subscription*), for just $1! :heart_eyes_cat:
-
 ### FAQ
 
 - You need to restart the server after editing the manifest/config in aiostreams.
