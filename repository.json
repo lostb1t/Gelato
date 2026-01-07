@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.0.1] - 2026-01-07\n\n### 🐛 Bug Fixes\n\n- Purge streams\n",
+        "checksum": "f4e50ddc941ee8890f1cb36713bc8561",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.0.1/gelato_0.25.0.1.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-01-07T15:10:38Z",
+        "version": "0.25.0.1"
+      },
+      {
         "changelog": "## [0.25.0.0] - 2026-01-06\n\n### 🐛 Bug Fixes\n\n- [**breaking**] Use jellyfins alternate versions schematics\n",
         "checksum": "21c15178c7c16c5e0fca0a212d9cbf9b",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.0.0/gelato_0.25.0.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-27T08:09:10Z",
         "version": "0.24.4.1"
-      },
-      {
-        "changelog": "## [0.24.4.0] - 2025-11-27\n\n### 🚀 Features\n\n- Add parralism to catalog import and process metadata in background\n",
-        "checksum": "8a0baef2cee53ec3e162792edeaf4ccd",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.4.0/gelato_0.24.4.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-27T07:58:43Z",
-        "version": "0.24.4.0"
       }
     ]
   }
