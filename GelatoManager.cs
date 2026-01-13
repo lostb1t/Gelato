@@ -724,8 +724,17 @@ public class GelatoManager
             _repo.DeleteItem(stale.Select(m => m.Id).ToList());
         }
 
-        newVideos.Add(primary);
-        MergeVersions(newVideos.ToArray());
+        // newVideos.Add(primary);
+        var replacementLinks = newVideos
+            .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
+            .ToArray();
+        primary.LinkedAlternateVersions = replacementLinks;
+        primary.SetPrimaryVersionId(null);
+
+        await primary
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            .ConfigureAwait(false);
+        //MergeVersions(newVideos.ToArray());
 
         _log.LogInformation(
             $"SyncStreams finished for {item.Name} and userId {userId}: {newVideos.Count} streams, {stale.Count} deleted"
