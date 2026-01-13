@@ -697,21 +697,24 @@ public class GelatoManager
             target.OfficialRating = primary.OfficialRating;
             target.Genres = primary.Genres;
 
+            target.SetParent(parent);
             // target.SetGelatoData("isStream", "true");
 
-            if (isNew)
-            {
-                parent.AddChild(target);
-            }
-            else
-            {
-                await target
-                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                    .ConfigureAwait(false);
-            }
+            //if (isNew)
+            // {
+            //     parent.AddChild(target);
+            // }
+            // else
+            // {
+            //     await target
+            //         .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+            //        .ConfigureAwait(false);
+            //}
 
             newVideos.Add(target);
         }
+
+        _repo.SaveItems(newVideos, ct);
 
         var stale = existing.Values.Where(m => !newVideos.Any(x => x.Id == m.Id)).ToList();
 
