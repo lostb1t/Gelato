@@ -4,6 +4,7 @@
 #pragma warning disable CS0165
 
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Globalization;
 using System.Text;
@@ -550,7 +551,7 @@ public class GelatoManager
     public async Task SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
-
+        var stopwatch = Stopwatch.StartNew();
         if (IsStream(item as Video))
         {
             _log.LogWarning($"SyncStreams: item is a stream, skipping");
@@ -735,9 +736,9 @@ public class GelatoManager
             .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
             .ConfigureAwait(false);
         //MergeVersions(newVideos.ToArray());
-
+        stopwatch.Stop();
         _log.LogInformation(
-            $"SyncStreams finished for {item.Name} and userId {userId}: {newVideos.Count} streams, {stale.Count} deleted"
+            $"SyncStreams finished for {item.Name} in {Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s: {newVideos.Count} streams, {stale.Count} purged"
         );
     }
 
