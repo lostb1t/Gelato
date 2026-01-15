@@ -551,6 +551,7 @@ public class GelatoManager
     public async Task SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
+        var inv = CultureInfo.InvariantCulture;
         var stopwatch = Stopwatch.StartNew();
         if (IsStream(item as Video))
         {
@@ -686,7 +687,8 @@ public class GelatoManager
             target.PresentationUniqueKey = primary.PresentationUniqueKey;
             //target.SeriesPresentationUniqueKey = primary.SeriesPresentationUniqueKey;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-            target.SetPrimaryVersionId(primary.Id.ToString());
+            target.SetPrimaryVersionId(primary.Id.ToString("N", inv));
+            ;
             target.SetGelatoData("userId", userId.ToString());
             target.SetGelatoData("name", s.Name);
             target.SetGelatoData("index", $"{index:D3}");

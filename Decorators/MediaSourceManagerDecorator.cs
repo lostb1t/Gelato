@@ -70,8 +70,12 @@ namespace Gelato.Decorators
         )
         {
             var manager = _manager.Value;
-
-            _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
+            var video = item as Video;
+            _log.LogDebug(
+                "GetStaticMediaSources {Id} {isPrimary}",
+                item.Id,
+                video.PrimaryVersionId
+            );
             var ctx = _http?.HttpContext;
             Guid userId;
             if (user != null)
@@ -98,7 +102,6 @@ namespace Gelato.Decorators
 
             var allowSync = ctx.IsInsertableAction();
 
-            var video = item as Video;
             string cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
                 ? id.ToString()
                 : item.Id.ToString();

@@ -59,6 +59,7 @@ public sealed class GelatoItemRepository : IItemRepository
 
     public InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
     {
+        //return filter;
         var ctx = _http?.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
