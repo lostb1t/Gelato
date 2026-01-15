@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.1.0] - 2026-01-15\n\n### 🚀 Features\n\n- Add timer to stream sync log\n\n### 🐛 Bug Fixes\n\n- Wrong primary version id format resulting in dupes\n",
+        "checksum": "4c869ad58e81217a4cbaa9b3dc188ec6",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.0/gelato_0.25.1.0.zip",
+        "targetAbi": "10.11.0.0",
+        "timestamp": "2026-01-15T11:02:52Z",
+        "version": "0.25.1.0"
+      },
+      {
         "changelog": "## [0.25.0.3] - 2026-01-13\n\n### 🐛 Bug Fixes\n\n- Squeezing out the last drop of performance for loading streams\n",
         "checksum": "345155d0b6c54c96109dd1b279cdd93d",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.0.3/gelato_0.25.0.3.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-27T15:16:46Z",
         "version": "0.24.5.2"
-      },
-      {
-        "changelog": "## [0.24.5.1] - 2025-11-27\n\n### 🐛 Bug Fixes\n\n- Prefix collection id with type as the tmdb addon does not seem to use unique ids\n",
-        "checksum": "58581239680a9c9afe18f200028aac54",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.5.1/gelato_0.24.5.1.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-27T09:17:44Z",
-        "version": "0.24.5.1"
       }
     ]
   }
