@@ -159,4 +159,7 @@ public sealed class GelatoItemRepository : IItemRepository
     public IReadOnlyDictionary<string, MusicArtist[]> FindArtists(
         IReadOnlyList<string> artistNames
     ) => _inner.FindArtists(artistNames);
+
+    public Task ReattachUserDataAsync(BaseItem item, CancellationToken cancellationToken) =>
+        _inner.ReattachUserDataAsync(item, cancellationToken);
 }
