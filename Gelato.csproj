@@ -7,9 +7,9 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Model" Version="10.11" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.11" />
-    <PackageReference Include="Jellyfin.Common" Version="10.11" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.6" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.6" />
+    <PackageReference Include="Jellyfin.Common" Version="10.11.6" />
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
   </ItemGroup>
   <ItemGroup>
