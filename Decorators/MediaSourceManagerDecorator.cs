@@ -215,6 +215,7 @@ namespace Gelato.Decorators
                 // remove primary from list when there are streams
                 sources = sources
                     .Where(k => !k.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase))
+                    .Where(k => !k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
                     .ToList();
             }
 
