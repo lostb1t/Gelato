@@ -100,6 +100,11 @@ public sealed class GelatoItemRepository : IItemRepository
         {
             filter.IsDeadPerson = null;
         }
+        else if (filter.IsMissing == true) 
+       {
+          // jf deletes virtual items when theres a valid priamry versio . So just dont return it
+          filter.IsVirtualItem = false;
+        }
         return filter;
     }
 

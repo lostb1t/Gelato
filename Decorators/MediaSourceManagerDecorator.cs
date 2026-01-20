@@ -147,7 +147,9 @@ namespace Gelato.Decorators
                 item = _libraryManager.GetItemById(item.Id);
             }
 
-            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
+            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user)
+            //  .Where(x => manager.IsGelato(x) && !manager.IsStream(x))
+              .ToList();
 
             // we dont use jellyfins alternate versions crap. So we have to load it ourselves
 

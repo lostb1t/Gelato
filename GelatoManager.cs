@@ -576,20 +576,6 @@ public class GelatoManager
 
         var primary = (Video)item;
 
-        // primary can be a local file
-        // todo: this is just here to for backwards compat tho. Should remove at one point
-        if (IsGelato(primary))
-        {
-            primary.Path = uri.ToString();
-            if (primary.ProviderIds.ContainsKey("GelatoUserId"))
-            {
-                primary.ProviderIds.Remove("GelatoUserId");
-            }
-
-            await primary
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                .ConfigureAwait(false);
-        }
 
         var providerIds = primary.ProviderIds ?? new Dictionary<string, string>();
         providerIds.TryAdd("Stremio", uri.ExternalId);
@@ -629,7 +615,7 @@ public class GelatoManager
             HasAnyProviderId = providerIds,
             Recursive = true,
             IsDeadPerson = true,
-            IsVirtualItem = true,
+          //  IsVirtualItem = true,
         };
 
         var existing = _repo
@@ -713,7 +699,18 @@ public class GelatoManager
         if (stale.Any())
         {
             _log.LogDebug($"SyncStreams: deleting {string.Join(", ", stale.Select(m => m.Id))}");
+            try {
             _repo.DeleteItem(stale.Select(m => m.Id).ToList());
+            } catch {
+              foreach (var _item in stale)
+    {
+      _library.DeleteItem(_item, new DeleteOptions
+                {
+                    DeleteFileLocation = false
+                });
+            
+    }
+            }
         }
 
 
@@ -753,13 +750,13 @@ public class GelatoManager
 
     public bool IsPrimaryVersion(Video item)
     {
-        return !item.IsVirtualItem;
+        return !item.IsVirtualItem && string.IsNullOrWhiteSpace(item.PrimaryVersionId);
         // return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
 
     public bool IsStream(Video item)
     {
-        return IsGelato(item) && item.IsVirtualItem;
+        return IsGelato(item) && !IsPrimaryVersion(item);
     }
 
     private static bool IsLocalFile(string? path)
