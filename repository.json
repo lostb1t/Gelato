@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.1.2] - 2026-01-20\n\n### 🐛 Bug Fixes\n\n- Add ReattachUserDataAsync for Jellyfin 10.11.6 compatibility (#88)\n\n### ⚙️ Miscellaneous Tasks\n\n- *(release)* Bump version to v0.25.1.2\n- *(release)* Bump version to v0.25.1.2\n",
+        "checksum": "91330cba88c8bae1c83ac9fdf09daa50",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.2/gelato_0.25.1.2.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-01-20T10:28:25Z",
+        "version": "0.25.1.2"
+      },
+      {
         "changelog": "## [0.25.1.1] - 2026-01-17\n\n### 🐛 Bug Fixes\n\n- Video cast after type check\n",
         "checksum": "6e20b472ebf4e92e2720f14e19590496",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.1/gelato_0.25.1.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-11-28T09:34:46Z",
         "version": "0.24.5.4"
-      },
-      {
-        "changelog": "## [0.24.5.3] - 2025-11-28\n\n### ⚡ Performance\n\n- Make purge delete in parallel\n",
-        "checksum": "e0f132d8f9ae718917e90c877bce889f",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.5.3/gelato_0.24.5.3.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-11-28T08:22:08Z",
-        "version": "0.24.5.3"
       }
     ]
   }
