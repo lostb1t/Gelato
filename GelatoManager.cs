@@ -668,7 +668,7 @@ public class GelatoManager
             target.IsVirtualItem = true;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
-            target.Tags = primary.Tags;
+            //target.Tags = primary.Tags;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
             
                         target.SetParent(parent);
