@@ -718,12 +718,11 @@ public class GelatoManager
         //var replacementLinks = newVideos
         //    .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
         //    .ToArray();
-        //primary.LinkedAlternateVersions = replacementLinks;
-       // primary.SetPrimaryVersionId(null);
-
-       // await primary
-       //     .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-       ///     .ConfigureAwait(false);
+      primary.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+      primary.SetPrimaryVersionId(null);
+      await primary
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            .ConfigureAwait(false);
 
         stopwatch.Stop();
   
