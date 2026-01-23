@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.3.0] - 2026-01-23\n\n### 🚀 Features\n\n- Check if user as access on insert\n",
+        "checksum": "94a7d7ee81b0215275b6a7f0d13cc7a0",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.0/gelato_0.25.3.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-01-23T18:28:22Z",
+        "version": "0.25.3.0"
+      },
+      {
         "changelog": "## [0.25.2.0] - 2026-01-23\n\n### 🚀 Features\n\n- Check if user as access on insert\n",
         "checksum": "200c98e8b92148f4f7f41374e5dcd1e8",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.2.0/gelato_0.25.2.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-12-03T21:30:53Z",
         "version": "0.24.6.6"
-      },
-      {
-        "changelog": "## [0.24.6.5] - 2025-12-03\n\n### 🚜 Refactor\n\n- Handle addons that dont listen to skip\n",
-        "checksum": "6c35c3e5d3d79fbe70adfb520e279e95",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.6.5/gelato_0.24.6.5.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-12-03T16:43:03Z",
-        "version": "0.24.6.5"
       }
     ]
   }
