@@ -98,7 +98,7 @@ namespace Gelato.Decorators
             var actionName =
                 ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
 
-            var allowSync = ctx.IsInsertableAction();
+            var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
             var video = item as Video;
             string cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
                 ? id.ToString()
@@ -189,7 +189,8 @@ namespace Gelato.Decorators
             var gelatoSources = _repo
                 .GetItemList(query)
                 .OfType<Video>()
-                .Where(x => manager.IsGelato(x) && x.GelatoData("userId") == userId.ToString())
+                // if userid is empty then return everything
+                .Where(x => manager.IsGelato(x) && (userId == Guid.Empty || x.GelatoData("userId") == userId.ToString()))
                 .OrderBy(s => s.GelatoData("index"))
                 .Select(s =>
                 {
