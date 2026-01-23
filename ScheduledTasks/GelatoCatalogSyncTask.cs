@@ -157,7 +157,7 @@ namespace Gelato.Tasks
                                             .InsertMeta(
                                                 root,
                                                 meta,
-                                                Guid.Empty,
+                                                null,
                                                 true,
                                                 true,
                                                 true,

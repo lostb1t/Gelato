@@ -12,6 +12,8 @@ using MediaBrowser.Model.IO;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Database.Implementations.Entities;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Gelato.Filters;
 
@@ -22,12 +24,13 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
     private readonly ILogger<InsertActionFilter> _log;
     private readonly GelatoManager _manager;
     private readonly KeyLock _lock = new();
-
+private readonly IUserManager _userManager;
     public int Order => 1;
 
     public InsertActionFilter(
         ILibraryManager library,
         GelatoManager manager,
+          IUserManager userManager,
         GelatoStremioProviderFactory stremioFactory,
         ILogger<InsertActionFilter> log
     )
@@ -35,6 +38,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         _library = library;
         _stremioFactory = stremioFactory;
         _manager = manager;
+         _userManager = userManager;
         _log = log;
     }
 
@@ -46,6 +50,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         if (
             !ctx.IsInsertableAction()
             || !ctx.TryGetRouteGuid(out var guid)
+            || !ctx.TryGetUserId(out var userId)
+            || _userManager.GetUserById(userId) is not User user
             || _manager.GetStremioMeta(guid) is not StremioMeta stremioMeta
         )
         {
@@ -53,9 +59,10 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
+        
         // Check if already exists
         var item = _manager.IntoBaseItem(stremioMeta);
-        var existing = FindExistingItem(item);
+        var existing = _manager.FindExistingItem(item, user);
         if (existing is not null)
         {
             _log.LogInformation(
@@ -67,7 +74,6 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
             return;
         }
 
-        ctx.TryGetUserId(out var userId);
 
         // Get root folder
         var isSeries = stremioMeta.Type == StremioMediaType.Series;
@@ -99,7 +105,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         }
 
         // Insert the item
-        var baseItem = await InsertMetaAsync(guid, root, meta, userId);
+        var baseItem = await InsertMetaAsync(guid, root, meta, user);
         if (baseItem is not null)
         {
             ctx.ReplaceGuid(baseItem.Id);
@@ -109,38 +115,11 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
         await next();
     }
 
-    public BaseItem? FindExistingItem(BaseItem item)
-    {
-        var query = new InternalItemsQuery
-        {
-            IncludeItemTypes = new[] { item.GetBaseItemKind() },
-            HasAnyProviderId = item.ProviderIds,
-            Recursive = true,
-            IsVirtualItem = false,
-            IsDeadPerson = true, // skip filter marker
-        };
-
-        return _library
-            .GetItemList(query)
-            .FirstOrDefault(x =>
-            {
-                if (x is null)
-                    return false;
-
-                if (x is Video v)
-                {
-                    return !_manager.IsStream(v);
-                }
-
-                return true;
-            });
-    }
-
     public async Task<BaseItem?> InsertMetaAsync(
         Guid guid,
         Folder root,
         StremioMeta meta,
-        Guid userId
+        User user
     )
     {
         BaseItem? baseItem = null;
@@ -154,7 +133,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter
                 (baseItem, created) = await _manager.InsertMeta(
                     root,
                     meta,
-                    userId,
+                    user,
                     false,
                     true,
                     false,

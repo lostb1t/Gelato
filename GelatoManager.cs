@@ -306,26 +306,43 @@ public class GelatoManager
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    public BaseItem? Exist(StremioMeta meta)
+    public BaseItem? Exist(StremioMeta meta, User user)
     {
-        var baseItem = IntoBaseItem(meta);
-        if (baseItem?.ProviderIds is not { Count: > 0 })
+        var item = IntoBaseItem(meta);
+        if (item?.ProviderIds is not { Count: > 0 })
         {
             _log.LogWarning("Gelato: Missing provider ids, skipping");
             return null;
         }
-
-        var kind = baseItem.GetBaseItemKind();
+  
+        return FindExistingItem(item, user);
+    }
+    
+    public BaseItem? FindExistingItem(BaseItem item, User user)
+    {
         var query = new InternalItemsQuery
         {
-            IncludeItemTypes = new[] { kind },
-            HasAnyProviderId = baseItem.ProviderIds,
+            IncludeItemTypes = new[] { item.GetBaseItemKind() },
+            HasAnyProviderId = item.ProviderIds,
             Recursive = true,
-            IsDeadPerson = true,
+            IsVirtualItem = false,
+            IsDeadPerson = true, // skip filter marker
         };
 
-        var existing = _library.GetItemList(query).OfType<BaseItem>().FirstOrDefault();
-        return existing;
+        return _library
+            .GetItemList(query)
+            .FirstOrDefault(x =>
+            {
+                if (x is null)
+                    return false;
+
+                if (x is Video v)
+                {
+                    return !IsStream(v);
+                }
+
+                return item.IsVisibleStandalone(user);
+            });
     }
 
     /// <summary>
@@ -334,7 +351,7 @@ public class GelatoManager
     public async Task<(BaseItem? Item, bool Created)> InsertMeta(
         Folder parent,
         StremioMeta meta,
-        Guid userId,
+        User? user,
         bool allowRemoteRefresh,
         bool refreshItem,
         bool queueRefreshItem,
@@ -365,7 +382,7 @@ public class GelatoManager
         )
         {
             // do a prechexk as loading metadata is expensive
-            existing = Exist(meta);
+            existing = Exist(meta, user);
 
             if (existing is not null)
             {
@@ -378,7 +395,7 @@ public class GelatoManager
                 return (existing, false);
             }
             var lookupId = meta.ImdbId ?? meta.Id;
-            var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             meta = await cfg.stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
             if (meta is null)
@@ -411,7 +428,7 @@ public class GelatoManager
             return (null, false);
         }
 
-        existing = Exist(meta);
+        existing = Exist(meta, user);
 
         if (existing is not null)
         {
@@ -672,79 +689,41 @@ public class GelatoManager
             target.SetParent(parent);
             target.SetPrimaryVersionId(null);
             
-var users = target.GelatoData<List<Guid>>("userId") ?? new List<Guid>();
-if (!users.Contains(userId))
-{
-    users.Add(userId);
-    target.SetGelatoData("userIds", users);
-}
-
-// name → string
-target.SetGelatoData("name", s.Name);
-
-// index → int
-target.SetGelatoData("index", index);
-
-
-            //if (isNew)
-            // {
-            //     parent.AddChild(target);
-            // }
-            // else
-            // {
-            //     await target
-            //         .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-            //        .ConfigureAwait(false);
-            //}
+            var users = target.GelatoData<List<Guid>>("userId") ?? new List<Guid>();
+            if (!users.Contains(userId))
+            {
+                users.Add(userId);
+                target.SetGelatoData("userIds", users);
+            }
+            
+            target.SetGelatoData("name", s.Name);
+            target.SetGelatoData("index", index);
 
             newVideos.Add(target);
         }
 
         _repo.SaveItems(newVideos, ct);
 
-
-var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
-var stale = existing.Values
-    .Where(m =>
-        !newIds.Contains(m.Id) &&
-        (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
-    )
-    .ToList();
-
-foreach (var _item in stale)
-{
-    var users = _item.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
-
-    if (users.Remove(userId)) 
-    {
-        _item.SetGelatoData("userIds", users);
-    }
-}
-
-_repo.SaveItems(stale, ct);
+        var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
+        var stale = existing.Values
+            .Where(m =>
+                !newIds.Contains(m.Id) &&
+                (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
+            )
+            .ToList();
         
-       // if (stale.Any())
-       // {
-      //      _log.LogDebug($"SyncStreams: deleting {string.Join(", ", stale.Select(m => m.Id))}");
-      //      try {
-      //      _repo.DeleteItem(stale.Select(m => m.Id).ToList());
-     //       } catch {
-     //         foreach (var _item in stale)
-    //{
-    //  _library.DeleteItem(_item, new DeleteOptions
-    //            {
-    //                DeleteFileLocation = false
-    //            });
-            
-    //}
-     //       }
-     //   }
-
-
-        // newVideos.Add(primary);
-        //var replacementLinks = newVideos
-        //    .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
-        //    .ToArray();
+        foreach (var _item in stale)
+        {
+            var users = _item.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
+        
+            if (users.Remove(userId)) 
+            {
+                _item.SetGelatoData("userIds", users);
+            }
+        }
+        
+        _repo.SaveItems(stale, ct);
+        
       primary.LinkedAlternateVersions = Array.Empty<LinkedChild>();
       primary.SetPrimaryVersionId(null);
       await primary
