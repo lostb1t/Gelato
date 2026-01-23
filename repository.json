@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.1.7] - 2026-01-23\n\n### ⚙️ Miscellaneous Tasks\n\n- More stream logging\n",
+        "checksum": "dc4c60c050cbb500e78a9afe6652edf1",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.7/gelato_0.25.1.7.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-01-23T10:53:57Z",
+        "version": "0.25.1.7"
+      },
+      {
         "changelog": "## [0.25.1.6] - 2026-01-20\n\n### 🐛 Bug Fixes\n\n- Reset linked children to clewr ghost versions\n",
         "checksum": "a9013788c34c9e2b15a44d9a58eae44e",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.6/gelato_0.25.1.6.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-12-02T20:16:26Z",
         "version": "0.24.6.2"
-      },
-      {
-        "changelog": "## [0.24.6.1] - 2025-12-01\n\n### 🐛 Bug Fixes\n\n- Primary check on insert redirect\n",
-        "checksum": "92f9db29473584d611e4b1a02598d845",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.6.1/gelato_0.24.6.1.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-12-01T14:36:35Z",
-        "version": "0.24.6.1"
       }
     ]
   }
