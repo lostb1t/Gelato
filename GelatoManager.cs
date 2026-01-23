@@ -326,6 +326,7 @@ public class GelatoManager
             HasAnyProviderId = item.ProviderIds,
             Recursive = true,
             IsVirtualItem = false,
+            User = user,
             IsDeadPerson = true, // skip filter marker
         };
 
@@ -333,15 +334,7 @@ public class GelatoManager
             .GetItemList(query)
             .FirstOrDefault(x =>
             {
-                if (x is null)
-                    return false;
-
-                if (x is Video v)
-                {
-                    return !IsStream(v);
-                }
-
-                return item.IsVisibleStandalone(user);
+                return x is not null && !IsStream((Video)x);
             });
     }
 
