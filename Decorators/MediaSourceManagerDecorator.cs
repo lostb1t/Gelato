@@ -187,27 +187,33 @@ namespace Gelato.Decorators
             }
 
             var gelatoSources = _repo
-                .GetItemList(query)
-                .OfType<Video>()
-                // if userid is empty then return everything
-                .Where(x => manager.IsGelato(x) && (userId == Guid.Empty || x.GelatoData("userId") == userId.ToString()))
-                .OrderBy(s => s.GelatoData("index"))
-                .Select(s =>
-                {
-                    var k = GetVersionInfo(
-                        enablePathSubstitution,
-                        s,
-                        MediaSourceType.Grouping,
-                        ctx,
-                        user
-                    );
-                    if (user is not null)
-                    {
-                        _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
-                    }
-                    return k;
-                })
-                .ToList();
+    .GetItemList(query)
+    .OfType<Video>()
+    .Where(x =>
+        manager.IsGelato(x) &&
+        (
+            userId == Guid.Empty ||
+            (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
+        ))
+    .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
+    .Select(s =>
+    {
+        var k = GetVersionInfo(
+            enablePathSubstitution,
+            s,
+            MediaSourceType.Grouping,
+            ctx,
+            user
+        );
+
+        if (user is not null)
+        {
+            _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
+        }
+
+        return k;
+    })
+    .ToList();
                 
                 _log.LogInformation(
                     "Found {s} streams. UserId={Action} GelatoId={Uri}",
@@ -597,7 +603,7 @@ namespace Gelato.Decorators
                 Protocol = MediaProtocol.Http,
                 MediaStreams = _inner.GetMediaStreams(item.Id),
                 MediaAttachments = _inner.GetMediaAttachments(item.Id),
-                Name = item.GelatoData("name"),
+                Name = item.GelatoData<string>("name"),
                 Path = item.Path,
                 RunTimeTicks = item.RunTimeTicks,
                 Container = item.Container,

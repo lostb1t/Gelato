@@ -621,7 +621,7 @@ public class GelatoManager
         var existing = _repo
             .GetItemList(query)
             .OfType<Video>()
-            .Where(v => IsStream(v) && v.GelatoData("userId") == userId.ToString())
+            .Where(v => IsStream(v))
             .ToDictionary(v => v.Id);
 
         var newVideos = new List<Video>();
@@ -668,14 +668,22 @@ public class GelatoManager
             target.IsVirtualItem = true;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
-            //target.Tags = primary.Tags;
-            target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-            
-                        target.SetParent(parent);
+            target.LinkedAlternateVersions = Array.Empty<LinkedChild>();     
+            target.SetParent(parent);
             target.SetPrimaryVersionId(null);
-            target.SetGelatoData("userId", userId.ToString());
-            target.SetGelatoData("name", s.Name);
-            target.SetGelatoData("index", $"{index:D3}");
+            
+var users = target.GelatoData<List<Guid>>("userId") ?? new List<Guid>();
+if (!users.Contains(userId))
+{
+    users.Add(userId);
+    target.SetGelatoData("userIds", users);
+}
+
+// name → string
+target.SetGelatoData("name", s.Name);
+
+// index → int
+target.SetGelatoData("index", index);
 
 
             //if (isNew)
@@ -694,24 +702,43 @@ public class GelatoManager
 
         _repo.SaveItems(newVideos, ct);
 
-        var stale = existing.Values.Where(m => !newVideos.Any(x => x.Id == m.Id)).ToList();
 
-        if (stale.Any())
-        {
-            _log.LogDebug($"SyncStreams: deleting {string.Join(", ", stale.Select(m => m.Id))}");
-            try {
-            _repo.DeleteItem(stale.Select(m => m.Id).ToList());
-            } catch {
-              foreach (var _item in stale)
+var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
+var stale = existing.Values
+    .Where(m =>
+        !newIds.Contains(m.Id) &&
+        (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
+    )
+    .ToList();
+
+foreach (var _item in stale)
+{
+    var users = _item.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
+
+    if (users.Remove(userId)) 
     {
-      _library.DeleteItem(_item, new DeleteOptions
-                {
-                    DeleteFileLocation = false
-                });
-            
+        _item.SetGelatoData("userIds", users);
     }
-            }
-        }
+}
+
+_repo.SaveItems(stale, ct);
+        
+       // if (stale.Any())
+       // {
+      //      _log.LogDebug($"SyncStreams: deleting {string.Join(", ", stale.Select(m => m.Id))}");
+      //      try {
+      //      _repo.DeleteItem(stale.Select(m => m.Id).ToList());
+     //       } catch {
+     //         foreach (var _item in stale)
+    //{
+    //  _library.DeleteItem(_item, new DeleteOptions
+    //            {
+    //                DeleteFileLocation = false
+    //            });
+            
+    //}
+     //       }
+     //   }
 
 
         // newVideos.Add(primary);
@@ -727,7 +754,7 @@ public class GelatoManager
         stopwatch.Stop();
   
         _log.LogInformation(
-            $"SyncStreams finished item={item.Name} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count} deleted={stale.Count}"
+            $"SyncStreams finished item={item.Name} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
         );
     }
 

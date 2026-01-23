@@ -675,39 +675,41 @@ public static class StringExtensions
 
 public static class BaseItemExtensions
 {
-    public static string GelatoData(this BaseItem item, string key)
-    {
-        if (string.IsNullOrEmpty(item.ExternalId))
-            return string.Empty;
+    public static T? GelatoData<T>(this BaseItem item, string key)
+{
+    if (string.IsNullOrEmpty(item.ExternalId))
+        return default;
 
-        try
-        {
-            var data = JsonSerializer.Deserialize<Dictionary<string, string>>(item.ExternalId);
-            return data?.GetValueOrDefault(key) ?? string.Empty;
-        }
-        catch
-        {
-            return string.Empty;
-        }
+    try
+    {
+        var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.ExternalId);
+        return dict != null && dict.TryGetValue(key, out var el)
+            ? el.Deserialize<T>()
+            : default;
+    }
+    catch
+    {
+        return default;
+    }
+}
+
+public static void SetGelatoData<T>(this BaseItem item, string key, T value)
+{
+    Dictionary<string, JsonElement> data;
+
+    try
+    {
+        data = string.IsNullOrEmpty(item.ExternalId)
+            ? new()
+            : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.ExternalId)
+              ?? new();
+    }
+    catch
+    {
+        data = new();
     }
 
-    public static void SetGelatoData(this BaseItem item, string key, string value)
-    {
-        Dictionary<string, string> data;
-
-        try
-        {
-            data = string.IsNullOrEmpty(item.ExternalId)
-                ? new Dictionary<string, string>()
-                : JsonSerializer.Deserialize<Dictionary<string, string>>(item.ExternalId)
-                    ?? new Dictionary<string, string>();
-        }
-        catch
-        {
-            data = new Dictionary<string, string>();
-        }
-
-        data[key] = value;
-        item.ExternalId = JsonSerializer.Serialize(data);
-    }
+    data[key] = JsonSerializer.SerializeToElement(value);
+    item.ExternalId = JsonSerializer.Serialize(data);
+}
 }
