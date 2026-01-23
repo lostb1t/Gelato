@@ -334,7 +334,15 @@ public class GelatoManager
             .GetItemList(query)
             .FirstOrDefault(x =>
             {
-                return x is not null && !IsStream((Video)x);
+if (x is null)
+                    return false;
+
+                if (x is Video v)
+                {
+                    return !IsStream(v);
+                }
+
+                return true;
             });
     }
 
@@ -457,8 +465,8 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                ReplaceAllImages = true,
-                ReplaceAllMetadata = true,
+                ReplaceAllImages = false,
+                ReplaceAllMetadata = false,
                 ForceSave = true,
             };
 
