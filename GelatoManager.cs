@@ -727,7 +727,7 @@ public class GelatoManager
         stopwatch.Stop();
   
         _log.LogInformation(
-            $"SyncStreams finished for {item.Name} in {Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s: {newVideos.Count} streams, {stale.Count} purged"
+            $"SyncStreams finished item={item.Name} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count} deleted={stale.Count}"
         );
     }
 

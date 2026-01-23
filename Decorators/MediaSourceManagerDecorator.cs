@@ -207,6 +207,13 @@ namespace Gelato.Decorators
                     return k;
                 })
                 .ToList();
+                
+                _log.LogInformation(
+                    "Found {s} streams. UserId={Action} GelatoId={Uri}",
+                    gelatoSources.Count,
+                    userId,
+                    item.GetProviderId("Stremio")
+                );
 
             sources.AddRange(gelatoSources);
 
