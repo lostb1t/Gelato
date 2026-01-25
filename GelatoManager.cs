@@ -690,7 +690,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             target.SetParent(parent);
             target.SetPrimaryVersionId(null);
             
-            var users = target.GelatoData<List<Guid>>("userId") ?? new List<Guid>();
+            var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId))
             {
                 users.Add(userId);
@@ -734,7 +734,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         stopwatch.Stop();
   
         _log.LogInformation(
-            $"SyncStreams finished item={item.Name} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
+            $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
         );
     }
 
