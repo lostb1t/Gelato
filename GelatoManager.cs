@@ -306,6 +306,50 @@ public class GelatoManager
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
+    /// <summary>
+    /// Extracts the filename from a URL, handling URL encoding.
+    /// Returns null if the URL is invalid or doesn't contain a valid media filename.
+    /// </summary>
+    private static string? ExtractFilenameFromUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        // Get the filename from the URL path
+        var filename = System.IO.Path.GetFileName(uri.LocalPath);
+
+        if (string.IsNullOrWhiteSpace(filename))
+        {
+            return null;
+        }
+
+        // Decode URL-encoded characters
+        filename = Uri.UnescapeDataString(filename);
+
+        // Verify it looks like a media file (has a valid extension)
+        var extension = System.IO.Path.GetExtension(filename)?.ToLowerInvariant();
+        if (string.IsNullOrEmpty(extension))
+        {
+            return null;
+        }
+
+        // Check for common media extensions
+        var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v",
+            ".ts", ".m2ts", ".mts", ".vob", ".mpg", ".mpeg", ".3gp", ".ogv"
+        };
+
+        return mediaExtensions.Contains(extension) ? filename : null;
+    }
+
     public BaseItem? Exist(StremioMeta meta, User user)
     {
         var item = IntoBaseItem(meta);
@@ -697,7 +741,13 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 target.SetGelatoData("userIds", users);
             }
             
-            target.SetGelatoData("name", s.Name);
+            // Use the actual filename for MediaSource.Name to enable subtitle plugins
+            // to identify release groups and compute file hashes.
+            // Priority: 1) BehaviorHints.Filename (torrents), 2) Extract from URL, 3) Stream name
+            var mediaFilename = s.BehaviorHints?.Filename
+                ?? ExtractFilenameFromUrl(s.Url)
+                ?? s.GetName();
+            target.SetGelatoData("name", mediaFilename);
             target.SetGelatoData("index", index);
 
             newVideos.Add(target);
