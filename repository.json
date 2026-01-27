@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.3.3] - 2026-01-27\n\n### 🐛 Bug Fixes\n\n- Remove wonky catalog pagination import check\n",
+        "checksum": "cd205c0f5d6ad827e751e83818dc499b",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.3/gelato_0.25.3.3.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-01-27T12:22:38Z",
+        "version": "0.25.3.3"
+      },
+      {
         "changelog": "## [0.25.3.2] - 2026-01-25\n\n### 🐛 Bug Fixes\n\n- Typo\n",
         "checksum": "e3b949515d0263842c867c53059607ee",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.2/gelato_0.25.3.2.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-12-04T19:11:12Z",
         "version": "0.24.7.1"
-      },
-      {
-        "changelog": "## [0.24.7.0] - 2025-12-04\n\n### 🚀 Features\n\n- Run stream purge weekly by eefault\n\n### 🚜 Refactor\n\n- Speedup purge\n",
-        "checksum": "257cd770f2d9baba88345cfc3c246677",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.0/gelato_0.24.7.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-12-04T18:02:55Z",
-        "version": "0.24.7.0"
       }
     ]
   }
