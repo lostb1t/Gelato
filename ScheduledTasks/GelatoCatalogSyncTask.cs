@@ -97,7 +97,7 @@ namespace Gelato.Tasks
                     var processed = 0;
                     // var collectionCommited = false;
                     var ids = new ConcurrentDictionary<Guid, byte>();
-                    var meta_ids = new ConcurrentDictionary<String, byte>();
+                    //var meta_ids = new ConcurrentDictionary<String, byte>();
                     //var addToCollectionIds = new ConcurrentDictionary<Guid, byte>();
                     var genreExtra = cat.Extra?.FirstOrDefault(e =>
                         string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase)
@@ -126,11 +126,11 @@ namespace Gelato.Tasks
                             async (meta, ct) =>
                             {
                                 // yeah skip doesnt seem to work for some badly programmed addons
-                                if (meta_ids.Keys.ToList().Contains(meta.Id))
-                                {
-                                    q = true;
-                                    return;
-                                }
+                                //if (meta_ids.Keys.ToList().Contains(meta.Id))
+                               // {
+                               //     q = true;
+                               //     return;
+                               // }
                                 var p = Interlocked.Increment(ref processed);
                                 ct.ThrowIfCancellationRequested();
                                 if (p > maxPerCatalog)
@@ -138,7 +138,7 @@ namespace Gelato.Tasks
                                     return;
                                 }
 
-                                meta_ids.TryAdd(meta.Id, 0);
+                                //meta_ids.TryAdd(meta.Id, 0);
                                 var mediaType = meta.Type;
                                 var baseItemKind = mediaType.ToBaseItem();
 
@@ -190,7 +190,7 @@ namespace Gelato.Tasks
                         skip += page.Count;
                     }
 
-                    if (shouldCreateCollection && ids.Count != 0)
+                    if (shouldCreateCollection)
                     {
                         await SaveCollection(cat, ids.Keys.Take(maxPerCatalog).ToList())
                             .ConfigureAwait(false);
