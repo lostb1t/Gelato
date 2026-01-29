@@ -77,14 +77,15 @@ namespace Gelato.Tasks
                 IsDeadPerson = true,
             };
 
-            var parentItems = _library
+            var parentItemIds = _library
                 .GetItemList(parentQuery)
                 .OfType<BaseItem>()
                 .Where(i => _manager.IsGelato(i))
+                  .Select(m => m.Id)
                 .ToList();
 
-if (parentItems.Any()) {
-_repo.DeleteItem(parentItems.Select(m => m.Id).ToList());
+if (parentItemIds.Any()) {
+_repo.DeleteItem(parentItemIds);
 }
             var childQuery = new InternalItemsQuery
             {
@@ -101,13 +102,14 @@ _repo.DeleteItem(parentItems.Select(m => m.Id).ToList());
                 IsDeadPerson = true,
             };
 
-            var childItems = _library
+            var childItemIds = _library
                 .GetItemList(childQuery)
                 .OfType<BaseItem>()
                 .Where(i => _manager.IsGelato(i))
+                                    .Select(m => m.Id)
                 .ToList();
-if (childItems.Any()) {
-_repo.DeleteItem(childItems.Select(m => m.Id).ToList());
+if (childItemIds.Any()) {
+_repo.DeleteItem(childItemIds);
 }
             _manager.ClearCache();
             progress?.Report(100.0);
