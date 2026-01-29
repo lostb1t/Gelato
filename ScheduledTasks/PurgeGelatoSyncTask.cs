@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Gelato;
 using Gelato.Common;
+using Gelato.Decorators;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
@@ -30,16 +31,19 @@ namespace Gelato.Tasks
         private readonly ILogger<PurgeGelatoSyncTask> _log;
         private readonly GelatoManager _manager;
         private readonly ILibraryManager _library;
+    private readonly GelatoItemRepository _repo;
 
         public PurgeGelatoSyncTask(
             ILibraryManager libraryManager,
             ILogger<PurgeGelatoSyncTask> log,
+                    GelatoItemRepository repo,  
             GelatoManager manager
         )
         {
             _log = log;
             _library = libraryManager;
             _manager = manager;
+                    _repo = repo;
         }
 
         public string Name => "WARNING: purge all gelato items";
@@ -79,8 +83,9 @@ namespace Gelato.Tasks
                 .Where(i => _manager.IsGelato(i))
                 .ToList();
 
-            await DeleteItemsAsync(parentItems, progress, stats, ct);
-
+if (parentItems.Any()) {
+_repo.DeleteItem(parentItems.Select(m => m.Id).ToList());
+}
             var childQuery = new InternalItemsQuery
             {
                 IncludeItemTypes = new[] { BaseItemKind.Season, BaseItemKind.Episode },
@@ -101,9 +106,9 @@ namespace Gelato.Tasks
                 .OfType<BaseItem>()
                 .Where(i => _manager.IsGelato(i))
                 .ToList();
-
-            await DeleteItemsAsync(childItems, progress, stats, ct);
-
+if (childItems.Any()) {
+_repo.DeleteItem(childItems.Select(m => m.Id).ToList());
+}
             _manager.ClearCache();
             progress?.Report(100.0);
 
@@ -114,49 +119,6 @@ namespace Gelato.Tasks
             _log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
         }
 
-        private async Task DeleteItemsAsync(
-            IReadOnlyCollection<BaseItem> items,
-            IProgress<double> progress,
-            ConcurrentDictionary<BaseItemKind, int> stats,
-            CancellationToken ct
-        )
-        {
-            if (items.Count == 0)
-                return;
-
-            var deleted = 0;
-            var total = items.Count;
-
-            var opts = new ParallelOptions { MaxDegreeOfParallelism = 50, CancellationToken = ct };
-
-            await Parallel.ForEachAsync(
-                items,
-                opts,
-                async (item, ct2) =>
-                {
-                    ct2.ThrowIfCancellationRequested();
-
-                    try
-                    {
-                        _library.DeleteItem(
-                            item,
-                            new DeleteOptions { DeleteFileLocation = false },
-                            true
-                        );
-
-                        stats.AddOrUpdate(item.GetBaseItemKind(), 1, (_, old) => old + 1);
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
-                    }
-
-                    var d = Interlocked.Increment(ref deleted);
-                    progress?.Report(Math.Min(100.0, (double)d / total * 100.0));
-
-                    await Task.CompletedTask;
-                }
-            );
-        }
+        
     }
 }
