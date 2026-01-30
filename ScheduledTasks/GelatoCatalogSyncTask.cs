@@ -83,7 +83,7 @@ namespace Gelato.Tasks
             long done = 0;
             progress.Report(done);
 
-            var opts = new ParallelOptions { MaxDegreeOfParallelism = 8, CancellationToken = ct };
+            var opts = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct };
 
             var stopwatch = Stopwatch.StartNew();
 
@@ -160,7 +160,8 @@ namespace Gelato.Tasks
                                                 null,
                                                 true,
                                                 true,
-                                                true,
+                                                false,
+                                                false,
                                                 ct
                                             )
                                             .ConfigureAwait(false);

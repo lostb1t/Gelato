@@ -356,6 +356,7 @@ if (x is null)
         bool allowRemoteRefresh,
         bool refreshItem,
         bool queueRefreshItem,
+        bool queueRefreshChildren,
         CancellationToken ct
     )
     {
@@ -469,6 +470,25 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 ReplaceAllMetadata = false,
                 ForceSave = true,
             };
+            
+                              
+            var options_seasons = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            {
+                MetadataRefreshMode = MetadataRefreshMode.None,
+                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                ReplaceAllImages = false,
+                ReplaceAllMetadata = false,
+                ForceSave = false,
+            };
+            
+            var options_ep = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            {
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                ImageRefreshMode = MetadataRefreshMode.None,
+                ReplaceAllImages = false,
+                ReplaceAllMetadata = false,
+                ForceSave = false,
+            };
 
             if (queueRefreshItem)
             {
@@ -476,51 +496,41 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             }
             else
             {
-                await baseItem.RefreshMetadata(options, ct).ConfigureAwait(false);
+              
+             
 
-                if (baseItem is Series series)
+                    // heres the deal. jellyfin removes all relariins on refresh when providerids change
+    // so untill refresh is done there are no episodes. So skip them with this when needed
+                if (baseItem is Series series && queueRefreshChildren)
                 {
-                    QueueRefreshSeasonsOnly(series, options, ct);
-                }
+                    var seasons = series.GetChildren(null, true, null).OfType<Season>();
+
+                    foreach (var season in seasons)
+                    {
+
+                      _provider.QueueRefresh(season.Id, options_seasons, RefreshPriority.High);
+                     
+                     // var episodes = season.GetChildren(null, true, null).OfType<Season>();
+                    //foreach (var ep in episodes)
+                   // {
+                      //_provider.QueueRefresh(ep.Id, options_ep, RefreshPriority.High);
+                   // }
+
+                    }
+                    
+
+                   } else {
+                       _provider.RefreshFullItem(baseItem, options, ct);
+                   }
+               
             }
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
         return (baseItem, true);
     }
 
-    // heres the deal. jellyfin removes all relariins on refresh when peofiderids do nit match
-    // so untill refresh is done rhere are no episodes. So skip them wirh this when needed
-    private void QueueRefreshSeasonsOnly(
-        Series series,
-        MetadataRefreshOptions options,
-        CancellationToken ct = default
-    )
-    {
-        _ = Task.Run(
-            async () =>
-            {
-                try
-                {
-                    var seasons = series.GetChildren(null, true, null).OfType<Season>();
 
-                    foreach (var season in seasons)
-                    {
-                        await season.RefreshMetadata(options, ct).ConfigureAwait(false);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _log.LogError(
-                        ex,
-                        "Background refresh (series+seasons only) failed for {SeriesId} {Name}",
-                        series.Id,
-                        series.Name
-                    );
-                }
-            },
-            CancellationToken.None
-        );
-    }
+    
 
     public IEnumerable<BaseItem> FindByProviderIds(
         Dictionary<string, string> providerIds,
@@ -918,7 +928,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             _log.LogWarning("seriesRootFolder null or empty for {SeriesId}", seriesMeta.Id);
             return null;
         }
-
+            var stopwatch = Stopwatch.StartNew();
         // Group episodes by season
         var seasonGroups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
             .Where(e => e.Season.HasValue && (e.Episode.HasValue || e.Number.HasValue)) // Filter out invalid episodes early
@@ -956,8 +966,20 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             series = tmpSeries;
             if (series.Id == Guid.Empty)
                 series.Id = Guid.NewGuid();
+            //series.PresentationUniqueKey = series.CreatePresentationUniqueKey();
+
+            var optionss = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            {
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                ReplaceAllImages = false,
+                ReplaceAllMetadata = true,
+                ForceSave = true,
+            };
+            await series.RefreshMetadata(optionss, ct).ConfigureAwait(false);
             series.PresentationUniqueKey = series.CreatePresentationUniqueKey();
             seriesRootFolder.AddChild(series);
+                 // await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
         var existingSeasonsDict = _library
@@ -995,7 +1017,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
 
         var seriesStremioId = series.GetProviderId("Stremio");
         var seriesPresentationKey = series.GetPresentationUniqueKey();
-
+        Console.Write(seriesPresentationKey);
         foreach (var seasonGroup in seasonGroups)
         {
             ct.ThrowIfCancellationRequested();
@@ -1013,7 +1035,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
 
                 season = new Season
                 {
-                    Id = Guid.NewGuid(),
+                    //Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
                     IndexNumber = seasonIndex,
                     SeriesId = series.Id,
@@ -1021,13 +1043,19 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                     Path = seasonPath,
                     DateLastRefreshed = DateTime.UtcNow,
                     SeriesPresentationUniqueKey = seriesPresentationKey,
+                    DateModified = DateTime.UtcNow,
+                    DateLastSaved = DateTime.UtcNow,
+                    
+                      //ParentId = series.Id
+                    //IsVirtualItem = true
                 };
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
+                            season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
                 series.AddChild(season);
                 seasonsInserted++;
 
-                _log.LogTrace("Created season with id {SeasonId}", season.Id);
+                //_log.LogInformation("Created season with id {SeasonId} and index {Index}", season.Id, season.IndexNumber);
             }
 
             // Get existing episodes once per season and create dictionary
@@ -1090,33 +1118,23 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 episode.SeriesName = series.Name;
                 episode.SeasonName = season.Name;
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
-                episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
                 episode.SetProviderId("Stremio", $"{seasonStremioId}:{index}");
-
+                episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
                 season.AddChild(episode);
+               // await episode.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
                 episodesInserted++;
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
             }
         }
 
-        // Refresh metadata
-        var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-        {
-            MetadataRefreshMode = MetadataRefreshMode.None,
-            ImageRefreshMode = MetadataRefreshMode.None,
-            ReplaceAllImages = false,
-            ReplaceAllMetadata = false,
-            ForceSave = true,
-        };
-
-        await _provider.RefreshFullItem(series, options, CancellationToken.None);
-        // await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct);
+        stopwatch.Stop();
 
         _log.LogInformation(
-            "Sync completed for {SeriesName}: {SeasonsInserted} season(s) and {EpisodesInserted} episode(s) inserted",
+            "Sync completed for {SeriesName}: {SeasonsInserted} season(s) and {EpisodesInserted} episode(s) in {Dur}",
             series.Name,
             seasonsInserted,
-            episodesInserted
+            episodesInserted,
+              stopwatch.Elapsed.TotalSeconds
         );
 
         return series;
@@ -1280,7 +1298,8 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         item.PremiereDate = meta.GetPremiereDate();
         // item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         item.Overview = meta.Description ?? meta.Overview;
-
+item.DateModified = DateTime.UtcNow;
+                item.DateLastSaved = DateTime.UtcNow;
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary))
         {

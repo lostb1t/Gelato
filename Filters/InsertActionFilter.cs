@@ -137,6 +137,7 @@ private readonly IUserManager _userManager;
                     false,
                     true,
                     false,
+                    true,
                     ct
                 );
             }
