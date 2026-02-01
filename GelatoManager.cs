@@ -503,12 +503,14 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
     // so untill refresh is done there are no episodes. So skip them with this when needed
                 if (baseItem is Series series && queueRefreshChildren)
                 {
+                    _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
+                         return (baseItem, true);
                     var seasons = series.GetChildren(null, true, null).OfType<Season>();
 
                     foreach (var season in seasons)
                     {
 
-                      _provider.QueueRefresh(season.Id, options_seasons, RefreshPriority.High);
+                      _provider.QueueRefresh(season.Id, options, RefreshPriority.High);
                      
                      // var episodes = season.GetChildren(null, true, null).OfType<Season>();
                     //foreach (var ep in episodes)
@@ -968,7 +970,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 series.Id = Guid.NewGuid();
             //series.PresentationUniqueKey = series.CreatePresentationUniqueKey();
 
-            var optionss = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
+            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
@@ -976,10 +978,10 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 ReplaceAllMetadata = true,
                 ForceSave = true,
             };
-            await series.RefreshMetadata(optionss, ct).ConfigureAwait(false);
-            series.PresentationUniqueKey = series.CreatePresentationUniqueKey();
+            // important
+            series.ParentId = seriesRootFolder.Id;
+            await series.RefreshMetadata(options, ct).ConfigureAwait(false);
             seriesRootFolder.AddChild(series);
-                 // await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
         var existingSeasonsDict = _library
@@ -1017,7 +1019,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
 
         var seriesStremioId = series.GetProviderId("Stremio");
         var seriesPresentationKey = series.GetPresentationUniqueKey();
-        Console.Write(seriesPresentationKey);
+
         foreach (var seasonGroup in seasonGroups)
         {
             ct.ThrowIfCancellationRequested();
@@ -1044,14 +1046,14 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                     DateLastRefreshed = DateTime.UtcNow,
                     SeriesPresentationUniqueKey = seriesPresentationKey,
                     DateModified = DateTime.UtcNow,
-                    DateLastSaved = DateTime.UtcNow,
-                    
-                      //ParentId = series.Id
-                    //IsVirtualItem = true
+                    DateLastSaved = DateTime.UtcNow, 
+                    // important
+                      ParentId = series.Id
                 };
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
-                            season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
+                season.SetProviderId(MetadataProvider.Custom, $"{seriesStremioId}:{seasonIndex}");
+                season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
                 series.AddChild(season);
                 seasonsInserted++;
 
@@ -1117,8 +1119,8 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 episode.SeriesId = series.Id;
                 episode.SeriesName = series.Name;
                 episode.SeasonName = season.Name;
+                episode.ParentId = season.Id;
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
-                episode.SetProviderId("Stremio", $"{seasonStremioId}:{index}");
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
                 season.AddChild(episode);
                // await episode.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
@@ -1289,9 +1291,14 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         {
             item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
         }
+        
+
+        
 
         var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
+                // ikportant
+        item.SetProviderId(MetadataProvider.Custom, stremioUri.ExternalId);
         item.DateLastRefreshed = DateTime.UtcNow;
         item.IsVirtualItem = false;
         item.ProductionYear = meta.GetYear();
@@ -1308,6 +1315,7 @@ item.DateModified = DateTime.UtcNow;
                 new ItemImageInfo { Type = ImageType.Primary, Path = primary },
             }.ToArray();
         }
+        item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         return item;
     }
 }
