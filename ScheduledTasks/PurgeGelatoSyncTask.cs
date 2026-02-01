@@ -53,73 +53,66 @@ namespace Gelato.Tasks
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
+public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
+{
+    var stats = new ConcurrentDictionary<BaseItemKind, int>();
+    var deletionOrder = new List<BaseItemKind>
+    {
+        BaseItemKind.Episode,
+        BaseItemKind.Season,
+        BaseItemKind.Series,
+        BaseItemKind.BoxSet,
+        BaseItemKind.Movie
+    };
+
+    var items = _library
+        .GetItemList(new InternalItemsQuery
         {
-            var stats = new ConcurrentDictionary<BaseItemKind, int>();
-
-            var parentQuery = new InternalItemsQuery
+            IncludeItemTypes = new[]
             {
-                IncludeItemTypes = new[]
-                {
-                    BaseItemKind.Movie,
-                    BaseItemKind.Series,
-                    BaseItemKind.BoxSet,
-                },
-                Recursive = true,
-                HasAnyProviderId = new()
-                {
-                    { "Stremio", string.Empty },
-                    { "stremio", string.Empty },
-                },
-                GroupByPresentationUniqueKey = false,
-                GroupBySeriesPresentationUniqueKey = false,
-                CollapseBoxSetItems = false,
-                IsDeadPerson = true,
-            };
-
-            var parentItemIds = _library
-                .GetItemList(parentQuery)
-                .OfType<BaseItem>()
-                .Where(i => _manager.IsGelato(i))
-                  .Select(m => m.Id)
-                .ToList();
-
-if (parentItemIds.Any()) {
-_repo.DeleteItem(parentItemIds);
-}
-            var childQuery = new InternalItemsQuery
+                BaseItemKind.Movie,
+                BaseItemKind.Series,
+                BaseItemKind.BoxSet,
+                BaseItemKind.Season,
+                BaseItemKind.Episode
+            },
+            Recursive = true,
+            HasAnyProviderId = new()
             {
-                IncludeItemTypes = new[] { BaseItemKind.Season, BaseItemKind.Episode },
-                Recursive = true,
-                HasAnyProviderId = new()
-                {
-                    { "Stremio", string.Empty },
-                    { "stremio", string.Empty },
-                },
-                GroupByPresentationUniqueKey = false,
-                GroupBySeriesPresentationUniqueKey = false,
-                CollapseBoxSetItems = false,
-                IsDeadPerson = true,
-            };
+                { "Stremio", string.Empty },
+                { "stremio", string.Empty },
+            },
+            GroupByPresentationUniqueKey = false,
+            GroupBySeriesPresentationUniqueKey = false,
+            CollapseBoxSetItems = false,
+            IsDeadPerson = true,
+        })
+        .OfType<BaseItem>()
+        .Where(i => _manager.IsGelato(i))
+        .GroupBy(i => i.GetBaseItemKind())
+        .OrderBy(g => deletionOrder.IndexOf(g.Key))
+        .Select(g => new { Kind = g.Key, Ids = g.Select(m => m.Id).ToList() })
+        .ToList();
 
-            var childItemIds = _library
-                .GetItemList(childQuery)
-                .OfType<BaseItem>()
-                .Where(i => _manager.IsGelato(i))
-                                    .Select(m => m.Id)
-                .ToList();
-if (childItemIds.Any()) {
-_repo.DeleteItem(childItemIds);
-}
-            _manager.ClearCache();
-            progress?.Report(100.0);
-
-            var ordered = stats.OrderBy(k => k.Key.ToString());
-            var parts = ordered.Select(kv => $"{kv.Key}={kv.Value}");
-            var line = string.Join(", ", parts);
-
-            _log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
+    foreach (var group in items)
+    {
+        if (group.Ids.Any())
+        {
+            _repo.DeleteItem(group.Ids);
+            stats.AddOrUpdate(group.Kind, group.Ids.Count, (_, count) => count + group.Ids.Count);
         }
+    }
+
+    _manager.ClearCache();
+    progress?.Report(100.0);
+
+    var orderedStats = stats.OrderBy(k => deletionOrder.IndexOf(k.Key));
+    var parts = orderedStats.Select(kv => $"{kv.Key}={kv.Value}");
+    var line = string.Join(", ", parts);
+
+    _log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
+}
+        
 
         
     }
