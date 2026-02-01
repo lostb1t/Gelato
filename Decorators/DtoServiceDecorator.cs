@@ -104,12 +104,13 @@ namespace Gelato.Decorators
                         && dto.MediaSources?.Length == 1
                         && dto.Path is not null
                         && dto.MediaSources[0]
-                            .Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase)
+                            .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
                     || (!IsList && item is not null && item.IsUnaired)
                 )
                 {
                     dto.LocationType = LocationType.Virtual;
                     dto.Path = null;
+                    dto.CanDownload = false;
                 }
 
                 if (dto.MediaSources?.Any() == true)

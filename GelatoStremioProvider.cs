@@ -695,9 +695,16 @@ namespace Gelato
         }
 
         public bool IsValid()
-        {
-            return (!string.IsNullOrWhiteSpace(Url) || !string.IsNullOrWhiteSpace(InfoHash));
-        }
+{
+    if (string.IsNullOrWhiteSpace(Url))
+        return false;
+
+    Uri uri;
+    if (!Uri.TryCreate(Url, UriKind.Absolute, out uri))
+        return false;
+
+    return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
+}
 
         public bool IsFile()
         {
