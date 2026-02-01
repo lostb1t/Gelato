@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.3.7] - 2026-02-01\n\n### 🐛 Bug Fixes\n\n- PresentationUniqueKey generation\n",
+        "checksum": "270a8ebbc97e9499a6c8a40855abc277",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.7/gelato_0.25.3.7.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-01T08:01:15Z",
+        "version": "0.25.3.7"
+      },
+      {
         "changelog": "## [0.25.3.6] - 2026-01-30\n\n### 🚜 Refactor\n\n- Meta imports\n",
         "checksum": "a5ad41d0586e5cd8d71fa921a4b6b1f9",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.6/gelato_0.25.3.6.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2025-12-07T00:40:56Z",
         "version": "0.24.7.5"
-      },
-      {
-        "changelog": "## [0.24.7.4] - 2025-12-06\n\n### 🐛 Bug Fixes\n\n- Always use primary id for first media source\n",
-        "checksum": "63714cf34592ea611c27d7755a1ec847",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.4/gelato_0.24.7.4.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2025-12-06T13:15:46Z",
-        "version": "0.24.7.4"
       }
     ]
   }
