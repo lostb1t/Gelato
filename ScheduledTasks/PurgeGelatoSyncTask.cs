@@ -56,14 +56,6 @@ namespace Gelato.Tasks
 public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
 {
     var stats = new ConcurrentDictionary<BaseItemKind, int>();
-    var deletionOrder = new List<BaseItemKind>
-    {
-        BaseItemKind.Episode,
-        BaseItemKind.Season,
-        BaseItemKind.Series,
-        BaseItemKind.BoxSet,
-        BaseItemKind.Movie
-    };
 
     var items = _library
         .GetItemList(new InternalItemsQuery
@@ -73,11 +65,9 @@ public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
                 BaseItemKind.Movie,
                 BaseItemKind.Series,
                 BaseItemKind.BoxSet,
-                BaseItemKind.Season,
-                BaseItemKind.Episode
             },
             Recursive = true,
-            HasAnyProviderId = new()
+            HasAnyProviderId = new Dictionary<string, string>
             {
                 { "Stremio", string.Empty },
                 { "stremio", string.Empty },
@@ -89,25 +79,32 @@ public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
         })
         .OfType<BaseItem>()
         .Where(i => _manager.IsGelato(i))
-        .GroupBy(i => i.GetBaseItemKind())
-        .OrderBy(g => deletionOrder.IndexOf(g.Key))
-        .Select(g => new { Kind = g.Key, Ids = g.Select(m => m.Id).ToList() })
         .ToList();
 
-    foreach (var group in items)
+    int totalItems = items.Count;
+    int processedItems = 0;
+
+    foreach (var item in items)
     {
-        if (group.Ids.Any())
-        {
-            _repo.DeleteItem(group.Ids);
-            stats.AddOrUpdate(group.Kind, group.Ids.Count, (_, count) => count + group.Ids.Count);
-        }
+        _library.DeleteItem(
+            item,
+            new DeleteOptions { DeleteFileLocation = false },
+            true);
+
+        // Update stats by item kind
+        var kind = item.GetBaseItemKind();
+        stats.AddOrUpdate(kind, 1, (_, count) => count + 1);
+
+        // Update progress
+        processedItems++;
+        double currentProgress = (double)processedItems / totalItems * 100;
+        progress?.Report(currentProgress);
     }
 
     _manager.ClearCache();
     progress?.Report(100.0);
 
-    var orderedStats = stats.OrderBy(k => deletionOrder.IndexOf(k.Key));
-    var parts = orderedStats.Select(kv => $"{kv.Key}={kv.Value}");
+    var parts = stats.Select(kv => $"{kv.Key}={kv.Value}");
     var line = string.Join(", ", parts);
 
     _log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
