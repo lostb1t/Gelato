@@ -470,25 +470,6 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 ReplaceAllMetadata = false,
                 ForceSave = true,
             };
-            
-                              
-            var options_seasons = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-            {
-                MetadataRefreshMode = MetadataRefreshMode.None,
-                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                ReplaceAllImages = false,
-                ReplaceAllMetadata = false,
-                ForceSave = false,
-            };
-            
-            var options_ep = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-            {
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                ImageRefreshMode = MetadataRefreshMode.None,
-                ReplaceAllImages = false,
-                ReplaceAllMetadata = false,
-                ForceSave = false,
-            };
 
             if (queueRefreshItem)
             {
@@ -497,28 +478,10 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             else
             {
               
-             
-
-                    // heres the deal. jellyfin removes all relariins on refresh when providerids change
-    // so untill refresh is done there are no episodes. So skip them with this when needed
                 if (baseItem is Series series && queueRefreshChildren)
                 {
                     _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-                         return (baseItem, true);
-                    var seasons = series.GetChildren(null, true, null).OfType<Season>();
-
-                    foreach (var season in seasons)
-                    {
-
-                      _provider.QueueRefresh(season.Id, options, RefreshPriority.High);
-                     
-                     // var episodes = season.GetChildren(null, true, null).OfType<Season>();
-                    //foreach (var ep in episodes)
-                   // {
-                      //_provider.QueueRefresh(ep.Id, options_ep, RefreshPriority.High);
-                   // }
-
-                    }
+                    
                     
 
                    } else {
@@ -531,8 +494,6 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         return (baseItem, true);
     }
 
-
-    
 
     public IEnumerable<BaseItem> FindByProviderIds(
         Dictionary<string, string> providerIds,
