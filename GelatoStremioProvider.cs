@@ -114,10 +114,9 @@ namespace Gelato
                                 string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
                             ) == true
                         )
-                        .OrderByDescending(c =>
-                            c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase)
-                            == true
-                        )
+                  .OrderBy(c =>
+    c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
+)
                         .FirstOrDefault();
 
                     SeriesSearchCatalog = m
@@ -127,10 +126,9 @@ namespace Gelato
                                 string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
                             ) == true
                         )
-                        .OrderByDescending(c =>
-                            c.Id?.EndsWith(".tmdb.search", StringComparison.OrdinalIgnoreCase)
-                            == true
-                        )
+                .OrderBy(c =>
+    c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
+)
                         .FirstOrDefault();
                 }
 
