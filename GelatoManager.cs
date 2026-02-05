@@ -1189,32 +1189,23 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         {
             case StremioMediaType.Series:
                 item = new Series { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)) };
-                //item.Path = $"gelato://stub/{item.Id}";
                 break;
 
             case StremioMediaType.Movie:
                 item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
-                //item.Path = GetGelatoLocalPath(item);
-
-                //item.IsShortcut = true;
-                //item.ShortcutPath = $"gelato://stub/{item.Id}";
                 break;
 
             case StremioMediaType.Episode:
                 item = new Episode { Id = _library.GetNewItemId(Id, typeof(Episode)) };
-
-                //var tvdbId = meta.TvdbEpisodeId();
-
-                //if (!string.IsNullOrWhiteSpace(tvdbId)) {
-                //                    item.SetProviderId("Tvdb", tvdbId);
-                //                  }
                 break;
             default:
                 _log.LogWarning("unsupported type {type}", meta.Type);
                 return null;
         }
         ;
-
+        
+        // important as its needed so jellyfin doesnt recalculate key
+        item.SetProviderId(MetadataProvider.Custom, item.Id.ToString());
         item.Path = $"gelato://stub/{item.Id}";
         item.Name = meta.GetName();
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
@@ -1252,14 +1243,10 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         {
             item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
         }
-        
-
-        
+           
 
         var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
-                // ikportant
-        item.SetProviderId(MetadataProvider.Custom, stremioUri.ExternalId);
         item.DateLastRefreshed = DateTime.UtcNow;
         item.IsVirtualItem = false;
         item.ProductionYear = meta.GetYear();
