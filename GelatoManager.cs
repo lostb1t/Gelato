@@ -998,7 +998,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
 
                 season = new Season
                 {
-                    //Id = Guid.NewGuid(),
+                    Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
                     IndexNumber = seasonIndex,
                     SeriesId = series.Id,
@@ -1009,11 +1009,11 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                     DateModified = DateTime.UtcNow,
                     DateLastSaved = DateTime.UtcNow, 
                     // important
-                      ParentId = series.Id
+                    ParentId = series.Id
                 };
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
-                season.SetProviderId(MetadataProvider.Custom, $"{seriesStremioId}:{seasonIndex}");
+                //season.SetProviderId(MetadataProvider.Custom, season.Id.ToString());
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
                 series.AddChild(season);
                 seasonsInserted++;
@@ -1205,7 +1205,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         ;
         
         // important as its needed so jellyfin doesnt recalculate key
-        item.SetProviderId(MetadataProvider.Custom, item.Id.ToString());
+       // item.SetProviderId(MetadataProvider.Custom, item.Id.ToString());
         item.Path = $"gelato://stub/{item.Id}";
         item.Name = meta.GetName();
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
