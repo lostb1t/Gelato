@@ -628,7 +628,10 @@ public static class ActionContextExtensions
             ctx.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")?.Value
             ?? ctx.Request.Query["userId"].FirstOrDefault();
 
-        return Guid.TryParse(userIdStr, out userId);
+        if(!Guid.TryParse(userIdStr, out userId))
+            return false;
+
+        return userId != Guid.Empty;
     }
 
     public static bool TryGetActionArgument<T>(
