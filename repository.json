@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.5.0] - 2026-02-06\n\n### 🚀 Features\n\n- Show play button even if unaired\n\n### 🐛 Bug Fixes\n\n- User id parsing returning true when empty (#96)\n",
+        "checksum": "3ac8ffa31ed3082ec364b9b96193432d",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.5.0/gelato_0.25.5.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-06T11:14:36Z",
+        "version": "0.25.5.0"
+      },
+      {
         "changelog": "## [0.25.4.1] - 2026-02-05\n\n### 🐛 Bug Fixes\n\n- Playstate for episodes\n",
         "checksum": "c0c8b46408bf18a179b699852e9d821f",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.4.1/gelato_0.25.4.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2026-01-04T21:42:38Z",
         "version": "0.24.7.11"
-      },
-      {
-        "changelog": "## [0.24.7.10] - 2026-01-01\n\n### 🐛 Bug Fixes\n\n- Use released field formpremiere date\n",
-        "checksum": "494542e2397ddd6e03d0419e35a6bd9b",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.24.7.10/gelato_0.24.7.10.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2026-01-01T18:08:02Z",
-        "version": "0.24.7.10"
       }
     ]
   }
