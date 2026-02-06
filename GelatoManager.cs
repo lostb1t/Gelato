@@ -481,8 +481,6 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 if (baseItem is Series series && queueRefreshChildren)
                 {
                     _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-                    
-                    
 
                    } else {
                        _provider.RefreshFullItem(baseItem, options, ct);
@@ -943,6 +941,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             series.ParentId = seriesRootFolder.Id;
             await series.RefreshMetadata(options, ct).ConfigureAwait(false);
             seriesRootFolder.AddChild(series);
+            await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
         var existingSeasonsDict = _library

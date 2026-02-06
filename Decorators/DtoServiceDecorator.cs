@@ -105,7 +105,7 @@ namespace Gelato.Decorators
                         && dto.Path is not null
                         && dto.MediaSources[0]
                             .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
-                    || (!IsList && item is not null && item.IsUnaired)
+                  //  || (!IsList && item is not null && item.IsUnaired)
                 )
                 {
                     dto.LocationType = LocationType.Virtual;
