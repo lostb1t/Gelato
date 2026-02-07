@@ -147,112 +147,62 @@ namespace Gelato.Decorators
                 item = _libraryManager.GetItemById(item.Id);
             }
 
-            var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user)
-            //  .Where(x => manager.IsGelato(x) && !manager.IsStream(x))
-              .ToList();
 
-            // we dont use jellyfins alternate versions crap. So we have to load it ourselves
+var primaryItem = manager.IsStream(video)
+    ? _libraryManager.GetItemById(video.PrimaryVersionId)
+    : item;
 
-            InternalItemsQuery query;
+var sources = _inner.GetStaticMediaSources(primaryItem, enablePathSubstitution, user).ToList();
+video = (Video)primaryItem;
 
-            if (item.GetBaseItemKind() == BaseItemKind.Episode)
-            {
-                var episode = (Episode)item;
-                query = new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                    ParentId = episode.SeasonId,
-                    Recursive = false,
-                    GroupByPresentationUniqueKey = false,
-                    GroupBySeriesPresentationUniqueKey = false,
-                    CollapseBoxSetItems = false,
-                    IsDeadPerson = true,
-                    IsVirtualItem = true,
-                    IndexNumber = episode.IndexNumber,
-                };
-            }
-            else
-            {
-                query = new InternalItemsQuery
-                {
-                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                    HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
-                    Recursive = false,
-                    GroupByPresentationUniqueKey = false,
-                    GroupBySeriesPresentationUniqueKey = false,
-                    CollapseBoxSetItems = false,
-                    IsDeadPerson = true,
-                    IsVirtualItem = true,
-                };
-            }
+var map = video.GetLinkedAlternateVersions().ToDictionary(x => x.Id, x => x);
 
-            var gelatoSources = _repo
-    .GetItemList(query)
-    .OfType<Video>()
-    .Where(x =>
-        manager.IsGelato(x) &&
-        (
-            userId == Guid.Empty ||
-            (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
-        ))
-    .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
-    .Select(s =>
-    {
-        var k = GetVersionInfo(
-            enablePathSubstitution,
-            s,
-            MediaSourceType.Grouping,
-            ctx,
-            user
-        );
+map[video.Id] = video;
 
-        if (user is not null)
-        {
-            _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
+var filteredSources = sources
+    .Where(x =>{
+      
+        if (!map.TryGetValue(Guid.Parse(x.Id), out var m)) {
+          return false;
         }
-
-        return k;
+       return !manager.IsGelato(m) ||
+        (userId == Guid.Empty || (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false));
+      }
+    )
+    .OrderBy(x => map[Guid.Parse(x.Id)].GelatoData<int?>("index") ?? int.MaxValue)
+    .Select(x =>
+    {
+        x.Name = map[Guid.Parse(x.Id)].GelatoData<string>("name");
+        return x;
     })
     .ToList();
-                
-                _log.LogInformation(
-                    "Found {s} streams. UserId={Action} GelatoId={Uri}",
-                    gelatoSources.Count,
-                    userId,
-                    item.GetProviderId("Stremio")
-                );
 
-            sources.AddRange(gelatoSources);
 
-            if (sources.Count > 1)
-            {
-                // remove primary from list when there are streams
-                sources = sources
-                    .Where(k => !k.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase))
-                    .Where(k => !k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-            }
+_log.LogInformation(
+    "Found {StreamCount} streams. UserId={UserId} GelatoId={StremioId}",
+    filteredSources.Count,
+    userId,
+    item.GetProviderId("Stremio")
+);
 
-            // failsafe. mediasources cannot be null
-            if (sources.Count == 0)
-            {
-                sources.Add(
-                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
-                );
-            }
 
-            if (sources.Count > 0)
-                sources[0].Type = MediaSourceType.Default;
+// Remove primary sources if there are streams
+if (filteredSources.Count > 1)
+{
+    filteredSources = filteredSources
+        .Where(k => !k.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase))
+        .Where(k => !k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
+        .ToList();
+}
 
-            //  if (mediaSourceId == item.Id)
-            //  {
-            // use primary id for first result. This is needed as some dlients dont listen to static media sources and ust use the primary id
-            // yes this gives other issues. but im tired
-            // sources[0].ETag = sources[0].Id;
-            sources[0].Id = item.Id.ToString("N");
-            //}
+// Set the first source as default and update its ID
+if (filteredSources.Count > 0)
+{
+    filteredSources[0].Type = MediaSourceType.Default;
+    filteredSources[0].Id = item.Id.ToString("N");
+}
 
-            return sources;
+return filteredSources;
         }
 
         public void AddParts(IEnumerable<IMediaSourceProvider> providers)
@@ -645,6 +595,7 @@ namespace Gelato.Decorators
                 info.Protocol = MediaProtocol.File;
             }
 
+        
             info.Bitrate = item.TotalBitrate;
             info.InferTotalBitrate();
 

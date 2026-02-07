@@ -51,7 +51,6 @@ namespace Gelato.Decorators
           options.EnableUserData = false;
         }
 
-
             var list = _inner.GetBaseItemDtos(items, options, user, owner);
             for (int i = 0; i < list.Count; i++)
             {

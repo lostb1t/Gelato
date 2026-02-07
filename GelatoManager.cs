@@ -100,7 +100,7 @@ public class GelatoManager
         _library = libraryManager;
         _fileSystem = fileSystem;
 
-        _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
+       // _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
     }
 
     // jf preferes path but we want to match on id.
@@ -306,9 +306,9 @@ public class GelatoManager
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    public BaseItem? Exist(StremioMeta meta, User user)
+    public BaseItem? Exist(StremioMeta meta, Folder parent, User user)
     {
-        var item = IntoBaseItem(meta);
+        var item = IntoBaseItem(meta, parent);
         if (item?.ProviderIds is not { Count: > 0 })
         {
             _log.LogWarning("Gelato: Missing provider ids, skipping");
@@ -384,7 +384,7 @@ if (x is null)
         )
         {
             // do a prechexk as loading metadata is expensive
-            existing = Exist(meta, user);
+            existing = Exist(meta, parent, user);
 
             if (existing is not null)
             {
@@ -430,7 +430,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             return (null, false);
         }
 
-        existing = Exist(meta, user);
+        existing = Exist(meta, parent, user);
 
         if (existing is not null)
         {
@@ -443,11 +443,14 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             return (existing, false);
         }
 
-        var baseItem = IntoBaseItem(meta);
+        var baseItem = IntoBaseItem(meta, parent);
 
         if (mediaType == StremioMediaType.Movie)
         {
+           // CreateStrmFile(target.Path, target.ShortcutPath);
+            //target.DateModified = DateTime.UtcNow;
             parent.AddChild(baseItem);
+            
         }
         else
         {
@@ -653,14 +656,20 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             }
 
             target.Name = primary.Name;
-            target.Path = path;
-            target.IsVirtualItem = true;
+            //target.Path = path;
+            target.PresentationUniqueKey = primary.PresentationUniqueKey;
+            target.IsVirtualItem = false;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();     
             target.SetParent(parent);
-            target.SetPrimaryVersionId(null);
+            target.SetPrimaryVersionId(primary.Id.ToString());
             
+            target.Path = $"{parent.Path}/{target.PrimaryVersionId}/{target.Id}.strm";
+            target.ShortcutPath = path;
+            target.IsShortcut = true;
+            CreateStrmFile(target.Path, target.ShortcutPath);
+            target.DateModified = DateTime.UtcNow;
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId))
             {
@@ -695,12 +704,13 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         }
         
         _repo.SaveItems(stale, ct);
-        
-      primary.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-      primary.SetPrimaryVersionId(null);
-      await primary
-            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-            .ConfigureAwait(false);
+             newVideos.Add(primary);
+        MergeVersions(newVideos.ToArray());   
+     // primary.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+    //  primary.SetPrimaryVersionId(null);
+     // await primary
+     //       .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+     //       .ConfigureAwait(false);
 
         stopwatch.Stop();
   
@@ -709,6 +719,71 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         );
     }
 
+    public async Task MergeVersions(Video[] items)
+    {
+        if (items == null || items.Length < 2)
+        {
+            _log.LogWarning("MergeVersions called with insufficient items.");
+            return;
+        }
+
+        // try to get a persistsnt value
+        var primaryVersion =
+            items.FirstOrDefault(i => string.IsNullOrEmpty(i.PrimaryVersionId))
+            //items.FirstOrDefault(i => i.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true)
+            // ?? items.FirstOrDefault(i => i.IsFileProtocol)
+            //?? items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId))
+            ?? items.FirstOrDefault();
+
+        if (primaryVersion == null)
+        {
+            _log.LogError(
+                "MergeVersions: No item with a path starting with 'stremio' found. Merge aborted."
+            );
+            return;
+        }
+
+        _log.LogDebug($"selected {primaryVersion.Name} {primaryVersion.Id} as primary version");
+
+        var inv = CultureInfo.InvariantCulture;
+        var alternates = items.Where(i => !i.Id.Equals(primaryVersion.Id)).ToList();
+        var replacementLinks = alternates
+            .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
+            .ToArray();
+
+        foreach (var v in alternates)
+        {
+            v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
+            v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+
+            await v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+
+        primaryVersion.LinkedAlternateVersions = replacementLinks;
+        primaryVersion.SetPrimaryVersionId(null);
+
+        await primaryVersion
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            .ConfigureAwait(false);
+    }
+
+    private void AddToAlternateVersionsIfNotPresent(
+        List<LinkedChild> alternateVersions,
+        LinkedChild newVersion
+    )
+    {
+        if (
+            !alternateVersions.Any(i =>
+                string.Equals(i.Path, newVersion.Path, StringComparison.OrdinalIgnoreCase)
+            )
+        )
+        {
+            alternateVersions.Add(newVersion);
+        }
+    }
+
+    
     public static void CreateStrmFile(string path, string content)
     {
         var directory = Path.GetDirectoryName(path);
@@ -780,12 +855,12 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         if (
             !string.IsNullOrWhiteSpace(stremioId)
             // failsafe. local file is never gelato
-            && !(
-                (
-                    item.GetBaseItemKind() == BaseItemKind.Movie
-                    || item.GetBaseItemKind() == BaseItemKind.Episode
-                ) && item.IsFileProtocol
-            )
+           // && !(
+            //    (
+            //        item.GetBaseItemKind() == BaseItemKind.Movie
+            //        || item.GetBaseItemKind() == BaseItemKind.Episode
+            //    ) && item.IsFileProtocol
+           // )
         )
         {
             return true;
@@ -905,7 +980,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         }
 
         // Create or get series
-        var tmpSeries = (Series)IntoBaseItem(seriesMeta);
+        var tmpSeries = (Series)IntoBaseItem(seriesMeta, seriesRootFolder);
 
         if (tmpSeries.ProviderIds is null || tmpSeries.ProviderIds.Count == 0)
         {
@@ -1071,7 +1146,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
                 );
 
                 epMeta.Type = StremioMediaType.Episode;
-                var episode = (Episode)IntoBaseItem(epMeta);
+                var episode = (Episode)IntoBaseItem(epMeta, seriesRootFolder);
 
                 episode.IndexNumber = index;
                 episode.ParentIndexNumber = season.IndexNumber;
@@ -1178,7 +1253,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         );
     }
 
-    public BaseItem IntoBaseItem(StremioMeta meta)
+    public BaseItem IntoBaseItem(StremioMeta meta, Folder? parent)
     {
         BaseItem item;
 
@@ -1205,7 +1280,16 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         
         // important as its needed so jellyfin doesnt recalculate key
        // item.SetProviderId(MetadataProvider.Custom, item.Id.ToString());
+        //item.Path = $"gelato://stub/{item.Id}";
+        
         item.Path = $"gelato://stub/{item.Id}";
+        
+        if (parent is not null && (meta.Type is StremioMediaType.Episode || meta.Type is StremioMediaType.Movie)) {
+            item.Path = $"{parent.Path}/{item.Id}/{item.Id}.strm";
+            item.ShortcutPath = $"gelato://stub/{item.Id}";
+            item.IsShortcut = true;
+            CreateStrmFile(item.Path, item.ShortcutPath);
+        }
         item.Name = meta.GetName();
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);

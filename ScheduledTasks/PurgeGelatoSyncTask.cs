@@ -95,11 +95,9 @@ public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
 } catch {
   _repo.DeleteItem([item.Id]);
 }
-        // Update stats by item kind
 
         stats.AddOrUpdate(kind, 1, (_, count) => count + 1);
 
-        // Update progress
         processedItems++;
         double currentProgress = (double)processedItems / totalItems * 100;
         progress?.Report(currentProgress);

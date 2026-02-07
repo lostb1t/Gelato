@@ -207,7 +207,7 @@ namespace Gelato.Filters
 
             foreach (var meta in metas)
             {
-                var baseItem = _manager.IntoBaseItem(meta);
+                var baseItem = _manager.IntoBaseItem(meta, null);
                 if (baseItem is null)
                     continue;
 

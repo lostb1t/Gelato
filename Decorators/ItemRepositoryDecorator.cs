@@ -59,7 +59,7 @@ public sealed class GelatoItemRepository : IItemRepository
 
     public InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
     {
-        //return filter;
+       // return filter;
         var ctx = _http?.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
@@ -79,10 +79,10 @@ if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
                 )
             )
             {
-                if (filter.IsVirtualItem is null)
-                {
-                    filter.IsVirtualItem = false;
-                }
+              //  if (filter.IsVirtualItem is null)
+              //  {
+              //      filter.IsVirtualItem = false;
+               // }
                 if (filter.MaxPremiereDate is null && filterUnreleased)
                 {
                     // we dont have access to the query so can make a proper statement.
@@ -101,11 +101,11 @@ if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
         {
             filter.IsDeadPerson = null;
         }
-        else if (filter.IsMissing == true) 
-       {
+       // else if (filter.IsMissing == true) 
+       //{
           // jf deletes virtual items when theres a valid priamry versio . So just dont return it
-          filter.IsVirtualItem = false;
-        }
+       //   filter.IsVirtualItem = false;
+       // }
         return filter;
     }
 

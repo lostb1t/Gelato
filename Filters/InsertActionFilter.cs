@@ -61,18 +61,7 @@ private readonly IUserManager _userManager;
 
         
         // Check if already exists
-        var item = _manager.IntoBaseItem(stremioMeta);
-        var existing = _manager.FindExistingItem(item, user);
-        if (existing is not null)
-        {
-            _log.LogInformation(
-                "Media already exists; redirecting to canonical id {Id}",
-                existing.Id
-            );
-            ctx.ReplaceGuid(existing.Id);
-            await next();
-            return;
-        }
+   
 
 
         // Get root folder
@@ -83,6 +72,19 @@ private readonly IUserManager _userManager;
         if (root is null)
         {
             _log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
+            await next();
+            return;
+        }
+        
+        var item = _manager.IntoBaseItem(stremioMeta, root);
+        var existing = _manager.FindExistingItem(item, user);
+        if (existing is not null)
+        {
+            _log.LogInformation(
+                "Media already exists; redirecting to canonical id {Id}",
+                existing.Id
+            );
+            ctx.ReplaceGuid(existing.Id);
             await next();
             return;
         }

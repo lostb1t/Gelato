@@ -97,7 +97,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         }
         catch (Exception ex)
         {
-            _log.LogError(ex, "Error getting config");
+            _log.LogWarning(ex, "Error getting config");
             return new PluginConfiguration();
         }
     }
