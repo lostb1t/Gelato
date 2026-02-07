@@ -1002,7 +1002,6 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             series = tmpSeries;
             if (series.Id == Guid.Empty)
                 series.Id = Guid.NewGuid();
-            //series.PresentationUniqueKey = series.CreatePresentationUniqueKey();
 
             var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
             {
@@ -1284,7 +1283,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         
         item.Path = $"gelato://stub/{item.Id}";
         
-        if (parent is not null && (meta.Type is StremioMediaType.Episode || meta.Type is StremioMediaType.Movie)) {
+        if (parent is not null) {
             item.Path = $"{parent.Path}/{item.Id}/{item.Id}.strm";
             item.ShortcutPath = $"gelato://stub/{item.Id}";
             item.IsShortcut = true;

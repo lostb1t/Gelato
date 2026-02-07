@@ -195,6 +195,13 @@ if (filteredSources.Count > 1)
         .ToList();
 }
 
+      if (filteredSources.Count == 0)
+            {
+                filteredSources.Add(
+                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
+                );
+            }
+
 // Set the first source as default and update its ID
 if (filteredSources.Count > 0)
 {

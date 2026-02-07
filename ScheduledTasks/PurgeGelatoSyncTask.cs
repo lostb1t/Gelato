@@ -90,7 +90,7 @@ public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
        try {
         _library.DeleteItem(
             item,
-            new DeleteOptions { DeleteFileLocation = false },
+            new DeleteOptions { DeleteFileLocation = true },
             true);
 } catch {
   _repo.DeleteItem([item.Id]);
