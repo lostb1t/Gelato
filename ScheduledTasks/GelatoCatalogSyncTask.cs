@@ -247,10 +247,13 @@ namespace Gelato.Tasks
                         new CollectionCreationOptions
                         {
                             Name = cat.Name,
+                            IsLocked = true,
                             ProviderIds = new Dictionary<string, string> { { "Stremio", id } },
                         }
                     )
                     .ConfigureAwait(false);
+                collection.DisplayOrder = "Default";
+                await collection.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
             }
 
             return collection;
@@ -263,7 +266,9 @@ namespace Gelato.Tasks
             if (collection != null)
             {
                 var childrenIds = _library
-                    .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
+                    .GetItemList(new InternalItemsQuery { 
+                      Parent = collection, 
+                        Recursive = false })
                     .Select(i => i.Id)
                     .ToList();
 

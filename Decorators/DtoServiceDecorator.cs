@@ -30,6 +30,7 @@ namespace Gelato.Decorators
             BaseItem? owner = null
         )
         {
+          //options.EnableUserData = false;
             var dto = _inner.GetBaseItemDto(item, options, user, owner);
             Patch(dto, item, user, owner, options, false);
             return dto;
@@ -42,6 +43,15 @@ namespace Gelato.Decorators
             BaseItem? owner = null
         )
         {
+          // im going to hell for this
+          BaseItem item = items.FirstOrDefault();
+
+        if (item != null && item.GetBaseItemKind() == BaseItemKind.BoxSet)
+        {
+          options.EnableUserData = false;
+        }
+
+
             var list = _inner.GetBaseItemDtos(items, options, user, owner);
             for (int i = 0; i < list.Count; i++)
             {
