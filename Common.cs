@@ -463,6 +463,7 @@ public static class ActionContextExtensions
         "GetEpisodes",
         "GetSimilarItems",
         "GetLatestMedia",
+        "GetLatestMediaLegacy",
         "GetUpcomingEpisodes",
         "GetRecommendedItems",
         "GetMovieRecommendations",
