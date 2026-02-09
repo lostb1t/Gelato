@@ -467,6 +467,8 @@ public static class ActionContextExtensions
         "GetUpcomingEpisodes",
         "GetRecommendedItems",
         "GetMovieRecommendations",
+        "GetSuggestionsLegacy",
+        "GetSuggestions",
     };
 
     private static readonly HashSet<string> InsertableActionNames = new(
