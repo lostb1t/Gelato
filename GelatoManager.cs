@@ -656,7 +656,6 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             }
 
             target.Name = primary.Name;
-            //target.Path = path;
             target.PresentationUniqueKey = primary.PresentationUniqueKey;
             target.IsVirtualItem = false;
             target.ProviderIds = providerIds;
@@ -664,12 +663,16 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();     
             target.SetParent(parent);
             target.SetPrimaryVersionId(primary.Id.ToString());
-            
-            target.Path = $"{parent.Path}/{target.PrimaryVersionId}/{target.Id}.strm";
+
+            //target.Path = $"{parent.Path}/{primary.Id.ToString()}/{target.Id}.strm";
+            //target.Path = $"{parent.Path}/{target.Id}.strm";
+            target.Path = $"{parent.Path}/{primary.Name} ({primary.PremiereDate.Value.Year}) - {target.Id}.strm";
             target.ShortcutPath = path;
             target.IsShortcut = true;
             CreateStrmFile(target.Path, target.ShortcutPath);
-            target.DateModified = DateTime.UtcNow;
+target.DateModified = File.GetLastWriteTimeUtc(target.Path);
+
+            
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId))
             {
@@ -701,16 +704,17 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             {
                 _item.SetGelatoData("userIds", users);
             }
+                    if (!users.Any()) {
+              _library.DeleteItem(
+            item,
+            new DeleteOptions { DeleteFileLocation = true },
+            true);
+            }
         }
         
         _repo.SaveItems(stale, ct);
-             newVideos.Add(primary);
+        newVideos.Add(primary);
         MergeVersions(newVideos.ToArray());   
-     // primary.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-    //  primary.SetPrimaryVersionId(null);
-     // await primary
-     //       .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-     //       .ConfigureAwait(false);
 
         stopwatch.Stop();
   
@@ -784,15 +788,15 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
     }
 
     
-    public static void CreateStrmFile(string path, string content)
+public static void CreateStrmFile(string path, string content)
     {
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        var ignore = System.IO.Path.Combine(directory, ".ignore");
-        if (!File.Exists(ignore))
-            File.Create(ignore).Close();
+       // var ignore = System.IO.Path.Combine(directory, ".ignore");
+      //  if (!File.Exists(ignore))
+      //      File.Create(ignore).Close();
 
         if (!path.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
             path += ".strm";
@@ -1280,16 +1284,20 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         // important as its needed so jellyfin doesnt recalculate key
        // item.SetProviderId(MetadataProvider.Custom, item.Id.ToString());
         //item.Path = $"gelato://stub/{item.Id}";
-        
+        item.Name = meta.GetName();
+                item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{item.Id}";
-        
+        //item.DateModified = DateTime.UtcNow;
         if (parent is not null) {
-            item.Path = $"{parent.Path}/{item.Id}/{item.Id}.strm";
+            //item.Path = $"{parent.Path}/{item.Id}/{item.Id}.strm";
+            item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year}) - {item.Id}.strm";
             item.ShortcutPath = $"gelato://stub/{item.Id}";
             item.IsShortcut = true;
             CreateStrmFile(item.Path, item.ShortcutPath);
+            item.DateModified = File.GetLastWriteTimeUtc(item.Path);
+            Console.Write(item.DateModified);
         }
-        item.Name = meta.GetName();
+
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
         if (!string.IsNullOrWhiteSpace(meta.Description))
@@ -1329,13 +1337,13 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
 
         var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
-        item.DateLastRefreshed = DateTime.UtcNow;
+       // item.DateLastRefreshed = DateTime.UtcNow;
         item.IsVirtualItem = false;
         item.ProductionYear = meta.GetYear();
-        item.PremiereDate = meta.GetPremiereDate();
+
         // item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         item.Overview = meta.Description ?? meta.Overview;
-item.DateModified = DateTime.UtcNow;
+
                 item.DateLastSaved = DateTime.UtcNow;
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary))
