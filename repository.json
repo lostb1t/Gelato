@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.5.3] - 2026-02-09\n\n### 🐛 Bug Fixes\n\n- Add latest legacy endpoints to listing routes\n",
+        "checksum": "44e3a4f82103665d0ca12d05df40e3f3",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.5.3/gelato_0.25.5.3.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-09T11:56:16Z",
+        "version": "0.25.5.3"
+      },
+      {
         "changelog": "## [0.25.5.2] - 2026-02-09\n\n### 🐛 Bug Fixes\n\n- Better error handling during import\n",
         "checksum": "6830d099f3ed784693fc4e97a7b942ca",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.5.2/gelato_0.25.5.2.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2026-01-13T11:47:20Z",
         "version": "0.25.0.2"
-      },
-      {
-        "changelog": "## [0.25.0.1] - 2026-01-07\n\n### 🐛 Bug Fixes\n\n- Purge streams\n",
-        "checksum": "f4e50ddc941ee8890f1cb36713bc8561",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.0.1/gelato_0.25.0.1.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2026-01-07T15:10:38Z",
-        "version": "0.25.0.1"
       }
     ]
   }
