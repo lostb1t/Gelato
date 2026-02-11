@@ -65,8 +65,8 @@ public class GelatoManager
     private readonly IMediaStreamRepository _mediaStreams;
     private readonly ICollectionManager _collectionManager;
     private readonly GelatoStremioProviderFactory _stremioFactory;
-    private readonly Folder? _seriesFolder;
-    private readonly Folder? _movieFolder;
+    //private readonly Folder? _seriesFolder;
+    //private readonly Folder? _movieFolder;
 
     public GelatoManager(
         ILoggerFactory loggerFactory,
@@ -663,14 +663,17 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();     
             target.SetParent(parent);
             target.SetPrimaryVersionId(primary.Id.ToString());
-
+            target.PremiereDate = primary.PremiereDate;
+            target.Path = path;
             //target.Path = $"{parent.Path}/{primary.Id.ToString()}/{target.Id}.strm";
             //target.Path = $"{parent.Path}/{target.Id}.strm";
-            target.Path = $"{parent.Path}/{primary.Name} ({primary.PremiereDate.Value.Year}) - {target.Id}.strm";
+            if (cfg.UseStrm) {
+            target.Path = GetStrmPath(primary,item);
             target.ShortcutPath = path;
             target.IsShortcut = true;
             CreateStrmFile(target.Path, target.ShortcutPath);
-target.DateModified = File.GetLastWriteTimeUtc(target.Path);
+            }
+            target.DateModified = File.GetLastWriteTimeUtc(target.Path);
 
             
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
@@ -786,7 +789,9 @@ target.DateModified = File.GetLastWriteTimeUtc(target.Path);
             alternateVersions.Add(newVersion);
         }
     }
-
+public static String GetStrmPath(BaseItem parent, BaseItem item) {
+            return $"{Path.GetDirectoryName(parent.Path)}/{item.Name} ({item.PremiereDate.Value.Year})/{item.PremiereDate.Value.Year}) - {item.Id}.strm";
+}
     
 public static void CreateStrmFile(string path, string content)
     {
@@ -1256,16 +1261,18 @@ public static void CreateStrmFile(string path, string content)
         );
     }
 
-    public BaseItem IntoBaseItem(StremioMeta meta, Folder? parent)
+public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStrm = false, bool createStrm = false)
     {
         BaseItem item;
 
         var Id = meta.Id;
+      
 
         switch (meta.Type)
         {
             case StremioMediaType.Series:
                 item = new Series { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)) };
+                
                 break;
 
             case StremioMediaType.Movie:
@@ -1280,22 +1287,24 @@ public static void CreateStrmFile(string path, string content)
                 return null;
         }
         ;
-        
+
         // important as its needed so jellyfin doesnt recalculate key
        // item.SetProviderId(MetadataProvider.Custom, item.Id.ToString());
         //item.Path = $"gelato://stub/{item.Id}";
         item.Name = meta.GetName();
-                item.PremiereDate = meta.GetPremiereDate();
+        item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{item.Id}";
         //item.DateModified = DateTime.UtcNow;
-        if (parent is not null) {
-            //item.Path = $"{parent.Path}/{item.Id}/{item.Id}.strm";
-            item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year}) - {item.Id}.strm";
+        if (parent is not null && useStrm) {
+            //var baseFolder
+            item.Path = GetStrmPath(parent,item);
             item.ShortcutPath = $"gelato://stub/{item.Id}";
             item.IsShortcut = true;
-            CreateStrmFile(item.Path, item.ShortcutPath);
+            if (createStrm) {
+               CreateStrmFile(item.Path, item.ShortcutPath);
+            }
             item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-            Console.Write(item.DateModified);
+          
         }
 
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
