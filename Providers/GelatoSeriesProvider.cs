@@ -146,7 +146,7 @@ namespace Gelato.Providers
                     return;
                 }
 
-                await _manager.SyncSeriesTreesAsync(seriesFolder, meta, CancellationToken.None);
+                await _manager.SyncSeriesTreesAsync(cfg, meta, CancellationToken.None);
             }
             catch (Exception ex)
             {

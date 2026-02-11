@@ -370,6 +370,7 @@ if (x is null)
         }
         _log.LogDebug("inserting  {Name}", meta.Name);
         var baseItemKind = mediaType.ToBaseItem();
+        var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
 
         // load in full metadata if needed.
         if (
@@ -397,7 +398,6 @@ if (x is null)
                 return (existing, false);
             }
             var lookupId = meta.ImdbId ?? meta.Id;
-var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             meta = await cfg.stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
             if (meta is null)
@@ -443,7 +443,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             return (existing, false);
         }
 
-        var baseItem = IntoBaseItem(meta, parent);
+        var baseItem = IntoBaseItem(meta, parent, cfg.UseStrm, true);
 
         if (mediaType == StremioMediaType.Movie)
         {
@@ -454,7 +454,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         }
         else
         {
-            baseItem = await SyncSeriesTreesAsync(parent, meta, ct).ConfigureAwait(false);
+            baseItem = await SyncSeriesTreesAsync(cfg, meta, ct).ConfigureAwait(false);
         }
 
         if (baseItem is null)
@@ -665,10 +665,10 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             target.SetPrimaryVersionId(primary.Id.ToString());
             target.PremiereDate = primary.PremiereDate;
             target.Path = path;
-            //target.Path = $"{parent.Path}/{primary.Id.ToString()}/{target.Id}.strm";
-            //target.Path = $"{parent.Path}/{target.Id}.strm";
+
             if (cfg.UseStrm) {
-            target.Path = GetStrmPath(primary,item);
+              Console.WriteLine("STTRRRMMMMMMM");
+            target.Path = GetStrmPath(primary, item);
             target.ShortcutPath = path;
             target.IsShortcut = true;
             CreateStrmFile(target.Path, target.ShortcutPath);
@@ -789,8 +789,11 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             alternateVersions.Add(newVersion);
         }
     }
+
 public static String GetStrmPath(BaseItem parent, BaseItem item) {
-            return $"{Path.GetDirectoryName(parent.Path)}/{item.Name} ({item.PremiereDate.Value.Year})/{item.PremiereDate.Value.Year}) - {item.Id}.strm";
+       var dirInfo = new DirectoryInfo(parent.Path);
+       Console.WriteLine(dirInfo.FullName);
+       return $"{dirInfo.FullName}/{item.Name} ({item.PremiereDate.Value.Year})/{item.Name} ({item.PremiereDate.Value.Year}) - {item.Id}.strm";
 }
     
 public static void CreateStrmFile(string path, string content)
@@ -962,11 +965,13 @@ public static void CreateStrmFile(string path, string content)
     }
 
     public async Task<BaseItem?> SyncSeriesTreesAsync(
-        Folder seriesRootFolder,
+       // Folder seriesRootFolder,
+        PluginConfiguration cfg,
         StremioMeta seriesMeta,
         CancellationToken ct
     )
     {
+        var seriesRootFolder = cfg.SeriesFolder;
         // Early validation
         if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
         {
@@ -989,7 +994,7 @@ public static void CreateStrmFile(string path, string content)
         }
 
         // Create or get series
-        var tmpSeries = (Series)IntoBaseItem(seriesMeta, seriesRootFolder);
+        var tmpSeries = (Series)IntoBaseItem(seriesMeta, seriesRootFolder, cfg.UseStrm, true);
 
         if (tmpSeries.ProviderIds is null || tmpSeries.ProviderIds.Count == 0)
         {
@@ -1154,7 +1159,7 @@ public static void CreateStrmFile(string path, string content)
                 );
 
                 epMeta.Type = StremioMediaType.Episode;
-                var episode = (Episode)IntoBaseItem(epMeta, seriesRootFolder);
+                var episode = (Episode)IntoBaseItem(epMeta, seriesRootFolder, cfg.UseStrm, true);
 
                 episode.IndexNumber = index;
                 episode.ParentIndexNumber = season.IndexNumber;
@@ -1239,7 +1244,7 @@ public static void CreateStrmFile(string path, string content)
                     );
                     continue;
                 }
-                await SyncSeriesTreesAsync(series.GetParent() as Folder, meta, cancellationToken);
+                await SyncSeriesTreesAsync(cfg, meta, cancellationToken);
                 processed++;
             }
             catch (Exception ex)
