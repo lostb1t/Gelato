@@ -112,8 +112,9 @@ public class GelatoManager
         if (addedItems == null || addedItems.Count == 0)
             return;
 
-        // Filter only Gelato items
-        var gelatoItems = addedItems.Where(IsGelato).ToList();
+var gelatoItems = addedItems.Where(
+    x => IsGelato(x) && !x.IsShortcut
+).ToList();
 
         if (gelatoItems.Count == 0)
             return;
@@ -667,8 +668,7 @@ if (x is null)
             target.Path = path;
 
             if (cfg.UseStrm) {
-              Console.WriteLine("STTRRRMMMMMMM");
-            target.Path = GetStrmPath(primary, item);
+            target.Path = GetStrmPath(parent, target);
             target.ShortcutPath = path;
             target.IsShortcut = true;
             CreateStrmFile(target.Path, target.ShortcutPath);
@@ -792,19 +792,15 @@ if (x is null)
 
 public static String GetStrmPath(BaseItem parent, BaseItem item) {
        var dirInfo = new DirectoryInfo(parent.Path);
-       Console.WriteLine(dirInfo.FullName);
        return $"{dirInfo.FullName}/{item.Name} ({item.PremiereDate.Value.Year})/{item.Name} ({item.PremiereDate.Value.Year}) - {item.Id}.strm";
 }
     
 public static void CreateStrmFile(string path, string content)
     {
         var directory = Path.GetDirectoryName(path);
+               Console.WriteLine(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
-
-       // var ignore = System.IO.Path.Combine(directory, ".ignore");
-      //  if (!File.Exists(ignore))
-      //      File.Create(ignore).Close();
 
         if (!path.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
             path += ".strm";
