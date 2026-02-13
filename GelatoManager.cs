@@ -260,7 +260,8 @@ var gelatoItems = addedItems.Where(
             );
         }
         var ignore = System.IO.Path.Combine(path, ".ignore");
-        File.Delete(ignore);
+       //File.Create(ignore).Close();
+       File.Delete(ignore);
     }
 
     public Folder? TryGetMovieFolder(Guid userId)
@@ -293,13 +294,17 @@ var gelatoItems = addedItems.Where(
         {
             return null;
         }
-
+        //path = $"gelato://stubfolder/{folder.Name}";
         SeedFolder(path);
-        return _repo
+        var folder = _repo
             .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
-    }
+       //folder.Path = $"gelato://stubfolder/{folder.Name}";
+       //_repo.SaveItems([folder], CancellationToken.None);
+        
+        return folder;
+    } 
 
     private static bool IsValidUrl(string? url)
     {
@@ -658,7 +663,7 @@ if (x is null)
 
             target.Name = primary.Name;
             target.PresentationUniqueKey = primary.PresentationUniqueKey;
-            target.IsVirtualItem = false;
+            target.IsVirtualItem = true;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();     
@@ -672,9 +677,12 @@ if (x is null)
             target.ShortcutPath = path;
             target.IsShortcut = true;
             CreateStrmFile(target.Path, target.ShortcutPath);
-            }
             target.DateModified = File.GetLastWriteTimeUtc(target.Path);
+            target.DateLastRefreshed = target.DateModified;
+                        target.DateLastSaved = target.DateLastSaved;
+          }
 
+     
             
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId))
@@ -1295,18 +1303,22 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{item.Id}";
-        //item.DateModified = DateTime.UtcNow;
+        item.DateModified = DateTime.UtcNow;
+                        item.DateLastSaved = DateTime.UtcNow;
         if (parent is not null && useStrm) {
             //var baseFolder
             item.Path = GetStrmPath(parent,item);
             item.ShortcutPath = $"gelato://stub/{item.Id}";
             item.IsShortcut = true;
             if (createStrm) {
-               CreateStrmFile(item.Path, item.ShortcutPath);
+              CreateStrmFile(item.Path, item.ShortcutPath);
             }
             item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-          
+                      item.DateLastRefreshed = item.DateModified;
+                        item.DateLastSaved = item.DateLastSaved;
         }
+        
+        item.IsVirtualItem = true;
 
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
@@ -1354,7 +1366,7 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         // item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         item.Overview = meta.Description ?? meta.Overview;
 
-                item.DateLastSaved = DateTime.UtcNow;
+
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary))
         {
