@@ -16,7 +16,6 @@ using Jellyfin.Extensions;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
@@ -618,6 +617,7 @@ namespace Gelato.Decorators
                 SupportsDirectPlay = true,
             };
 
+            // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
             if (!string.IsNullOrEmpty(bingeGroup))
             {
                 info.RequiredHttpHeaders = new Dictionary<string, string>
