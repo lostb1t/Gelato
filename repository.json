@@ -8,6 +8,30 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.25.6.1] - 2026-02-13\n\n### 🐛 Bug Fixes\n\n- Missing import\n",
+        "checksum": "f337ae5f408689fccaa17e27a275f833",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.6.1/gelato_0.25.6.1.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-13T13:03:05Z",
+        "version": "0.25.6.1"
+      },
+      {
+        "changelog": "## [0.25.6.0] - 2026-02-13\n\n### 🚀 Features\n\n- Nudge release\n",
+        "checksum": "",
+        "sourceUrl": "",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-13T12:51:43Z",
+        "version": "0.25.6.0"
+      },
+      {
+        "changelog": "## [0.25.5.4] - 2026-02-13\n\n### 🐛 Bug Fixes\n\n- Add latest legacy endpoints to listing routes\n",
+        "checksum": "",
+        "sourceUrl": "",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-13T12:35:47Z",
+        "version": "0.25.5.4"
+      },
+      {
         "changelog": "## [0.25.5.3] - 2026-02-09\n\n### 🐛 Bug Fixes\n\n- Add latest legacy endpoints to listing routes\n",
         "checksum": "44e3a4f82103665d0ca12d05df40e3f3",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.5.3/gelato_0.25.5.3.zip",
@@ -222,30 +246,6 @@
         "targetAbi": "10.11.0.0",
         "timestamp": "2026-01-17T11:55:39Z",
         "version": "0.25.1.1"
-      },
-      {
-        "changelog": "## [0.25.1.0] - 2026-01-15\n\n### 🚀 Features\n\n- Add timer to stream sync log\n\n### 🐛 Bug Fixes\n\n- Wrong primary version id format resulting in dupes\n",
-        "checksum": "4c869ad58e81217a4cbaa9b3dc188ec6",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.0/gelato_0.25.1.0.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2026-01-15T11:02:52Z",
-        "version": "0.25.1.0"
-      },
-      {
-        "changelog": "## [0.25.0.3] - 2026-01-13\n\n### 🐛 Bug Fixes\n\n- Squeezing out the last drop of performance for loading streams\n",
-        "checksum": "345155d0b6c54c96109dd1b279cdd93d",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.0.3/gelato_0.25.0.3.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2026-01-13T11:58:11Z",
-        "version": "0.25.0.3"
-      },
-      {
-        "changelog": "## [0.25.0.2] - 2026-01-13\n\n### 🐛 Bug Fixes\n\n- Use jellyfin bulk save for streams. At least i think it is\n",
-        "checksum": "56ad8609ee94417edff42365d894a572",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.0.2/gelato_0.25.0.2.zip",
-        "targetAbi": "10.11.0.0",
-        "timestamp": "2026-01-13T11:47:20Z",
-        "version": "0.25.0.2"
       }
     ]
   }
