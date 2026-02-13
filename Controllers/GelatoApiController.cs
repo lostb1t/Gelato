@@ -51,6 +51,15 @@ public sealed class GelatoApiController : ControllerBase
         return meta;
     }
 
+    [HttpGet("catalogs")]
+    [Authorize]
+    public async Task<ActionResult<List<StremioCatalog>>> GetCatalogs()
+    {
+        var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+        var manifest = await cfg.stremio.GetManifestAsync();
+        return Ok(manifest?.Catalogs ?? new List<StremioCatalog>());
+    }
+
     [HttpGet("stream")]
     public async Task<IActionResult> TorrentStream(
         [FromQuery] string ih,

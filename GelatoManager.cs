@@ -669,6 +669,11 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
             }
             
             target.SetGelatoData("name", s.Name);
+            target.SetGelatoData("description", s.Description);
+            if (!string.IsNullOrEmpty(s.BehaviorHints?.BingeGroup))
+            {
+                target.SetGelatoData("bingeGroup", s.BehaviorHints.BingeGroup);
+            }
             target.SetGelatoData("index", index);
 
             newVideos.Add(target);

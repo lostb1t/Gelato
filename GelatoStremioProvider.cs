@@ -645,6 +645,7 @@ namespace Gelato
         public string Url { get; set; } = "";
         public string? Title { get; set; }
         public string? Name { get; set; }
+        public string? Description { get; set; }
         public string? Quality { get; set; }
         public string? Subtitle { get; set; }
         public string? Audio { get; set; }
