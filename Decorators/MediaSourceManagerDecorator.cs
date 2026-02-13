@@ -16,7 +16,6 @@ using Jellyfin.Extensions;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
@@ -596,6 +595,11 @@ namespace Gelato.Decorators
         {
             ArgumentNullException.ThrowIfNull(item);
 
+            var streamName = item.GelatoData<string>("name");
+            var streamDesc = item.GelatoData<string>("description");
+            var bingeGroup = item.GelatoData<string>("bingeGroup");
+            var richName = !string.IsNullOrEmpty(streamDesc) ? $"{streamName}\n{streamDesc}" : streamName;
+
             var info = new MediaSourceInfo
             {
                 Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
@@ -603,7 +607,7 @@ namespace Gelato.Decorators
                 Protocol = MediaProtocol.Http,
                 MediaStreams = _inner.GetMediaStreams(item.Id),
                 MediaAttachments = _inner.GetMediaAttachments(item.Id),
-                Name = item.GelatoData<string>("name"),
+                Name = richName,
                 Path = item.Path,
                 RunTimeTicks = item.RunTimeTicks,
                 Container = item.Container,
@@ -612,6 +616,15 @@ namespace Gelato.Decorators
                 SupportsDirectStream = true,
                 SupportsDirectPlay = true,
             };
+
+            // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
+            if (!string.IsNullOrEmpty(bingeGroup))
+            {
+                info.RequiredHttpHeaders = new Dictionary<string, string>
+                {
+                    { "X-Gelato-BingeGroup", bingeGroup }
+                };
+            }
 
             if (user is not null)
             {
