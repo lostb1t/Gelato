@@ -261,7 +261,7 @@ var gelatoItems = addedItems.Where(
         }
         var ignore = System.IO.Path.Combine(path, ".ignore");
        //File.Create(ignore).Close();
-       File.Delete(ignore);
+        File.Delete(ignore);
     }
 
     public Folder? TryGetMovieFolder(Guid userId)
@@ -296,14 +296,14 @@ var gelatoItems = addedItems.Where(
         }
         //path = $"gelato://stubfolder/{folder.Name}";
         SeedFolder(path);
-        var folder = _repo
+        return _repo
             .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
        //folder.Path = $"gelato://stubfolder/{folder.Name}";
        //_repo.SaveItems([folder], CancellationToken.None);
         
-        return folder;
+        //return folder;
     } 
 
     private static bool IsValidUrl(string? url)
@@ -456,7 +456,8 @@ if (x is null)
            // CreateStrmFile(target.Path, target.ShortcutPath);
             //target.DateModified = DateTime.UtcNow;
             parent.AddChild(baseItem);
-            
+            //baseItem.SetParent(parent);
+            //_library.CreateItem(baseItem, parent);
         }
         else
         {
@@ -806,7 +807,7 @@ public static String GetStrmPath(BaseItem parent, BaseItem item) {
 public static void CreateStrmFile(string path, string content)
     {
         var directory = Path.GetDirectoryName(path);
-               Console.WriteLine(path);
+            //   Console.WriteLine(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
@@ -1314,11 +1315,13 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
               CreateStrmFile(item.Path, item.ShortcutPath);
             }
             item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-                      item.DateLastRefreshed = item.DateModified;
-                        item.DateLastSaved = item.DateLastSaved;
+            item.DateLastRefreshed = item.DateModified;
+            item.DateLastSaved = item.DateLastSaved;
+            
+            
         }
         
-        item.IsVirtualItem = true;
+       // item.IsVirtualItem = true;
 
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
@@ -1355,7 +1358,6 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         {
             item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
         }
-           
 
         var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
@@ -1365,7 +1367,6 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
 
         // item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         item.Overview = meta.Description ?? meta.Overview;
-
 
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary))
