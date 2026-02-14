@@ -130,8 +130,10 @@ namespace Gelato.Decorators
                             );
                             try
                             {
-                                await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                                var count = await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                                if (count > 0) {
                                 manager.SetStreamSync(cacheKey);
+                              }
                             }
                             catch (Exception ex)
                             {

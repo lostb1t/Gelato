@@ -537,7 +537,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
     /// sorting. We make sure to keep a one stable version based on primaryversionid
     /// </summary>
     /// <returns></returns>
-    public async Task SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
+    public async Task<int> SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
         var inv = CultureInfo.InvariantCulture;
@@ -545,7 +545,7 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         if (IsStream(item as Video))
         {
             _log.LogWarning($"SyncStreams: item is a stream, skipping");
-            return;
+            return 0;
         }
 
         var isEpisode = item is Episode;
@@ -553,14 +553,14 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         if (parent is null)
         {
             _log.LogWarning($"SyncStreams: no parent, skipping");
-            return;
+            return 0;
         }
 
         var uri = StremioUri.FromBaseItem(item);
         if (uri is null)
         {
             _log.LogError($"Unable to build Stremio URI for {item.Name}");
-            return;
+            return 0;
         }
 
         var primary = (Video)item;
@@ -712,6 +712,8 @@ var cfg = GelatoPlugin.Instance!.GetConfig(user != null ? user.Id : Guid.Empty);
         _log.LogInformation(
             $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
         );
+        
+        return acceptable.Count;
     }
 
     public static void CreateStrmFile(string path, string content)
