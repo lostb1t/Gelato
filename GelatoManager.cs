@@ -656,7 +656,7 @@ var existing = _repo
                     isEpisode && item is Episode e
                         ? new Episode
                         {
-                            Id = id,
+                            Id = _library.GetNewItemId(path, typeof(Episode)),
                             SeriesId = e.SeriesId,
                             SeriesName = e.SeriesName,
                             SeasonId = e.SeasonId,
@@ -1044,7 +1044,8 @@ public static void CreateStrmFile(string path, string content)
             // important
             series.ParentId = seriesRootFolder.Id;
             await series.RefreshMetadata(options, ct).ConfigureAwait(false);
-            seriesRootFolder.AddChild(series);
+            //seriesRootFolder.AddChild(series);
+            SaveItem(series, seriesRootFolder);
             await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
@@ -1118,7 +1119,8 @@ public static void CreateStrmFile(string path, string content)
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 //season.SetProviderId(MetadataProvider.Custom, season.Id.ToString());
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
-                series.AddChild(season);
+                //series.AddChild(season);
+                SaveItem(season, series);
                 seasonsInserted++;
 
                 //_log.LogInformation("Created season with id {SeasonId} and index {Index}", season.Id, season.IndexNumber);
@@ -1324,12 +1326,7 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
                 break;
 
             case StremioMediaType.Movie:
-                //item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
-                var id = _library.GetNewItemId(Id, typeof(Movie));
-                var path = $"gelato://stub/{id}";
-               // var _id = _library.GetNewItemId(path, typeof(Movie));        
-
-                item = new Movie { Id = id };
+                item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
             break;
 
             case StremioMediaType.Episode:
@@ -1341,44 +1338,24 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         }
         ;
 
-        // important as its needed so jellyfin doesnt recalculate key
-       // item.SetProviderId(MetadataProvider.Custom, item.Id.ToString());
-        //item.Path = $"gelato://stub/{item.Id}";
+        
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{item.Id}";
         item.DateModified = DateTime.UtcNow;
-                        item.DateLastSaved = DateTime.UtcNow;
+        item.DateLastSaved = DateTime.UtcNow;
         
+        only videos should use strm, but fokfers should have acreal filepath
           if (parent is not null && useStrm) {
             item.ShortcutPath = item.Path;
-            
-
             item.Path = GetStrmPath(parent, item, "placeholder");
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
-
- // Console.WriteLine(item.Id);
-
-            //item.Id = _library.GetNewItemId(item.Path, typeof(Movie));
-            
-            
-
             item.IsShortcut = true;
-          //  if (createStrm) {
-           //   CreateStrmFile(item.Path, item.ShortcutPath);
-                                             //var directory = Path.GetDirectoryName(item.Path);
-          //    var f = new Folder {
-         //     Path = directory;
-          //  };
-          //  parent.AddChild(f);
-
-           // }
             item.DateModified = File.GetLastWriteTimeUtc(item.Path);
             item.DateLastRefreshed = item.DateModified;
             item.DateLastSaved = item.DateLastSaved;    
         }
         
-       // item.IsVirtualItem = true;
 
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
@@ -1418,11 +1395,9 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
 
         var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? Id);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
-       // item.DateLastRefreshed = DateTime.UtcNow;
         item.IsVirtualItem = false;
         item.ProductionYear = meta.GetYear();
 
-        // item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         item.Overview = meta.Description ?? meta.Overview;
 
         var primary = meta.Poster ?? meta.Thumbnail;
