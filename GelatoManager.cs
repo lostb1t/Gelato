@@ -455,7 +455,8 @@ if (x is null)
         {
            // CreateStrmFile(target.Path, target.ShortcutPath);
             //target.DateModified = DateTime.UtcNow;
-            parent.AddChild(baseItem);
+           // parent.AddChild(baseItem);
+            SaveItem(baseItem, parent, cfg.UseStrm);
             //baseItem.SetParent(parent);
             //_library.CreateItem(baseItem, parent);
         }
@@ -573,8 +574,12 @@ if (x is null)
             return;
         }
 
-        var primary = (Video)item;
-
+        var primary = item as Video;
+        if (primary is null)
+        {
+            _log.LogError("SyncStreams: item is not a Video type, itemType={ItemType}", item?.GetType()?.Name);
+            return;
+        }
 
         var providerIds = primary.ProviderIds ?? new Dictionary<string, string>();
         providerIds.TryAdd("Stremio", uri.ExternalId);
@@ -617,11 +622,11 @@ if (x is null)
           //  IsVirtualItem = true,
         };
 
-        var existing = _repo
-            .GetItemList(query)
-            .OfType<Video>()
-            .Where(v => IsStream(v))
-            .ToDictionary(v => v.Id);
+var existing = _repo
+    .GetItemList(query)
+    .OfType<Video>()
+    .Where(v => IsStream(v))
+    .ToDictionary(v => v.GelatoData<Guid>("guid"));
 
         var newVideos = new List<Video>();
 
@@ -641,8 +646,9 @@ if (x is null)
 
             var id = s.GetGuid();
             //var id = Guid.NewGuid();
-            var target = existing.GetValueOrDefault(id);
-            var isNew = target is null;
+           // var target = existing.GetValueOrDefault(id);
+            Video target;
+            var isNew = !existing.TryGetValue(id, out target);
 
             if (isNew)
             {
@@ -659,7 +665,7 @@ if (x is null)
                             ParentIndexNumber = e.ParentIndexNumber,
                             PremiereDate = e.PremiereDate,
                         }
-                        : new Movie { Id = id };
+                        : new Movie { Id = _library.GetNewItemId(path, typeof(Movie)) };
             }
 
             target.Name = primary.Name;
@@ -668,22 +674,25 @@ if (x is null)
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();     
-            target.SetParent(parent);
+           // target.SetParent(parent);
             target.SetPrimaryVersionId(primary.Id.ToString());
             target.PremiereDate = primary.PremiereDate;
             target.Path = path;
 
             if (cfg.UseStrm) {
-            target.Path = GetStrmPath(parent, target);
+            target.Path = GetStrmPath(parent, target, id.ToString());
+            target.Id = _library.GetNewItemId(target.Path, target.GetType());
             target.ShortcutPath = path;
             target.IsShortcut = true;
+            Console.WriteLine(target.Path);
+            Console.WriteLine("YO");
             CreateStrmFile(target.Path, target.ShortcutPath);
             target.DateModified = File.GetLastWriteTimeUtc(target.Path);
             target.DateLastRefreshed = target.DateModified;
-                        target.DateLastSaved = target.DateLastSaved;
+            target.DateLastSaved = target.DateLastSaved;
           }
 
-     
+
             
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId))
@@ -694,11 +703,13 @@ if (x is null)
             
             target.SetGelatoData("name", s.Name);
             target.SetGelatoData("index", index);
+            target.SetGelatoData("guid", id);
 
             newVideos.Add(target);
         }
 
-        _repo.SaveItems(newVideos, ct);
+      //  _repo.SaveItems(newVideos, ct);
+newVideos = SaveItems(newVideos, parent, cfg.UseStrm).Cast<Video>().ToList();
 
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
         var stale = existing.Values
@@ -799,9 +810,9 @@ if (x is null)
         }
     }
 
-public static String GetStrmPath(BaseItem parent, BaseItem item) {
+public static String GetStrmPath(BaseItem parent, BaseItem item, string id) {
        var dirInfo = new DirectoryInfo(parent.Path);
-       return $"{dirInfo.FullName}/{item.Name} ({item.PremiereDate.Value.Year})/{item.Name} ({item.PremiereDate.Value.Year}) - {item.Id}.strm";
+       return $"{dirInfo.FullName}/{item.Name} ({item.PremiereDate.Value.Year})/{item.Name} ({item.PremiereDate.Value.Year}) {id}.strm";
 }
     
 public static void CreateStrmFile(string path, string content)
@@ -1271,13 +1282,40 @@ public static void CreateStrmFile(string path, string content)
         );
     }
 
+   public BaseItem SaveItem(BaseItem item, Folder parent = null, bool useStrm = false) {
+        return SaveItems(new[] { item }, parent, useStrm).FirstOrDefault();
+   }
+
+   public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent, bool useStrm = false) {
+        foreach (var item in items) {
+            if (useStrm) {
+                CreateStrmFile(item.Path, item.ShortcutPath);
+                var directory = Path.GetDirectoryName(item.Path);
+                var new_parent = new Folder {
+                    //title = item.
+                    Path = directory
+                };
+               // parent.AddChild(item);
+                parent.AddChild(new_parent);
+                new_parent.AddChild(item);
+            } else {
+                parent.AddChild(item);
+            }
+        }
+                foreach (var item in items) {
+        //Console.WriteLine(item.Part);
+      };
+        _repo.SaveItems(items.ToList(), CancellationToken.None);
+        return items;
+   }
+    
 public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStrm = false, bool createStrm = false)
     {
         BaseItem item;
 
         var Id = meta.Id;
       
-
+ 
         switch (meta.Type)
         {
             case StremioMediaType.Series:
@@ -1286,8 +1324,13 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
                 break;
 
             case StremioMediaType.Movie:
-                item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
-                break;
+                //item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
+                var id = _library.GetNewItemId(Id, typeof(Movie));
+                var path = $"gelato://stub/{id}";
+               // var _id = _library.GetNewItemId(path, typeof(Movie));        
+
+                item = new Movie { Id = id };
+            break;
 
             case StremioMediaType.Episode:
                 item = new Episode { Id = _library.GetNewItemId(Id, typeof(Episode)) };
@@ -1306,19 +1349,33 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         item.Path = $"gelato://stub/{item.Id}";
         item.DateModified = DateTime.UtcNow;
                         item.DateLastSaved = DateTime.UtcNow;
-        if (parent is not null && useStrm) {
-            //var baseFolder
-            item.Path = GetStrmPath(parent,item);
-            item.ShortcutPath = $"gelato://stub/{item.Id}";
+        
+          if (parent is not null && useStrm) {
+            item.ShortcutPath = item.Path;
+            
+
+            item.Path = GetStrmPath(parent, item, "placeholder");
+            item.Id = _library.GetNewItemId(item.Path, item.GetType());
+
+ // Console.WriteLine(item.Id);
+
+            //item.Id = _library.GetNewItemId(item.Path, typeof(Movie));
+            
+            
+
             item.IsShortcut = true;
-            if (createStrm) {
-              CreateStrmFile(item.Path, item.ShortcutPath);
-            }
+          //  if (createStrm) {
+           //   CreateStrmFile(item.Path, item.ShortcutPath);
+                                             //var directory = Path.GetDirectoryName(item.Path);
+          //    var f = new Folder {
+         //     Path = directory;
+          //  };
+          //  parent.AddChild(f);
+
+           // }
             item.DateModified = File.GetLastWriteTimeUtc(item.Path);
             item.DateLastRefreshed = item.DateModified;
-            item.DateLastSaved = item.DateLastSaved;
-            
-            
+            item.DateLastSaved = item.DateLastSaved;    
         }
         
        // item.IsVirtualItem = true;

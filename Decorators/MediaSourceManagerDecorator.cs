@@ -152,6 +152,12 @@ var primaryItem = manager.IsStream(video)
     ? _libraryManager.GetItemById(video.PrimaryVersionId)
     : item;
 
+if (primaryItem is null)
+{
+    _log.LogError("GetStaticMediaSources: primaryItem is null for item {ItemId}", item?.Id);
+    return Array.Empty<MediaSourceInfo>();
+}
+
 var sources = _inner.GetStaticMediaSources(primaryItem, enablePathSubstitution, user).ToList();
 video = (Video)primaryItem;
 
@@ -177,7 +183,38 @@ var filteredSources = sources
     })
     .ToList();
 
+var query = new InternalItemsQuery
+                {
+                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                    HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
+                    Recursive = false,
+                    GroupByPresentationUniqueKey = false,
+                    GroupBySeriesPresentationUniqueKey = false,
+                    CollapseBoxSetItems = false,
+                    IsDeadPerson = true
+                };
+            
 
+            var gelatoSources = _repo
+    .GetItemList(query)
+    .OfType<Video>();
+foreach (var v in gelatoSources)
+{
+    Console.WriteLine(v.Path);
+    Console.WriteLine(v.Name);
+    var p = v.GetParent();
+    if (p != null)
+    {
+        Console.WriteLine(p.Path);
+        Console.WriteLine(p.Name);
+    }
+    else
+    {
+        Console.WriteLine("Parent is null");
+    }
+    Console.WriteLine("-------");
+}    
+    
 _log.LogInformation(
     "Found {StreamCount} streams. UserId={UserId} GelatoId={StremioId}",
     filteredSources.Count,
