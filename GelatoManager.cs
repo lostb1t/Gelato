@@ -612,7 +612,7 @@ var existing = _repo
            // target.SetParent(parent);
             target.SetPrimaryVersionId(primary.Id.ToString());
             target.PremiereDate = primary.PremiereDate;
-            //target.Path = path;
+            target.Path = path;
 
   
 
@@ -1223,15 +1223,21 @@ public static void CreateStrmFile(string path, string content)
        
           
           if (item.IsFolder) {
-               item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
+                item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
                 Directory.CreateDirectory(item.Path);
           } else {
+            item.ShortcutPath = item.Path";
+                        item.IsShortcut = true;
+            if (!IsStream(item)) {
+           // item.ShortcutPath = $"gelato://stub/{item.Id}";
+            item.Path = GetStrmPath(parent, item, null);
 
-                        item.ShortcutPath = $"gelato://stub/{item.Id}";
+            } else {
+
             item.Path = GetStrmPath(parent, item, item.GelatoData("guid"));
-            item.IsShortcut = true;
+            }
             //Console.WriteLine(item.Path);
-                CreateStrmFile(item.Path, item.ShortcutPath);
+            CreateStrmFile(item.Path, item.ShortcutPath);
             }
             
                         item.Id = _library.GetNewItemId(item.Path, item.GetType());
@@ -1257,12 +1263,12 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         switch (meta.Type)
         {
             case StremioMediaType.Series:
-                item = new Series { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)) };
+                item = new Series { Id = _library.GetNewItemId(Id, typeof(Series)) };
                 
                 break;
 
             case StremioMediaType.Movie:
-                item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
+                item = new Movie { Id = _library.GetNewItemId(Id, typeof(Movie)) };
             break;
 
             case StremioMediaType.Episode:
@@ -1277,7 +1283,8 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
-        //item.DateModified = DateTime.UtcNow;
+        item.Path = $"gelato://stub/{item.Id}";
+//item.DateModified = DateTime.UtcNow;
         //item.DateLastSaved = DateTime.UtcNow;
         
 
