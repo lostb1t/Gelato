@@ -15,7 +15,6 @@ using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Extensions;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
@@ -118,9 +117,14 @@ namespace Gelato.Decorators {
                                 "GetStaticMediaSources refreshing streams for {Id}",
                                 item.Id
                             );
-                            try {
-                                await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                            
+                            try
+                            {
+                                var count = await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                                if (count > 0) {
+
                                 manager.SetStreamSync(cacheKey);
+                              }
                             }
                             catch (Exception ex) {
                                 _log.LogError(ex, "Failed to sync streams");
@@ -186,11 +190,11 @@ namespace Gelato.Decorators {
                     .ToList();
             }
 
-            if (filteredSources.Count == 0) {
-                filteredSources.Add(
-                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
-                );
-            }
+            //if (filteredSources.Count == 0) {
+            //    filteredSources.Add(
+            //        GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
+            //    );
+           // }
 
             // Set the first source as default and update its ID
             if (filteredSources.Count > 0) {
@@ -513,64 +517,6 @@ namespace Gelato.Decorators {
                 cancellationToken
             );
 
-        private MediaSourceInfo GetVersionInfo(
-            bool enablePathSubstitution,
-            BaseItem item,
-            MediaSourceType type,
-            HttpContext ctx,
-            User user = null
-        ) {
-            ArgumentNullException.ThrowIfNull(item);
-
-            var info = new MediaSourceInfo {
-                Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                ETag = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                Protocol = MediaProtocol.Http,
-                MediaStreams = _inner.GetMediaStreams(item.Id),
-                MediaAttachments = _inner.GetMediaAttachments(item.Id),
-                Name = item.GelatoData<string>("name"),
-                Path = item.Path,
-                RunTimeTicks = item.RunTimeTicks,
-                Container = item.Container,
-                Size = item.Size,
-                Type = type,
-                SupportsDirectStream = true,
-                SupportsDirectPlay = true,
-            };
-
-            if (user is not null) {
-                info.SupportsTranscoding = user.HasPermission(
-                    PermissionKind.EnableVideoPlaybackTranscoding
-                );
-                info.SupportsDirectStream = user.HasPermission(
-                    PermissionKind.EnablePlaybackRemuxing
-                );
-            }
-            if (string.IsNullOrEmpty(info.Path)) {
-                info.Type = MediaSourceType.Placeholder;
-            }
-
-            var video = item as Video;
-            if (video is not null) {
-                info.IsoType = video.IsoType;
-                info.VideoType = video.VideoType;
-                info.Video3DFormat = video.Video3DFormat;
-                info.Timestamp = video.Timestamp;
-                info.IsRemote = true;
-            }
-
-            // massive cheat. clients will direct play remote files directly. But we always want to proxy it.
-            // just fake a real file.
-            if (ctx.GetActionName() == "GetPostedPlaybackInfo") {
-                info.IsRemote = false;
-                info.Protocol = MediaProtocol.File;
-            }
-
-
-            info.Bitrate = item.TotalBitrate;
-            info.InferTotalBitrate();
-
-            return info;
-        }
+        
     }
 }

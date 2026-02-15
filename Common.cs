@@ -463,9 +463,12 @@ public static class ActionContextExtensions
         "GetEpisodes",
         "GetSimilarItems",
         "GetLatestMedia",
+        "GetLatestMediaLegacy",
         "GetUpcomingEpisodes",
         "GetRecommendedItems",
         "GetMovieRecommendations",
+        "GetSuggestionsLegacy",
+        "GetSuggestions",
     };
 
     private static readonly HashSet<string> InsertableActionNames = new(

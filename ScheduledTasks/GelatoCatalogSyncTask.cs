@@ -200,10 +200,18 @@ namespace Gelato.Tasks
 
                     _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
                 }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
+catch (OperationCanceledException) when (ct.IsCancellationRequested)
+{
+    throw;
+}
+catch (OperationCanceledException ex)
+{
+    _log.LogWarning(
+        ex,
+        "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
+        cat.Id
+    );
+}
                 catch (Exception ex)
                 {
                     _log.LogError(

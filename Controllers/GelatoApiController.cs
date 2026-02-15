@@ -16,6 +16,7 @@ using Microsoft.Extensions.Logging;
 using MonoTorrent;
 using MonoTorrent.Client;
 using MonoTorrent.Streaming;
+using Gelato.Common;
 
 namespace Gelato;
 
@@ -25,12 +26,18 @@ public sealed class GelatoApiController : ControllerBase
 {
     private readonly ILogger<GelatoApiController> _log;
     private readonly IApplicationPaths _appPaths;
+    private readonly GelatoManager _gelatoManager;
     private readonly string _downloadPath;
 
-    public GelatoApiController(ILogger<GelatoApiController> log, IApplicationPaths appPaths)
+    public GelatoApiController(
+        ILogger<GelatoApiController> log,
+        IApplicationPaths appPaths,
+        GelatoManager gelatoManager
+    )
     {
         _log = log;
         _appPaths = appPaths;
+        _gelatoManager = gelatoManager;
         _downloadPath = Path.Combine(_appPaths.CachePath, "gelato-torrents");
         Directory.CreateDirectory(_downloadPath);
     }
@@ -49,6 +56,25 @@ public sealed class GelatoApiController : ControllerBase
             return NotFound();
         }
         return meta;
+    }
+
+    [HttpGet("catalogs")]
+    [Authorize]
+    public async Task<ActionResult<List<StremioCatalog>>> GetCatalogs()
+    {
+        HttpContext.TryGetUserId(out var userId);
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+        var manifest = await cfg.stremio.GetManifestAsync();
+        return Ok(manifest?.Catalogs ?? new List<StremioCatalog>());
+    }
+
+    [HttpGet("subtitles/{itemId}")]
+    public ActionResult<IEnumerable<StremioSubtitle>> GetSubtitles(
+        [FromRoute, Required] Guid itemId
+    )
+    {
+        var subs = _gelatoManager.GetStremioSubtitlesCache(itemId);
+        return Ok(subs ?? new List<StremioSubtitle>());
     }
 
     [HttpGet("stream")]
