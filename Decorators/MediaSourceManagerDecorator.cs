@@ -185,7 +185,7 @@ var filteredSources = sources
 
     
     
-_log.LogInformation(
+_log.LogDebug(
     "Found {StreamCount} streams. UserId={UserId} GelatoId={StremioId}",
     filteredSources.Count,
     userId,

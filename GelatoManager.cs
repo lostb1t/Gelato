@@ -380,12 +380,18 @@ if (x is null)
             //target.DateModified = DateTime.UtcNow;
            // parent.AddChild(baseItem);
           var directory = Path.GetDirectoryName(baseItem.Path);
-          var new_parent = new Folder {
-                    //title = item.
-                Path = directory
-          };
-          parent.AddChild(new_parent);
-          SaveItem(baseItem, new_parent);
+          Folder folderParent = parent;
+          if (!string.IsNullOrWhiteSpace(directory))
+          {
+              var new_parent = new Folder {
+                    Id = _library.GetNewItemId(directory, typeof(Folder)),
+                    Name = Path.GetFileName(directory.TrimEnd('/', '\\')),
+                    Path = directory
+              };
+              parent.AddChild(new_parent);
+              folderParent = new_parent;
+          }
+          SaveItem(baseItem, folderParent);
             //baseItem.SetParent(parent);
             //_library.CreateItem(baseItem, parent);
         }
@@ -627,7 +633,7 @@ var existing = _repo
         }
 
       //  _repo.SaveItems(newVideos, ct);
-        newVideos = SaveItems(newVideos, parent).Cast<Video>().ToList();
+        newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
 
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
         var stale = existing.Values
@@ -1220,9 +1226,11 @@ public static void CreateStrmFile(string path, string content)
                item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
                 Directory.CreateDirectory(item.Path);
           } else {
+
                         item.ShortcutPath = $"gelato://stub/{item.Id}";
-            item.Path = GetStrmPath(parent, item, "placeholder");
+            item.Path = GetStrmPath(parent, item, item.GelatoData("guid"));
             item.IsShortcut = true;
+            //Console.WriteLine(item.Path);
                 CreateStrmFile(item.Path, item.ShortcutPath);
             }
             
