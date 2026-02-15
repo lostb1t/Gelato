@@ -1262,7 +1262,6 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
 
         var Id = meta.Id;
       
- 
         switch (meta.Type)
         {
             case StremioMediaType.Series:
