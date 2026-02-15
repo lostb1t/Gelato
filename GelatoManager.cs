@@ -379,7 +379,7 @@ if (x is null)
            // CreateStrmFile(target.Path, target.ShortcutPath);
             //target.DateModified = DateTime.UtcNow;
            // parent.AddChild(baseItem);
-          var directory = Path.GetDirectoryName(item.Path);
+          var directory = Path.GetDirectoryName(baseItem.Path);
           var new_parent = new Folder {
                     //title = item.
                 Path = directory
@@ -1234,7 +1234,7 @@ public static void CreateStrmFile(string path, string content)
         _repo.SaveItems(items.ToList(), CancellationToken.None);
         
         foreach (var item in items) {
-                  RegisterItem(item);
+                  _library.RegisterItem(item);
       };
         return items;
    }
