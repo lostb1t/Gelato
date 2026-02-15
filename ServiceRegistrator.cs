@@ -44,7 +44,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
-            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
+            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
             //.DecorateSingle<IDirectoryService, DirectoryServiceDecorator>();
 
 

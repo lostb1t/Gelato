@@ -1,8 +1,3 @@
-#pragma warning disable SA1611
-#pragma warning disable SA1591
-#pragma warning disable SA1615
-#pragma warning disable CS0165
-
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -1154,14 +1149,9 @@ public class GelatoManager {
             item.DateLastRefreshed = item.DateModified;
             item.DateLastSaved = item.DateLastSaved;
             }
-            //   Console.WriteLine(item.Path);
-            //   Console.WriteLine("========");
 
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
-            
-            //if (item.PresentationUniqueKey is null) {
-              item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            //}
+            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
             
             parent.AddChild(item);
 
@@ -1198,22 +1188,10 @@ public class GelatoManager {
         }
             ;
 
-
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{Id}";
-        //item.DateModified = DateTime.UtcNow;
-        //item.DateLastSaved = DateTime.UtcNow;
-
-
-
-
-        //   item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-        //   item.DateLastRefreshed = item.DateModified;
-        //  item.DateLastSaved = item.DateLastSaved;
-
-
-
+        
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
         if (!string.IsNullOrWhiteSpace(meta.Description))
