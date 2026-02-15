@@ -379,19 +379,19 @@ if (x is null)
            // CreateStrmFile(target.Path, target.ShortcutPath);
             //target.DateModified = DateTime.UtcNow;
            // parent.AddChild(baseItem);
-          var directory = Path.GetDirectoryName(baseItem.Path);
-          Folder folderParent = parent;
-          if (!string.IsNullOrWhiteSpace(directory))
-          {
+          var directory = $"{parent.Path}/{baseItem.Name} ({baseItem.PremiereDate.Value.Year})";
+
+        //  if (!string.IsNullOrWhiteSpace(directory))
+         // {
               var new_parent = new Folder {
                     Id = _library.GetNewItemId(directory, typeof(Folder)),
-                    Name = Path.GetFileName(directory.TrimEnd('/', '\\')),
+                   // Name = Path.GetFileName(directory.TrimEnd('/', '\\')),
                     Path = directory
               };
               parent.AddChild(new_parent);
-              folderParent = new_parent;
-          }
-          SaveItem(baseItem, folderParent);
+
+          //}
+          SaveItem(baseItem, new_parent);
             //baseItem.SetParent(parent);
             //_library.CreateItem(baseItem, parent);
         }
@@ -736,7 +736,7 @@ var existing = _repo
 
 public static String GetStrmPath(BaseItem parent, BaseItem item, string id) {
        var dirInfo = new DirectoryInfo(parent.Path);
-       return $"{dirInfo.FullName}/{item.Name} ({item.PremiereDate.Value.Year})/{item.Name} ({item.PremiereDate.Value.Year}) {id}.strm";
+       return $"{dirInfo.FullName}/{item.Name} ({item.PremiereDate.Value.Year}) {id}.strm";
 }
     
 public static void CreateStrmFile(string path, string content)
@@ -966,10 +966,11 @@ public static void CreateStrmFile(string path, string content)
                 ForceSave = true,
             };
             // important
-            series.ParentId = seriesRootFolder.Id;
-            await series.RefreshMetadata(options, ct).ConfigureAwait(false);
+           // series.ParentId = seriesRootFolder.Id;
+
             //seriesRootFolder.AddChild(series);
             SaveItem(series, seriesRootFolder);
+            await series.RefreshMetadata(options, ct).ConfigureAwait(false);
             await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
@@ -1018,7 +1019,7 @@ public static void CreateStrmFile(string path, string content)
 
             if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
             {
-                _log.LogTrace(
+                _log.LogInformation(
                     "Creating series {SeriesName} season {SeasonIndex:D2}",
                     series.Name,
                     seasonIndex
@@ -1221,24 +1222,26 @@ public static void CreateStrmFile(string path, string content)
         foreach (var item in items) {
    
        
-          
+                    //  Console.WriteLine(item.Path);
           if (item.IsFolder) {
                 item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
                 Directory.CreateDirectory(item.Path);
           } else {
-            item.ShortcutPath = item.Path";
+            item.ShortcutPath = item.Path;
                         item.IsShortcut = true;
-            if (!IsStream(item)) {
+            if (!IsStream((Video)item)) {
            // item.ShortcutPath = $"gelato://stub/{item.Id}";
             item.Path = GetStrmPath(parent, item, null);
 
             } else {
-
-            item.Path = GetStrmPath(parent, item, item.GelatoData("guid"));
+var id = item.GelatoData<Guid>("guid");
+            item.Path = GetStrmPath(parent, item, id.ToString());
             }
-            //Console.WriteLine(item.Path);
+
             CreateStrmFile(item.Path, item.ShortcutPath);
             }
+                     //   Console.WriteLine(item.Path);
+         //   Console.WriteLine("========");
             
                         item.Id = _library.GetNewItemId(item.Path, item.GetType());
                         
@@ -1283,7 +1286,7 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
-        item.Path = $"gelato://stub/{item.Id}";
+        item.Path = $"gelato://stub/{Id}";
 //item.DateModified = DateTime.UtcNow;
         //item.DateLastSaved = DateTime.UtcNow;
         
