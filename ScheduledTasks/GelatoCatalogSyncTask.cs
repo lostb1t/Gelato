@@ -193,8 +193,8 @@ namespace Gelato.Tasks
 
                     if (shouldCreateCollection && ids.Keys.Any())
                     {
-                        await SaveCollection(cat, ids.Keys.Take(maxPerCatalog).ToList())
-                            .ConfigureAwait(false);
+                        //await SaveCollection(cat, ids.Keys.Take(maxPerCatalog).ToList())
+                        //    .ConfigureAwait(false);
                         ids.Clear();
                     }
 

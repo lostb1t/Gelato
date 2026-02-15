@@ -338,16 +338,20 @@ public class GelatoManager {
         var baseItem = IntoBaseItem(meta);
 
         if (mediaType == StremioMediaType.Movie) {
-            var directory = $"{parent.Path}/{baseItem.Name} ({baseItem.PremiereDate.Value.Year})";
-
             var new_parent = new Folder {
-                Name = $"{baseItem.Name} ({baseItem.PremiereDate.Value.Year}",
-                Path = directory
+                Name = $"{baseItem.Name} ({baseItem.PremiereDate.Value.Year})",
+               ExternalId = "test",
+
+// Path = $"{parent.Path}/{baseItem.Name} ({baseItem.PremiereDate.Value.Year})";
             };
+                            new_parent.PresentationUniqueKey = new_parent.GetPresentationUniqueKey();
 
-            // SaveItem(new_parent, parent);
-
-            SaveItem(baseItem, parent);
+            new_parent = (Folder)SaveItem(new_parent, parent);
+                         // await new_parent.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+      //  await new_parent.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+            baseItem = SaveItem(baseItem, new_parent);
+          //  await baseItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+           // await baseItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
         }
         else {
             baseItem = await SyncSeriesTreesAsync(cfg, meta, ct).ConfigureAwait(false);
@@ -548,10 +552,6 @@ public class GelatoManager {
             target.PremiereDate = primary.PremiereDate;
             target.Path = path;
 
-
-
-
-
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId)) {
                 users.Add(userId);
@@ -570,7 +570,6 @@ public class GelatoManager {
             newVideos.Add(target);
         }
 
-        //  _repo.SaveItems(newVideos, ct);
         newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
 
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
@@ -596,7 +595,7 @@ public class GelatoManager {
         }
 
         _repo.SaveItems(stale, ct);
-        newVideos.Add(primary);
+        newVideos.Add(primary);  
         MergeVersions(newVideos.ToArray());
 
         stopwatch.Stop();
@@ -666,8 +665,8 @@ public class GelatoManager {
         }
     }
 
-    public String GetStrmPath(BaseItem parent, BaseItem item) {
-        var dirInfo = new DirectoryInfo(parent.Path);
+    public String GetStrmPath(string basePath, BaseItem item) {
+        var dirInfo = new DirectoryInfo(basePath);
         var baseName = $"{item.Name} ({item.PremiereDate?.Year})";
         var fileName = IsStream((Video)item)
             ? $"{baseName} {item.GelatoData<Guid>("guid")}.strm"
@@ -1120,34 +1119,46 @@ public class GelatoManager {
 
             //  Console.WriteLine(item.Path);
             if (item.IsFolder) {
+              if (item.Path is null) {
                 if (item.GetBaseItemKind() == BaseItemKind.Series) {
                     item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
                 }
-                else if (item.GetBaseItemKind() == BaseItemKind.Season) {
+                else{
+                //else if (item.GetBaseItemKind() == BaseItemKind.Season) {
                     item.Path = $"{parent.Path}/{item.Name}";
                 }
+              }
                 Directory.CreateDirectory(item.Path);
+                           // item.DateModified = File.GetLastWriteTimeUtc(item.Path);
+            item.DateLastRefreshed = Directory.GetLastWriteTimeUtc(item.Path);
+            item.DateLastSaved = item.DateLastRefreshed;
             }
             else {
                 item.ShortcutPath = item.Path;
                 item.IsShortcut = true;
-                item.Path = GetStrmPath(parent, item);
+                item.Path = GetStrmPath($"{parent.Path}", item);
 
                 CreateStrmFile(item.Path, item.ShortcutPath);
+                            item.DateModified = File.GetLastWriteTimeUtc(item.Path);
+            item.DateLastRefreshed = item.DateModified;
+            item.DateLastSaved = item.DateLastSaved;
             }
             //   Console.WriteLine(item.Path);
             //   Console.WriteLine("========");
-            item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-            item.DateLastRefreshed = item.DateModified;
-            item.DateLastSaved = item.DateLastSaved;
-            item.Id = _library.GetNewItemId(item.Path, item.GetType());
 
+            item.Id = _library.GetNewItemId(item.Path, item.GetType());
+            
+            if (item.PresentationUniqueKey is null) {
+              item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+            }
+            
             parent.AddChild(item);
 
         }
         _repo.SaveItems(items.ToList(), CancellationToken.None);
 
         foreach (var item in items) {
+
             _library.RegisterItem(item);
         }
         ;
