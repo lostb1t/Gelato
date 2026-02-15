@@ -1224,7 +1224,11 @@ public static void CreateStrmFile(string path, string content)
        
                     //  Console.WriteLine(item.Path);
           if (item.IsFolder) {
+                if (item.GetBaseItemKind() == BaseItemKind.Series) {
                 item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
+                } else {
+                  item.Path = $"{parent.Path}/{item.Name}";
+                }
                 Directory.CreateDirectory(item.Path);
           } else {
             item.ShortcutPath = item.Path;
