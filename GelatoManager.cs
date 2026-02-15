@@ -734,9 +734,15 @@ var existing = _repo
         }
     }
 
-public static String GetStrmPath(BaseItem parent, BaseItem item, string id) {
-       var dirInfo = new DirectoryInfo(parent.Path);
-       return $"{dirInfo.FullName}/{item.Name} ({item.PremiereDate.Value.Year}) {id}.strm";
+public static String GetStrmPath(BaseItem parent, BaseItem item)
+{
+    var dirInfo = new DirectoryInfo(parent.Path);
+    var baseName = $"{item.Name} ({item.PremiereDate?.Year})";
+    var fileName = IsStream((Video)item)
+        ? $"{baseName} {item.GelatoData<Guid>("guid")}.strm"
+        : $"{baseName}.strm";
+
+    return Path.Combine(dirInfo.FullName, fileName);
 }
     
 public static void CreateStrmFile(string path, string content)
