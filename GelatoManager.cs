@@ -376,13 +376,8 @@ if (x is null)
 
         if (mediaType == StremioMediaType.Movie)
         {
-           // CreateStrmFile(target.Path, target.ShortcutPath);
-            //target.DateModified = DateTime.UtcNow;
-           // parent.AddChild(baseItem);
           var directory = $"{parent.Path}/{baseItem.Name} ({baseItem.PremiereDate.Value.Year})";
 
-        //  if (!string.IsNullOrWhiteSpace(directory))
-         // {
               var new_parent = new Folder {
                     Name =  $"{baseItem.Name} ({baseItem.PremiereDate.Value.Year}",
                     Path = directory
@@ -390,10 +385,7 @@ if (x is null)
 
               SaveItem(new_parent, parent);
 
-          //}
           SaveItem(baseItem, new_parent);
-            //baseItem.SetParent(parent);
-            //_library.CreateItem(baseItem, parent);
         }
         else
         {
