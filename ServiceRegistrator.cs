@@ -5,6 +5,7 @@ using Gelato.Filters;
 using Gelato.Tasks;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Plugins;
@@ -43,7 +44,9 @@ public class ServiceRegistrator : IPluginServiceRegistrator
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
-            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
+            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
+            //.DecorateSingle<IDirectoryService, DirectoryServiceDecorator>();
+
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {

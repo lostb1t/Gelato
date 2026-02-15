@@ -64,6 +64,7 @@ public class GelatoManager {
     private readonly IMediaStreamRepository _mediaStreams;
     private readonly ICollectionManager _collectionManager;
     private readonly GelatoStremioProviderFactory _stremioFactory;
+    private readonly IDirectoryService _directoryService;
     //private readonly Folder? _seriesFolder;
     //private readonly Folder? _movieFolder;
 
@@ -81,7 +82,8 @@ public class GelatoManager {
         IMemoryCache memoryCache,
         ICollectionManager collectionManager,
         IServerConfigurationManager serverConfig,
-        ILibraryManager libraryManager
+        ILibraryManager libraryManager,
+        IDirectoryService directoryService
     ) {
         _loggerFactory = loggerFactory;
         _memoryCache = memoryCache;
@@ -97,6 +99,7 @@ public class GelatoManager {
         _user = userManager;
         _library = libraryManager;
         _fileSystem = fileSystem;
+        _directoryService = directoryService;
 
     }
 
@@ -346,11 +349,15 @@ public class GelatoManager {
             };
                             new_parent.PresentationUniqueKey = new_parent.GetPresentationUniqueKey();
 
-            new_parent = (Folder)SaveItem(new_parent, parent);
+           // new_parent = (Folder)SaveItem(new_parent, parent);
                          // await new_parent.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
       //  await new_parent.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
-            baseItem = SaveItem(baseItem, new_parent);
-          //  await baseItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+            baseItem = SaveItem(baseItem, parent);
+         
+        await baseItem
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            .ConfigureAwait(false);
+ //  await baseItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
            // await baseItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
         }
         else {
@@ -363,7 +370,7 @@ public class GelatoManager {
         }
 
         if (refreshItem) {
-            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
+            var options = new MetadataRefreshOptions(_directoryService) {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = false,
@@ -382,6 +389,10 @@ public class GelatoManager {
                 }
                 else {
                     _provider.RefreshFullItem(baseItem, options, ct);
+                             
+        await baseItem
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            .ConfigureAwait(false);
                 }
 
             }
@@ -871,7 +882,7 @@ public class GelatoManager {
             if (series.Id == Guid.Empty)
                 series.Id = Guid.NewGuid();
 
-            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
+            var options = new MetadataRefreshOptions(_directoryService) {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = false,
@@ -1139,7 +1150,7 @@ public class GelatoManager {
                 item.Path = GetStrmPath($"{parent.Path}", item);
 
                 CreateStrmFile(item.Path, item.ShortcutPath);
-                            item.DateModified = File.GetLastWriteTimeUtc(item.Path);
+            item.DateModified = File.GetLastWriteTimeUtc(item.Path);
             item.DateLastRefreshed = item.DateModified;
             item.DateLastSaved = item.DateLastSaved;
             }
@@ -1148,9 +1159,9 @@ public class GelatoManager {
 
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
             
-            if (item.PresentationUniqueKey is null) {
+            //if (item.PresentationUniqueKey is null) {
               item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            }
+            //}
             
             parent.AddChild(item);
 
@@ -1158,7 +1169,6 @@ public class GelatoManager {
         _repo.SaveItems(items.ToList(), CancellationToken.None);
 
         foreach (var item in items) {
-
             _library.RegisterItem(item);
         }
         ;
@@ -1173,7 +1183,6 @@ public class GelatoManager {
         switch (meta.Type) {
             case StremioMediaType.Series:
                 item = new Series { Id = _library.GetNewItemId(Id, typeof(Series)) };
-
                 break;
 
             case StremioMediaType.Movie:
