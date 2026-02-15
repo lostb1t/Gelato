@@ -671,7 +671,23 @@ namespace Gelato
         {
             string key;
 
-            if (!string.IsNullOrEmpty(InfoHash))
+            // Prefer URL identity when a direct URL exists, even if InfoHash is present.
+            // Some providers attach the same InfoHash to multiple hosters (e.g. Dropload/SuperVideo).
+            if (!string.IsNullOrWhiteSpace(Url))
+            {
+                key = string.Join(
+                    "|",
+                    Url ?? string.Empty,
+                    Title ?? string.Empty,
+                    Name ?? string.Empty,
+                    Description ?? string.Empty,
+                    Quality ?? string.Empty,
+                    Audio ?? string.Empty,
+                    Subtitle ?? string.Empty,
+                    BehaviorHints?.Filename ?? string.Empty
+                );
+            }
+            else if (!string.IsNullOrEmpty(InfoHash))
             {
                 key = InfoHash;
             }
@@ -684,7 +700,7 @@ namespace Gelato
             }
             else
             {
-                key = Url;
+                key = string.Empty;
             }
 
             using var md5 = System.Security.Cryptography.MD5.Create();
@@ -712,7 +728,8 @@ namespace Gelato
 
         public bool IsTorrent()
         {
-            return !string.IsNullOrWhiteSpace(InfoHash);
+            // If URL exists, treat it as a direct stream for filtering/routing purposes.
+            return !string.IsNullOrWhiteSpace(InfoHash) && string.IsNullOrWhiteSpace(Url);
         }
     }
 
