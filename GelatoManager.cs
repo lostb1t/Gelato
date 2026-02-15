@@ -384,11 +384,11 @@ if (x is null)
         //  if (!string.IsNullOrWhiteSpace(directory))
          // {
               var new_parent = new Folder {
-                    Id = _library.GetNewItemId(directory, typeof(Folder)),
-                   // Name = Path.GetFileName(directory.TrimEnd('/', '\\')),
+                    Name =  $"{baseItem.Name} ({baseItem.PremiereDate.Value.Year}",
                     Path = directory
               };
-              parent.AddChild(new_parent);
+
+              SaveItem(new_parent, parent);
 
           //}
           SaveItem(baseItem, new_parent);
@@ -734,7 +734,7 @@ var existing = _repo
         }
     }
 
-public static String GetStrmPath(BaseItem parent, BaseItem item)
+public String GetStrmPath(BaseItem parent, BaseItem item)
 {
     var dirInfo = new DirectoryInfo(parent.Path);
     var baseName = $"{item.Name} ({item.PremiereDate?.Year})";
@@ -1025,7 +1025,7 @@ public static void CreateStrmFile(string path, string content)
 
             if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
             {
-                _log.LogInformation(
+                _log.LogTrace(
                     "Creating series {SeriesName} season {SeasonIndex:D2}",
                     series.Name,
                     seasonIndex
@@ -1046,11 +1046,9 @@ public static void CreateStrmFile(string path, string content)
                     // important
                     ParentId = series.Id
                 };
-                season.Path = $"{series.Path}/{season.Name}";
-                           season.Id = _library.GetNewItemId(season.Path, season.GetType());
-            season.DateModified = File.GetLastWriteTimeUtc(season.Path);
-            season.DateLastRefreshed = season.DateModified;
-            season.DateLastSaved = season.DateLastSaved;    
+                //season.Path = $"{series.Path}/{season.Name}";
+               // season.Id = _library.GetNewItemId(season.Path, season.GetType());
+
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 //season.SetProviderId(MetadataProvider.Custom, season.Id.ToString());
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
@@ -1232,28 +1230,23 @@ public static void CreateStrmFile(string path, string content)
           if (item.IsFolder) {
                 if (item.GetBaseItemKind() == BaseItemKind.Series) {
                 item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
-                } else {
+                } else if (item.GetBaseItemKind() == BaseItemKind.Season) {
                   item.Path = $"{parent.Path}/{item.Name}";
                 }
                 Directory.CreateDirectory(item.Path);
           } else {
             item.ShortcutPath = item.Path;
                         item.IsShortcut = true;
-            if (!IsStream((Video)item)) {
-           // item.ShortcutPath = $"gelato://stub/{item.Id}";
-            item.Path = GetStrmPath(parent, item, null);
-
-            } else {
-var id = item.GelatoData<Guid>("guid");
-            item.Path = GetStrmPath(parent, item, id.ToString());
-            }
+                item.Path = GetStrmPath(parent, item);
 
             CreateStrmFile(item.Path, item.ShortcutPath);
             }
                      //   Console.WriteLine(item.Path);
          //   Console.WriteLine("========");
-            
-                        item.Id = _library.GetNewItemId(item.Path, item.GetType());
+            item.DateModified = File.GetLastWriteTimeUtc(item.Path);
+            item.DateLastRefreshed = item.DateModified;
+            item.DateLastSaved = item.DateLastSaved;    
+            item.Id = _library.GetNewItemId(item.Path, item.GetType());
                         
                 parent.AddChild(item);
   
