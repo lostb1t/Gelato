@@ -19,13 +19,11 @@ using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
-public sealed class GelatoItemRepository : IItemRepository
-{
+public sealed class GelatoItemRepository : IItemRepository {
     private readonly IItemRepository _inner;
     private readonly IHttpContextAccessor _http;
 
-    public GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
-    {
+    public GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http) {
         _inner = inner;
         _http = http ?? throw new ArgumentNullException(nameof(http));
     }
@@ -39,34 +37,29 @@ public sealed class GelatoItemRepository : IItemRepository
 
     public BaseItem RetrieveItem(Guid id) => _inner.RetrieveItem(id);
 
-    public QueryResult<BaseItem> GetItems(InternalItemsQuery filter)
-    {
+    public QueryResult<BaseItem> GetItems(InternalItemsQuery filter) {
         return _inner.GetItems(ApplyFilters(filter));
     }
 
     public IReadOnlyList<Guid> GetItemIdsList(InternalItemsQuery filter) =>
         _inner.GetItemIdsList(ApplyFilters(filter));
 
-    public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter)
-    {
+    public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter) {
         return _inner.GetItemList(ApplyFilters(filter));
     }
 
-    public IReadOnlyList<BaseItem> GetNoScopeItemList(InternalItemsQuery filter)
-    {
+    public IReadOnlyList<BaseItem> GetNoScopeItemList(InternalItemsQuery filter) {
         return _inner.GetItemList(filter);
     }
 
-    public InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
-    {
-       // return filter;
+    public InternalItemsQuery ApplyFilters(InternalItemsQuery filter) {
+        // return filter;
         var ctx = _http?.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
-//filter.DtoOptions.EnableUserData = false;
+        //filter.DtoOptions.EnableUserData = false;
 
-if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
-        {
+        if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null) {
             filter.IsDeadPerson = null;
             if (
                 (
@@ -77,14 +70,12 @@ if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
                         )
                         .Any()
                 )
-            )
-            {
-              //  if (filter.IsVirtualItem is null)
-              //  {
-              //      filter.IsVirtualItem = false;
-               // }
-                if (filter.MaxPremiereDate is null && filterUnreleased)
-                {
+            ) {
+                //  if (filter.IsVirtualItem is null)
+                //  {
+                //      filter.IsVirtualItem = false;
+                // }
+                if (filter.MaxPremiereDate is null && filterUnreleased) {
                     // we dont have access to the query so can make a proper statement.
                     var days =
                         (
@@ -97,15 +88,14 @@ if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
                 }
             }
         }
-        else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person))
-        {
+        else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person)) {
             filter.IsDeadPerson = null;
         }
-       // else if (filter.IsMissing == true) 
-       //{
-          // jf deletes virtual items when theres a valid priamry versio . So just dont return it
-       //   filter.IsVirtualItem = false;
-       // }
+        // else if (filter.IsMissing == true)
+        //{
+        // jf deletes virtual items when theres a valid priamry versio . So just dont return it
+        //   filter.IsVirtualItem = false;
+        // }
         return filter;
     }
 

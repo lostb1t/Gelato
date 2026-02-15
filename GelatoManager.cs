@@ -46,8 +46,7 @@ using Microsoft.Extensions.Primitives;
 
 namespace Gelato;
 
-public class GelatoManager
-{
+public class GelatoManager {
     private readonly ILogger<GelatoManager> _log;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -83,8 +82,7 @@ public class GelatoManager
         ICollectionManager collectionManager,
         IServerConfigurationManager serverConfig,
         ILibraryManager libraryManager
-    )
-    {
+    ) {
         _loggerFactory = loggerFactory;
         _memoryCache = memoryCache;
         _collectionManager = collectionManager;
@@ -102,36 +100,30 @@ public class GelatoManager
 
     }
 
-    
 
-    public int GetHttpPort()
-    {
+
+    public int GetHttpPort() {
         var networkConfig = _serverConfig.GetNetworkConfiguration();
         return networkConfig.InternalHttpPort;
     }
 
-    public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
-    {
+    public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs) {
         _memoryCache.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
     }
 
-    public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
-    {
+    public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid) {
         return _memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
     }
 
-    public void SaveStremioUri(Guid guid, StremioUri stremioUri)
-    {
+    public void SaveStremioUri(Guid guid, StremioUri stremioUri) {
         _memoryCache.Set($"uri:{guid}", stremioUri, TimeSpan.FromMinutes(3600));
     }
 
-    public StremioUri? GetStremioUri(Guid guid)
-    {
+    public StremioUri? GetStremioUri(Guid guid) {
         return _memoryCache.TryGetValue($"uri:{guid}", out var value) ? value as StremioUri : null;
     }
 
-    public void SetStreamSync(string guid)
-    {
+    public void SetStreamSync(string guid) {
         _memoryCache.Set(
             $"streamsync:{guid}",
             guid,
@@ -139,82 +131,68 @@ public class GelatoManager
         );
     }
 
-    public bool HasStreamSync(string guid)
-    {
+    public bool HasStreamSync(string guid) {
         return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
     }
 
-    public void SaveStremioMeta(Guid guid, StremioMeta meta)
-    {
+    public void SaveStremioMeta(Guid guid, StremioMeta meta) {
         _memoryCache.Set($"meta:{guid}", meta, TimeSpan.FromMinutes(360));
     }
 
-    public StremioMeta? GetStremioMeta(Guid guid)
-    {
+    public StremioMeta? GetStremioMeta(Guid guid) {
         return _memoryCache.TryGetValue($"meta:{guid}", out var value)
             ? value as StremioMeta
             : null;
     }
 
-    public void RemoveStremioMeta(Guid guid)
-    {
+    public void RemoveStremioMeta(Guid guid) {
         _memoryCache.Remove($"meta:{guid}");
     }
 
-    public void ClearCache()
-    {
-        if (_memoryCache is MemoryCache cache)
-        {
+    public void ClearCache() {
+        if (_memoryCache is MemoryCache cache) {
             cache.Compact(1.0);
         }
 
         _log.LogDebug("Cache cleared");
     }
 
-    public static void SeedFolder(string path)
-    {
+    public static void SeedFolder(string path) {
         Directory.CreateDirectory(path);
         var seed = System.IO.Path.Combine(path, "stub.txt");
-        if (!File.Exists(seed))
-        {
+        if (!File.Exists(seed)) {
             File.WriteAllText(
                 seed,
                 "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
             );
         }
         var ignore = System.IO.Path.Combine(path, ".ignore");
-       //File.Create(ignore).Close();
+        //File.Create(ignore).Close();
         File.Delete(ignore);
     }
 
-    public Folder? TryGetMovieFolder(Guid userId)
-    {
+    public Folder? TryGetMovieFolder(Guid userId) {
         return TryGetFolder(
             GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).MoviePath
         );
     }
 
-    public Folder? TryGetSeriesFolder(Guid userId)
-    {
+    public Folder? TryGetSeriesFolder(Guid userId) {
         return TryGetFolder(
             GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).SeriesPath
         );
     }
 
-    public Folder? TryGetMovieFolder(PluginConfiguration cfg)
-    {
+    public Folder? TryGetMovieFolder(PluginConfiguration cfg) {
         return TryGetFolder(cfg.MoviePath);
     }
 
-    public Folder? TryGetSeriesFolder(PluginConfiguration cfg)
-    {
+    public Folder? TryGetSeriesFolder(PluginConfiguration cfg) {
         return TryGetFolder(cfg.SeriesPath);
     }
 
-    public Folder? TryGetFolder(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
+    public Folder? TryGetFolder(string path) {
+        if (string.IsNullOrWhiteSpace(path)) {
             return null;
         }
         //path = $"gelato://stubfolder/{folder.Name}";
@@ -223,34 +201,29 @@ public class GelatoManager
             .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
-       //folder.Path = $"gelato://stubfolder/{folder.Name}";
-       //_repo.SaveItems([folder], CancellationToken.None);
-        
-        //return folder;
-    } 
+        //folder.Path = $"gelato://stubfolder/{folder.Name}";
+        //_repo.SaveItems([folder], CancellationToken.None);
 
-    private static bool IsValidUrl(string? url)
-    {
+        //return folder;
+    }
+
+    private static bool IsValidUrl(string? url) {
         return Uri.TryCreate(url, UriKind.Absolute, out var uri)
             && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
-    public BaseItem? Exist(StremioMeta meta, Folder parent, User user)
-    {
+    public BaseItem? Exist(StremioMeta meta, Folder parent, User user) {
         var item = IntoBaseItem(meta);
-        if (item?.ProviderIds is not { Count: > 0 })
-        {
+        if (item?.ProviderIds is not { Count: > 0 }) {
             _log.LogWarning("Gelato: Missing provider ids, skipping");
             return null;
         }
-  
+
         return FindExistingItem(item, user);
     }
-    
-    public BaseItem? FindExistingItem(BaseItem item, User user)
-    {
-        var query = new InternalItemsQuery
-        {
+
+    public BaseItem? FindExistingItem(BaseItem item, User user) {
+        var query = new InternalItemsQuery {
             IncludeItemTypes = new[] { item.GetBaseItemKind() },
             HasAnyProviderId = item.ProviderIds,
             Recursive = true,
@@ -261,13 +234,11 @@ public class GelatoManager
 
         return _library
             .GetItemList(query)
-            .FirstOrDefault(x =>
-            {
-if (x is null)
+            .FirstOrDefault(x => {
+                if (x is null)
                     return false;
 
-                if (x is Video v)
-                {
+                if (x is Video v) {
                     return !IsStream(v);
                 }
 
@@ -287,13 +258,11 @@ if (x is null)
         bool queueRefreshItem,
         bool queueRefreshChildren,
         CancellationToken ct
-    )
-    {
+    ) {
         var mediaType = meta.Type;
         BaseItem? existing;
 
-        if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series))
-        {
+        if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series)) {
             _log.LogWarning("type {Type} is not valid, skipping", mediaType);
             return (null, false);
         }
@@ -311,13 +280,11 @@ if (x is null)
                     && (meta.Videos is null || !meta.Videos.Any())
                 )
             )
-        )
-        {
+        ) {
             // do a prechexk as loading metadata is expensive
             existing = Exist(meta, parent, user);
 
-            if (existing is not null)
-            {
+            if (existing is not null) {
                 _log.LogDebug(
                     "found existing {Kind}: {Id} for {Name}",
                     existing.GetBaseItemKind(),
@@ -329,8 +296,7 @@ if (x is null)
             var lookupId = meta.ImdbId ?? meta.Id;
             meta = await cfg.stremio.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
-            if (meta is null)
-            {
+            if (meta is null) {
                 _log.LogWarning(
                     "InsertMeta: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",
                     lookupId,
@@ -343,8 +309,7 @@ if (x is null)
             baseItemKind = mediaType.ToBaseItem();
         }
 
-        if (!meta.IsValid())
-        {
+        if (!meta.IsValid()) {
             _log.LogWarning(
                 "meta for {Id} is not valid {Name} , skipping",
                 meta.Id,
@@ -353,16 +318,14 @@ if (x is null)
             return (null, false);
         }
 
-        if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series))
-        {
+        if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series)) {
             _log.LogWarning("type {Type} is not valid after refresh, skipping", mediaType);
             return (null, false);
         }
 
         existing = Exist(meta, parent, user);
 
-        if (existing is not null)
-        {
+        if (existing is not null) {
             _log.LogDebug(
                 "found existing {Kind}: {Id} for {Name}",
                 existing.GetBaseItemKind(),
@@ -374,34 +337,29 @@ if (x is null)
 
         var baseItem = IntoBaseItem(meta);
 
-        if (mediaType == StremioMediaType.Movie)
-        {
-          var directory = $"{parent.Path}/{baseItem.Name} ({baseItem.PremiereDate.Value.Year})";
+        if (mediaType == StremioMediaType.Movie) {
+            var directory = $"{parent.Path}/{baseItem.Name} ({baseItem.PremiereDate.Value.Year})";
 
-              var new_parent = new Folder {
-                    Name =  $"{baseItem.Name} ({baseItem.PremiereDate.Value.Year}",
-                    Path = directory
-              };
+            var new_parent = new Folder {
+                Name = $"{baseItem.Name} ({baseItem.PremiereDate.Value.Year}",
+                Path = directory
+            };
 
-             // SaveItem(new_parent, parent);
+            // SaveItem(new_parent, parent);
 
-          SaveItem(baseItem, parent);
+            SaveItem(baseItem, parent);
         }
-        else
-        {
+        else {
             baseItem = await SyncSeriesTreesAsync(cfg, meta, ct).ConfigureAwait(false);
         }
 
-        if (baseItem is null)
-        {
+        if (baseItem is null) {
             _log.LogWarning("InsertMeta: failed to create {Type} for {Name}", mediaType, meta.Name);
             return (null, false);
         }
 
-        if (refreshItem)
-        {
-            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-            {
+        if (refreshItem) {
+            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = false,
@@ -409,21 +367,19 @@ if (x is null)
                 ForceSave = true,
             };
 
-            if (queueRefreshItem)
-            {
+            if (queueRefreshItem) {
                 _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
             }
-            else
-            {
-              
-                if (baseItem is Series series && queueRefreshChildren)
-                {
+            else {
+
+                if (baseItem is Series series && queueRefreshChildren) {
                     _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
 
-                   } else {
-                       _provider.RefreshFullItem(baseItem, options, ct);
-                   }
-               
+                }
+                else {
+                    _provider.RefreshFullItem(baseItem, options, ct);
+                }
+
             }
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
@@ -435,10 +391,8 @@ if (x is null)
         Dictionary<string, string> providerIds,
         BaseItemKind kind,
         Folder parent
-    )
-    {
-        var q = new InternalItemsQuery
-        {
+    ) {
+        var q = new InternalItemsQuery {
             IncludeItemTypes = new[] { kind },
             Recursive = true,
             ParentId = parent.Id,
@@ -465,8 +419,7 @@ if (x is null)
         Dictionary<string, string> providerIds,
         BaseItemKind kind,
         Folder parent
-    )
-    {
+    ) {
         return FindByProviderIds(providerIds, kind, parent).FirstOrDefault();
     }
 
@@ -475,35 +428,30 @@ if (x is null)
     /// sorting. We make sure to keep a one stable version based on primaryversionid
     /// </summary>
     /// <returns></returns>
-    public async Task SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
-    {
+    public async Task SyncStreams(BaseItem item, Guid userId, CancellationToken ct) {
         _log.LogDebug($"SyncStreams for {item.Id}");
         var inv = CultureInfo.InvariantCulture;
         var stopwatch = Stopwatch.StartNew();
-        if (IsStream(item as Video))
-        {
+        if (IsStream(item as Video)) {
             _log.LogWarning($"SyncStreams: item is a stream, skipping");
             return;
         }
 
         var isEpisode = item is Episode;
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder(userId);
-        if (parent is null)
-        {
+        if (parent is null) {
             _log.LogWarning($"SyncStreams: no parent, skipping");
             return;
         }
 
         var uri = StremioUri.FromBaseItem(item);
-        if (uri is null)
-        {
+        if (uri is null) {
             _log.LogError($"Unable to build Stremio URI for {item.Name}");
             return;
         }
 
         var primary = item as Video;
-        if (primary is null)
-        {
+        if (primary is null) {
             _log.LogError("SyncStreams: item is not a Video type, itemType={ItemType}", item?.GetType()?.Name);
             return;
         }
@@ -520,16 +468,13 @@ if (x is null)
 
         // Filter valid streams
         var acceptable = streams
-            .Select(s =>
-            {
-                if (!s.IsValid())
-                {
+            .Select(s => {
+                if (!s.IsValid()) {
                     _log.LogWarning("Invalid stream, skipping {StreamName}", s.Name);
                     return null;
                 }
 
-                if (!cfg.P2PEnabled && s.IsTorrent())
-                {
+                if (!cfg.P2PEnabled && s.IsTorrent()) {
                     _log.LogDebug($"P2P stream, skipping {s.Name}");
                     return null;
                 }
@@ -540,25 +485,23 @@ if (x is null)
             .ToList();
 
         // Get existing streams
-        var query = new InternalItemsQuery
-        {
+        var query = new InternalItemsQuery {
             IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
             HasAnyProviderId = providerIds,
             Recursive = true,
             IsDeadPerson = true,
-          //  IsVirtualItem = true,
+            //  IsVirtualItem = true,
         };
 
-var existing = _repo
-    .GetItemList(query)
-    .OfType<Video>()
-    .Where(v => IsStream(v))
-    .ToDictionary(v => v.GelatoData<Guid>("guid"));
+        var existing = _repo
+            .GetItemList(query)
+            .OfType<Video>()
+            .Where(v => IsStream(v))
+            .ToDictionary(v => v.GelatoData<Guid>("guid"));
 
         var newVideos = new List<Video>();
 
-        for (int i = 0; i < acceptable.Count; i++)
-        {
+        for (int i = 0; i < acceptable.Count; i++) {
             var s = acceptable[i];
             var index = i + 1;
             var path = s.IsFile()
@@ -573,16 +516,14 @@ var existing = _repo
 
             var id = s.GetGuid();
             //var id = Guid.NewGuid();
-           // var target = existing.GetValueOrDefault(id);
+            // var target = existing.GetValueOrDefault(id);
             Video target;
             var isNew = !existing.TryGetValue(id, out target);
 
-            if (isNew)
-            {
+            if (isNew) {
                 target =
                     isEpisode && item is Episode e
-                        ? new Episode
-                        {
+                        ? new Episode {
                             Id = _library.GetNewItemId(path, typeof(Episode)),
                             SeriesId = e.SeriesId,
                             SeriesName = e.SeriesName,
@@ -600,23 +541,22 @@ var existing = _repo
             target.IsVirtualItem = true;
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
-            target.LinkedAlternateVersions = Array.Empty<LinkedChild>();     
-           // target.SetParent(parent);
+            target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
+            // target.SetParent(parent);
             target.SetPrimaryVersionId(primary.Id.ToString());
             target.PremiereDate = primary.PremiereDate;
             target.Path = path;
 
-  
 
 
-            
+
+
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
-            if (!users.Contains(userId))
-            {
+            if (!users.Contains(userId)) {
                 users.Add(userId);
                 target.SetGelatoData("userIds", users);
             }
-            
+
             target.SetGelatoData("name", s.Name);
             target.SetGelatoData("index", index);
             target.SetGelatoData("guid", id);
@@ -624,7 +564,7 @@ var existing = _repo
             newVideos.Add(target);
         }
 
-      //  _repo.SaveItems(newVideos, ct);
+        //  _repo.SaveItems(newVideos, ct);
         newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
 
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
@@ -634,38 +574,34 @@ var existing = _repo
                 (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
             )
             .ToList();
-        
-        foreach (var _item in stale)
-        {
+
+        foreach (var _item in stale) {
             var users = _item.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
-        
-            if (users.Remove(userId)) 
-            {
+
+            if (users.Remove(userId)) {
                 _item.SetGelatoData("userIds", users);
             }
-                    if (!users.Any()) {
-              _library.DeleteItem(
-            item,
-            new DeleteOptions { DeleteFileLocation = true },
-            true);
+            if (!users.Any()) {
+                _library.DeleteItem(
+              item,
+              new DeleteOptions { DeleteFileLocation = true },
+              true);
             }
         }
-        
+
         _repo.SaveItems(stale, ct);
         newVideos.Add(primary);
-        MergeVersions(newVideos.ToArray());   
+        MergeVersions(newVideos.ToArray());
 
         stopwatch.Stop();
-  
+
         _log.LogInformation(
             $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
         );
     }
 
-    public async Task MergeVersions(Video[] items)
-    {
-        if (items == null || items.Length < 2)
-        {
+    public async Task MergeVersions(Video[] items) {
+        if (items == null || items.Length < 2) {
             _log.LogWarning("MergeVersions called with insufficient items.");
             return;
         }
@@ -678,8 +614,7 @@ var existing = _repo
             //?? items.FirstOrDefault(i => i.MediaSourceCount > 1 && string.IsNullOrEmpty(i.PrimaryVersionId))
             ?? items.FirstOrDefault();
 
-        if (primaryVersion == null)
-        {
+        if (primaryVersion == null) {
             _log.LogError(
                 "MergeVersions: No item with a path starting with 'stremio' found. Merge aborted."
             );
@@ -694,8 +629,7 @@ var existing = _repo
             .Select(i => new LinkedChild { Path = i.Path, ItemId = i.Id })
             .ToArray();
 
-        foreach (var v in alternates)
-        {
+        foreach (var v in alternates) {
             v.SetPrimaryVersionId(primaryVersion.Id.ToString("N", inv));
             v.LinkedAlternateVersions = Array.Empty<LinkedChild>();
 
@@ -714,33 +648,29 @@ var existing = _repo
     private void AddToAlternateVersionsIfNotPresent(
         List<LinkedChild> alternateVersions,
         LinkedChild newVersion
-    )
-    {
+    ) {
         if (
             !alternateVersions.Any(i =>
                 string.Equals(i.Path, newVersion.Path, StringComparison.OrdinalIgnoreCase)
             )
-        )
-        {
+        ) {
             alternateVersions.Add(newVersion);
         }
     }
 
-public String GetStrmPath(BaseItem parent, BaseItem item)
-{
-    var dirInfo = new DirectoryInfo(parent.Path);
-    var baseName = $"{item.Name} ({item.PremiereDate?.Year})";
-    var fileName = IsStream((Video)item)
-        ? $"{baseName} {item.GelatoData<Guid>("guid")}.strm"
-        : $"{baseName}.strm";
+    public String GetStrmPath(BaseItem parent, BaseItem item) {
+        var dirInfo = new DirectoryInfo(parent.Path);
+        var baseName = $"{item.Name} ({item.PremiereDate?.Year})";
+        var fileName = IsStream((Video)item)
+            ? $"{baseName} {item.GelatoData<Guid>("guid")}.strm"
+            : $"{baseName}.strm";
 
-    return Path.Combine(dirInfo.FullName, fileName);
-}
-    
-public static void CreateStrmFile(string path, string content)
-    {
+        return Path.Combine(dirInfo.FullName, fileName);
+    }
+
+    public static void CreateStrmFile(string path, string content) {
         var directory = Path.GetDirectoryName(path);
-            //   Console.WriteLine(path);
+        //   Console.WriteLine(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
@@ -750,19 +680,16 @@ public static void CreateStrmFile(string path, string content)
         File.WriteAllText(path, content.Trim(), Encoding.UTF8);
     }
 
-    public bool IsPrimaryVersion(Video item)
-    {
+    public bool IsPrimaryVersion(Video item) {
         return !item.IsVirtualItem && string.IsNullOrWhiteSpace(item.PrimaryVersionId);
         // return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
     }
 
-    public bool IsStream(Video item)
-    {
+    public bool IsStream(Video item) {
         return IsGelato(item) && !IsPrimaryVersion(item);
     }
 
-    private static bool IsLocalFile(string? path)
-    {
+    private static bool IsLocalFile(string? path) {
         if (string.IsNullOrWhiteSpace(path))
             return false;
 
@@ -787,51 +714,44 @@ public static void CreateStrmFile(string path, string content)
     /// <param name="item"></param>
     /// <param name="user"></param>
     /// <returns></returns>
-    public virtual bool CanDelete(BaseItem item, User user)
-    {
+    public virtual bool CanDelete(BaseItem item, User user) {
         var allCollectionFolders = _library.GetUserRootFolder().Children.OfType<Folder>().ToList();
 
         return item.IsAuthorizedToDelete(user, allCollectionFolders);
     }
 
-    public bool IsStremio(BaseItem item)
-    {
+    public bool IsStremio(BaseItem item) {
         return IsGelato(item);
     }
 
-    public bool IsGelato(BaseItem item)
-    {
+    public bool IsGelato(BaseItem item) {
         var stremioId = item.GetProviderId("Stremio");
         if (
             !string.IsNullOrWhiteSpace(stremioId)
-            // failsafe. local file is never gelato
-           // && !(
-            //    (
-            //        item.GetBaseItemKind() == BaseItemKind.Movie
-            //        || item.GetBaseItemKind() == BaseItemKind.Episode
-            //    ) && item.IsFileProtocol
-           // )
-        )
-        {
+        // failsafe. local file is never gelato
+        // && !(
+        //    (
+        //        item.GetBaseItemKind() == BaseItemKind.Movie
+        //        || item.GetBaseItemKind() == BaseItemKind.Episode
+        //    ) && item.IsFileProtocol
+        // )
+        ) {
             return true;
         }
         return false;
     }
 
-    public string GetGelatoLocalPath(BaseItem item, string? fileName = null)
-    {
+    public string GetGelatoLocalPath(BaseItem item, string? fileName = null) {
         var basePath =
             item.GetBaseItemKind() == BaseItemKind.Movie
                 ? GelatoPlugin.Instance!.Configuration.MoviePath
                 : GelatoPlugin.Instance!.Configuration.SeriesPath;
 
-        if (item.GetBaseItemKind() == BaseItemKind.Episode)
-        {
+        if (item.GetBaseItemKind() == BaseItemKind.Episode) {
             var episode = (Episode)item;
             var series = episode.Series;
 
-            if (series == null)
-            {
+            if (series == null) {
                 throw new InvalidOperationException("Episode must have a parent series");
             }
 
@@ -850,8 +770,7 @@ public static void CreateStrmFile(string path, string content)
             return Path.Combine(basePath, seriesFolder, seasonFolder, episodeFileName);
         }
 
-        if (item.GetBaseItemKind() == BaseItemKind.Movie)
-        {
+        if (item.GetBaseItemKind() == BaseItemKind.Movie) {
             var movie = (Movie)item;
 
             // Movie Name (Year)/Movie Name (Year).strm
@@ -872,14 +791,11 @@ public static void CreateStrmFile(string path, string content)
         return Path.Combine(basePath, fallbackFileName);
     }
 
-    public void ReplaceGuid(ActionContext ctx, Guid value)
-    {
+    public void ReplaceGuid(ActionContext ctx, Guid value) {
         // Replace route values
         var rd = ctx.RouteData.Values;
-        foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" })
-        {
-            if (rd.TryGetValue(key, out var raw) && raw is not null)
-            {
+        foreach (var key in new[] { "id", "Id", "ID", "itemId", "ItemId", "ItemID" }) {
+            if (rd.TryGetValue(key, out var raw) && raw is not null) {
                 // _log.LogInformation("Gelato: Replacing route {Key} {Old} → {New}", key, raw, value);
                 ctx.RouteData.Values[key] = value.ToString();
             }
@@ -889,12 +805,10 @@ public static void CreateStrmFile(string path, string content)
         var request = ctx.HttpContext.Request;
         var parsed = QueryHelpers.ParseQuery(request.QueryString.Value ?? "");
 
-        if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1)
-        {
+        if (parsed.TryGetValue("ids", out var existing) && existing.Count == 1) {
             // _log.LogInformation("Gelato: Replacing query ids {Old} → {New}", existing[0], value);
 
-            var dict = new Dictionary<string, StringValues>(parsed)
-            {
+            var dict = new Dictionary<string, StringValues>(parsed) {
                 ["ids"] = new StringValues(value.ToString()),
             };
 
@@ -903,20 +817,18 @@ public static void CreateStrmFile(string path, string content)
     }
 
     public async Task<BaseItem?> SyncSeriesTreesAsync(
-       // Folder seriesRootFolder,
+        // Folder seriesRootFolder,
         PluginConfiguration cfg,
         StremioMeta seriesMeta,
         CancellationToken ct
-    )
-    {
+    ) {
         var seriesRootFolder = cfg.SeriesFolder;
         // Early validation
-        if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
-        {
+        if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path)) {
             _log.LogWarning("seriesRootFolder null or empty for {SeriesId}", seriesMeta.Id);
             return null;
         }
-            var stopwatch = Stopwatch.StartNew();
+        var stopwatch = Stopwatch.StartNew();
         // Group episodes by season
         var seasonGroups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
             .Where(e => e.Season.HasValue && (e.Episode.HasValue || e.Number.HasValue)) // Filter out invalid episodes early
@@ -925,8 +837,7 @@ public static void CreateStrmFile(string path, string content)
             .GroupBy(e => e.Season!.Value)
             .ToList();
 
-        if (seasonGroups.Count == 0)
-        {
+        if (seasonGroups.Count == 0) {
             _log.LogWarning("No valid episodes found for {SeriesId}", seriesMeta.Id);
             return null;
         }
@@ -934,8 +845,7 @@ public static void CreateStrmFile(string path, string content)
         // Create or get series
         var tmpSeries = (Series)IntoBaseItem(seriesMeta);
 
-        if (tmpSeries.ProviderIds is null || tmpSeries.ProviderIds.Count == 0)
-        {
+        if (tmpSeries.ProviderIds is null || tmpSeries.ProviderIds.Count == 0) {
             _log.LogWarning(
                 "No providers found for {SeriesId} {SeriesName}, skipping creation",
                 seriesMeta.Id,
@@ -949,14 +859,12 @@ public static void CreateStrmFile(string path, string content)
             tmpSeries.GetBaseItemKind(),
             seriesRootFolder
         );
-        if (series is null)
-        {
+        if (series is null) {
             series = tmpSeries;
             if (series.Id == Guid.Empty)
                 series.Id = Guid.NewGuid();
 
-            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem))
-            {
+            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = false,
@@ -964,7 +872,7 @@ public static void CreateStrmFile(string path, string content)
                 ForceSave = true,
             };
             // important
-           // series.ParentId = seriesRootFolder.Id;
+            // series.ParentId = seriesRootFolder.Id;
 
             //seriesRootFolder.AddChild(series);
             SaveItem(series, seriesRootFolder);
@@ -974,8 +882,7 @@ public static void CreateStrmFile(string path, string content)
 
         var existingSeasonsDict = _library
             .GetItemList(
-                new InternalItemsQuery
-                {
+                new InternalItemsQuery {
                     ParentId = series.Id,
                     IncludeItemTypes = new[] { BaseItemKind.Season },
                     Recursive = true,
@@ -985,10 +892,8 @@ public static void CreateStrmFile(string path, string content)
             .OfType<Season>()
             .Where(s => s.IndexNumber.HasValue)
             .GroupBy(s => s.IndexNumber!.Value)
-            .Select(g =>
-            {
-                if (g.Count() > 1)
-                {
+            .Select(g => {
+                if (g.Count() > 1) {
                     _log.LogWarning(
                         "Duplicate seasons found for series {SeriesName} ({SeriesId})! Season {SeasonNum} exists {Count} times. IDs: {Ids}",
                         series.Name,
@@ -1008,23 +913,20 @@ public static void CreateStrmFile(string path, string content)
         var seriesStremioId = series.GetProviderId("Stremio");
         var seriesPresentationKey = series.GetPresentationUniqueKey();
 
-        foreach (var seasonGroup in seasonGroups)
-        {
+        foreach (var seasonGroup in seasonGroups) {
             ct.ThrowIfCancellationRequested();
 
             var seasonIndex = seasonGroup.Key;
             var seasonPath = $"{series.Path}:{seasonIndex}";
 
-            if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
-            {
+            if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season)) {
                 _log.LogTrace(
                     "Creating series {SeriesName} season {SeasonIndex:D2}",
                     series.Name,
                     seasonIndex
                 );
 
-                season = new Season
-                {
+                season = new Season {
                     Id = Guid.NewGuid(),
                     Name = $"Season {seasonIndex:D2}",
                     IndexNumber = seasonIndex,
@@ -1034,12 +936,12 @@ public static void CreateStrmFile(string path, string content)
                     DateLastRefreshed = DateTime.UtcNow,
                     SeriesPresentationUniqueKey = seriesPresentationKey,
                     DateModified = DateTime.UtcNow,
-                    DateLastSaved = DateTime.UtcNow, 
+                    DateLastSaved = DateTime.UtcNow,
                     // important
                     ParentId = series.Id
                 };
                 //season.Path = $"{series.Path}/{season.Name}";
-               // season.Id = _library.GetNewItemId(season.Path, season.GetType());
+                // season.Id = _library.GetNewItemId(season.Path, season.GetType());
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 //season.SetProviderId(MetadataProvider.Custom, season.Id.ToString());
@@ -1054,8 +956,7 @@ public static void CreateStrmFile(string path, string content)
             // Get existing episodes once per season and create dictionary
             var existingEpisodeNumbers = _library
                 .GetItemList(
-                    new InternalItemsQuery
-                    {
+                    new InternalItemsQuery {
                         ParentId = season.Id,
                         IncludeItemTypes = new[] { BaseItemKind.Episode },
                         Recursive = true,
@@ -1068,15 +969,13 @@ public static void CreateStrmFile(string path, string content)
                 .ToHashSet();
             var seasonStremioId = season.GetProviderId("Stremio");
 
-            foreach (var epMeta in seasonGroup)
-            {
+            foreach (var epMeta in seasonGroup) {
                 ct.ThrowIfCancellationRequested();
 
                 var index = epMeta.Episode ?? epMeta.Number;
 
                 // This should never happen due to earlier filtering, but kept for safety
-                if (!index.HasValue)
-                {
+                if (!index.HasValue) {
                     _log.LogWarning(
                         "Episode number missing for: {EpisodeName}, skipping",
                         epMeta.GetName()
@@ -1084,8 +983,7 @@ public static void CreateStrmFile(string path, string content)
                     continue;
                 }
 
-                if (existingEpisodeNumbers.Contains(index.Value))
-                {
+                if (existingEpisodeNumbers.Contains(index.Value)) {
                     _log.LogTrace(
                         "Episode {EpisodeName} already exists, skipping",
                         epMeta.GetName()
@@ -1115,7 +1013,7 @@ public static void CreateStrmFile(string path, string content)
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
                 //season.AddChild(episode);
                 SaveItem(episode, season);
-               // await episode.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+                // await episode.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
                 episodesInserted++;
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
             }
@@ -1139,14 +1037,12 @@ public static void CreateStrmFile(string path, string content)
         Guid userId,
         IProgress<double> progress,
         CancellationToken cancellationToken
-    )
-    {
+    ) {
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         // var seriesFolder = cfg.SeriesFolder;
         var seriesItems = _library
             .GetItemList(
-                new InternalItemsQuery
-                {
+                new InternalItemsQuery {
                     IncludeItemTypes = new[] { BaseItemKind.Series },
                     SeriesStatuses = new[] { SeriesStatus.Continuing },
                     HasAnyProviderId = new()
@@ -1167,11 +1063,9 @@ public static void CreateStrmFile(string path, string content)
         var stremio = cfg.stremio;
 
         var processed = 0;
-        foreach (var series in seriesItems)
-        {
+        foreach (var series in seriesItems) {
             cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
+            try {
                 _log.LogDebug(
                     "SyncSeries: syncing series trees for {Name} ({Id})",
                     series.Name,
@@ -1179,8 +1073,7 @@ public static void CreateStrmFile(string path, string content)
                 );
 
                 var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
-                if (meta is null)
-                {
+                if (meta is null) {
                     _log.LogWarning(
                         "SyncRunningSeries: skipping {Name} ({Id}) - no metadata found",
                         series.Name,
@@ -1191,8 +1084,7 @@ public static void CreateStrmFile(string path, string content)
                 await SyncSeriesTreesAsync(cfg, meta, cancellationToken);
                 processed++;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 _log.LogError(
                     ex,
                     "SyncSeries: failed for {Name} ({Id}). Error: {ErrorMessage}",
@@ -1210,63 +1102,64 @@ public static void CreateStrmFile(string path, string content)
         );
     }
 
-   public BaseItem SaveItem(BaseItem item, Folder parent) {
+    public BaseItem SaveItem(BaseItem item, Folder parent) {
         return SaveItems(new[] { item }, parent).FirstOrDefault();
-   }
+    }
 
-   public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
+    public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
         foreach (var item in items) {
-   
-       
-                    //  Console.WriteLine(item.Path);
-          if (item.IsFolder) {
+
+
+            //  Console.WriteLine(item.Path);
+            if (item.IsFolder) {
                 if (item.GetBaseItemKind() == BaseItemKind.Series) {
-                  item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
-                } else if (item.GetBaseItemKind() == BaseItemKind.Season) {
-                  item.Path = $"{parent.Path}/{item.Name}";
+                    item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
+                }
+                else if (item.GetBaseItemKind() == BaseItemKind.Season) {
+                    item.Path = $"{parent.Path}/{item.Name}";
                 }
                 Directory.CreateDirectory(item.Path);
-          } else {
+            }
+            else {
                 item.ShortcutPath = item.Path;
                 item.IsShortcut = true;
                 item.Path = GetStrmPath(parent, item);
 
                 CreateStrmFile(item.Path, item.ShortcutPath);
             }
-                     //   Console.WriteLine(item.Path);
-         //   Console.WriteLine("========");
+            //   Console.WriteLine(item.Path);
+            //   Console.WriteLine("========");
             item.DateModified = File.GetLastWriteTimeUtc(item.Path);
             item.DateLastRefreshed = item.DateModified;
-            item.DateLastSaved = item.DateLastSaved;    
+            item.DateLastSaved = item.DateLastSaved;
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
-                        
-                parent.AddChild(item);
-  
-                }
+
+            parent.AddChild(item);
+
+        }
         _repo.SaveItems(items.ToList(), CancellationToken.None);
-        
+
         foreach (var item in items) {
-                  _library.RegisterItem(item);
-      };
+            _library.RegisterItem(item);
+        }
+        ;
         return items;
-   }
-    
-public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStrm = false, bool createStrm = false)
-    {
+    }
+
+    public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool createStrm = false) {
         BaseItem item;
 
         var Id = meta.Id;
-      
-        switch (meta.Type)
-        {
+
+        switch (meta.Type) {
             case StremioMediaType.Series:
                 item = new Series { Id = _library.GetNewItemId(Id, typeof(Series)) };
-                
+
                 break;
 
             case StremioMediaType.Movie:
                 item = new Movie { Id = _library.GetNewItemId(Id, typeof(Movie)) };
-            break;
+                break;
 
             case StremioMediaType.Episode:
                 item = new Episode { Id = _library.GetNewItemId(Id, typeof(Episode)) };
@@ -1275,23 +1168,23 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
                 _log.LogWarning("unsupported type {type}", meta.Type);
                 return null;
         }
-        ;
+            ;
 
-        
+
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{Id}";
-//item.DateModified = DateTime.UtcNow;
+        //item.DateModified = DateTime.UtcNow;
         //item.DateLastSaved = DateTime.UtcNow;
-        
 
-          
-        
-         //   item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-         //   item.DateLastRefreshed = item.DateModified;
-          //  item.DateLastSaved = item.DateLastSaved;    
-    
-        
+
+
+
+        //   item.DateModified = File.GetLastWriteTimeUtc(item.Path);
+        //   item.DateLastRefreshed = item.DateModified;
+        //  item.DateLastSaved = item.DateLastSaved;
+
+
 
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
@@ -1299,8 +1192,7 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
             item.Overview = meta.Description;
 
         // NOTICE: do this only for show and movie. cause the parent imdb is used for season abd episodes
-        if (meta.Type is not StremioMediaType.Episode && !string.IsNullOrWhiteSpace(Id))
-        {
+        if (meta.Type is not StremioMediaType.Episode && !string.IsNullOrWhiteSpace(Id)) {
             var providerMappings = new (string Prefix, string Provider, bool StripPrefix)[]
             {
                 ("tmdb:", MetadataProvider.Tmdb.ToString(), true),
@@ -1313,10 +1205,8 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
                 ("tvmaze:", MetadataProvider.TvMaze.ToString(), true),
             };
 
-            foreach (var (prefix, provider, stripPrefix) in providerMappings)
-            {
-                if (Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                {
+            foreach (var (prefix, provider, stripPrefix) in providerMappings) {
+                if (Id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) {
                     var providerId = stripPrefix ? Id.Substring(prefix.Length) : Id;
                     item.SetProviderId(provider, providerId);
                     break;
@@ -1324,8 +1214,7 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(meta.ImdbId))
-        {
+        if (!string.IsNullOrWhiteSpace(meta.ImdbId)) {
             item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
         }
 
@@ -1337,8 +1226,7 @@ public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool useStr
         item.Overview = meta.Description ?? meta.Overview;
 
         var primary = meta.Poster ?? meta.Thumbnail;
-        if (!string.IsNullOrWhiteSpace(primary))
-        {
+        if (!string.IsNullOrWhiteSpace(primary)) {
             item.ImageInfos = new List<ItemImageInfo>
             {
                 new ItemImageInfo { Type = ImageType.Primary, Path = primary },
