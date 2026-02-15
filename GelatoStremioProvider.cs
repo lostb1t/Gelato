@@ -694,16 +694,21 @@ namespace Gelato
         }
 
         public bool IsValid()
-{
-    if (string.IsNullOrWhiteSpace(Url))
-        return false;
-
-    Uri uri;
-    if (!Uri.TryCreate(Url, UriKind.Absolute, out uri))
-        return false;
-
-    return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
-}
+        {
+            // P2P torrent streams have an infohash but no URL —
+            // they are streamed via the internal /gelato/stream endpoint
+            if (IsTorrent() && !IsFile())
+                return true;
+        
+            if (string.IsNullOrWhiteSpace(Url))
+                return false;
+        
+            Uri uri;
+            if (!Uri.TryCreate(Url, UriKind.Absolute, out uri))
+                return false;
+        
+            return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
+        }
 
         public bool IsFile()
         {
