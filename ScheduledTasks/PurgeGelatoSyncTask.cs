@@ -87,19 +87,20 @@ public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
     foreach (var item in items)
     {
                var kind = item.GetBaseItemKind();
-       try {
-        _library.DeleteItem(
+            try
+                {
+                    _library.DeleteItem(
             item,
-            new DeleteOptions { DeleteFileLocation = false },
+            new DeleteOptions { DeleteFileLocation = true },
             true);
-} catch {
-  _repo.DeleteItem([item.Id]);
-}
-        // Update stats by item kind
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
+                }
 
         stats.AddOrUpdate(kind, 1, (_, count) => count + 1);
 
-        // Update progress
         processedItems++;
         double currentProgress = (double)processedItems / totalItems * 100;
         progress?.Report(currentProgress);

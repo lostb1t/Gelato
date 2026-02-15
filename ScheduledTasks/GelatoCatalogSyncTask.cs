@@ -191,7 +191,7 @@ namespace Gelato.Tasks
                         skip += page.Count;
                     }
 
-                    if (shouldCreateCollection)
+                    if (shouldCreateCollection && ids.Keys.Any())
                     {
                         await SaveCollection(cat, ids.Keys.Take(maxPerCatalog).ToList())
                             .ConfigureAwait(false);

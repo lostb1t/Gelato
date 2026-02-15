@@ -94,7 +94,10 @@ namespace Gelato.Tasks
 
                 try
                 {
-                    _repo.DeleteItem([item.Id]);
+                    _library.DeleteItem(
+            item,
+            new DeleteOptions { DeleteFileLocation = true },
+            true);
                 }
                 catch (Exception ex)
                 {
