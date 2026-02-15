@@ -150,7 +150,7 @@ namespace Gelato.Decorators {
 
             var sources = _inner.GetStaticMediaSources(primaryItem, enablePathSubstitution, user).ToList();
             video = (Video)primaryItem;
-
+//Console.WriteLine(sources.Count());
             var map = video.GetLinkedAlternateVersions().ToDictionary(x => x.Id, x => x);
 
             map[video.Id] = video;
@@ -172,8 +172,6 @@ namespace Gelato.Decorators {
                 })
                 .ToList();
 
-
-
             _log.LogDebug(
                 "Found {StreamCount} streams. UserId={UserId} GelatoId={StremioId}",
                 filteredSources.Count,
@@ -181,20 +179,11 @@ namespace Gelato.Decorators {
                 item.GetProviderId("Stremio")
             );
 
-
-            // Remove primary sources if there are streams
-            if (filteredSources.Count > 1) {
-                filteredSources = filteredSources
-                    .Where(k => !k.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase))
-                    .Where(k => !k.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+           if (filteredSources.Count == 0) {
+               filteredSources.Add(
+                    sources[0]
+                );
             }
-
-            //if (filteredSources.Count == 0) {
-            //    filteredSources.Add(
-            //        GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
-            //    );
-           // }
 
             // Set the first source as default and update its ID
             if (filteredSources.Count > 0) {

@@ -30,7 +30,6 @@ namespace Gelato.Decorators
             BaseItem? owner = null
         )
         {
-          //options.EnableUserData = false;
             var dto = _inner.GetBaseItemDto(item, options, user, owner);
             Patch(dto, item, user, owner, options, false);
             return dto;
@@ -93,21 +92,8 @@ namespace Gelato.Decorators
         )
         {
             var manager = _manager.Value;
-
-            if (
-                item is not null
-                && user is not null
-                && IsGelato(dto)
-                && manager.CanDelete(item, user)
-            )
-            {
-                dto.CanDelete = true;
-            }
-            if (IsGelato(dto))
-            {
-                dto.CanDownload = true;
-
-                // mark unplayable if placeholder
+            
+                // mark if placeholder
                 if (
                     !IsList
                         && dto.MediaSources?.Length == 1
@@ -122,11 +108,7 @@ namespace Gelato.Decorators
                     dto.CanDownload = false;
                 }
 
-                if (dto.MediaSources?.Any() == true)
-                {
-                    //dto.MediaSources[0].Id = dto.Id.ToString("N");
-                }
-            }
+
         }
     }
 }
