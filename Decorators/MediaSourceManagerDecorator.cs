@@ -645,6 +645,12 @@ namespace Gelato.Decorators
                 info.Video3DFormat = video.Video3DFormat;
                 info.Timestamp = video.Timestamp;
                 info.IsRemote = true;
+                
+                if (video.IsShortcut)
+                {
+                    info.IsRemote = true;
+                    info.Path = video.ShortcutPath;
+                }
             }
 
             // massive cheat. clients will direct play remote files directly. But we always want to proxy it.
