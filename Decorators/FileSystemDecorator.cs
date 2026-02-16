@@ -19,8 +19,7 @@ namespace Gelato.Decorators;
 /// return virtual entries derived from the Jellyfin database instead of hitting disk.
 /// Non‑Gelato paths pass straight through to the real filesystem.
 /// </summary>
-public sealed class FileSystemDecorator : IFileSystem
-{
+public sealed class FileSystemDecorator : IFileSystem {
     private readonly IFileSystem _inner;
     private readonly IItemRepository _repo;
     private readonly ILogger<FileSystemDecorator> _log;
@@ -28,8 +27,7 @@ public sealed class FileSystemDecorator : IFileSystem
     public FileSystemDecorator(
         IFileSystem inner,
         IItemRepository repo,
-        ILogger<FileSystemDecorator> log)
-    {
+        ILogger<FileSystemDecorator> log) {
         _inner = inner;
         _repo = repo;
         _log = log;
@@ -37,16 +35,14 @@ public sealed class FileSystemDecorator : IFileSystem
 
     // ── helpers ──────────────────────────────────────────────────────────
 
-    private static bool IsGelatoPath(string path)
-    {
+    private static bool IsGelatoPath(string path) {
         var cfg = GelatoPlugin.Instance?.Configuration;
         if (cfg is null) return false;
 
         return IsSubPathOf(path, cfg.MoviePath) || IsSubPathOf(path, cfg.SeriesPath);
     }
 
-    private static bool IsSubPathOf(string path, string basePath)
-    {
+    private static bool IsSubPathOf(string path, string basePath) {
         if (string.IsNullOrWhiteSpace(basePath)) return false;
 
         // Normalize trailing separators for reliable comparison
@@ -73,22 +69,18 @@ public sealed class FileSystemDecorator : IFileSystem
     /// Query items from the DB whose Path starts with <paramref name="directory"/>.
     /// Returns only direct children (one level deep).
     /// </summary>
-    private IReadOnlyList<BaseItem> GetChildItemsFromDb(string directory)
-    {
+    private IReadOnlyList<BaseItem> GetChildItemsFromDb(string directory) {
         var normalizedDir = directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         IReadOnlyList<BaseItem> allItems;
-        try
-        {
-            allItems = _repo.GetItemList(new InternalItemsQuery
-            {
+        try {
+            allItems = _repo.GetItemList(new InternalItemsQuery {
                 Recursive = true,
                 IsDeadPerson = true, // skip gelato filters
                 IncludeItemTypes = GelatoItemKinds,
             });
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             _log.LogError(ex, "Gelato: error querying items for virtual directory {Path}", directory);
             return Array.Empty<BaseItem>();
         }
@@ -98,8 +90,7 @@ public sealed class FileSystemDecorator : IFileSystem
         var results = new List<BaseItem>();
         var seenDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var item in allItems)
-        {
+        foreach (var item in allItems) {
             if (string.IsNullOrEmpty(item.Path)) continue;
 
             var itemPath = item.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -112,12 +103,10 @@ public sealed class FileSystemDecorator : IFileSystem
             var relative = itemPath.Substring(normalizedDir.Length + 1);
 
             // Direct child: no more separators
-            if (!relative.Contains(Path.DirectorySeparatorChar) && !relative.Contains(Path.AltDirectorySeparatorChar))
-            {
+            if (!relative.Contains(Path.DirectorySeparatorChar) && !relative.Contains(Path.AltDirectorySeparatorChar)) {
                 results.Add(item);
             }
-            else
-            {
+            else {
                 // Intermediate directory — extract the first segment
                 var firstSeg = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, 2)[0];
                 seenDirs.Add(Path.Combine(normalizedDir, firstSeg));
@@ -125,13 +114,11 @@ public sealed class FileSystemDecorator : IFileSystem
         }
 
         // Create synthetic folder items for intermediate directories
-        foreach (var dir in seenDirs)
-        {
+        foreach (var dir in seenDirs) {
             if (results.Any(r => string.Equals(r.Path, dir, StringComparison.OrdinalIgnoreCase)))
                 continue;
 
-            results.Add(new Folder
-            {
+            results.Add(new Folder {
                 Path = dir,
                 Name = Path.GetFileName(dir),
                 DateModified = DateTime.UtcNow,
@@ -142,13 +129,11 @@ public sealed class FileSystemDecorator : IFileSystem
         return results;
     }
 
-    private static FileSystemMetadata ToMetadata(BaseItem item)
-    {
+    private static FileSystemMetadata ToMetadata(BaseItem item) {
         var isDir = item.IsFolder;
         var path = item.Path ?? string.Empty;
 
-        return new FileSystemMetadata
-        {
+        return new FileSystemMetadata {
             FullName = path,
             Name = Path.GetFileName(path),
             Extension = isDir ? string.Empty : Path.GetExtension(path),
@@ -160,8 +145,7 @@ public sealed class FileSystemDecorator : IFileSystem
         };
     }
 
-    private static FileSystemMetadata FakeDirectoryMeta(string path) => new()
-    {
+    private static FileSystemMetadata FakeDirectoryMeta(string path) => new() {
         FullName = path,
         Name = Path.GetFileName(path),
         Extension = string.Empty,
@@ -172,8 +156,7 @@ public sealed class FileSystemDecorator : IFileSystem
         CreationTimeUtc = DateTime.UtcNow,
     };
 
-    private static FileSystemMetadata FakeFileMeta(string path) => new()
-    {
+    private static FileSystemMetadata FakeFileMeta(string path) => new() {
         FullName = path,
         Name = Path.GetFileName(path),
         Extension = Path.GetExtension(path),
@@ -186,8 +169,7 @@ public sealed class FileSystemDecorator : IFileSystem
 
     // ── IFileSystem – entries listing ───────────────────────────────────
 
-    public IEnumerable<FileSystemMetadata> GetFileSystemEntries(string path, bool recursive = false)
-    {
+    public IEnumerable<FileSystemMetadata> GetFileSystemEntries(string path, bool recursive = false) {
         if (!IsGelatoPath(path))
             return _inner.GetFileSystemEntries(path, recursive);
 
@@ -198,23 +180,20 @@ public sealed class FileSystemDecorator : IFileSystem
         return children.Select(ToMetadata);
     }
 
-    public IEnumerable<FileSystemMetadata> GetFiles(string path, bool recursive = false)
-    {
+    public IEnumerable<FileSystemMetadata> GetFiles(string path, bool recursive = false) {
         if (!IsGelatoPath(path))
             return _inner.GetFiles(path, recursive);
 
         return GetChildItemsFromDb(path).Where(i => !i.IsFolder).Select(ToMetadata);
     }
 
-    public IEnumerable<FileSystemMetadata> GetFiles(string path, IReadOnlyList<string>? extensions, bool enableCaseSensitiveExtensions, bool recursive)
-    {
+    public IEnumerable<FileSystemMetadata> GetFiles(string path, IReadOnlyList<string>? extensions, bool enableCaseSensitiveExtensions, bool recursive) {
         if (!IsGelatoPath(path))
             return _inner.GetFiles(path, extensions, enableCaseSensitiveExtensions, recursive);
 
         var items = GetChildItemsFromDb(path).Where(i => !i.IsFolder).Select(ToMetadata);
 
-        if (extensions is { Count: > 0 })
-        {
+        if (extensions is { Count: > 0 }) {
             var cmp = enableCaseSensitiveExtensions ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
             var extSet = new HashSet<string>(extensions, cmp);
             items = items.Where(f => extSet.Contains(f.Extension));
@@ -223,23 +202,20 @@ public sealed class FileSystemDecorator : IFileSystem
         return items;
     }
 
-    public IEnumerable<FileSystemMetadata> GetFiles(string path, string searchPattern, bool recursive)
-    {
+    public IEnumerable<FileSystemMetadata> GetFiles(string path, string searchPattern, bool recursive) {
         if (!IsGelatoPath(path))
             return _inner.GetFiles(path, searchPattern, recursive);
 
         return GetChildItemsFromDb(path).Where(i => !i.IsFolder).Select(ToMetadata);
     }
 
-    public IEnumerable<FileSystemMetadata> GetFiles(string path, string searchPattern, IReadOnlyList<string>? extensions, bool enableCaseSensitiveExtensions, bool recursive)
-    {
+    public IEnumerable<FileSystemMetadata> GetFiles(string path, string searchPattern, IReadOnlyList<string>? extensions, bool enableCaseSensitiveExtensions, bool recursive) {
         if (!IsGelatoPath(path))
             return _inner.GetFiles(path, searchPattern, extensions, enableCaseSensitiveExtensions, recursive);
 
         var items = GetChildItemsFromDb(path).Where(i => !i.IsFolder).Select(ToMetadata);
 
-        if (extensions is { Count: > 0 })
-        {
+        if (extensions is { Count: > 0 }) {
             var cmp = enableCaseSensitiveExtensions ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
             var extSet = new HashSet<string>(extensions, cmp);
             items = items.Where(f => extSet.Contains(f.Extension));
@@ -248,8 +224,7 @@ public sealed class FileSystemDecorator : IFileSystem
         return items;
     }
 
-    public IEnumerable<FileSystemMetadata> GetDirectories(string path, bool recursive = false)
-    {
+    public IEnumerable<FileSystemMetadata> GetDirectories(string path, bool recursive = false) {
         if (!IsGelatoPath(path))
             return _inner.GetDirectories(path, recursive);
 
@@ -258,23 +233,20 @@ public sealed class FileSystemDecorator : IFileSystem
 
     // ── IFileSystem – path listings ─────────────────────────────────────
 
-    public IEnumerable<string> GetFilePaths(string path, bool recursive = false)
-    {
+    public IEnumerable<string> GetFilePaths(string path, bool recursive = false) {
         if (!IsGelatoPath(path))
             return _inner.GetFilePaths(path, recursive);
 
         return GetChildItemsFromDb(path).Where(i => !i.IsFolder).Select(i => i.Path!);
     }
 
-    public IEnumerable<string> GetFilePaths(string path, string[]? extensions, bool enableCaseSensitiveExtensions, bool recursive)
-    {
+    public IEnumerable<string> GetFilePaths(string path, string[]? extensions, bool enableCaseSensitiveExtensions, bool recursive) {
         if (!IsGelatoPath(path))
             return _inner.GetFilePaths(path, extensions, enableCaseSensitiveExtensions, recursive);
 
         var items = GetChildItemsFromDb(path).Where(i => !i.IsFolder);
 
-        if (extensions is { Length: > 0 })
-        {
+        if (extensions is { Length: > 0 }) {
             var cmp = enableCaseSensitiveExtensions ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase;
             var extSet = new HashSet<string>(extensions, cmp);
             items = items.Where(i => extSet.Contains(Path.GetExtension(i.Path)));
@@ -283,16 +255,14 @@ public sealed class FileSystemDecorator : IFileSystem
         return items.Select(i => i.Path!);
     }
 
-    public IEnumerable<string> GetDirectoryPaths(string path, bool recursive = false)
-    {
+    public IEnumerable<string> GetDirectoryPaths(string path, bool recursive = false) {
         if (!IsGelatoPath(path))
             return _inner.GetDirectoryPaths(path, recursive);
 
         return GetChildItemsFromDb(path).Where(i => i.IsFolder).Select(i => i.Path!);
     }
 
-    public IEnumerable<string> GetFileSystemEntryPaths(string path, bool recursive = false)
-    {
+    public IEnumerable<string> GetFileSystemEntryPaths(string path, bool recursive = false) {
         if (!IsGelatoPath(path))
             return _inner.GetFileSystemEntryPaths(path, recursive);
 
@@ -303,39 +273,33 @@ public sealed class FileSystemDecorator : IFileSystem
 
     // ── IFileSystem – single item lookups ───────────────────────────────
 
-    public FileSystemMetadata GetFileSystemInfo(string path)
-    {
+    public FileSystemMetadata GetFileSystemInfo(string path) {
         if (!IsGelatoPath(path))
             return _inner.GetFileSystemInfo(path);
 
         // Check if it's a known item path
         IReadOnlyList<BaseItem> items;
-        try
-        {
-            items = _repo.GetItemList(new InternalItemsQuery
-            {
+        try {
+            items = _repo.GetItemList(new InternalItemsQuery {
                 Path = path,
                 Recursive = true,
                 IsDeadPerson = true,
                 IncludeItemTypes = GelatoItemKinds,
             });
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             _log.LogError(ex, "Gelato: error querying item for {Path}", path);
             items = Array.Empty<BaseItem>();
         }
 
-        if (items.Count > 0)
-        {
+        if (items.Count > 0) {
             _log.LogInformation("Gelato: GetFileSystemInfo found item for {Path} (Type={Type})", path, items[0].GetType().Name);
             return ToMetadata(items[0]);
         }
 
         // Could be an intermediate directory
         var hasChildren = GetChildItemsFromDb(path).Count > 0;
-        if (hasChildren)
-        {
+        if (hasChildren) {
             _log.LogInformation("Gelato: GetFileSystemInfo returning fake dir for {Path} (has children)", path);
             return FakeDirectoryMeta(path);
         }
@@ -344,24 +308,20 @@ public sealed class FileSystemDecorator : IFileSystem
         return new FileSystemMetadata { FullName = path, Exists = false };
     }
 
-    public FileSystemMetadata GetFileInfo(string path)
-    {
+    public FileSystemMetadata GetFileInfo(string path) {
         if (!IsGelatoPath(path))
             return _inner.GetFileInfo(path);
 
         IReadOnlyList<BaseItem> items;
-        try
-        {
-            items = _repo.GetItemList(new InternalItemsQuery
-            {
+        try {
+            items = _repo.GetItemList(new InternalItemsQuery {
                 Path = path,
                 Recursive = true,
                 IsDeadPerson = true,
                 IncludeItemTypes = GelatoItemKinds,
             });
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             _log.LogError(ex, "Gelato: error querying file for {Path}", path);
             items = Array.Empty<BaseItem>();
         }
@@ -372,24 +332,20 @@ public sealed class FileSystemDecorator : IFileSystem
         return new FileSystemMetadata { FullName = path, Exists = false, IsDirectory = false };
     }
 
-    public FileSystemMetadata GetDirectoryInfo(string path)
-    {
+    public FileSystemMetadata GetDirectoryInfo(string path) {
         if (!IsGelatoPath(path))
             return _inner.GetDirectoryInfo(path);
 
         IReadOnlyList<BaseItem> items;
-        try
-        {
-            items = _repo.GetItemList(new InternalItemsQuery
-            {
+        try {
+            items = _repo.GetItemList(new InternalItemsQuery {
                 Path = path,
                 Recursive = true,
                 IsDeadPerson = true,
                 IncludeItemTypes = GelatoItemKinds,
             });
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             _log.LogError(ex, "Gelato: error querying directory for {Path}", path);
             items = Array.Empty<BaseItem>();
         }
@@ -407,32 +363,27 @@ public sealed class FileSystemDecorator : IFileSystem
 
     // ── IFileSystem – existence checks ──────────────────────────────────
 
-    public bool DirectoryExists(string path)
-    {
+    public bool DirectoryExists(string path) {
         if (!IsGelatoPath(path))
             return _inner.DirectoryExists(path);
 
         return GetChildItemsFromDb(path).Count > 0;
     }
 
-    public bool FileExists(string path)
-    {
+    public bool FileExists(string path) {
         if (!IsGelatoPath(path))
             return _inner.FileExists(path);
 
         IReadOnlyList<BaseItem> items;
-        try
-        {
-            items = _repo.GetItemList(new InternalItemsQuery
-            {
+        try {
+            items = _repo.GetItemList(new InternalItemsQuery {
                 Path = path,
                 Recursive = true,
                 IsDeadPerson = true,
                 IncludeItemTypes = GelatoItemKinds,
             });
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             _log.LogError(ex, "Gelato: error checking file existence for {Path}", path);
             items = Array.Empty<BaseItem>();
         }
@@ -443,15 +394,13 @@ public sealed class FileSystemDecorator : IFileSystem
     // ── IFileSystem – timestamps ────────────────────────────────────────
 
     public DateTime GetCreationTimeUtc(FileSystemMetadata info) => _inner.GetCreationTimeUtc(info);
-    public DateTime GetCreationTimeUtc(string path)
-    {
+    public DateTime GetCreationTimeUtc(string path) {
         if (!IsGelatoPath(path)) return _inner.GetCreationTimeUtc(path);
         return DateTime.UtcNow;
     }
 
     public DateTime GetLastWriteTimeUtc(FileSystemMetadata info) => _inner.GetLastWriteTimeUtc(info);
-    public DateTime GetLastWriteTimeUtc(string path)
-    {
+    public DateTime GetLastWriteTimeUtc(string path) {
         if (!IsGelatoPath(path)) return _inner.GetLastWriteTimeUtc(path);
         return DateTime.UtcNow;
     }

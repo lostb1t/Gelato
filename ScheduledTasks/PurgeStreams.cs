@@ -7,9 +7,7 @@ using Gelato;
 using Gelato.Common;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Entities;
@@ -17,10 +15,8 @@ using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Tasks
-{
-    public sealed class PurgeGelatoStreamsTask : IScheduledTask
-    {
+namespace Gelato.Tasks {
+    public sealed class PurgeGelatoStreamsTask : IScheduledTask {
         private readonly ILogger<PurgeGelatoStreamsTask> _log;
 
         private readonly GelatoManager _manager;
@@ -32,8 +28,7 @@ namespace Gelato.Tasks
             ILogger<PurgeGelatoStreamsTask> log,
             IItemRepository repo,
             GelatoManager manager
-        )
-        {
+        ) {
             _log = log;
             _library = libraryManager;
 
@@ -46,8 +41,7 @@ namespace Gelato.Tasks
         public string Description => "Removes all stremio streams";
         public string Category => "Gelato Maintenance";
 
-        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
-        {
+        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() {
             return new[]
             {
                 new TaskTriggerInfo
@@ -61,12 +55,10 @@ namespace Gelato.Tasks
         public async Task ExecuteAsync(
             IProgress<double> progress,
             CancellationToken cancellationToken
-        )
-        {
+        ) {
             _log.LogInformation("purging streams");
 
-            var query = new InternalItemsQuery
-            {
+            var query = new InternalItemsQuery {
                 IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
                 Recursive = true,
                 HasAnyProviderId = new()
@@ -88,19 +80,16 @@ namespace Gelato.Tasks
 
             int done = 0;
 
-            foreach (var item in streams)
-            {
+            foreach (var item in streams) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                try
-                {
+                try {
                     _library.DeleteItem(
             item,
             new DeleteOptions { DeleteFileLocation = true },
             true);
                 }
-                catch (Exception ex)
-                {
+                catch (Exception ex) {
                     _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
                 }
 

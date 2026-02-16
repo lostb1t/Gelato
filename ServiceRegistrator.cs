@@ -5,13 +5,13 @@ using Gelato.Filters;
 using Gelato.Tasks;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
-using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
-using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -22,10 +22,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato;
 
-public class ServiceRegistrator : IPluginServiceRegistrator
-{
-    public void RegisterServices(IServiceCollection services, IServerApplicationHost host)
-    {
+public class ServiceRegistrator : IPluginServiceRegistrator {
+    public void RegisterServices(IServiceCollection services, IServerApplicationHost host) {
         //services.AddSingleton<GelatoStremioProvider>();
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
@@ -46,11 +44,10 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
-           // .DecorateSingle<IFileSystem, FileSystemDecorator>();
+        // .DecorateSingle<IFileSystem, FileSystemDecorator>();
 
 
-        services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
-        {
+        services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {
             o.Filters.AddService<InsertActionFilter>(order: 1);
             o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
@@ -60,19 +57,16 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         });
     }
 
-    public class GelatoService : IHostedService
-    {
+    public class GelatoService : IHostedService {
         private readonly IConfiguration _config;
         private readonly ILogger<GelatoService> _log;
 
-        public GelatoService(IConfiguration config, ILogger<GelatoService> log)
-        {
+        public GelatoService(IConfiguration config, ILogger<GelatoService> log) {
             _config = config;
             _log = log;
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken)
-        {
+        public async Task StartAsync(CancellationToken cancellationToken) {
             var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
             var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "40M";
 
@@ -90,10 +84,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
     }
 }
 
-public static class ServiceCollectionDecorationExtensions
-{
-    static object BuildInner(IServiceProvider sp, ServiceDescriptor d)
-    {
+public static class ServiceCollectionDecorationExtensions {
+    static object BuildInner(IServiceProvider sp, ServiceDescriptor d) {
         if (d.ImplementationInstance is not null)
             return d.ImplementationInstance;
         if (d.ImplementationFactory is not null)
@@ -104,8 +96,7 @@ public static class ServiceCollectionDecorationExtensions
     public static IServiceCollection DecorateSingle<TService, TDecorator>(
         this IServiceCollection services
     )
-        where TDecorator : class, TService
-    {
+        where TDecorator : class, TService {
         var original = services.LastOrDefault(sd => sd.ServiceType == typeof(TService));
         if (original is null)
             return services; // nothing to decorate
@@ -115,8 +106,7 @@ public static class ServiceCollectionDecorationExtensions
         services.Add(
             new ServiceDescriptor(
                 typeof(TService),
-                sp =>
-                {
+                sp => {
                     var inner = (TService)BuildInner(sp, original);
                     return ActivatorUtilities.CreateInstance<TDecorator>(sp, inner);
                 },
@@ -130,8 +120,7 @@ public static class ServiceCollectionDecorationExtensions
     public static IServiceCollection DecorateAll<TService, TDecorator>(
         this IServiceCollection services
     )
-        where TDecorator : class, TService
-    {
+        where TDecorator : class, TService {
         var originals = services.Where(sd => sd.ServiceType == typeof(TService)).ToList();
         if (originals.Count == 0)
             return services;
@@ -139,13 +128,11 @@ public static class ServiceCollectionDecorationExtensions
         foreach (var d in originals)
             services.Remove(d);
 
-        foreach (var d in originals)
-        {
+        foreach (var d in originals) {
             services.Add(
                 new ServiceDescriptor(
                     typeof(TService),
-                    sp =>
-                    {
+                    sp => {
                         var inner = (TService)BuildInner(sp, d);
                         return ActivatorUtilities.CreateInstance<TDecorator>(sp, inner);
                     },

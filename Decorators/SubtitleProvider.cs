@@ -16,11 +16,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Decorators
-{
-    public sealed class SubtitleProvider
-    //public sealed class SubtitleProvider : ISubtitleProvider
-    {
+namespace Gelato.Decorators {
+    public sealed class SubtitleProvider {
         private readonly GelatoStremioProvider _stremio;
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
@@ -37,8 +34,7 @@ namespace Gelato.Decorators
             GelatoStremioProvider stremio,
             IHttpClientFactory http,
             ILogger<SubtitleProvider> log
-        )
-        {
+        ) {
             _stremio = stremio;
             _http = http;
             _log = log;
@@ -52,23 +48,19 @@ namespace Gelato.Decorators
         public async Task<IEnumerable<RemoteSubtitleInfo>> Search(
             SubtitleSearchRequest request,
             CancellationToken cancellationToken
-        )
-        {
+        ) {
             IReadOnlyList<StremioSubtitle> subs;
 
-            try
-            {
+            try {
                 string filename;
 
                 if (
                     Uri.TryCreate(request.MediaPath, UriKind.Absolute, out var uri)
                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-                )
-                {
+                ) {
                     filename = Path.GetFileName(uri.LocalPath);
                 }
-                else
-                {
+                else {
                     filename = Path.GetFileName(request.MediaPath);
                 }
 
@@ -77,16 +69,13 @@ namespace Gelato.Decorators
 
                 subs = await _stremio.GetSubtitlesAsync(stremioUri, filename).ConfigureAwait(false);
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 _log.LogError(ex, "Subtitle search failed for {Path}", request.MediaPath);
                 return Array.Empty<RemoteSubtitleInfo>();
             }
 
             var now = DateTime.UtcNow;
-            foreach (var s in subs)
-            {
-                // _log.LogDebug($"s: {s.LangCode} id: {s.Id}");
+            foreach (var s in subs) {
                 _subsCache[CacheKey(s.Id)] = (s, now + CacheTtl);
             }
 
@@ -102,8 +91,7 @@ namespace Gelato.Decorators
                     )
                 );
             _log.LogDebug($"Found: {subs.Count} subtitles. After filter {filtered.Count()}");
-            return subs.Select(s => new RemoteSubtitleInfo
-            {
+            return subs.Select(s => new RemoteSubtitleInfo {
                 Id = s.Id,
                 Name = s.Title,
                 ProviderName = Name,
@@ -115,12 +103,10 @@ namespace Gelato.Decorators
         public async Task<SubtitleResponse> GetSubtitles(
             string id,
             CancellationToken cancellationToken
-        )
-        {
+        ) {
             var key = CacheKey(id);
 
-            if (!_subsCache.TryGetValue(key, out var entry) || entry.Expires <= DateTime.UtcNow)
-            {
+            if (!_subsCache.TryGetValue(key, out var entry) || entry.Expires <= DateTime.UtcNow) {
                 _subsCache.TryRemove(key, out _);
                 _log.LogWarning("Subtitle cache miss/expired for id={Id}", id);
                 throw new FileNotFoundException($"Subtitle not found for id {id}");
@@ -134,8 +120,7 @@ namespace Gelato.Decorators
                 HttpCompletionOption.ResponseHeadersRead,
                 cancellationToken
             );
-            if (!resp.IsSuccessStatusCode)
-            {
+            if (!resp.IsSuccessStatusCode) {
                 _log.LogError(
                     "Failed to download subtitle id={Id} from {Url}. Status={Status}",
                     id,
@@ -152,16 +137,14 @@ namespace Gelato.Decorators
             );
             ms.Position = 0;
 
-            return new SubtitleResponse
-            {
+            return new SubtitleResponse {
                 Format = GuessSubtitleCodec(sub.Url),
                 Stream = ms,
                 Language = "en",
             };
         }
 
-        public string GuessSubtitleCodec(string? urlOrPath)
-        {
+        public string GuessSubtitleCodec(string? urlOrPath) {
             if (string.IsNullOrWhiteSpace(urlOrPath))
                 return "subrip";
 

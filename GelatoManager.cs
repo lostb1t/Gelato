@@ -1,21 +1,14 @@
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.Globalization;
 using System.Text;
-using System.Text.Json;
 using Gelato.Common;
 using Gelato.Configuration;
 using Gelato.Decorators;
 using Jellyfin.Data.Enums;
-using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
-using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Net;
-using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Collections;
-using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -24,20 +17,14 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
-using MediaBrowser.Model.Plugins;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
-
-//using Jellyfin.Networking.Configuration;
-//using Jellyfin.Server.Extensions;
 
 namespace Gelato;
 
@@ -328,24 +315,12 @@ public class GelatoManager {
         var baseItem = IntoBaseItem(meta);
 
         if (mediaType == StremioMediaType.Movie) {
-            var new_parent = new Folder {
-                Name = $"{baseItem.Name} ({baseItem.PremiereDate.Value.Year})",
-               ExternalId = "test",
-
-// Path = $"{parent.Path}/{baseItem.Name} ({baseItem.PremiereDate.Value.Year})";
-            };
-                            new_parent.PresentationUniqueKey = new_parent.GetPresentationUniqueKey();
-
-           // new_parent = (Folder)SaveItem(new_parent, parent);
-                         // await new_parent.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
-      //  await new_parent.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
             baseItem = SaveItem(baseItem, parent);
-         
-        await baseItem
-            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-            .ConfigureAwait(false);
- //  await baseItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
-           // await baseItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+
+            await baseItem
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                .ConfigureAwait(false);
+            
         }
         else {
             baseItem = await SyncSeriesTreesAsync(cfg, meta, ct).ConfigureAwait(false);
@@ -369,7 +344,6 @@ public class GelatoManager {
                 _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
             }
             else {
-
                 if (baseItem is Series) {
                     // Queue with a FRESH DirectoryService to avoid stale cache from earlier lookups.
                     // By the time the queue processes this, all seasons/episodes will be in the DB.
@@ -384,10 +358,6 @@ public class GelatoManager {
                 }
                 else {
                     _provider.RefreshFullItem(baseItem, options, ct);
-                             
-        await baseItem
-            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-            .ConfigureAwait(false);
                 }
 
             }
@@ -438,8 +408,7 @@ public class GelatoManager {
     /// sorting. We make sure to keep a one stable version based on primaryversionid
     /// </summary>
     /// <returns></returns>
-    public async Task<int> SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
-    {
+    public async Task<int> SyncStreams(BaseItem item, Guid userId, CancellationToken ct) {
         _log.LogDebug($"SyncStreams for {item.Id}");
         var inv = CultureInfo.InvariantCulture;
         var stopwatch = Stopwatch.StartNew();
@@ -567,12 +536,10 @@ public class GelatoManager {
 
             target.SetGelatoData("name", s.Name);
             target.SetGelatoData("description", s.Description);
-            if (!string.IsNullOrEmpty(s.BehaviorHints?.BingeGroup))
-            {
+            if (!string.IsNullOrEmpty(s.BehaviorHints?.BingeGroup)) {
                 target.SetGelatoData("bingeGroup", s.BehaviorHints.BingeGroup);
             }
-            if (!string.IsNullOrEmpty(s.BehaviorHints?.Filename))
-            {
+            if (!string.IsNullOrEmpty(s.BehaviorHints?.Filename)) {
                 target.SetGelatoData("filename", s.BehaviorHints.Filename);
             }
             target.SetGelatoData("index", index);
@@ -606,15 +573,15 @@ public class GelatoManager {
         }
 
         _repo.SaveItems(stale, ct);
-        newVideos.Add(primary);  
-       // MergeVersions(newVideos.ToArray());
+        newVideos.Add(primary);
+        // MergeVersions(newVideos.ToArray());
 
         stopwatch.Stop();
 
         _log.LogInformation(
             $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
         );
-        
+
         return acceptable.Count;
     }
 
@@ -1176,9 +1143,9 @@ public class GelatoManager {
                 }
                 Directory.CreateDirectory(item.Path);
 
-            var now = DateTime.UtcNow;
-            item.DateLastRefreshed = now;
-            item.DateLastSaved = now;
+                var now = DateTime.UtcNow;
+                item.DateLastRefreshed = now;
+                item.DateLastSaved = now;
             }
             else {
                 item.ShortcutPath = item.Path;
@@ -1193,15 +1160,15 @@ public class GelatoManager {
                 if (item is Video)
                     CreateStrmFile(item.Path, item.ShortcutPath);
 
-            var now = DateTime.UtcNow;
-            item.DateModified = now;
-            item.DateLastRefreshed = now;
-            item.DateLastSaved = now;
+                var now = DateTime.UtcNow;
+                item.DateModified = now;
+                item.DateLastRefreshed = now;
+                item.DateLastSaved = now;
             }
 
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
-            
+
             parent.AddChild(item);
 
         }
@@ -1240,7 +1207,7 @@ public class GelatoManager {
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{Id}";
-        
+
         if (!string.IsNullOrWhiteSpace(meta.Runtime))
             item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
         if (!string.IsNullOrWhiteSpace(meta.Description))

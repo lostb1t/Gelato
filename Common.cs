@@ -13,31 +13,23 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Gelato.Common;
 
-public sealed class StremioUri
-{
+public sealed class StremioUri {
     public StremioMediaType MediaType { get; }
     public string ExternalId { get; }
     public string? StreamId { get; }
 
-    public StremioUri(StremioMediaType mediaType, string externalId, string? streamId = null)
-    {
+    public StremioUri(StremioMediaType mediaType, string externalId, string? streamId = null) {
         if (string.IsNullOrWhiteSpace(externalId))
             throw new ArgumentException("externalId cannot be null or empty.", nameof(externalId));
 
@@ -51,8 +43,7 @@ public sealed class StremioUri
         RegexOptions.Compiled | RegexOptions.IgnoreCase
     );
 
-    public static StremioUri FromString(string value)
-    {
+    public static StremioUri FromString(string value) {
         if (string.IsNullOrWhiteSpace(value))
             throw new ArgumentException("Value cannot be null or empty.", nameof(value));
 
@@ -62,22 +53,19 @@ public sealed class StremioUri
         throw new FormatException($"Invalid StremioId string: {value}");
     }
 
-    public static StremioUri? FromMeta(StremioMeta meta)
-    {
+    public static StremioUri? FromMeta(StremioMeta meta) {
         if (TryParse(meta.Id, out var sid) && sid is not null)
             return sid;
 
         return null;
     }
 
-    public static StremioUri? FromBaseItem(BaseItem item)
-    {
+    public static StremioUri? FromBaseItem(BaseItem item) {
         if (item is null)
             throw new ArgumentNullException(nameof(item));
 
         var kind = item.GetBaseItemKind();
-        var mediaType = kind switch
-        {
+        var mediaType = kind switch {
             BaseItemKind.Movie => StremioMediaType.Movie,
             BaseItemKind.Series or BaseItemKind.Episode => StremioMediaType.Series,
             _ => throw new NotSupportedException($"Unsupported BaseItemKind: {kind}"),
@@ -88,24 +76,21 @@ public sealed class StremioUri
         if (!string.IsNullOrWhiteSpace(stremioId))
             uri = new StremioUri(mediaType, stremioId);
 
-        if (kind == BaseItemKind.Movie)
-        {
+        if (kind == BaseItemKind.Movie) {
             var imdb = item.GetProviderId(MetadataProvider.Imdb);
             return string.IsNullOrWhiteSpace(imdb)
                 ? uri
                 : new StremioUri(StremioMediaType.Movie, imdb);
         }
 
-        if (kind == BaseItemKind.Series)
-        {
+        if (kind == BaseItemKind.Series) {
             var imdb = item.GetProviderId(MetadataProvider.Imdb);
             return string.IsNullOrWhiteSpace(imdb)
                 ? uri
                 : new StremioUri(StremioMediaType.Series, imdb);
         }
 
-        if (kind == BaseItemKind.Episode)
-        {
+        if (kind == BaseItemKind.Episode) {
             var ep = (MediaBrowser.Controller.Entities.TV.Episode)item;
             var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
             if (
@@ -122,8 +107,7 @@ public sealed class StremioUri
         return null;
     }
 
-    public static StremioUri Parse(string id)
-    {
+    public static StremioUri Parse(string id) {
         if (string.IsNullOrWhiteSpace(id))
             throw new ArgumentException("Value cannot be null or empty.", nameof(id));
 
@@ -135,8 +119,7 @@ public sealed class StremioUri
         var ext = m.Groups["ext"].Value;
         var stream = m.Groups["stream"].Success ? m.Groups["stream"].Value : null;
 
-        var mediaType = typeStr switch
-        {
+        var mediaType = typeStr switch {
             "movie" => StremioMediaType.Movie,
             "series" => StremioMediaType.Series,
             _ => throw new FormatException($"Unknown media type in StremioId: {typeStr}"),
@@ -145,22 +128,18 @@ public sealed class StremioUri
         return new StremioUri(mediaType, ext, stream);
     }
 
-    public static bool TryParse(string id, out StremioUri? value)
-    {
-        try
-        {
+    public static bool TryParse(string id, out StremioUri? value) {
+        try {
             value = Parse(id);
             return true;
         }
-        catch
-        {
+        catch {
             value = null;
             return false;
         }
     }
 
-    public override string ToString()
-    {
+    public override string ToString() {
         var type = MediaType == StremioMediaType.Movie ? "movie" : "series";
         return StreamId is null
             ? $"stremio://{type}/{ExternalId}"
@@ -168,14 +147,12 @@ public sealed class StremioUri
     }
 
     // without stream id
-    public string ToBaseString()
-    {
+    public string ToBaseString() {
         var type = MediaType == StremioMediaType.Movie ? "movie" : "series";
         return $"stremio://{type}/{ExternalId}";
     }
 
-    public Guid ToGuid()
-    {
+    public Guid ToGuid() {
         using var md5 = MD5.Create();
         var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(ToString()));
         return new Guid(hash);
@@ -193,10 +170,8 @@ public sealed class StremioUri
         new(StremioMediaType.Series, externalId, streamId);
 }
 
-public static class Utils
-{
-    public static long? ParseToTicks(string? input)
-    {
+public static class Utils {
+    public static long? ParseToTicks(string? input) {
         if (string.IsNullOrWhiteSpace(input))
             return null;
 
@@ -207,13 +182,11 @@ public static class Utils
             return ts.Ticks;
 
         // Try XML ISO8601 style (PT2H29M)
-        try
-        {
+        try {
             ts = System.Xml.XmlConvert.ToTimeSpan(input);
             return ts.Ticks;
         }
-        catch
-        {
+        catch {
             // ignore
         }
         // Regex fallback for human formats like "2h29min"
@@ -233,26 +206,22 @@ public static class Utils
     }
 }
 
-public sealed class TimedBlock : IDisposable
-{
+public sealed class TimedBlock : IDisposable {
     private readonly Stopwatch _sw;
     private readonly string _label;
 
-    public TimedBlock(string label)
-    {
+    public TimedBlock(string label) {
         _label = label;
         _sw = Stopwatch.StartNew();
     }
 
-    public void Dispose()
-    {
+    public void Dispose() {
         _sw.Stop();
         Console.WriteLine($"{_label} took {_sw.ElapsedMilliseconds} ms");
     }
 }
 
-public sealed class KeyLock
-{
+public sealed class KeyLock {
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _queues = new();
     private readonly ConcurrentDictionary<Guid, Lazy<Task>> _inflight = new();
 
@@ -260,8 +229,7 @@ public sealed class KeyLock
         Guid key,
         Func<CancellationToken, Task> action,
         CancellationToken ct = default
-    )
-    {
+    ) {
         var lazy = _inflight.GetOrAdd(
             key,
             _ => new Lazy<Task>(
@@ -276,8 +244,7 @@ public sealed class KeyLock
         Guid key,
         Func<CancellationToken, Task<T>> action,
         CancellationToken ct = default
-    )
-    {
+    ) {
         var lazy = _inflight.GetOrAdd(
             key,
             _ => new Lazy<Task>(
@@ -292,16 +259,13 @@ public sealed class KeyLock
         Guid key,
         Func<CancellationToken, Task> action,
         CancellationToken ct = default
-    )
-    {
+    ) {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
+        try {
             await action(ct).ConfigureAwait(false);
         }
-        finally
-        {
+        finally {
             ReleaseAndMaybeRemove(key, sem);
         }
     }
@@ -310,16 +274,13 @@ public sealed class KeyLock
         Guid key,
         Func<CancellationToken, Task<T>> action,
         CancellationToken ct = default
-    )
-    {
+    ) {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         await sem.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
+        try {
             return await action(ct).ConfigureAwait(false);
         }
-        finally
-        {
+        finally {
             ReleaseAndMaybeRemove(key, sem);
         }
     }
@@ -328,18 +289,15 @@ public sealed class KeyLock
         Guid key,
         Func<CancellationToken, Task> action,
         CancellationToken ct = default
-    )
-    {
+    ) {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         if (!await sem.WaitAsync(0, ct).ConfigureAwait(false))
             return false;
-        try
-        {
+        try {
             await action(ct).ConfigureAwait(false);
             return true;
         }
-        finally
-        {
+        finally {
             ReleaseAndMaybeRemove(key, sem);
         }
     }
@@ -348,29 +306,23 @@ public sealed class KeyLock
         Guid key,
         Func<CancellationToken, Task<T>> action,
         CancellationToken ct = default
-    )
-    {
+    ) {
         var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         if (!await sem.WaitAsync(0, ct).ConfigureAwait(false))
             return (false, default!);
-        try
-        {
+        try {
             return (true, await action(ct).ConfigureAwait(false));
         }
-        finally
-        {
+        finally {
             ReleaseAndMaybeRemove(key, sem);
         }
     }
 
-    private async Task Once(Guid key, Func<CancellationToken, Task> action, CancellationToken ct)
-    {
-        try
-        {
+    private async Task Once(Guid key, Func<CancellationToken, Task> action, CancellationToken ct) {
+        try {
             await action(ct).ConfigureAwait(false);
         }
-        finally
-        {
+        finally {
             _inflight.TryRemove(key, out _);
         }
     }
@@ -379,35 +331,27 @@ public sealed class KeyLock
         Guid key,
         Func<CancellationToken, Task<T>> action,
         CancellationToken ct
-    )
-    {
-        try
-        {
+    ) {
+        try {
             return await action(ct).ConfigureAwait(false);
         }
-        finally
-        {
+        finally {
             _inflight.TryRemove(key, out _);
         }
     }
 
-    private void ReleaseAndMaybeRemove(Guid key, SemaphoreSlim sem)
-    {
+    private void ReleaseAndMaybeRemove(Guid key, SemaphoreSlim sem) {
         sem.Release();
-        if (sem.CurrentCount == 1 && sem.Wait(0))
-        {
+        if (sem.CurrentCount == 1 && sem.Wait(0)) {
             sem.Release();
             _queues.TryRemove(key, out _);
         }
     }
 }
 
-public static class EnumMappingExtensions
-{
-    public static StremioMediaType ToStremio(this BaseItemKind kind)
-    {
-        return kind switch
-        {
+public static class EnumMappingExtensions {
+    public static StremioMediaType ToStremio(this BaseItemKind kind) {
+        return kind switch {
             BaseItemKind.Movie => StremioMediaType.Movie,
             BaseItemKind.Series => StremioMediaType.Series,
             BaseItemKind.Season => StremioMediaType.Series,
@@ -416,10 +360,8 @@ public static class EnumMappingExtensions
         };
     }
 
-    public static BaseItemKind ToBaseItem(this StremioMediaType type)
-    {
-        return type switch
-        {
+    public static BaseItemKind ToBaseItem(this StremioMediaType type) {
+        return type switch {
             StremioMediaType.Movie => BaseItemKind.Movie,
             StremioMediaType.Series => BaseItemKind.Series,
             _ => throw new ArgumentOutOfRangeException(
@@ -431,8 +373,7 @@ public static class EnumMappingExtensions
     }
 }
 
-public static class ActionContextExtensions
-{
+public static class ActionContextExtensions {
     private static readonly string[] RouteGuidKeys =
     {
         "id",
@@ -508,8 +449,7 @@ public static class ActionContextExtensions
     public static bool IsApiListing(this ActionExecutingContext ctx) =>
         ctx.GetActionName() is string actionName && BaseItemListActionNames.Contains(actionName);
 
-    public static bool IsApiListing(this HttpContext ctx)
-    {
+    public static bool IsApiListing(this HttpContext ctx) {
         var actionName = ctx.GetActionName();
         return actionName != null && BaseItemListActionNames.Contains(actionName);
     }
@@ -517,8 +457,7 @@ public static class ActionContextExtensions
     public static bool IsApiSearchAction(this ActionExecutingContext ctx) =>
         ctx.GetActionName() is string actionName && SearchActionNames.Contains(actionName);
 
-    public static bool IsInsertableAction(this HttpContext ctx)
-    {
+    public static bool IsInsertableAction(this HttpContext ctx) {
         var actionName = ctx.GetActionName();
         return actionName != null
             && InsertableActionNames.Contains(actionName)
@@ -531,9 +470,7 @@ public static class ActionContextExtensions
     public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
         IsInsertableAction(ctx.HttpContext);
 
-    //private static bool IsSingleItemList(this HttpContext ctx, Guid expectedId)
-    private static bool IsSingleItemList(HttpContext ctx)
-    {
+    private static bool IsSingleItemList(HttpContext ctx) {
         if (ctx?.Request?.Query is null)
             return false;
 
@@ -554,19 +491,16 @@ public static class ActionContextExtensions
         return ids.Length == 1;
     }
 
-    public static bool TryGetRouteGuid(this ActionExecutingContext ctx, out Guid value)
-    {
+    public static bool TryGetRouteGuid(this ActionExecutingContext ctx, out Guid value) {
         value = Guid.Empty;
         return ctx.TryGetRouteGuidString(out var s) && Guid.TryParse(s, out value);
     }
 
-    public static bool TryGetRouteGuidString(this ActionExecutingContext ctx, out string value)
-    {
+    public static bool TryGetRouteGuidString(this ActionExecutingContext ctx, out string value) {
         value = string.Empty;
 
         // Check if already resolved
-        if (ctx.HttpContext.Items["GuidResolved"] is Guid g)
-        {
+        if (ctx.HttpContext.Items["GuidResolved"] is Guid g) {
             value = g.ToString("N");
             return true;
         }
@@ -574,14 +508,12 @@ public static class ActionContextExtensions
         var rd = ctx.RouteData.Values;
 
         // Check route values
-        foreach (var key in RouteGuidKeys)
-        {
+        foreach (var key in RouteGuidKeys) {
             if (
                 rd.TryGetValue(key, out var raw)
                 && raw?.ToString() is string s
                 && !string.IsNullOrWhiteSpace(s)
-            )
-            {
+            ) {
                 value = s;
                 return true;
             }
@@ -593,8 +525,7 @@ public static class ActionContextExtensions
             query.TryGetValue("ids", out var ids)
             && ids.Count == 1
             && !string.IsNullOrWhiteSpace(ids[0])
-        )
-        {
+        ) {
             value = ids[0]!;
             return true;
         }
@@ -602,14 +533,11 @@ public static class ActionContextExtensions
         return false;
     }
 
-    public static void ReplaceGuid(this ActionExecutingContext ctx, Guid value)
-    {
+    public static void ReplaceGuid(this ActionExecutingContext ctx, Guid value) {
         var rd = ctx.RouteData.Values;
 
-        foreach (var key in RouteGuidKeys)
-        {
-            if (rd.TryGetValue(key, out var raw) && raw is not null)
-            {
+        foreach (var key in RouteGuidKeys) {
+            if (rd.TryGetValue(key, out var raw) && raw is not null) {
                 rd[key] = value.ToString();
                 ctx.ActionArguments[key] = value;
             }
@@ -618,20 +546,18 @@ public static class ActionContextExtensions
         ctx.HttpContext.Items["GuidResolved"] = value;
     }
 
-    public static bool TryGetUserId(this ActionExecutingContext ctx, out Guid userId)
-    {
+    public static bool TryGetUserId(this ActionExecutingContext ctx, out Guid userId) {
         return ctx.HttpContext.TryGetUserId(out userId);
     }
 
-    public static bool TryGetUserId(this HttpContext ctx, out Guid userId)
-    {
+    public static bool TryGetUserId(this HttpContext ctx, out Guid userId) {
         userId = Guid.Empty;
 
         var userIdStr =
             ctx.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")?.Value
             ?? ctx.Request.Query["userId"].FirstOrDefault();
 
-        if(!Guid.TryParse(userIdStr, out userId))
+        if (!Guid.TryParse(userIdStr, out userId))
             return false;
 
         return userId != Guid.Empty;
@@ -642,10 +568,8 @@ public static class ActionContextExtensions
         string key,
         out T value,
         T defaultValue = default
-    )
-    {
-        if (ctx.ActionArguments.TryGetValue(key, out var objValue) && objValue is T typedValue)
-        {
+    ) {
+        if (ctx.ActionArguments.TryGetValue(key, out var objValue) && objValue is T typedValue) {
             value = typedValue;
             return true;
         }
@@ -655,10 +579,8 @@ public static class ActionContextExtensions
     }
 }
 
-public static class StringExtensions
-{
-    public static HashSet<BaseItemKind> ParseBaseItemKinds(this string value)
-    {
+public static class StringExtensions {
+    public static HashSet<BaseItemKind> ParseBaseItemKinds(this string value) {
         var kinds = new HashSet<BaseItemKind>();
 
         if (string.IsNullOrWhiteSpace(value))
@@ -669,8 +591,7 @@ public static class StringExtensions
                 ',',
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
             )
-        )
-        {
+        ) {
             if (Enum.TryParse<BaseItemKind>(raw, true, out var kind))
                 kinds.Add(kind);
         }
@@ -679,43 +600,36 @@ public static class StringExtensions
     }
 }
 
-public static class BaseItemExtensions
-{
-    public static T? GelatoData<T>(this BaseItem item, string key)
-{
-    if (string.IsNullOrEmpty(item.ExternalId))
-        return default;
+public static class BaseItemExtensions {
+    public static T? GelatoData<T>(this BaseItem item, string key) {
+        if (string.IsNullOrEmpty(item.ExternalId))
+            return default;
 
-    try
-    {
-        var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.ExternalId);
-        return dict != null && dict.TryGetValue(key, out var el)
-            ? el.Deserialize<T>()
-            : default;
-    }
-    catch
-    {
-        return default;
-    }
-}
-
-public static void SetGelatoData<T>(this BaseItem item, string key, T value)
-{
-    Dictionary<string, JsonElement> data;
-
-    try
-    {
-        data = string.IsNullOrEmpty(item.ExternalId)
-            ? new()
-            : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.ExternalId)
-              ?? new();
-    }
-    catch
-    {
-        data = new();
+        try {
+            var dict = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.ExternalId);
+            return dict != null && dict.TryGetValue(key, out var el)
+                ? el.Deserialize<T>()
+                : default;
+        }
+        catch {
+            return default;
+        }
     }
 
-    data[key] = JsonSerializer.SerializeToElement(value);
-    item.ExternalId = JsonSerializer.Serialize(data);
-}
+    public static void SetGelatoData<T>(this BaseItem item, string key, T value) {
+        Dictionary<string, JsonElement> data;
+
+        try {
+            data = string.IsNullOrEmpty(item.ExternalId)
+                ? new()
+                : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.ExternalId)
+                  ?? new();
+        }
+        catch {
+            data = new();
+        }
+
+        data[key] = JsonSerializer.SerializeToElement(value);
+        item.ExternalId = JsonSerializer.Serialize(data);
+    }
 }

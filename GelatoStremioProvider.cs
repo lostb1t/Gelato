@@ -1,14 +1,7 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 using Gelato.Common;
-using Gelato.Configuration;
-using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -50,7 +43,6 @@ namespace Gelato {
                 (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
             var url = $"{_baseUrl}/{path}{extrasPart}.json";
             url = url.Replace("%3A", ":").Replace("%3a", ":");
-            // Console.Write(url);
             return url;
         }
 
@@ -161,7 +153,6 @@ namespace Gelato {
             var id = item.GetProviderId("Imdb");
             if (id is null) {
                 _log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
-                // return null;
                 id = item.GetProviderId("Tmdb");
                 if (id is null) {
                     _log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
@@ -169,7 +160,6 @@ namespace Gelato {
                 }
                 id = $"tmdb:{id}";
             }
-            ;
             var url = BuildUrl(
                 new string[] { "meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id }
             );
@@ -251,7 +241,6 @@ namespace Gelato {
                 );
                 return Array.Empty<StremioMeta>();
             }
-            ;
 
             return await GetCatalogMetasAsync(catalog.Id, mediaType.ToString(), query, skip);
         }
@@ -291,9 +280,6 @@ namespace Gelato {
     }
 
     public class StremioCatalog {
-        //[JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
-        //public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
-
         // we dont cast to enum cause types is not a static set
         public string Type { get; set; } = "";
         public string Id { get; set; } = "";

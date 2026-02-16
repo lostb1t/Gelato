@@ -9,19 +9,15 @@ using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Providers;
 
-namespace Gelato.Decorators
-{
-    public sealed class GelatoSubtitleManager : ISubtitleManager
-    {
+namespace Gelato.Decorators {
+    public sealed class GelatoSubtitleManager : ISubtitleManager {
         private readonly ISubtitleManager _inner;
 
-        public GelatoSubtitleManager(ISubtitleManager inner)
-        {
+        public GelatoSubtitleManager(ISubtitleManager inner) {
             _inner = inner;
         }
 
-        public event EventHandler<SubtitleDownloadFailureEventArgs> SubtitleDownloadFailure
-        {
+        public event EventHandler<SubtitleDownloadFailureEventArgs> SubtitleDownloadFailure {
             add => _inner.SubtitleDownloadFailure += value;
             remove => _inner.SubtitleDownloadFailure -= value;
         }
@@ -38,11 +34,9 @@ namespace Gelato.Decorators
         public Task<RemoteSubtitleInfo[]> SearchSubtitles(
             SubtitleSearchRequest request,
             CancellationToken cancellationToken
-        )
-        {
+        ) {
             // nasty hack to prevent some plugins chocking on remote files
-            if (request.MediaPath.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-            {
+            if (request.MediaPath.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
                 request.MediaPath += ".strm";
             }
             return _inner.SearchSubtitles(request, cancellationToken);
