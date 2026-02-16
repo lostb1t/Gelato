@@ -144,8 +144,17 @@ public class GelatoManager {
         _log.LogDebug("Cache cleared");
     }
 
-    public static void SeedFolder(string path) {
-        // No-op: the FileSystemDecorator virtualises this directory from the DB.
+    public static void SeedFolder(string path)
+    {
+        Directory.CreateDirectory(path);
+        var seed = System.IO.Path.Combine(path, "stub.txt");
+        if (!File.Exists(seed))
+        {
+            File.WriteAllText(
+                seed,
+                "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
+            );
+        }
     }
 
     public Folder? TryGetMovieFolder(Guid userId) {
@@ -172,16 +181,12 @@ public class GelatoManager {
         if (string.IsNullOrWhiteSpace(path)) {
             return null;
         }
-        //path = $"gelato://stubfolder/{folder.Name}";
+
         SeedFolder(path);
         return _repo
             .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
-        //folder.Path = $"gelato://stubfolder/{folder.Name}";
-        //_repo.SaveItems([folder], CancellationToken.None);
-
-        //return folder;
     }
 
     private static bool IsValidUrl(string? url) {
