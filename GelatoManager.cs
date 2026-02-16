@@ -571,7 +571,7 @@ public class GelatoManager {
             }
             if (!users.Any()) {
                 _library.DeleteItem(
-              item,
+              _item,
               new DeleteOptions { DeleteFileLocation = true },
               true);
             }
