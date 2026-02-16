@@ -79,9 +79,9 @@ if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
                 )
             )
             {
-                if (filter.IsVirtualItem is null)
+                if (filter.ExcludeTags is null || filter.ExcludeTags.Length == 0)
                 {
-                    filter.IsVirtualItem = false;
+                    filter.ExcludeTags = new[] { GelatoManager.StreamTag };
                 }
                 if (filter.MaxPremiereDate is null && filterUnreleased)
                 {
@@ -103,8 +103,8 @@ if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
         }
         else if (filter.IsMissing == true) 
        {
-          // jf deletes virtual items when theres a valid priamry versio . So just dont return it
-          filter.IsVirtualItem = false;
+          // jf deletes virtual items when theres a valid primary version. So just dont return it
+          filter.ExcludeTags = new[] { GelatoManager.StreamTag };
         }
         return filter;
     }

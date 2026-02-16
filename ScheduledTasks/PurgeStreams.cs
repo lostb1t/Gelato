@@ -74,9 +74,8 @@ namespace Gelato.Tasks
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
-                // skip filters marker
                 IsDeadPerson = true,
-                IsVirtualItem = true,      
+                Tags = new[] { GelatoManager.StreamTag },
             };
 
             var streams = _library

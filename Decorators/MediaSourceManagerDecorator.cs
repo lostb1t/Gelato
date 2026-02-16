@@ -168,7 +168,7 @@ namespace Gelato.Decorators
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    IsVirtualItem = true,
+                    Tags = new[] { GelatoManager.StreamTag },
                     IndexNumber = episode.IndexNumber,
                 };
             }
@@ -183,7 +183,7 @@ namespace Gelato.Decorators
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    IsVirtualItem = true,
+                    Tags = new[] { GelatoManager.StreamTag },
                 };
             }
 
@@ -450,9 +450,6 @@ namespace Gelato.Decorators
 
             if (NeedsProbe(selected))
             {
-                var v = owner.IsVirtualItem;
-                owner.IsVirtualItem = false;
-
                 await owner
                     .RefreshMetadata(
                         new MetadataRefreshOptions(_directoryService)
@@ -463,8 +460,6 @@ namespace Gelato.Decorators
                         ct
                     )
                     .ConfigureAwait(false);
-
-                owner.IsVirtualItem = v;
 
                 await owner
                     .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)

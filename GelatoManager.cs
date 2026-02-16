@@ -42,6 +42,8 @@ using Microsoft.Extensions.Primitives;
 namespace Gelato;
 
 public class GelatoManager {
+    public const string StreamTag = "gelato-stream";
+
     private readonly ILogger<GelatoManager> _log;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -215,7 +217,7 @@ public class GelatoManager {
             IncludeItemTypes = new[] { item.GetBaseItemKind() },
             HasAnyProviderId = item.ProviderIds,
             Recursive = true,
-            IsVirtualItem = false,
+            ExcludeTags = new[] { StreamTag },
             User = user,
             IsDeadPerson = true, // skip filter marker
         };
@@ -539,7 +541,7 @@ public class GelatoManager {
 
             target.Name = primary.Name;
             target.PresentationUniqueKey = primary.PresentationUniqueKey;
-            target.IsVirtualItem = true;
+            target.Tags = new[] { StreamTag };
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
@@ -685,8 +687,11 @@ public class GelatoManager {
     }
 
     public bool IsPrimaryVersion(Video item) {
-        return !item.IsVirtualItem && string.IsNullOrWhiteSpace(item.PrimaryVersionId);
-        // return string.IsNullOrWhiteSpace(item.PrimaryVersionId);
+        return !HasStreamTag(item) && string.IsNullOrWhiteSpace(item.PrimaryVersionId);
+    }
+
+    public static bool HasStreamTag(BaseItem item) {
+        return item.Tags is not null && item.Tags.Contains(StreamTag, StringComparer.OrdinalIgnoreCase);
     }
 
     public bool IsStream(Video item) {
