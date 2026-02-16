@@ -238,7 +238,6 @@ public class GelatoManager {
         bool allowRemoteRefresh,
         bool refreshItem,
         bool queueRefreshItem,
-        bool queueRefreshChildren,
         CancellationToken ct
     ) {
         var mediaType = meta.Type;
@@ -345,7 +344,7 @@ public class GelatoManager {
                 ForceSave = true,
             };
 
-            if (queueRefreshItem || baseItem is Series) {
+            if (queueRefreshItem) {
                 _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
             }
             else {
@@ -949,6 +948,14 @@ public class GelatoManager {
                     // important
                     ParentId = series.Id
                 };
+                
+var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
+        if (!string.IsNullOrWhiteSpace(primary)) {
+            season.ImageInfos = new List<ItemImageInfo>
+            {
+                new ItemImageInfo { Type = ImageType.Primary, Path = primary },
+            }.ToArray();
+        }
         
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();

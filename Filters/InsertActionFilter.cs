@@ -123,8 +123,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
                     user,
                     false,
                     true,
-                    false,
-                    true,
+                    meta.Type is StremioMediaType.Series,
                     ct
                 );
             }
