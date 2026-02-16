@@ -93,6 +93,8 @@ public sealed class FileSystemDecorator : IFileSystem
             return Array.Empty<BaseItem>();
         }
 
+        _log.LogInformation("Gelato: GetChildItemsFromDb({Dir}) - total items from DB: {Total}", directory, allItems.Count);
+
         var results = new List<BaseItem>();
         var seenDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -189,8 +191,11 @@ public sealed class FileSystemDecorator : IFileSystem
         if (!IsGelatoPath(path))
             return _inner.GetFileSystemEntries(path, recursive);
 
-        _log.LogDebug("Gelato: virtual GetFileSystemEntries for {Path}", path);
-        return GetChildItemsFromDb(path).Select(ToMetadata);
+        var children = GetChildItemsFromDb(path);
+        _log.LogInformation("Gelato: virtual GetFileSystemEntries for {Path} → {Count} entries", path, children.Count);
+        foreach (var c in children)
+            _log.LogInformation("  → {ItemPath} (IsFolder={IsFolder}, Type={Type})", c.Path, c.IsFolder, c.GetType().Name);
+        return children.Select(ToMetadata);
     }
 
     public IEnumerable<FileSystemMetadata> GetFiles(string path, bool recursive = false)
@@ -291,7 +296,9 @@ public sealed class FileSystemDecorator : IFileSystem
         if (!IsGelatoPath(path))
             return _inner.GetFileSystemEntryPaths(path, recursive);
 
-        return GetChildItemsFromDb(path).Select(i => i.Path!);
+        var items = GetChildItemsFromDb(path);
+        _log.LogInformation("Gelato: virtual GetFileSystemEntryPaths for {Path} → {Count} entries", path, items.Count);
+        return items.Select(i => i.Path!);
     }
 
     // ── IFileSystem – single item lookups ───────────────────────────────
@@ -320,13 +327,20 @@ public sealed class FileSystemDecorator : IFileSystem
         }
 
         if (items.Count > 0)
+        {
+            _log.LogInformation("Gelato: GetFileSystemInfo found item for {Path} (Type={Type})", path, items[0].GetType().Name);
             return ToMetadata(items[0]);
+        }
 
         // Could be an intermediate directory
         var hasChildren = GetChildItemsFromDb(path).Count > 0;
         if (hasChildren)
+        {
+            _log.LogInformation("Gelato: GetFileSystemInfo returning fake dir for {Path} (has children)", path);
             return FakeDirectoryMeta(path);
+        }
 
+        _log.LogWarning("Gelato: GetFileSystemInfo returning Exists=false for {Path}", path);
         return new FileSystemMetadata { FullName = path, Exists = false };
     }
 

@@ -370,9 +370,17 @@ public class GelatoManager {
             }
             else {
 
-                if (baseItem is Series series && queueRefreshChildren) {
-                    _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-
+                if (baseItem is Series) {
+                    // Queue with a FRESH DirectoryService to avoid stale cache from earlier lookups.
+                    // By the time the queue processes this, all seasons/episodes will be in the DB.
+                    var seriesOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
+                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                        ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                        ReplaceAllImages = false,
+                        ReplaceAllMetadata = false,
+                        ForceSave = true,
+                    };
+                    _provider.QueueRefresh(baseItem.Id, seriesOptions, RefreshPriority.Normal);
                 }
                 else {
                     _provider.RefreshFullItem(baseItem, options, ct);
@@ -672,6 +680,30 @@ public class GelatoManager {
             : $"{baseName}.strm";
 
         return Path.Combine(dirInfo.FullName, fileName);
+    }
+
+    /// <summary>
+    /// Builds a proper .strm path for a non-folder item using the parent path.
+    /// Movies: parent/MovieName (Year)/MovieName (Year).strm
+    /// Episodes: parent/EpisodeName.strm  (parent is the season folder)
+    /// Streams: appends guid to disambiguate.
+    /// </summary>
+    private string BuildStrmPath(BaseItem item, Folder parent) {
+        var baseName = item.ProductionYear.HasValue
+            ? $"{item.Name} ({item.ProductionYear})"
+            : item.Name;
+
+        var isStream = item is Video v && IsStream(v);
+
+        var fileName = isStream
+            ? $"{baseName} {item.GelatoData<Guid>("guid")}.strm"
+            : $"{baseName}.strm";
+
+        // Movies get their own subdirectory: MovieName (Year)/MovieName (Year).strm
+        if (item.GetBaseItemKind() == BaseItemKind.Movie && !isStream)
+            return Path.Combine(parent.Path, baseName, fileName);
+
+        return Path.Combine(parent.Path, fileName);
     }
 
     public static void CreateStrmFile(string path, string content) {
@@ -1119,14 +1151,16 @@ public class GelatoManager {
         foreach (var item in items) {
 
             if (item.IsFolder) {
-              if (item.Path is null) {
                 if (item.GetBaseItemKind() == BaseItemKind.Series) {
-                    item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
+                    var year = item.PremiereDate?.Year;
+                    item.Path = year.HasValue
+                        ? Path.Combine(parent.Path, $"{item.Name} ({year})")
+                        : Path.Combine(parent.Path, item.Name);
                 }
-                else{
-                    item.Path = $"{parent.Path}/{item.Name}";
+                else {
+                    item.Path = Path.Combine(parent.Path, item.Name);
                 }
-              }
+                Directory.CreateDirectory(item.Path);
 
             var now = DateTime.UtcNow;
             item.DateLastRefreshed = now;
@@ -1135,7 +1169,11 @@ public class GelatoManager {
             else {
                 item.ShortcutPath = item.Path;
                 item.IsShortcut = true;
-                item.Path = GetStrmPath($"{parent.Path}", item);
+                item.Path = BuildStrmPath(item, parent);
+                // Ensure parent directory exists for resolvers that hit System.IO directly
+                var dir = Path.GetDirectoryName(item.Path);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
 
             var now = DateTime.UtcNow;
             item.DateModified = now;
