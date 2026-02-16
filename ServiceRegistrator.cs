@@ -29,7 +29,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
-        services.AddSingleton<DeleteResourceFilter>();
+      //  services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
         services.AddSingleton<GelatoManager>();
         // services.DecorateSingle<ISubtitleManager, GelatoSubtitleManager>();
@@ -52,7 +52,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
             o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
-            o.Filters.AddService<DeleteResourceFilter>();
+          //  o.Filters.AddService<DeleteResourceFilter>();
             o.Filters.AddService<DownloadFilter>();
         });
     }
