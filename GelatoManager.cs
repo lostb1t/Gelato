@@ -571,6 +571,10 @@ public class GelatoManager {
             {
                 target.SetGelatoData("bingeGroup", s.BehaviorHints.BingeGroup);
             }
+            if (!string.IsNullOrEmpty(s.BehaviorHints?.Filename))
+            {
+                target.SetGelatoData("filename", s.BehaviorHints.Filename);
+            }
             target.SetGelatoData("index", index);
             target.SetGelatoData("guid", id);
 
@@ -696,15 +700,24 @@ public class GelatoManager {
 
         var isStream = item is Video v && IsStream(v);
 
-        var fileName = isStream
+        // Use the original filename from the stream's BehaviorHints if available
+        var hintFilename = item.GelatoData<string>("filename");
+        if (isStream && !string.IsNullOrEmpty(hintFilename)) {
+            var fileName = Path.ChangeExtension(hintFilename, ".strm");
+            if (item.GetBaseItemKind() == BaseItemKind.Movie)
+                return Path.Combine(parent.Path, baseName, fileName);
+            return Path.Combine(parent.Path, fileName);
+        }
+
+        var generatedFileName = isStream
             ? $"{baseName} {item.GelatoData<Guid>("guid")}.strm"
             : $"{baseName}.strm";
 
         // Movies get their own subdirectory: MovieName (Year)/MovieName (Year).strm
         if (item.GetBaseItemKind() == BaseItemKind.Movie)
-            return Path.Combine(parent.Path, baseName, fileName);
+            return Path.Combine(parent.Path, baseName, generatedFileName);
 
-        return Path.Combine(parent.Path, fileName);
+        return Path.Combine(parent.Path, generatedFileName);
     }
 
     public static void CreateStrmFile(string path, string content) {
