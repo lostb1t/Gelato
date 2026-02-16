@@ -76,6 +76,7 @@ namespace Gelato.Tasks
                 },
                 // skip filters marker
                 IsDeadPerson = true,
+                IsVirtualItem = true,      
             };
 
             var streams = _library

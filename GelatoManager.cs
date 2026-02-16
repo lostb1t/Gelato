@@ -544,7 +544,8 @@ public class GelatoManager {
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
             // target.SetParent(parent);
-            target.SetPrimaryVersionId(primary.Id.ToString());
+            target.SetPrimaryVersionId(null);
+            //target.SetPrimaryVersionId(primary.Id.ToString());
             target.PremiereDate = primary.PremiereDate;
             target.Path = path;
 
@@ -592,7 +593,7 @@ public class GelatoManager {
 
         _repo.SaveItems(stale, ct);
         newVideos.Add(primary);  
-        MergeVersions(newVideos.ToArray());
+       // MergeVersions(newVideos.ToArray());
 
         stopwatch.Stop();
 
