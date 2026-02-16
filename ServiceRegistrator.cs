@@ -8,6 +8,7 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
+using MediaBrowser.Model.IO;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
@@ -44,8 +45,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
-            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
-            //.DecorateSingle<IDirectoryService, DirectoryServiceDecorator>();
+            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
+            .DecorateSingle<IFileSystem, FileSystemDecorator>();
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
