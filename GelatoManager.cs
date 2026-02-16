@@ -156,17 +156,7 @@ public class GelatoManager {
     }
 
     public static void SeedFolder(string path) {
-        Directory.CreateDirectory(path);
-        var seed = System.IO.Path.Combine(path, "stub.txt");
-        if (!File.Exists(seed)) {
-            File.WriteAllText(
-                seed,
-                "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
-            );
-        }
-        var ignore = System.IO.Path.Combine(path, ".ignore");
-        //File.Create(ignore).Close();
-        File.Delete(ignore);
+        // No-op: the FileSystemDecorator virtualises this directory from the DB.
     }
 
     public Folder? TryGetMovieFolder(Guid userId) {
@@ -1122,32 +1112,29 @@ public class GelatoManager {
     public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
         foreach (var item in items) {
 
-
-            //  Console.WriteLine(item.Path);
             if (item.IsFolder) {
               if (item.Path is null) {
                 if (item.GetBaseItemKind() == BaseItemKind.Series) {
                     item.Path = $"{parent.Path}/{item.Name} ({item.PremiereDate.Value.Year})";
                 }
                 else{
-                //else if (item.GetBaseItemKind() == BaseItemKind.Season) {
                     item.Path = $"{parent.Path}/{item.Name}";
                 }
               }
-                Directory.CreateDirectory(item.Path);
-                           // item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-            item.DateLastRefreshed = Directory.GetLastWriteTimeUtc(item.Path);
-            item.DateLastSaved = item.DateLastRefreshed;
+
+            var now = DateTime.UtcNow;
+            item.DateLastRefreshed = now;
+            item.DateLastSaved = now;
             }
             else {
                 item.ShortcutPath = item.Path;
                 item.IsShortcut = true;
                 item.Path = GetStrmPath($"{parent.Path}", item);
 
-                CreateStrmFile(item.Path, item.ShortcutPath);
-            item.DateModified = File.GetLastWriteTimeUtc(item.Path);
-            item.DateLastRefreshed = item.DateModified;
-            item.DateLastSaved = item.DateLastSaved;
+            var now = DateTime.UtcNow;
+            item.DateModified = now;
+            item.DateLastRefreshed = now;
+            item.DateLastSaved = now;
             }
 
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
