@@ -689,8 +689,9 @@ public class GelatoManager {
     /// Streams: appends guid to disambiguate.
     /// </summary>
     private string BuildStrmPath(BaseItem item, Folder parent) {
-        var baseName = item.ProductionYear.HasValue
-            ? $"{item.Name} ({item.ProductionYear})"
+        var year = item.PremiereDate?.Year;
+        var baseName = year.HasValue
+            ? $"{item.Name} ({year})"
             : item.Name;
 
         var isStream = item is Video v && IsStream(v);
@@ -700,7 +701,7 @@ public class GelatoManager {
             : $"{baseName}.strm";
 
         // Movies get their own subdirectory: MovieName (Year)/MovieName (Year).strm
-        if (item.GetBaseItemKind() == BaseItemKind.Movie && !isStream)
+        if (item.GetBaseItemKind() == BaseItemKind.Movie)
             return Path.Combine(parent.Path, baseName, fileName);
 
         return Path.Combine(parent.Path, fileName);
@@ -1174,6 +1175,10 @@ public class GelatoManager {
                 var dir = Path.GetDirectoryName(item.Path);
                 if (!string.IsNullOrEmpty(dir))
                     Directory.CreateDirectory(dir);
+
+                // Write the .strm file for videos (Movies/Episodes)
+                if (item is Video)
+                    CreateStrmFile(item.Path, item.ShortcutPath);
 
             var now = DateTime.UtcNow;
             item.DateModified = now;

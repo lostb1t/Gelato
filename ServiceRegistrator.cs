@@ -45,8 +45,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
-            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
-            .DecorateSingle<IFileSystem, FileSystemDecorator>();
+            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
+           // .DecorateSingle<IFileSystem, FileSystemDecorator>();
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
