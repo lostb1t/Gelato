@@ -337,7 +337,7 @@ public class GelatoManager {
         }
 
         if (refreshItem) {
-            var options = new MetadataRefreshOptions(_directoryService) {
+            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = false,
@@ -345,26 +345,11 @@ public class GelatoManager {
                 ForceSave = true,
             };
 
-            if (queueRefreshItem) {
+            if (queueRefreshItem || baseItem is Series) {
                 _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
             }
             else {
-                if (baseItem is Series) {
-                    // Queue with a FRESH DirectoryService to avoid stale cache from earlier lookups.
-                    // By the time the queue processes this, all seasons/episodes will be in the DB.
-                    var seriesOptions = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
-                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                        ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                        ReplaceAllImages = false,
-                        ReplaceAllMetadata = false,
-                        ForceSave = true,
-                    };
-                    _provider.QueueRefresh(baseItem.Id, seriesOptions, RefreshPriority.Normal);
-                }
-                else {
-                    _provider.RefreshFullItem(baseItem, options, ct);
-                }
-
+                _provider.RefreshFullItem(baseItem, options, ct);
             }
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
@@ -898,10 +883,7 @@ public class GelatoManager {
                 ReplaceAllMetadata = true,
                 ForceSave = true,
             };
-            // important
-            // series.ParentId = seriesRootFolder.Id;
-
-            //seriesRootFolder.AddChild(series);
+            
             SaveItem(series, seriesRootFolder);
             await series.RefreshMetadata(options, ct).ConfigureAwait(false);
             await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
@@ -967,17 +949,11 @@ public class GelatoManager {
                     // important
                     ParentId = series.Id
                 };
-                //season.Path = $"{series.Path}/{season.Name}";
-                // season.Id = _library.GetNewItemId(season.Path, season.GetType());
-
+        
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
-                //season.SetProviderId(MetadataProvider.Custom, season.Id.ToString());
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
-                //series.AddChild(season);
                 SaveItem(season, series);
                 seasonsInserted++;
-
-                //_log.LogInformation("Created season with id {SeasonId} and index {Index}", season.Id, season.IndexNumber);
             }
 
             // Get existing episodes once per season and create dictionary
@@ -1038,9 +1014,9 @@ public class GelatoManager {
                 episode.ParentId = season.Id;
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
-                //season.AddChild(episode);
+
                 SaveItem(episode, season);
-                // await episode.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+
                 episodesInserted++;
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
             }

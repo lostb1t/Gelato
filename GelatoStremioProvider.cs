@@ -535,6 +535,7 @@ namespace Gelato {
 
     public class StremioAppExtras {
         public List<StremioCast>? Cast { get; set; }
+        public List<String?>? SeasonPosters { get; set; }
     }
 
     public class StremioCast {
