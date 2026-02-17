@@ -8,7 +8,6 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
 using MediaBrowser.Common.Net;
-using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -46,7 +45,6 @@ public class GelatoManager {
     private IMemoryCache _memoryCache;
     private readonly IServerConfigurationManager _serverConfig;
     private readonly IMediaStreamRepository _mediaStreams;
-    private readonly ICollectionManager _collectionManager;
     private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly IDirectoryService _directoryService;
     //private readonly Folder? _seriesFolder;
@@ -64,14 +62,12 @@ public class GelatoManager {
         GelatoItemRepository repo,
         IFileSystem fileSystem,
         IMemoryCache memoryCache,
-        ICollectionManager collectionManager,
         IServerConfigurationManager serverConfig,
         ILibraryManager libraryManager,
         IDirectoryService directoryService
     ) {
         _loggerFactory = loggerFactory;
         _memoryCache = memoryCache;
-        _collectionManager = collectionManager;
         _log = loggerFactory.CreateLogger<GelatoManager>();
         _provider = provider;
         _mediaStreams = mediaStreams;
@@ -85,84 +81,6 @@ public class GelatoManager {
         _fileSystem = fileSystem;
         _directoryService = directoryService;
 
-       // _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
-    }
-
-    // jf preferes path but we want to match on id.
-    private void OnItemsAddedToCollection(object sender, CollectionModifiedEventArgs e)
-    {
-        var collection = e.Collection;
-        var addedItems = e.ItemsChanged;
-
-        if (addedItems == null || addedItems.Count == 0)
-            return;
-
-        // Filter only Gelato items
-        var gelatoItems = addedItems.Where(IsGelato).ToList();
-
-        if (gelatoItems.Count == 0)
-            return;
-
-        var needsFix = false;
-
-        for (int i = 0; i < collection.LinkedChildren.Length; i++)
-        {
-            var linkedChild = collection.LinkedChildren[i];
-
-            // Check if this LinkedChild has a path but no LibraryItemId (newly added)
-            if (
-                string.IsNullOrEmpty(linkedChild.LibraryItemId)
-                && !string.IsNullOrEmpty(linkedChild.Path)
-            )
-            {
-                // Try to match it to one of the Gelato items by path
-                var matchingItem = gelatoItems.FirstOrDefault(item =>
-                    item.Path == linkedChild.Path
-                );
-
-                if (matchingItem != null)
-                {
-                    _log.LogDebug(
-                        "Fixing Gelato LinkedChild with path {Path} for item {Id}",
-                        linkedChild.Path,
-                        matchingItem.Id
-                    );
-
-                    collection.LinkedChildren[i] = new LinkedChild
-                    {
-                        LibraryItemId = matchingItem.Id.ToString("N", CultureInfo.InvariantCulture),
-                        Type = LinkedChildType.Manual,
-                    };
-                    needsFix = true;
-                }
-            }
-        }
-
-        if (needsFix)
-        {
-            _log.LogDebug(
-                "Fixing {Count} Gelato items in collection {Name}",
-                gelatoItems.Count,
-                collection.Name
-            );
-            try
-            {
-                collection
-                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-            }
-            catch (Exception)
-            {
-                _log.LogWarning("error saving collection, retrying in 5 seconds.");
-                Thread.Sleep(TimeSpan.FromSeconds(10));
-
-                collection
-                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-            }
-        }
     }
 
     public int GetHttpPort() {
@@ -753,7 +671,6 @@ public class GelatoManager {
     }
 
     public static void CreateStrmFile(string path, string content) {
-       return; 
       var directory = Path.GetDirectoryName(path);
         //   Console.WriteLine(path);
         if (!string.IsNullOrEmpty(directory))
@@ -1193,7 +1110,34 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
         return SaveItems(new[] { item }, parent).FirstOrDefault();
     }
 
-    public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
+       public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
+        foreach (var item in items) {
+
+          
+              
+
+                var now = DateTime.UtcNow;
+                item.DateModified = now;
+                item.DateLastRefreshed = now;
+                item.DateLastSaved = now;
+
+
+            item.Id = _library.GetNewItemId(item.Path, item.GetType());
+            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+
+            parent.AddChild(item);
+
+        }
+        _repo.SaveItems(items.ToList(), CancellationToken.None);
+
+        foreach (var item in items) {
+            _library.RegisterItem(item);
+        }
+        ;
+        return items;
+    } 
+    
+    public IEnumerable<BaseItem> SaveItemsStrm(IEnumerable<BaseItem> items, Folder parent) {
         foreach (var item in items) {
 
             if (item.IsFolder) {
@@ -1223,7 +1167,7 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
 
                 // Write the .strm file for videos (Movies/Episodes)
                 if (item is Video)
-                    CreateStrmFile(item.Path, item.ShortcutPath);
+                   CreateStrmFile(item.Path, item.ShortcutPath);
 
                 var now = DateTime.UtcNow;
                 item.DateModified = now;

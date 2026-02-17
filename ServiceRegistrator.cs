@@ -2,12 +2,13 @@ using System.Reflection;
 using Gelato.Configuration;
 using Gelato.Decorators;
 using Gelato.Filters;
-using Gelato.Services;
+//using Gelato.Services;
 using Gelato.Tasks;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
+using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
@@ -40,15 +41,15 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
             sp.GetRequiredService<GelatoManager>()
         ));
-        services.AddSingleton<CatalogService>();
-        services.AddSingleton<CatalogImportService>();
-        services.AddSingleton<PalcoCacheService>(); // Palco Migration
+        //services.AddSingleton<CatalogService>();
+        //services.AddSingleton<CatalogImportService>();
         services.AddHostedService<GelatoService>();
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
-            .DecorateSingle<IFileSystem, FileSystemDecorator>();
+            .DecorateSingle<IFileSystem, FileSystemDecorator>()
+            .DecorateSingle<ICollectionManager, CollectionManagerDecorator>();
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {
