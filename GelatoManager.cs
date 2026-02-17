@@ -85,9 +85,85 @@ public class GelatoManager {
         _fileSystem = fileSystem;
         _directoryService = directoryService;
 
+       // _collectionManager.ItemsAddedToCollection += OnItemsAddedToCollection;
     }
 
+    // jf preferes path but we want to match on id.
+    private void OnItemsAddedToCollection(object sender, CollectionModifiedEventArgs e)
+    {
+        var collection = e.Collection;
+        var addedItems = e.ItemsChanged;
 
+        if (addedItems == null || addedItems.Count == 0)
+            return;
+
+        // Filter only Gelato items
+        var gelatoItems = addedItems.Where(IsGelato).ToList();
+
+        if (gelatoItems.Count == 0)
+            return;
+
+        var needsFix = false;
+
+        for (int i = 0; i < collection.LinkedChildren.Length; i++)
+        {
+            var linkedChild = collection.LinkedChildren[i];
+
+            // Check if this LinkedChild has a path but no LibraryItemId (newly added)
+            if (
+                string.IsNullOrEmpty(linkedChild.LibraryItemId)
+                && !string.IsNullOrEmpty(linkedChild.Path)
+            )
+            {
+                // Try to match it to one of the Gelato items by path
+                var matchingItem = gelatoItems.FirstOrDefault(item =>
+                    item.Path == linkedChild.Path
+                );
+
+                if (matchingItem != null)
+                {
+                    _log.LogDebug(
+                        "Fixing Gelato LinkedChild with path {Path} for item {Id}",
+                        linkedChild.Path,
+                        matchingItem.Id
+                    );
+
+                    collection.LinkedChildren[i] = new LinkedChild
+                    {
+                        LibraryItemId = matchingItem.Id.ToString("N", CultureInfo.InvariantCulture),
+                        Type = LinkedChildType.Manual,
+                    };
+                    needsFix = true;
+                }
+            }
+        }
+
+        if (needsFix)
+        {
+            _log.LogDebug(
+                "Fixing {Count} Gelato items in collection {Name}",
+                gelatoItems.Count,
+                collection.Name
+            );
+            try
+            {
+                collection
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception)
+            {
+                _log.LogWarning("error saving collection, retrying in 5 seconds.");
+                Thread.Sleep(TimeSpan.FromSeconds(10));
+
+                collection
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+        }
+    }
 
     public int GetHttpPort() {
         var networkConfig = _serverConfig.GetNetworkConfiguration();
@@ -677,7 +753,8 @@ public class GelatoManager {
     }
 
     public static void CreateStrmFile(string path, string content) {
-        var directory = Path.GetDirectoryName(path);
+       return; 
+      var directory = Path.GetDirectoryName(path);
         //   Console.WriteLine(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);

@@ -2,6 +2,7 @@ using System.Reflection;
 using Gelato.Configuration;
 using Gelato.Decorators;
 using Gelato.Filters;
+using Gelato.Services;
 using Gelato.Tasks;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
@@ -29,7 +30,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
-      //  services.AddSingleton<DeleteResourceFilter>();
+        services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
         services.AddSingleton<GelatoManager>();
         // services.DecorateSingle<ISubtitleManager, GelatoSubtitleManager>();
@@ -39,12 +40,15 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
             sp.GetRequiredService<GelatoManager>()
         ));
+        services.AddSingleton<CatalogService>();
+        services.AddSingleton<CatalogImportService>();
+        services.AddSingleton<PalcoCacheService>(); // Palco Migration
         services.AddHostedService<GelatoService>();
 
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
-            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>();
-        // .DecorateSingle<IFileSystem, FileSystemDecorator>();
+            .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
+            .DecorateSingle<IFileSystem, FileSystemDecorator>();
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {
@@ -52,7 +56,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
             o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
-          //  o.Filters.AddService<DeleteResourceFilter>();
+            o.Filters.AddService<DeleteResourceFilter>();
             o.Filters.AddService<DownloadFilter>();
         });
     }
