@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.0.0] - 2026-02-17\n\n### 🚀 Features\n\n- [**breaking**] Create strm files for inserted media (#101)\n",
+        "checksum": "a6090b01ca75c201c8928f99030d8e63",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.0.0/gelato_0.26.0.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-17T05:09:30Z",
+        "version": "0.26.0.0"
+      },
+      {
         "changelog": "## [0.25.7.0] - 2026-02-14\n\n### 🚀 Features\n\n- Dont cache if no streams\n",
         "checksum": "5c93fe9a2ad9260bd27b4a46ae47f56d",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.7.0/gelato_0.25.7.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-01-20T11:21:49Z",
         "version": "0.25.1.3"
-      },
-      {
-        "changelog": "## [0.25.1.2] - 2026-01-20\n\n### 🐛 Bug Fixes\n\n- Add ReattachUserDataAsync for Jellyfin 10.11.6 compatibility (#88)\n\n### ⚙️ Miscellaneous Tasks\n\n- *(release)* Bump version to v0.25.1.2\n- *(release)* Bump version to v0.25.1.2\n",
-        "checksum": "91330cba88c8bae1c83ac9fdf09daa50",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.2/gelato_0.25.1.2.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-01-20T10:28:25Z",
-        "version": "0.25.1.2"
       }
     ]
   }
