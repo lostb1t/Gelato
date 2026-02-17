@@ -8,7 +8,6 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
 using MediaBrowser.Common.Net;
-using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -46,7 +45,6 @@ public class GelatoManager {
     private IMemoryCache _memoryCache;
     private readonly IServerConfigurationManager _serverConfig;
     private readonly IMediaStreamRepository _mediaStreams;
-    private readonly ICollectionManager _collectionManager;
     private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly IDirectoryService _directoryService;
     //private readonly Folder? _seriesFolder;
@@ -64,14 +62,12 @@ public class GelatoManager {
         GelatoItemRepository repo,
         IFileSystem fileSystem,
         IMemoryCache memoryCache,
-        ICollectionManager collectionManager,
         IServerConfigurationManager serverConfig,
         ILibraryManager libraryManager,
         IDirectoryService directoryService
     ) {
         _loggerFactory = loggerFactory;
         _memoryCache = memoryCache;
-        _collectionManager = collectionManager;
         _log = loggerFactory.CreateLogger<GelatoManager>();
         _provider = provider;
         _mediaStreams = mediaStreams;
@@ -86,8 +82,6 @@ public class GelatoManager {
         _directoryService = directoryService;
 
     }
-
-
 
     public int GetHttpPort() {
         var networkConfig = _serverConfig.GetNetworkConfiguration();
@@ -677,7 +671,7 @@ public class GelatoManager {
     }
 
     public static void CreateStrmFile(string path, string content) {
-        var directory = Path.GetDirectoryName(path);
+      var directory = Path.GetDirectoryName(path);
         //   Console.WriteLine(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
@@ -1116,7 +1110,34 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
         return SaveItems(new[] { item }, parent).FirstOrDefault();
     }
 
-    public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
+       public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
+        foreach (var item in items) {
+
+          
+              
+
+                var now = DateTime.UtcNow;
+                item.DateModified = now;
+                item.DateLastRefreshed = now;
+                item.DateLastSaved = now;
+
+
+            item.Id = _library.GetNewItemId(item.Path, item.GetType());
+            item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+
+            parent.AddChild(item);
+
+        }
+        _repo.SaveItems(items.ToList(), CancellationToken.None);
+
+        foreach (var item in items) {
+            _library.RegisterItem(item);
+        }
+        ;
+        return items;
+    } 
+    
+    public IEnumerable<BaseItem> SaveItemsStrm(IEnumerable<BaseItem> items, Folder parent) {
         foreach (var item in items) {
 
             if (item.IsFolder) {
@@ -1146,7 +1167,7 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
 
                 // Write the .strm file for videos (Movies/Episodes)
                 if (item is Video)
-                    CreateStrmFile(item.Path, item.ShortcutPath);
+                   CreateStrmFile(item.Path, item.ShortcutPath);
 
                 var now = DateTime.UtcNow;
                 item.DateModified = now;
