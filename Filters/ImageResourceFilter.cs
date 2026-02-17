@@ -18,8 +18,7 @@ namespace Gelato.Filters;
 /// <summary>
 ///  Replaces image requests from stremio sources
 /// </summary>
-public sealed class ImageResourceFilter : IAsyncResourceFilter
-{
+public sealed class ImageResourceFilter : IAsyncResourceFilter {
     private readonly ILibraryManager _library;
     private readonly IHttpClientFactory _http;
     private readonly ILogger<ImageResourceFilter> _log;
@@ -30,8 +29,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
         IHttpClientFactory http,
         GelatoManager manager,
         ILogger<ImageResourceFilter> log
-    )
-    {
+    ) {
         _library = library;
         _http = http;
         _log = log;
@@ -41,13 +39,11 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
     public async Task OnResourceExecutionAsync(
         ResourceExecutingContext ctx,
         ResourceExecutionDelegate next
-    )
-    {
+    ) {
         if (
             ctx.ActionDescriptor is not ControllerActionDescriptor cad
             || cad.ActionName != "GetItemImage"
-        )
-        {
+        ) {
             await next();
             return;
         }
@@ -57,23 +53,20 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
         if (
             !routeValues.TryGetValue("itemId", out var guidString)
             || !Guid.TryParse(guidString?.ToString(), out var guid)
-        )
-        {
+        ) {
             await next();
             return;
         }
 
         var stremioMeta = _manager.GetStremioMeta(guid);
-        if (stremioMeta?.Poster is null)
-        {
+        if (stremioMeta?.Poster is null) {
             await next();
             return;
         }
 
         var url = stremioMeta.Poster;
 
-        try
-        {
+        try {
             var client = _http.CreateClient();
             using var res = await client.GetAsync(
                 url,
@@ -81,8 +74,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
                 ctx.HttpContext.RequestAborted
             );
 
-            if (!res.IsSuccessStatusCode)
-            {
+            if (!res.IsSuccessStatusCode) {
                 await next();
                 return;
             }
@@ -100,8 +92,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter
 
             return;
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             _log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);
             await next();
         }

@@ -17,10 +17,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Tasks
-{
-    public sealed class GelatoCatalogItemsSyncTask : IScheduledTask
-    {
+namespace Gelato.Tasks {
+    public sealed class GelatoCatalogItemsSyncTask : IScheduledTask {
         private readonly ILogger<GelatoCatalogItemsSyncTask> _log;
         private readonly GelatoManager _manager;
         private readonly ILibraryManager _library;
@@ -31,8 +29,7 @@ namespace Gelato.Tasks
             ICollectionManager collections,
             ILogger<GelatoCatalogItemsSyncTask> log,
             GelatoManager manager
-        )
-        {
+        ) {
             _log = log;
             _library = libraryManager;
             _manager = manager;
@@ -47,14 +44,12 @@ namespace Gelato.Tasks
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
-        {
+        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct) {
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
             var stremio = cfg.stremio;
             var manifest = await stremio.GetManifestAsync().ConfigureAwait(false);
             var catalogs = manifest?.Catalogs.Where(c => !c.IsSearchCapable()).ToList() ?? new();
-            if (catalogs.Count == 0)
-            {
+            if (catalogs.Count == 0) {
                 progress.Report(100);
                 _log.LogInformation("No catalogs found");
                 return;
@@ -68,13 +63,11 @@ namespace Gelato.Tasks
             var createCollections = cfg.CreateCollections;
             var collectionMaxItems = cfg.MaxCollectionItems;
 
-            if (seriesFolder is null)
-            {
+            if (seriesFolder is null) {
                 _log.LogWarning("No series root folder found");
             }
 
-            if (movieFolder is null)
-            {
+            if (movieFolder is null) {
                 _log.LogWarning("No movie root folder found");
             }
 
@@ -87,18 +80,13 @@ namespace Gelato.Tasks
 
             var stopwatch = Stopwatch.StartNew();
 
-            foreach (var cat in catalogs)
-            {
+            foreach (var cat in catalogs) {
                 _log.LogInformation("Processing catalog: {Type} / {Id}", cat.Type, cat.Id);
 
-                try
-                {
+                try {
                     var skip = 0;
                     var processed = 0;
-                    // var collectionCommited = false;
                     var ids = new ConcurrentDictionary<Guid, byte>();
-                    //var meta_ids = new ConcurrentDictionary<String, byte>();
-                    //var addToCollectionIds = new ConcurrentDictionary<Guid, byte>();
                     var genreExtra = cat.Extra?.FirstOrDefault(e =>
                         string.Equals(e.Name, "genre", StringComparison.OrdinalIgnoreCase)
                     );
@@ -107,38 +95,27 @@ namespace Gelato.Tasks
                     var shouldCreateCollection =
                         !(genreExtra?.IsRequired == true) && createCollections;
 
-                    while (processed < maxPerCatalog && !q)
-                    {
+                    while (processed < maxPerCatalog && !q) {
                         ct.ThrowIfCancellationRequested();
 
                         var page = await stremio
                             .GetCatalogMetasAsync(cat.Id, cat.Type, search: null, skip: skip)
                             .ConfigureAwait(false);
 
-                        if (page is null || page.Count == 0)
-                        {
+                        if (page is null || page.Count == 0) {
                             break;
                         }
 
                         await Parallel.ForEachAsync(
                             page,
                             opts,
-                            async (meta, ct) =>
-                            {
-                                // yeah skip doesnt seem to work for some badly programmed addons
-                                //if (meta_ids.Keys.ToList().Contains(meta.Id))
-                               // {
-                               //     q = true;
-                               //     return;
-                               // }
+                            async (meta, ct) => {
                                 var p = Interlocked.Increment(ref processed);
                                 ct.ThrowIfCancellationRequested();
-                                if (p > maxPerCatalog)
-                                {
+                                if (p > maxPerCatalog) {
                                     return;
                                 }
 
-                                //meta_ids.TryAdd(meta.Id, 0);
                                 var mediaType = meta.Type;
                                 var baseItemKind = mediaType.ToBaseItem();
 
@@ -149,10 +126,8 @@ namespace Gelato.Tasks
                                     : baseItemKind == BaseItemKind.Movie ? movieFolder
                                     : null;
 
-                                if (root is not null)
-                                {
-                                    try
-                                    {
+                                if (root is not null) {
+                                    try {
                                         var (item, created) = await _manager
                                             .InsertMeta(
                                                 root,
@@ -161,18 +136,15 @@ namespace Gelato.Tasks
                                                 true,
                                                 true,
                                                 false,
-                                                false,
                                                 ct
                                             )
                                             .ConfigureAwait(false);
 
-                                        if (item != null)
-                                        {
+                                        if (item != null) {
                                             ids.TryAdd(item.Id, 0);
                                         }
                                     }
-                                    catch (Exception ex)
-                                    {
+                                    catch (Exception ex) {
                                         _log.LogError(
                                             "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
                                             cat.Id,
@@ -191,29 +163,25 @@ namespace Gelato.Tasks
                         skip += page.Count;
                     }
 
-                    if (shouldCreateCollection)
-                    {
-                        await SaveCollection(cat, ids.Keys.Take(maxPerCatalog).ToList())
+                    if (shouldCreateCollection && ids.Keys.Any()) {
+                        await SaveCollection(cat, ids.Keys.Take(collectionMaxItems).ToList())
                             .ConfigureAwait(false);
                         ids.Clear();
                     }
 
                     _log.LogInformation("{Id}: processed ({Count} items)", cat.Id, processed);
                 }
-catch (OperationCanceledException) when (ct.IsCancellationRequested)
-{
-    throw;
-}
-catch (OperationCanceledException ex)
-{
-    _log.LogWarning(
-        ex,
-        "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
-        cat.Id
-    );
-}
-                catch (Exception ex)
-                {
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+                    throw;
+                }
+                catch (OperationCanceledException ex) {
+                    _log.LogWarning(
+                        ex,
+                        "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
+                        cat.Id
+                    );
+                }
+                catch (Exception ex) {
                     _log.LogError(
                         ex,
                         "Catalog sync failed for {Id}: {Message}",
@@ -222,7 +190,6 @@ catch (OperationCanceledException ex)
                     );
                 }
             }
-            ;
             stopwatch.Stop();
             _log.LogInformation(
                 "Catalog sync completed in {Minutes}m {Seconds}s ({TotalSeconds:F2}s total)",
@@ -232,13 +199,11 @@ catch (OperationCanceledException ex)
             );
         }
 
-        private async Task<BoxSet?> GetOrCreateBoxSetByIdAsync(StremioCatalog cat)
-        {
+        private async Task<BoxSet?> GetOrCreateBoxSetByIdAsync(StremioCatalog cat) {
             var id = $"{cat.Type.ToString()}.{cat.Id}";
             var collection = _library
                 .GetItemList(
-                    new InternalItemsQuery
-                    {
+                    new InternalItemsQuery {
                         IncludeItemTypes = new[] { BaseItemKind.BoxSet },
                         CollapseBoxSetItems = false,
                         Recursive = true,
@@ -248,12 +213,10 @@ catch (OperationCanceledException ex)
                 .Select(b => b as BoxSet)
                 .FirstOrDefault();
 
-            if (collection is null)
-            {
+            if (collection is null) {
                 collection = await _collections
                     .CreateCollectionAsync(
-                        new CollectionCreationOptions
-                        {
+                        new CollectionCreationOptions {
                             Name = cat.Name,
                             IsLocked = true,
                             ProviderIds = new Dictionary<string, string> { { "Stremio", id } },
@@ -267,16 +230,15 @@ catch (OperationCanceledException ex)
             return collection;
         }
 
-        private async Task SaveCollection(StremioCatalog cat, List<Guid> ids)
-        {
+        private async Task SaveCollection(StremioCatalog cat, List<Guid> ids) {
             var collection = await GetOrCreateBoxSetByIdAsync(cat).ConfigureAwait(false);
 
-            if (collection != null)
-            {
+            if (collection != null) {
                 var childrenIds = _library
-                    .GetItemList(new InternalItemsQuery { 
-                      Parent = collection, 
-                        Recursive = false })
+                    .GetItemList(new InternalItemsQuery {
+                        Parent = collection,
+                        Recursive = false
+                    })
                     .Select(i => i.Id)
                     .ToList();
 

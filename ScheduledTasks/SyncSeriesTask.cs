@@ -14,10 +14,8 @@ using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Tasks
-{
-    public sealed class SyncRunningSeriesTask : IScheduledTask
-    {
+namespace Gelato.Tasks {
+    public sealed class SyncRunningSeriesTask : IScheduledTask {
         private readonly ILibraryManager _library;
         private readonly ILogger<SyncRunningSeriesTask> _log;
         private readonly IFileSystem _fs;
@@ -28,8 +26,7 @@ namespace Gelato.Tasks
             ILogger<SyncRunningSeriesTask> log,
             IFileSystem fs,
             GelatoManager manager
-        )
-        {
+        ) {
             _library = library;
             _log = log;
             _fs = fs;
@@ -42,8 +39,7 @@ namespace Gelato.Tasks
             "Scans all TV libraries for continuing series and builds their series trees.";
         public string Category => "Gelato";
 
-        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
-        {
+        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() {
             return new[]
             {
                 new TaskTriggerInfo
@@ -57,8 +53,7 @@ namespace Gelato.Tasks
         public async Task ExecuteAsync(
             IProgress<double> progress,
             CancellationToken cancellationToken
-        )
-        {
+        ) {
             await _manager.SyncSeries(true, Guid.Empty, progress, cancellationToken);
         }
     }
