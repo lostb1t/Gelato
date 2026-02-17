@@ -54,14 +54,8 @@ public sealed class GelatoApiController : ControllerBase {
         return meta;
     }
 
-    [HttpGet("catalogs")]
-    [Authorize]
-    public async Task<ActionResult<List<StremioCatalog>>> GetCatalogs() {
-        HttpContext.TryGetUserId(out var userId);
-        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
-        var manifest = await cfg.stremio.GetManifestAsync();
-        return Ok(manifest?.Catalogs ?? new List<StremioCatalog>());
-    }
+// [HttpGet("catalogs")]
+// Moved to CatalogController
 
     [HttpGet("subtitles/{itemId}")]
     public ActionResult<IEnumerable<StremioSubtitle>> GetSubtitles(

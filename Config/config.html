@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 
 <head>
@@ -9,17 +8,33 @@
 </head>
 
 <body>
-  <div data-role="page" id="externalmediaConfigurationPage" class="page type-interior pluginConfigurationPage">
+  <div data-role="page" id="gelatoConfigurationPage" class="page type-interior pluginConfigurationPage">
     <div data-role="content">
       <div class="content-primary">
-        <form id="externalmediaForm">
+        <form id="gelatoForm">
           <div class="verticalSection">
             <div class="sectionTitleContainer flex align-items-center">
-              <h2 class="sectionTitle">Gelato</h2>
+              <h2 class="sectionTitle">Gelato Configuration</h2>
             </div>
           </div>
 
+          <!-- Tabs Navigation -->
           <div class="verticalSection">
+            <div class="padded-top padded-bottom"
+              style="display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 2em; gap: 2em;">
+              <button type="button" class="paper-icon-button-light tab-button active" data-tab="general"
+                style="padding: 0.5em 0; border-bottom: 2px solid #00a4dc; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 1;">General</button>
+              <button type="button" class="paper-icon-button-light tab-button" data-tab="catalogs"
+                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">Catalogs</button>
+              <button type="button" class="paper-icon-button-light tab-button" data-tab="advanced"
+                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">Advanced</button>
+            </div>
+          </div>
+
+          <!-- General Tab -->
+          <div id="tab-general" class="tab-content" style="display: block;">
+            <h3 class="sectionTitle">General Settings</h3>
+
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtUrl">AIOStreams URL (manifest or base):</label>
               <input is="emby-input" type="text" id="txtUrl" required="required" class="emby-input" />
@@ -39,12 +54,6 @@
               <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
             </div>
 
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtCatalogMaxItems">Max items per catalog
-                import:</label>
-              <input is="emby-input" type="number" id="txtCatalogMaxItems" class="emby-input" />
-            </div>
-
             <div class="checkboxContainer checkboxContainer-withDescription">
               <label>
                 <input is="emby-checkbox" type="checkbox" id="chkCreateCollections" />
@@ -53,24 +62,73 @@
             </div>
 
             <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum amount of items to add
-                to a collection:</label>
+              <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum items per
+                collection:</label>
               <input is="emby-input" type="number" id="txtMaxCollectionItems" class="emby-input" />
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">TTL for streams in seconds:</label>
-              <input is="emby-input" type="number" id="txtStreamTTL" class="emby-input" />
             </div>
 
             <div class="checkboxContainer checkboxContainer-withDescription">
               <label>
                 <input is="emby-checkbox" type="checkbox" id="chkEnableSubs" />
-                <span>Enable remote subtitles from addons</span>
+                <span>Enable remote subtitles</span>
               </label>
-              <div class="fieldDescription">Currently breaks until <a
-                  href="https://github.com/jellyfin/jellyfin/pull/14809"
-                  target="_blank">https://github.com/jellyfin/jellyfin/pull/14809</a> is merged.</div>
+              <div class="fieldDescription">Note: Currently experimental.</div>
+            </div>
+          </div>
+
+          <!-- Catalogs Tab -->
+          <div id="tab-catalogs" class="tab-content" style="display: none;">
+            <div class="verticalSection">
+              <div class="sectionTitleContainer">
+                <h3 class="sectionTitle">Manage Catalogs</h3>
+                <div class="fieldDescription">
+                  Enable Stremio catalogs to import them into Jellyfin.
+                  <br />
+                  <b>Sequential Import:</b> Series are processed one-by-one to respect rate limits.
+                </div>
+              </div>
+
+              <div class="inputContainer" style="display: flex; gap: 1em; align-items: center; margin-bottom: 1em;">
+                <div style="flex-grow: 1;">
+                  <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type..."
+                    is="emby-input" class="emby-input" />
+                </div>
+                <button type="button" is="emby-button" class="raised emby-button"
+                  id="btnRefreshCatalogs">Refresh</button>
+              </div>
+
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtCatalogMaxItems">Default Max Items (for new
+                  imports):</label>
+                <input is="emby-input" type="number" id="txtCatalogMaxItems" class="emby-input" />
+              </div>
+
+              <div id="catalogsList"
+                style="max-height: 600px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(0,0,0,0.2);">
+                <!-- Catalogs rendered here -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Advanced Tab (FFmpeg & Overrides) -->
+          <div id="tab-advanced" class="tab-content" style="display: none;">
+            <h3 class="sectionTitle">FFmpeg Settings</h3>
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtFFmpegAnalyzeDuration">FFmpeg
+                analyzeduration:</label>
+              <input is="emby-input" type="text" id="txtFFmpegAnalyzeDuration" class="emby-input" />
+              <div class="fieldDescription">Default: <code>5M</code>.</div>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtFFmpegProbeSize">FFmpeg probesize:</label>
+              <input is="emby-input" type="text" id="txtFFmpegProbeSize" class="emby-input" />
+              <div class="fieldDescription">Default: <code>25M</code>.</div>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Stream TTL (seconds):</label>
+              <input is="emby-input" type="number" id="txtStreamTTL" class="emby-input" />
             </div>
 
             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -78,18 +136,13 @@
                 <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
                 <span>Show streams for local items</span>
               </label>
-              <div class="fieldDescription">If enabled, streams are also loaded for local media</div>
             </div>
-
-
 
             <div class="checkboxContainer checkboxContainer-withDescription">
               <label>
                 <input is="emby-checkbox" type="checkbox" id="chkDisableSearch" />
-                <span>Local search only</span>
+                <span>Local search only (Disable Stremio search)</span>
               </label>
-              <div class="fieldDescription">If enabled, only local metadata will be searched, disabling remote Stremio
-                searches</div>
             </div>
 
             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -97,44 +150,16 @@
                 <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
                 <span>Filter unreleased items</span>
               </label>
-              <div class="fieldDescription">If enabled, only items that have been released will be shown in search
-                results (only with aiometadata) and catalog imports</div>
             </div>
 
             <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days for movies:</label>
+              <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
               <input is="emby-input" type="number" id="txtBufferDays" class="emby-input" />
-              <div class="fieldDescription">Number of days to wait after premiere date before showing (accounts for home
-                release delay). Default: 30 days. Set to 0 for no buffer. (NOTICE: filtering search results only works
-                with aiometadata not the tmdb addon)</div>
-            </div>
-          </div>
-
-          <div class="verticalSection">
-            <h3 class="sectionTitle">FFmpeg (probe & analyze)</h3>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtFFmpegAnalyzeDuration">FFmpeg
-                analyzeduration:</label>
-              <input is="emby-input" type="text" id="txtFFmpegAnalyzeDuration" class="emby-input" />
-              <div class="fieldDescription">Max analyze duration passed to FFmpeg (e.g., <code>5M</code>,
-                <code>2M</code>, or microseconds). Default: <code>5M</code>.</div>
             </div>
 
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtFFmpegProbeSize">FFmpeg probesize:</label>
-              <input is="emby-input" type="text" id="txtFFmpegProbeSize" class="emby-input" />
-              <div class="fieldDescription">Max probe size passed to FFmpeg (e.g., <code>25M</code>, <code>10M</code>,
-                or bytes). Default: <code>25M</code>.</div>
-            </div>
-          </div>
-
-
-
-          <div class="verticalSection">
-            <h3 class="sectionTitle">User Overrides</h3>
+            <h3 class="sectionTitle" style="margin-top: 2em;">User Overrides</h3>
             <div class="fieldDescription" style="margin-bottom: 1em;">
-              User overrides completely replace all settings below for specific users. All fields are required when creating an override.
+              Override settings for specific users.
             </div>
 
             <div id="userOverridesList" style="margin-bottom: 1em;"></div>
@@ -170,26 +195,18 @@
                 </label>
               </div>
 
-              <button type="button" id="btnAddOverride" is="emby-button" class="raised emby-button">
-                <span>Save Override</span>
-              </button>
-              <button type="button" id="btnCancelOverride" is="emby-button" class="emby-button"
-                style="margin-left: 0.5em;">
-                <span>Cancel</span>
-              </button>
+              <div style="margin-top: 1em;">
+                <button type="button" id="btnAddOverride" is="emby-button" class="raised emby-button">Save
+                  Override</button>
+                <button type="button" id="btnCancelOverride" is="emby-button" class="emby-button"
+                  style="margin-left: 0.5em;">Cancel</button>
+              </div>
             </div>
           </div>
 
-          <div class="verticalSection">
-            <p>Want to support me? Use one of my referral codes
-              <a target="_blank" href="https://github.com/lostb1t/Gelato/tree/main?tab=readme-ov-file#support">Support
-                link</a>
-            </p>
-          </div>
-
-          <div>
+          <div class="verticalSection" style="margin-top: 2em;">
             <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block emby-button">
-              <span>Save</span>
+              <span>Save Configuration</span>
             </button>
           </div>
         </form>
@@ -199,198 +216,247 @@
     <script type="text/javascript">
       (function () {
         const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A";
-        const page = document.querySelector('#externalmediaConfigurationPage');
-        const form = document.querySelector('#externalmediaForm');
+        // Unique ID for this IIFE instance to prevent collisions if multiple loaded
+        const pageId = "gelatoConfigurationPage";
+        const page = document.querySelector('#' + pageId);
+        const form = document.querySelector('#gelatoForm');
 
-        const txtUrl = document.querySelector('#txtUrl');
-        const txtMoviePath = document.querySelector('#txtMoviePath');
-        const txtSeriesPath = document.querySelector('#txtSeriesPath');
-        const txtCatalogMaxItems = document.querySelector('#txtCatalogMaxItems');
-        const chkCreateCollections = document.querySelector('#chkCreateCollections');
-        const txtMaxCollectionItems = document.querySelector('#txtMaxCollectionItems');
-        const txtStreamTTL = document.querySelector('#txtStreamTTL');
-        const chkEnableSubs = document.querySelector('#chkEnableSubs');
-        const chkEnableMixed = document.querySelector('#chkEnableMixed');
+        // Tab Logic
+        const tabs = page.querySelectorAll('.tab-button');
+        const tabContents = page.querySelectorAll('.tab-content');
 
-        const chkDisableSearch = document.querySelector('#chkDisableSearch');
-        const chkFilterUnreleased = document.querySelector('#chkFilterUnreleased');
-        const txtBufferDays = document.querySelector('#txtBufferDays');
+        tabs.forEach(tab => {
+          tab.addEventListener('click', () => {
+            // Deactivate all
+            tabs.forEach(t => {
+              t.classList.remove('active');
+              t.style.borderBottom = '2px solid transparent';
+              t.style.opacity = '0.6';
+            });
+            tabContents.forEach(c => c.style.display = 'none');
 
-        const txtFFmpegAnalyzeDuration = document.querySelector('#txtFFmpegAnalyzeDuration');
-        const txtFFmpegProbeSize = document.querySelector('#txtFFmpegProbeSize');
+            // Activate clicked
+            tab.classList.add('active');
+            tab.style.borderBottom = '2px solid #00a4dc'; // Jellyfin Blue
+            tab.style.opacity = '1';
 
+            const targetId = 'tab-' + tab.dataset.tab;
+            page.querySelector('#' + targetId).style.display = 'block';
 
+            // Lazy load catalogs if switching to catalogs tab
+            if (tab.dataset.tab === 'catalogs') {
+              // Always refresh display on switch
+              renderCatalogs();
+              if (allCatalogs.length === 0) loadCatalogs();
+            }
+          });
+        });
 
-        const selUserConfig = document.querySelector('#selUserConfig');
-        const userOverrideContainer = document.querySelector('#userOverrideContainer');
-        const userOverridesList = document.querySelector('#userOverridesList');
-        const txtUserUrl = document.querySelector('#txtUserUrl');
-        const txtUserMoviePath = document.querySelector('#txtUserMoviePath');
-        const txtUserSeriesPath = document.querySelector('#txtUserSeriesPath');
-        const chkUserDisableSearch = document.querySelector('#chkUserDisableSearch');
-        const btnAddOverride = document.querySelector('#btnAddOverride');
-        const btnCancelOverride = document.querySelector('#btnCancelOverride');
+        // Elements
+        const txtUrl = page.querySelector('#txtUrl');
+        const txtMoviePath = page.querySelector('#txtMoviePath');
+        const txtSeriesPath = page.querySelector('#txtSeriesPath');
+        const txtCatalogMaxItems = page.querySelector('#txtCatalogMaxItems');
+        const chkCreateCollections = page.querySelector('#chkCreateCollections');
+        const txtMaxCollectionItems = page.querySelector('#txtMaxCollectionItems');
+        const txtStreamTTL = page.querySelector('#txtStreamTTL');
+        const chkEnableSubs = page.querySelector('#chkEnableSubs');
+        const chkEnableMixed = page.querySelector('#chkEnableMixed');
+        const chkDisableSearch = page.querySelector('#chkDisableSearch');
+        const chkFilterUnreleased = page.querySelector('#chkFilterUnreleased');
+        const txtBufferDays = page.querySelector('#txtBufferDays');
+        const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
+        const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
+
+        // Catalogs
+        const catalogsList = page.querySelector('#catalogsList');
+        const txtCatalogSearch = page.querySelector('#txtCatalogSearch');
+        const btnRefreshCatalogs = page.querySelector('#btnRefreshCatalogs');
+        let allCatalogs = [];
+
+        // Overrides
+        const selUserConfig = page.querySelector('#selUserConfig');
+        const userOverrideContainer = page.querySelector('#userOverrideContainer');
+        const userOverridesList = page.querySelector('#userOverridesList');
+        const txtUserUrl = page.querySelector('#txtUserUrl');
+        const txtUserMoviePath = page.querySelector('#txtUserMoviePath');
+        const txtUserSeriesPath = page.querySelector('#txtUserSeriesPath');
+        const chkUserDisableSearch = page.querySelector('#chkUserDisableSearch');
+
+        const btnAddOverride = page.querySelector('#btnAddOverride');
+        const btnCancelOverride = page.querySelector('#btnCancelOverride');
 
         let currentConfig = null;
         let users = [];
 
-
-
-        function getUserName(userId) {
-          const user = users.find(u => u.Id === userId);
-          return user ? user.Name : userId;
-        }
-
-        function renderOverridesList() {
-          const overrides = currentConfig?.UserConfigs || {};
-          const entries = Object.entries(overrides);
-
-          // Clear the list first
-          userOverridesList.innerHTML = '';
-
-          if (entries.length === 0) {
-            const p = document.createElement('p');
-            p.style.color = '#888';
-            p.style.fontStyle = 'italic';
-            p.textContent = 'No user overrides configured.';
-            userOverridesList.appendChild(p);
-            return;
-          }
-
-          for (const [userId, override] of entries) {
-            const userName = getUserName(userId);
-            const details = [];
-            // if (override.Url) details.push('URL: ' + override.Url);
-            // if (override.MoviePath) details.push('Movies: ' + override.MoviePath);
-            // if (override.SeriesPath) details.push('Series: ' + override.SeriesPath);
-            // if (override.DisableSearch) details.push('Search disabled');
-
-            const container = document.createElement('div');
-            container.style.cssText = 'display: flex; align-items: center; padding: 0.75em; margin-bottom: 0.5em; background: rgba(0,0,0,0.1); border-radius: 4px;';
-
-            const infoDiv = document.createElement('div');
-            infoDiv.style.cssText = 'flex: 1; min-width: 0;';
-
-            const nameStrong = document.createElement('strong');
-            nameStrong.textContent = userName;
-            infoDiv.appendChild(nameStrong);
-
-            // const detailsDiv = document.createElement('div');
-            // detailsDiv.style.cssText = 'font-size: 0.85em; color: #aaa; overflow: hidden; text-overflow: ellipsis;';
-            // detailsDiv.textContent = details.join(' • ') || 'No overrides set';
-            // infoDiv.appendChild(detailsDiv);
-
-            container.appendChild(infoDiv);
-
-            const editBtn = document.createElement('button');
-            editBtn.setAttribute('type', 'button');
-            editBtn.setAttribute('is', 'emby-button');
-            editBtn.className = 'emby-button btnEditOverride';
-            editBtn.dataset.userid = userId;
-            editBtn.style.marginLeft = '0.5em';
-            editBtn.innerHTML = '<span>Edit</span>';
-            editBtn.addEventListener('click', () => editOverride(userId));
-            container.appendChild(editBtn);
-
-            const deleteBtn = document.createElement('button');
-            deleteBtn.setAttribute('type', 'button');
-            deleteBtn.setAttribute('is', 'emby-button');
-            deleteBtn.className = 'emby-button btnDeleteOverride';
-            deleteBtn.dataset.userid = userId;
-            deleteBtn.style.marginLeft = '0.5em';
-            deleteBtn.innerHTML = '<span>Delete</span>';
-            deleteBtn.addEventListener('click', () => deleteOverride(userId));
-            container.appendChild(deleteBtn);
-
-            userOverridesList.appendChild(container);
-          }
-        }
-
-        function deleteOverride(userId) {
-          if (!currentConfig.UserConfigs) return;
-          delete currentConfig.UserConfigs[userId];
-          renderOverridesList();
-        }
-
-        function editOverride(userId) {
-          selUserConfig.value = userId;
-          onUserSelected();
-        }
-
-        function clearOverrideForm() {
-          selUserConfig.value = '';
-          txtUserUrl.value = '';
-          txtUserMoviePath.value = '';
-          txtUserSeriesPath.value = '';
-          chkUserDisableSearch.checked = false;
-          userOverrideContainer.style.display = 'none';
-        }
-
-        function onUserSelected() {
-          const userId = selUserConfig.value;
-          if (!userId) {
-            userOverrideContainer.style.display = 'none';
-            return;
-          }
-
-          userOverrideContainer.style.display = 'block';
-
-          const override = currentConfig?.UserConfigs?.[userId];
-          if (override) {
-            // Editing existing override
-            txtUserUrl.value = override.Url;
-            txtUserMoviePath.value = override.MoviePath;
-            txtUserSeriesPath.value = override.SeriesPath;
-            chkUserDisableSearch.checked = override.DisableSearch;
-          } else {
-            // Creating new override - prefill with base config values
-            txtUserUrl.value = currentConfig.Url || '';
-            txtUserMoviePath.value = currentConfig.MoviePath || '';
-            txtUserSeriesPath.value = currentConfig.SeriesPath || '';
-            chkUserDisableSearch.checked = currentConfig.DisableSearch ?? false;
-          }
-        }
-
-        function saveOverride() {
-          const userId = selUserConfig.value;
-          if (!userId) return;
-
-          if (!currentConfig.UserConfigs) {
-            currentConfig.UserConfigs = {};
-          }
-
-          const url = txtUserUrl.value.trim();
-          const moviePath = txtUserMoviePath.value.trim();
-          const seriesPath = txtUserSeriesPath.value.trim();
-          const disableSearch = chkUserDisableSearch.checked;
-
-          console.log('saveOverride called', { userId, url, moviePath, seriesPath, disableSearch });
-
-          // All fields are required - save complete override
-          currentConfig.UserConfigs[userId] = {
-            Url: url,
-            MoviePath: moviePath,
-            SeriesPath: seriesPath,
-            DisableSearch: disableSearch
-          };
-          console.log('currentConfig.UserConfigs after save:', currentConfig.UserConfigs);
-
-          clearOverrideForm();
-          renderOverridesList();
-        }
-
-        async function loadUsers() {
+        async function loadCatalogs() {
           try {
-            users = await window.ApiClient.getUsers();
-            selUserConfig.innerHTML = '<option value="">-- Select user --</option>';
-            users.forEach(user => {
-              const option = document.createElement('option');
-              option.value = user.Id;
-              option.textContent = user.Name;
-              selUserConfig.appendChild(option);
-            });
+            // Show loading spinner in list
+            catalogsList.innerHTML = '<div style="padding: 2em; text-align: center;"><div class="mdl-spinner mdl-js-spinner is-active"></div><p>Loading catalogs...</p></div>';
+
+            const response = await window.ApiClient.getJSON(window.ApiClient.getUrl('gelato/catalogs'));
+            allCatalogs = response || [];
+            renderCatalogs();
           } catch (e) {
-            console.error('Error loading users:', e);
+            console.error('Error loading catalogs:', e);
+            catalogsList.innerHTML = '<p style="color:red; padding: 1em;">Error loading catalogs. Check logs.</p>';
+          }
+        }
+
+        function renderCatalogs() {
+          catalogsList.innerHTML = '';
+          const searchTerm = (txtCatalogSearch.value || '').toLowerCase();
+
+          const filtered = allCatalogs.filter(cat =>
+            (cat.Name || '').toLowerCase().includes(searchTerm) ||
+            (cat.Type || '').toLowerCase().includes(searchTerm)
+          );
+
+          if (filtered.length === 0) {
+            if (allCatalogs.length === 0) {
+              // Not loaded yet or empty manifest
+            } else {
+              catalogsList.innerHTML = '<p style="padding: 1em; text-align: center; opacity: 0.7;">No matching catalogs found.</p>';
+              return;
+            }
+          }
+
+          if (allCatalogs.length === 0) return; // Wait for load
+
+          const table = document.createElement('table');
+          table.classList.add('table', 'detailTable');
+          table.style.width = '100%';
+          table.style.textAlign = 'left';
+          table.style.borderCollapse = 'collapse';
+
+          const header = document.createElement('tr');
+          header.style.backgroundColor = 'rgba(0,0,0,0.3)';
+          header.innerHTML = `
+                <th style="padding: 10px;">Name</th>
+                <th style="padding: 10px;">Type</th>
+                <th style="padding: 10px; text-align: center;">Enabled</th>
+                <th style="padding: 10px;">Limit</th>
+                <th style="padding: 10px; text-align: right;">Actions</th>
+            `;
+          table.appendChild(header);
+
+          filtered.forEach(cat => {
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+
+            // Name
+            const nameCell = document.createElement('td');
+            nameCell.style.padding = '10px';
+            nameCell.textContent = cat.Name;
+            row.appendChild(nameCell);
+
+            // Type
+            const typeCell = document.createElement('td');
+            typeCell.style.padding = '10px';
+            typeCell.innerHTML = '<span style="padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); font-size: 0.9em;">' + cat.Type + '</span>';
+            row.appendChild(typeCell);
+
+            // Enabled
+            const enabledCell = document.createElement('td');
+            enabledCell.style.padding = '10px';
+            enabledCell.style.textAlign = 'center';
+            const enabledCheck = document.createElement('input');
+            enabledCheck.type = 'checkbox';
+            enabledCheck.checked = cat.Enabled;
+            enabledCheck.is = 'emby-checkbox';
+            enabledCell.appendChild(enabledCheck);
+            row.appendChild(enabledCell);
+
+            // Max Items
+            const maxCell = document.createElement('td');
+            maxCell.style.padding = '10px';
+            const maxInput = document.createElement('input');
+            maxInput.type = 'number';
+            maxInput.value = cat.MaxItems;
+            maxInput.style.width = '70px';
+            maxInput.is = 'emby-input';
+            maxInput.classList.add('emby-input');
+            maxInput.style.padding = '4px';
+            maxCell.appendChild(maxInput);
+            row.appendChild(maxCell);
+
+            // Actions
+            const actionCell = document.createElement('td');
+            actionCell.style.padding = '10px';
+            actionCell.style.textAlign = 'right';
+
+            const btnContainer = document.createElement('div');
+            btnContainer.style.display = 'flex';
+            btnContainer.style.justifyContent = 'flex-end';
+            btnContainer.style.gap = '10px';
+
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'button';
+            saveBtn.textContent = 'Save';
+            saveBtn.className = 'raised emby-button';
+            saveBtn.is = 'emby-button';
+            saveBtn.style.padding = '0.3em 0.8em';
+            saveBtn.onclick = async () => {
+              cat.Enabled = enabledCheck.checked;
+              cat.MaxItems = parseInt(maxInput.value) || 100;
+              await updateCatalogConfig(cat);
+            };
+
+            const importBtn = document.createElement('button');
+            importBtn.type = 'button';
+            importBtn.textContent = 'Import';
+            importBtn.className = 'raised emby-button';
+            importBtn.is = 'emby-button';
+            importBtn.style.background = '#00a4dc';
+            importBtn.style.color = '#fff';
+            importBtn.style.padding = '0.3em 0.8em';
+            importBtn.onclick = async () => {
+              await triggerImport(cat);
+            };
+
+            btnContainer.appendChild(saveBtn);
+            btnContainer.appendChild(importBtn);
+            actionCell.appendChild(btnContainer);
+            row.appendChild(actionCell);
+            table.appendChild(row);
+          });
+
+          catalogsList.appendChild(table);
+        }
+
+        async function updateCatalogConfig(cat) {
+          Dashboard.showLoadingMsg();
+          try {
+            // FIXED: Use string concatenation
+            const url = window.ApiClient.getUrl('gelato/catalogs/' + encodeURIComponent(cat.Id) + '/' + encodeURIComponent(cat.Type) + '/config');
+            await window.ApiClient.ajax({
+              type: "POST",
+              url: url,
+              data: JSON.stringify(cat),
+              contentType: 'application/json'
+            });
+            Dashboard.alert("Saved.");
+          } catch (e) {
+            console.error(e);
+            Dashboard.alert("Error saving config.");
+          } finally {
+            Dashboard.hideLoadingMsg();
+          }
+        }
+
+        async function triggerImport(cat) {
+          if (!confirm('Start import for ' + cat.Name + '?')) return;
+          Dashboard.showLoadingMsg();
+          try {
+            // FIXED: Use string concatenation
+            const url = window.ApiClient.getUrl('gelato/catalogs/' + encodeURIComponent(cat.Id) + '/' + encodeURIComponent(cat.Type) + '/import');
+            await window.ApiClient.ajax({ type: "POST", url: url });
+            Dashboard.alert("Import started.");
+          } catch (e) {
+            console.error(e);
+            Dashboard.alert("Error starting import.");
+          } finally {
+            Dashboard.hideLoadingMsg();
           }
         }
 
@@ -398,43 +464,28 @@
           Dashboard.showLoadingMsg();
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-
-            // Convert UserConfigs from array to object format for easier manipulation
-            const userConfigsArray = cfg.UserConfigs || [];
-            cfg.UserConfigs = {};
-            userConfigsArray.forEach(userConfig => {
-              cfg.UserConfigs[userConfig.UserId] = {
-                Url: userConfig.Url,
-                MoviePath: userConfig.MoviePath,
-                SeriesPath: userConfig.SeriesPath,
-                DisableSearch: userConfig.DisableSearch
-              };
-            });
-
             currentConfig = cfg;
 
-            txtUrl.value = cfg.Url || "";
-            txtMoviePath.value = cfg.MoviePath || "";
-            txtSeriesPath.value = cfg.SeriesPath || "";
-            txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
-            chkCreateCollections.checked = cfg.CreateCollections || false;
-            txtMaxCollectionItems.value = cfg.MaxCollectionItems || 3600;
-            txtStreamTTL.value = cfg.StreamTTL || 3600;
-            chkEnableSubs.checked = cfg.EnableSubs || false;
-            chkEnableMixed.checked = cfg.EnableMixed ?? true;
+            // Populate fields
+            if (txtUrl) txtUrl.value = cfg.Url || "";
+            if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
+            if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
+            if (txtCatalogMaxItems) txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
+            if (chkCreateCollections) chkCreateCollections.checked = cfg.CreateCollections || false;
+            if (txtMaxCollectionItems) txtMaxCollectionItems.value = cfg.MaxCollectionItems || 3600;
+            if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
+            if (chkEnableSubs) chkEnableSubs.checked = cfg.EnableSubs || false;
+            if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
+            if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
+            if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
+            if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays || 30;
+            if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
+            if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
 
-            chkDisableSearch.checked = cfg.DisableSearch ?? false;
-            chkFilterUnreleased.checked = cfg.FilterUnreleased ?? false;
-            txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 30;
-
-            txtFFmpegAnalyzeDuration.value = (cfg.FFmpegAnalyzeDuration || "5M");
-            txtFFmpegProbeSize.value = (cfg.FFmpegProbeSize || "40M");
-
-
-
-            clearOverrideForm();
+            // User Overrides Logic
             await loadUsers();
             renderOverridesList();
+
           } catch (e) {
             console.error(e);
           } finally {
@@ -447,26 +498,27 @@
           Dashboard.showLoadingMsg();
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            cfg.Url = (txtUrl.value || "").trim();
-            cfg.MoviePath = txtMoviePath.value.trim() || null;
-            cfg.SeriesPath = txtSeriesPath.value.trim() || null;
+            cfg.Url = txtUrl.value.trim();
+            cfg.MoviePath = txtMoviePath.value.trim();
+            cfg.SeriesPath = txtSeriesPath.value.trim();
+
+            // Only take catalog settings if Elements exist (might be hidden, but inputs exist in DOM)
+            // Actually they are in DOM always, just display:none
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
-            cfg.CreateCollections = !!chkCreateCollections.checked;
+            cfg.CreateCollections = chkCreateCollections.checked;
             cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 3600;
-            cfg.StreamTTL = parseInt(txtStreamTTL.value) || 250;
-            cfg.EnableSubs = !!chkEnableSubs.checked;
-            cfg.EnableMixed = !!chkEnableMixed.checked;
+            cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
+            cfg.EnableSubs = chkEnableSubs.checked;
+            cfg.EnableMixed = chkEnableMixed.checked;
 
-            cfg.DisableSearch = !!chkDisableSearch.checked;
-            cfg.FilterUnreleased = chkFilterUnreleased.checked ?? false;
-            cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) ?? 30;
+            cfg.DisableSearch = chkDisableSearch.checked;
+            cfg.FilterUnreleased = chkFilterUnreleased.checked;
+            cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) || 30;
 
-            cfg.FFmpegAnalyzeDuration = (txtFFmpegAnalyzeDuration.value || "5M").trim();
-            cfg.FFmpegProbeSize = (txtFFmpegProbeSize.value || "40M").trim();
+            cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
+            cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
 
-
-
-            // Convert UserConfigs from object to array format
+            // Handle User Configs
             // Use currentConfig.UserConfigs which contains any unsaved user overrides
             const userConfigsObj = (currentConfig && currentConfig.UserConfigs) || {};
             cfg.UserConfigs = Object.entries(userConfigsObj).map(([userId, override]) => ({
@@ -477,11 +529,11 @@
               DisableSearch: override.DisableSearch
             }));
 
-            console.log('Saving UserConfigs:', cfg.UserConfigs);
-
             await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
 
-            // Update currentConfig with the saved UserConfigs in object format for consistency
+            // Update local currentConfig to match
+            currentConfig = cfg;
+            // Re-hydrate the object form of UserConfigs for local editing
             const savedUserConfigsArray = cfg.UserConfigs || [];
             cfg.UserConfigs = {};
             savedUserConfigsArray.forEach(userConfig => {
@@ -492,7 +544,6 @@
                 DisableSearch: userConfig.DisableSearch
               };
             });
-            currentConfig = cfg;
 
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {
@@ -502,20 +553,134 @@
           }
         }
 
+        async function loadUsers() {
+          try {
+            users = await window.ApiClient.getUsers();
+            selUserConfig.innerHTML = '<option value="">-- Select user --</option>';
+            users.forEach(u => {
+              const opt = document.createElement('option');
+              opt.value = u.Id;
+              opt.textContent = u.Name;
+              selUserConfig.appendChild(opt);
+            });
+          } catch (e) { console.error(e); }
+        }
+
+        function renderOverridesList() {
+          userOverridesList.innerHTML = '';
+          const overrides = currentConfig?.UserConfigs || {};
+          const entries = Object.entries(overrides);
+
+          if (entries.length === 0) {
+            userOverridesList.innerHTML = '<p style="color: #888; font-style: italic;">No user overrides configured.</p>';
+            return;
+          }
+
+          for (const [userId, override] of entries) {
+            const userName = users.find(u => u.Id === userId)?.Name || userId;
+
+            const container = document.createElement('div');
+            container.style.cssText = 'display: flex; align-items: center; padding: 0.75em; margin-bottom: 0.5em; background: rgba(0,0,0,0.1); border-radius: 4px;';
+
+            const infoDiv = document.createElement('div');
+            infoDiv.style.flex = '1';
+            infoDiv.innerHTML = `<strong>${userName}</strong>`;
+            container.appendChild(infoDiv);
+
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'emby-button';
+            editBtn.is = 'emby-button';
+            editBtn.innerHTML = 'Edit';
+            editBtn.onclick = () => editOverride(userId);
+            container.appendChild(editBtn);
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'emby-button';
+            delBtn.is = 'emby-button';
+            delBtn.innerHTML = 'Delete';
+            delBtn.onclick = () => deleteOverride(userId);
+            delBtn.style.marginLeft = '0.5em';
+            container.appendChild(delBtn);
+
+            userOverridesList.appendChild(container);
+          }
+        }
+
+        function editOverride(userId) {
+          selUserConfig.value = userId;
+          onUserSelected();
+        }
+
+        function deleteOverride(userId) {
+          if (currentConfig?.UserConfigs) {
+            delete currentConfig.UserConfigs[userId];
+            renderOverridesList();
+          }
+        }
+
+        function onUserSelected() {
+          const userId = selUserConfig.value;
+          if (!userId) {
+            userOverrideContainer.style.display = 'none';
+            return;
+          }
+          userOverrideContainer.style.display = 'block';
+
+          const override = currentConfig?.UserConfigs?.[userId];
+          if (override) {
+            txtUserUrl.value = override.Url || '';
+            txtUserMoviePath.value = override.MoviePath || '';
+            txtUserSeriesPath.value = override.SeriesPath || '';
+            chkUserDisableSearch.checked = override.DisableSearch || false;
+          } else {
+            // New
+            txtUserUrl.value = currentConfig?.Url || '';
+            txtUserMoviePath.value = currentConfig?.MoviePath || '';
+            txtUserSeriesPath.value = currentConfig?.SeriesPath || '';
+            chkUserDisableSearch.checked = false;
+          }
+        }
+
+        page.querySelector('#btnCancelOverride').addEventListener('click', () => {
+          selUserConfig.value = '';
+          userOverrideContainer.style.display = 'none';
+        });
+
+        page.querySelector('#btnAddOverride').addEventListener('click', () => {
+          const userId = selUserConfig.value;
+          if (!userId) return;
+          if (!currentConfig.UserConfigs) currentConfig.UserConfigs = {};
+
+          currentConfig.UserConfigs[userId] = {
+            Url: txtUserUrl.value.trim(),
+            MoviePath: txtUserMoviePath.value.trim(),
+            SeriesPath: txtUserSeriesPath.value.trim(),
+            DisableSearch: chkUserDisableSearch.checked
+          };
+
+          renderOverridesList();
+          selUserConfig.value = '';
+          userOverrideContainer.style.display = 'none';
+        });
+
         function init() {
           form.addEventListener("submit", saveConfig);
+          txtCatalogSearch.addEventListener('input', renderCatalogs);
+          btnRefreshCatalogs.addEventListener('click', loadCatalogs);
+          selUserConfig.addEventListener('change', onUserSelected);
 
-          selUserConfig.addEventListener("change", onUserSelected);
-          btnAddOverride.addEventListener("click", saveOverride);
-          btnCancelOverride.addEventListener("click", clearOverrideForm);
+          // Tab 1 active by default
+          const startTab = page.querySelector('.tab-button[data-tab="general"]');
+          if (startTab) startTab.click();
+
           loadConfig();
         }
 
         page.addEventListener("pageshow", init);
       })();
     </script>
-
-
   </div>
 </body>
 

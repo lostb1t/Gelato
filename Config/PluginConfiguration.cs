@@ -43,6 +43,7 @@ namespace Gelato.Configuration {
         public int MaxCollectionItems { get; set; } = 100;
         public bool DisableSearch { get; set; } = false;
 
+        public List<CatalogConfig> Catalogs { get; set; } = new();
         public List<UserConfig> UserConfigs { get; set; } = new List<UserConfig>();
 
         public string GetBaseUrl() {
@@ -147,5 +148,13 @@ namespace Gelato.Configuration {
                 _log.CreateLogger<GelatoStremioProvider>()
             );
         }
+    }
+    public class CatalogConfig {
+        public string Id { get; set; } = "";
+        public string Type { get; set; } = "movie";
+        public string Name { get; set; } = "";
+        public bool Enabled { get; set; } = false;
+        public int MaxItems { get; set; } = 100;
+        public string Url { get; set; } = "";
     }
 }
