@@ -683,7 +683,7 @@ public class GelatoManager {
     }
 
     public bool IsPrimaryVersion(Video item) {
-        return !HasStreamTag(item) && string.IsNullOrWhiteSpace(item.PrimaryVersionId);
+        return !HasStreamTag(item) && string.IsNullOrWhiteSpace(item.PrimaryVersionId) && !item.IsVirtualItem;
     }
 
     public static bool HasStreamTag(BaseItem item) {
