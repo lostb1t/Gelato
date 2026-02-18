@@ -74,6 +74,36 @@
               </label>
               <div class="fieldDescription">Note: Currently experimental.</div>
             </div>
+
+            <h3 class="sectionTitle" style="margin-top: 2em;">Search & Discovery</h3>
+
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
+                <span>Show streams for local items</span>
+              </label>
+            </div>
+
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkDisableSearch" />
+                <span>Internal database search only (No remote requests)</span>
+              </label>
+            </div>
+
+            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
+                <span>Filter unreleased items</span>
+              </label>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
+              <input is="emby-input" type="number" id="txtBufferDays" class="emby-input" />
+              <div class="fieldDescription">Items released within these many days will be hidden if filter is enabled.
+              </div>
+            </div>
           </div>
 
           <!-- Catalogs Tab -->
@@ -98,14 +128,22 @@
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="txtCatalogMaxItems">Default Max Items (for new
-                  imports):</label>
+                <label class="inputLabel inputLabelUnfocused" for="txtCatalogMaxItems">Maximum items to show per catalog
+                  section:</label>
                 <input is="emby-input" type="number" id="txtCatalogMaxItems" class="emby-input" />
+                <div class="fieldDescription">Default limit for newly enabled catalogs.</div>
               </div>
 
               <div id="catalogsList"
                 style="max-height: 600px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(0,0,0,0.2);">
                 <!-- Catalogs rendered here -->
+              </div>
+
+              <div style="margin-top: 1.5em; display: flex; justify-content: flex-end;">
+                <button type="button" is="emby-button" class="raised emby-button" id="btnImportAll"
+                  style="background: #00a4dc; color: #fff;">
+                  <span>Import All Enabled</span>
+                </button>
               </div>
             </div>
           </div>
@@ -129,32 +167,7 @@
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Stream TTL (seconds):</label>
               <input is="emby-input" type="number" id="txtStreamTTL" class="emby-input" />
-            </div>
-
-            <div class="checkboxContainer checkboxContainer-withDescription">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
-                <span>Show streams for local items</span>
-              </label>
-            </div>
-
-            <div class="checkboxContainer checkboxContainer-withDescription">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkDisableSearch" />
-                <span>Local search only (Disable Stremio search)</span>
-              </label>
-            </div>
-
-            <div class="checkboxContainer checkboxContainer-withDescription">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
-                <span>Filter unreleased items</span>
-              </label>
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
-              <input is="emby-input" type="number" id="txtBufferDays" class="emby-input" />
+              <div class="fieldDescription">Cache duration for external stream URLs.</div>
             </div>
 
             <h3 class="sectionTitle" style="margin-top: 2em;">User Overrides</h3>
@@ -335,7 +348,7 @@
                 <th style="padding: 10px;">Name</th>
                 <th style="padding: 10px;">Type</th>
                 <th style="padding: 10px; text-align: center;">Enabled</th>
-                <th style="padding: 10px;">Limit</th>
+                <th style="padding: 10px;">Items per catalog</th>
                 <th style="padding: 10px; text-align: right;">Actions</th>
             `;
           table.appendChild(header);
@@ -455,6 +468,21 @@
           } catch (e) {
             console.error(e);
             Dashboard.alert("Error starting import.");
+          } finally {
+            Dashboard.hideLoadingMsg();
+          }
+        }
+
+        async function triggerImportAll() {
+          if (!confirm('Start import for all enabled catalogs?')) return;
+          Dashboard.showLoadingMsg();
+          try {
+            const url = window.ApiClient.getUrl('gelato/catalogs/import-all');
+            await window.ApiClient.ajax({ type: "POST", url: url });
+            Dashboard.alert("Global import started in background.");
+          } catch (e) {
+            console.error(e);
+            Dashboard.alert("Error starting global import.");
           } finally {
             Dashboard.hideLoadingMsg();
           }
@@ -669,6 +697,7 @@
           form.addEventListener("submit", saveConfig);
           txtCatalogSearch.addEventListener('input', renderCatalogs);
           btnRefreshCatalogs.addEventListener('click', loadCatalogs);
+          page.querySelector('#btnImportAll').addEventListener('click', triggerImportAll);
           selUserConfig.addEventListener('change', onUserSelected);
 
           // Tab 1 active by default

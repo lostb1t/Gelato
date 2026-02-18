@@ -74,4 +74,18 @@ public class CatalogController : ControllerBase {
 
         return Accepted();
     }
+    [HttpPost("import-all")]
+    public ActionResult ImportAll() {
+        _logger.LogInformation("Manual import triggered for all enabled catalogs");
+        
+        _ = Task.Run(async () => {
+             try {
+                 await _importService.SyncAllEnabledAsync(CancellationToken.None);
+             } catch (Exception ex) {
+                 _logger.LogError(ex, "Error in manual import for all enabled catalogs");
+             }
+        });
+
+        return Accepted();
+    }
 }
