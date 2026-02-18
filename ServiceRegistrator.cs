@@ -2,7 +2,7 @@ using System.Reflection;
 using Gelato.Configuration;
 using Gelato.Decorators;
 using Gelato.Filters;
-//using Gelato.Services;
+using Gelato.Services;
 using Gelato.Tasks;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
@@ -42,8 +42,9 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton(sp => new Lazy<GelatoManager>(() =>
             sp.GetRequiredService<GelatoManager>()
         ));
-        //services.AddSingleton<CatalogService>();
-        //services.AddSingleton<CatalogImportService>();
+        services.AddSingleton<CatalogService>();
+        services.AddSingleton<CatalogImportService>();
+        services.AddSingleton<PalcoCacheService>(); // Palco Migration
         services.AddHostedService<GelatoService>();
 
         services

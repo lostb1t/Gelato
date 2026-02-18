@@ -4,6 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Gelato</AssemblyName>
+    <Version>0.26.0.0</Version>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
@@ -12,6 +15,7 @@
     <PackageReference Include="Jellyfin.Common" Version="10.11.6" />
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
     <PackageReference Include="System.Reflection.TypeExtensions" Version="4.7.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.0" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Config\config.html" />

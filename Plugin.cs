@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Gelato.Configuration;
+using Gelato.Services;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Library;
@@ -18,6 +19,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages {
     public ConcurrentDictionary<Guid, PluginConfiguration> UserConfigs { get; } = new();
     private readonly IHttpClientFactory _http;
     private readonly GelatoStremioProviderFactory _stremioFactory;
+    public PalcoCacheService PalcoCache { get; } // Migrated Palco Cache Service
 
     public GelatoPlugin(
         IApplicationPaths applicationPaths,
@@ -26,6 +28,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages {
         ILogger<GelatoPlugin> log,
         IHttpClientFactory http,
         GelatoStremioProviderFactory stremioFactory,
+        PalcoCacheService palcoCache,
         ILibraryManager library
     )
         : base(applicationPaths, xmlSerializer) {
@@ -35,6 +38,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages {
         _manager = manager;
         _http = http;
         _stremioFactory = stremioFactory;
+        PalcoCache = palcoCache;
     }
 
     public static GelatoPlugin? Instance { get; private set; }
