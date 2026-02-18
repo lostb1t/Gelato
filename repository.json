@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.1.0] - 2026-02-18\n\n### 🚀 Features\n\n- Revert strm and add support for playlists (#103)\n- Migrate Palco caching services to Gelato (#102)\n",
+        "checksum": "49589d0d19b2bf6113b4e577c20920f0",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.0/gelato_0.26.1.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-18T18:16:35Z",
+        "version": "0.26.1.0"
+      },
+      {
         "changelog": "## [0.25.7.0] - 2026-02-14\n\n### 🚀 Features\n\n- Dont cache if no streams\n",
         "checksum": "5c93fe9a2ad9260bd27b4a46ae47f56d",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.7.0/gelato_0.25.7.0.zip",
