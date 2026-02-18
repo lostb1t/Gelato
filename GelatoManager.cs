@@ -505,11 +505,10 @@ public class GelatoManager {
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
-            // target.SetParent(parent);
             target.SetPrimaryVersionId(null);
-            //target.SetPrimaryVersionId(primary.Id.ToString());
             target.PremiereDate = primary.PremiereDate;
             target.Path = path;
+            target.IsVirtualItem = false;
 
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId)) {
