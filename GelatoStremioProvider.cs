@@ -1,31 +1,21 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 using Gelato.Common;
-using Gelato.Configuration;
-using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato
-{
-    public class GelatoStremioProvider
-    {
+namespace Gelato {
+    public class GelatoStremioProvider {
         private readonly IHttpClientFactory _http;
         private readonly ILogger<GelatoStremioProvider> _log;
         private StremioManifest? _manifest;
         public StremioCatalog? MovieSearchCatalog { get; private set; }
         public StremioCatalog? SeriesSearchCatalog { get; private set; }
-        private static readonly JsonSerializerOptions JsonOpts = new()
-        {
+        private static readonly JsonSerializerOptions JsonOpts = new() {
             PropertyNameCaseInsensitive = true,
         };
         private readonly string _baseUrl;
@@ -34,43 +24,36 @@ namespace Gelato
             string baseUrl,
             IHttpClientFactory http,
             ILogger<GelatoStremioProvider> log
-        )
-        {
+        ) {
             _http = http;
             _log = log;
             _baseUrl = baseUrl;
         }
 
-        private HttpClient NewClient()
-        {
+        private HttpClient NewClient() {
             var c = _http.CreateClient(nameof(GelatoStremioProvider));
             c.Timeout = TimeSpan.FromSeconds(30);
             return c;
         }
 
-        private string BuildUrl(string[] segments, IEnumerable<string>? extras = null)
-        {
+        private string BuildUrl(string[] segments, IEnumerable<string>? extras = null) {
             var parts = segments.Select(s => s == null ? "" : Uri.EscapeDataString(s)).ToArray();
             var path = string.Join("/", parts);
             var extrasPart =
                 (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
             var url = $"{_baseUrl}/{path}{extrasPart}.json";
             url = url.Replace("%3A", ":").Replace("%3a", ":");
-            // Console.Write(url);
             return url;
         }
 
-        private async Task<T?> GetJsonAsync<T>(string url)
-        {
+        private async Task<T?> GetJsonAsync<T>(string url) {
             _log.LogDebug("GetJsonAsync: requesting {Url}", url);
 
-            try
-            {
+            try {
                 var c = NewClient();
                 var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
 
-                if (!resp.IsSuccessStatusCode)
-                {
+                if (!resp.IsSuccessStatusCode) {
                     _log.LogWarning(
                         "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
                         url,
@@ -88,25 +71,21 @@ namespace Gelato
                 await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 _log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
                 throw;
             }
         }
 
-        public async Task<StremioManifest?> GetManifestAsync(bool force = false)
-        {
+        public async Task<StremioManifest?> GetManifestAsync(bool force = false) {
             if (!force && _manifest is not null)
                 return _manifest;
-            try
-            {
+            try {
                 var url = $"{_baseUrl}/manifest.json";
                 var m = await GetJsonAsync<StremioManifest>(url);
                 _manifest = m;
 
-                if (m?.Catalogs != null)
-                {
+                if (m?.Catalogs != null) {
                     MovieSearchCatalog = m
                         .Catalogs.Where(c =>
                             c.Type.ToLower() == StremioMediaType.Movie.ToString().ToLower()
@@ -132,24 +111,20 @@ namespace Gelato
                         .FirstOrDefault();
                 }
 
-                if (MovieSearchCatalog == null)
-                {
+                if (MovieSearchCatalog == null) {
                     _log.LogWarning("manifest has no search-capable movie catalog", url);
                 }
-                else
-                {
+                else {
                     _log.LogInformation(
                         "manifest uses movie search catalog: {Id}",
                         MovieSearchCatalog.Id
                     );
                 }
 
-                if (SeriesSearchCatalog == null)
-                {
+                if (SeriesSearchCatalog == null) {
                     _log.LogWarning("manifest has no search-capable series catalog", url);
                 }
-                else
-                {
+                else {
                     _log.LogInformation(
                         "manifest uses series search catalog: {Id}",
                         SeriesSearchCatalog.Id
@@ -157,42 +132,34 @@ namespace Gelato
                 }
                 return m;
             }
-            catch (Exception ex)
-            {
+            catch (Exception ex) {
                 _log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
                 return null;
             }
         }
 
-        public async Task<bool> IsReady()
-        {
+        public async Task<bool> IsReady() {
             var m = await GetManifestAsync();
             return m is not null;
         }
 
-        public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)
-        {
+        public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType) {
             var url = BuildUrl(new[] { "meta", mediaType.ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioMetaResponse>(url);
             return r?.Meta;
         }
 
-        public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
-        {
+        public async Task<StremioMeta?> GetMetaAsync(BaseItem item) {
             var id = item.GetProviderId("Imdb");
-            if (id is null)
-            {
+            if (id is null) {
                 _log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
-                // return null;
                 id = item.GetProviderId("Tmdb");
-                if (id is null)
-                {
+                if (id is null) {
                     _log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
                     return null;
                 }
                 id = $"tmdb:{id}";
             }
-            ;
             var url = BuildUrl(
                 new string[] { "meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id }
             );
@@ -200,34 +167,29 @@ namespace Gelato
             return r?.Meta;
         }
 
-        public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
-        {
+        public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri) {
             return await GetStreamsAsync(uri.ExternalId, uri.MediaType);
         }
 
         public async Task<List<StremioStream>> GetStreamsAsync(
             string id,
             StremioMediaType mediaType
-        )
-        {
+        ) {
             var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), id });
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
 
             var error = r?.GetError();
-            if (error is not null)
-            {
+            if (error is not null) {
                 throw new InvalidOperationException($"Stremio returned an error: {error}");
             }
 
             return r?.Streams ?? new();
         }
 
-        public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName)
-        {
+        public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName) {
             string[] extras = Array.Empty<string>();
 
-            if (!string.IsNullOrEmpty(fileName))
-            {
+            if (!string.IsNullOrEmpty(fileName)) {
                 extras = new[] { $"filename={fileName}" };
             }
 
@@ -244,8 +206,7 @@ namespace Gelato
             string mediaType,
             string? search = null,
             int? skip = null
-        )
-        {
+        ) {
             var extras = new List<string>();
             if (!string.IsNullOrWhiteSpace(search))
                 extras.Add($"search={Uri.EscapeDataString(search)}");
@@ -262,36 +223,30 @@ namespace Gelato
             string query,
             StremioMediaType mediaType,
             int? skip = null
-        )
-        {
+        ) {
             var manifest = await GetManifestAsync();
             if (manifest == null)
                 return Array.Empty<StremioMeta>();
 
-            StremioCatalog? catalog = mediaType switch
-            {
+            StremioCatalog? catalog = mediaType switch {
                 StremioMediaType.Movie => MovieSearchCatalog,
                 StremioMediaType.Series => SeriesSearchCatalog,
                 _ => null,
             };
 
-            if (catalog == null)
-            {
+            if (catalog == null) {
                 _log.LogError(
                     "SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.",
                     mediaType
                 );
                 return Array.Empty<StremioMeta>();
             }
-            ;
 
             return await GetCatalogMetasAsync(catalog.Id, mediaType.ToString(), query, skip);
         }
 
-        private static (string? type, string? extId) ResolveKey(BaseItem entity)
-        {
-            string? type = entity switch
-            {
+        private static (string? type, string? extId) ResolveKey(BaseItem entity) {
+            string? type = entity switch {
                 Movie => "movie",
                 Series => "series",
                 Episode => "series",
@@ -310,8 +265,7 @@ namespace Gelato
         }
     }
 
-    public class StremioManifest
-    {
+    public class StremioManifest {
         public string Name { get; set; } = "";
         public string Id { get; set; } = "";
         public string Version { get; set; } = "";
@@ -325,46 +279,37 @@ namespace Gelato
         public List<StremioCatalog> AddonCatalogs { get; set; } = new();
     }
 
-    public class StremioCatalog
-    {
-        //[JsonConverter(typeof(SafeStringEnumConverter<StremioMediaType>))]
-        //public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
-
+    public class StremioCatalog {
         // we dont cast to enum cause types is not a static set
         public string Type { get; set; } = "";
         public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public List<StremioExtra> Extra { get; set; } = new();
 
-        public bool IsSearchCapable()
-        {
+        public bool IsSearchCapable() {
             return Extra.Any(e =>
                 string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
             );
         }
     }
 
-    public class StremioExtra
-    {
+    public class StremioExtra {
         public string Name { get; set; } = "";
         public bool IsRequired { get; set; }
         public List<string> Options { get; set; } = new();
     }
 
-    public class StremioResource
-    {
+    public class StremioResource {
         public string Name { get; set; } = "";
         public List<string> Types { get; set; } = new();
         public List<string> IdPrefixes { get; set; } = new();
     }
 
-    public class StremioCatalogResponse
-    {
+    public class StremioCatalogResponse {
         public List<StremioMeta>? Metas { get; set; }
     }
 
-    public struct StremioSubtitle
-    {
+    public struct StremioSubtitle {
         public string Id { get; set; }
         public string Url { get; set; }
         public string? Lang { get; set; }
@@ -379,18 +324,15 @@ namespace Gelato
         public string? Moviehash { get; set; }
     }
 
-    public struct StremioSubtitleResponse
-    {
+    public struct StremioSubtitleResponse {
         public List<StremioSubtitle> Subtitles { get; set; }
     }
 
-    public class StremioMetaResponse
-    {
+    public class StremioMetaResponse {
         public StremioMeta Meta { get; set; } = default!;
     }
 
-    public class StremioMeta
-    {
+    public class StremioMeta {
         public string? Id { get; set; }
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -432,8 +374,7 @@ namespace Gelato
         public DateTime? FirstAired { get; set; }
         public Guid? Guid { get; set; }
 
-        public string? TvdbEpisodeId()
-        {
+        public string? TvdbEpisodeId() {
             if (!Uri.TryCreate(Thumbnail, UriKind.Absolute, out var uri))
                 return null;
 
@@ -445,45 +386,36 @@ namespace Gelato
             return int.TryParse(lastSegment, out _) ? lastSegment : null;
         }
 
-        public string GetName()
-        {
-            if (!string.IsNullOrWhiteSpace(Title))
-            {
+        public string GetName() {
+            if (!string.IsNullOrWhiteSpace(Title)) {
                 return Title;
             }
-            if (!string.IsNullOrWhiteSpace(Name))
-            {
+            if (!string.IsNullOrWhiteSpace(Name)) {
                 return Name;
             }
             return "";
         }
 
-        public Dictionary<string, string> GetProviderIds()
-        {
+        public Dictionary<string, string> GetProviderIds() {
             var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            if (!string.IsNullOrWhiteSpace(Id))
-            {
-                if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
-                {
+            if (!string.IsNullOrWhiteSpace(Id)) {
+                if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase)) {
                     dict[MetadataProvider.Tmdb.ToString()] = Id.Substring("tmdb:".Length);
                 }
-                else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
-                {
+                else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase)) {
                     dict[MetadataProvider.Imdb.ToString()] = Id;
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(ImdbId))
-            {
+            if (!string.IsNullOrWhiteSpace(ImdbId)) {
                 dict[MetadataProvider.Imdb.ToString()] = ImdbId;
             }
 
             return dict;
         }
 
-        public int? GetYear()
-        {
+        public int? GetYear() {
             if (Year is not null)
                 return Year;
 
@@ -491,8 +423,7 @@ namespace Gelato
                 return dt.Year;
 
             // "2007-2019", "2020-", or "2015"
-            if (!string.IsNullOrWhiteSpace(ReleaseInfo))
-            {
+            if (!string.IsNullOrWhiteSpace(ReleaseInfo)) {
                 var s = ReleaseInfo.Trim();
 
                 if (
@@ -517,62 +448,51 @@ namespace Gelato
             return null;
         }
 
-        public DateTime? GetPremiereDate()
-        {
+        public DateTime? GetPremiereDate() {
             if (Released is DateTime dt)
                 return dt;
 
             var year = GetYear();
-            if (year is null)
-            {
+            if (year is null) {
                 return null;
             }
             return new DateTime(year.Value, 1, 1);
         }
 
-        public bool IsValid()
-        {
-            if (Id is not null && !Id.Contains("error"))
-            {
+        public bool IsValid() {
+            if (Id is not null && !Id.Contains("error")) {
                 return true;
             }
 
             return false;
         }
 
-        public bool IsReleased(int bufferDays = 0)
-        {
+        public bool IsReleased(int bufferDays = 0) {
             var now = DateTime.UtcNow;
 
             // Check Released date first (most specific)
-            if (Released.HasValue)
-            {
+            if (Released.HasValue) {
                 var homeReleaseDate = Released.Value.AddDays(bufferDays);
                 return homeReleaseDate <= now;
             }
 
             // Check FirstAired for TV episodes
-            if (FirstAired.HasValue)
-            {
+            if (FirstAired.HasValue) {
                 return FirstAired.Value <= now;
             }
 
-            if (Status is not null)
-            {
-                if (Status == StremioStatus.Upcoming)
-                {
+            if (Status is not null) {
+                if (Status == StremioStatus.Upcoming) {
                     return false;
                 }
-                if (Status == StremioStatus.Ended || Status == StremioStatus.Continuing)
-                {
+                if (Status == StremioStatus.Ended || Status == StremioStatus.Continuing) {
                     return true;
                 }
             }
 
             // Fall back to year-based check
             var year = GetYear();
-            if (year.HasValue)
-            {
+            if (year.HasValue) {
                 // For year-only dates, assume mid-year release + buffer
                 var estimatedRelease = new DateTime(year.Value, 6, 1).AddDays(bufferDays);
                 return estimatedRelease <= now;
@@ -583,21 +503,18 @@ namespace Gelato
         }
     }
 
-    public class StremioTrailer
-    {
+    public class StremioTrailer {
         public string? Source { get; set; }
         public string? Type { get; set; }
     }
 
-    public class StremioLink
-    {
+    public class StremioLink {
         public string? Name { get; set; }
         public string? Category { get; set; }
         public string? Url { get; set; }
     }
 
-    public class StremioVideo
-    {
+    public class StremioVideo {
         public string Id { get; set; } = "";
         public string? Name { get; set; }
         public DateTime? Released { get; set; }
@@ -611,37 +528,32 @@ namespace Gelato
         public DateTime? FirstAired { get; set; }
     }
 
-    public class StremioTrailerStream
-    {
+    public class StremioTrailerStream {
         public string? Title { get; set; }
         public string? YtId { get; set; }
     }
 
-    public class StremioAppExtras
-    {
+    public class StremioAppExtras {
         public List<StremioCast>? Cast { get; set; }
+        public List<String?>? SeasonPosters { get; set; }
     }
 
-    public class StremioCast
-    {
+    public class StremioCast {
         public string? Name { get; set; }
         public string? Character { get; set; }
         public string? Photo { get; set; }
     }
 
-    public class StremioStreamsResponse
-    {
+    public class StremioStreamsResponse {
         public List<StremioStream> Streams { get; set; } = new();
 
-        public string? GetError()
-        {
+        public string? GetError() {
             var name = Streams.FirstOrDefault()?.GetName();
             return name is not null && name.Contains("error") ? name : null;
         }
     }
 
-    public class StremioStream
-    {
+    public class StremioStream {
         public string Url { get; set; } = "";
         public string? Title { get; set; }
         public string? Name { get; set; }
@@ -654,21 +566,17 @@ namespace Gelato
         public List<string>? Sources { get; set; }
         public StremioBehaviorHints? BehaviorHints { get; set; }
 
-        public string GetName()
-        {
-            if (!string.IsNullOrWhiteSpace(Title))
-            {
+        public string GetName() {
+            if (!string.IsNullOrWhiteSpace(Title)) {
                 return Title;
             }
-            if (!string.IsNullOrWhiteSpace(Name))
-            {
+            if (!string.IsNullOrWhiteSpace(Name)) {
                 return Name;
             }
             return "";
         }
 
-        public Guid GetGuid()
-        {
+        public Guid GetGuid() {
             string key;
 
             // Prefer URL identity when a direct URL exists, even if InfoHash is present.
@@ -694,8 +602,7 @@ namespace Gelato
             else if (
                 !string.IsNullOrEmpty(BehaviorHints?.BingeGroup)
                 && !string.IsNullOrEmpty(BehaviorHints?.Filename)
-            )
-            {
+            ) {
                 key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename}";
             }
             else
@@ -709,20 +616,18 @@ namespace Gelato
             return new Guid(hash);
         }
 
-        public bool IsValid()
-{
-    if (string.IsNullOrWhiteSpace(Url))
-        return false;
+        public bool IsValid() {
+            if (string.IsNullOrWhiteSpace(Url))
+                return false;
 
-    Uri uri;
-    if (!Uri.TryCreate(Url, UriKind.Absolute, out uri))
-        return false;
+            Uri uri;
+            if (!Uri.TryCreate(Url, UriKind.Absolute, out uri))
+                return false;
 
-    return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
-}
+            return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
+        }
 
-        public bool IsFile()
-        {
+        public bool IsFile() {
             return !string.IsNullOrWhiteSpace(Url);
         }
 
@@ -733,8 +638,7 @@ namespace Gelato
         }
     }
 
-    public class StremioBehaviorHints
-    {
+    public class StremioBehaviorHints {
         public string? BingeGroup { get; set; }
         public string? VideoHash { get; set; }
         public long? VideoSize { get; set; }
@@ -743,14 +647,12 @@ namespace Gelato
         public bool ConfigurationRequired { get; set; }
     }
 
-    public class StremioOptions
-    {
+    public class StremioOptions {
         public string BaseUrl { get; set; } = "https://your-stremio-addon";
         public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(8);
     }
 
-    public enum StremioMediaType
-    {
+    public enum StremioMediaType {
         Unknown = 0,
         Movie,
         Series,
@@ -763,8 +665,7 @@ namespace Gelato
         Events,
     }
 
-    public enum StremioStatus
-    {
+    public enum StremioStatus {
         Unknown = 0,
         Upcoming,
         Ended,
@@ -772,24 +673,20 @@ namespace Gelato
     }
 
     public class SafeStringEnumConverter<T> : JsonConverter<T>
-        where T : struct, Enum
-    {
+        where T : struct, Enum {
         public override T Read(
             ref Utf8JsonReader reader,
             Type typeToConvert,
             JsonSerializerOptions options
-        )
-        {
-            if (reader.TokenType == JsonTokenType.String)
-            {
+        ) {
+            if (reader.TokenType == JsonTokenType.String) {
                 var s = reader.GetString();
                 if (Enum.TryParse<T>(s, true, out var value))
                     return value;
                 if (Enum.TryParse<T>("Unknown", true, out var fallback))
                     return fallback;
             }
-            if (reader.TokenType == JsonTokenType.Number)
-            {
+            if (reader.TokenType == JsonTokenType.Number) {
                 if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i))
                     return (T)Enum.ToObject(typeof(T), i);
             }
@@ -803,15 +700,12 @@ namespace Gelato
             writer.WriteStringValue(value.ToString());
     }
 
-    public sealed class NullableIntLenientConverter : JsonConverter<int?>
-    {
-        public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
-        {
+    public sealed class NullableIntLenientConverter : JsonConverter<int?> {
+        public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) {
             if (r.TokenType == JsonTokenType.Number)
                 return r.TryGetInt32(out var i) ? i : (int?)null;
 
-            if (r.TokenType == JsonTokenType.String)
-            {
+            if (r.TokenType == JsonTokenType.String) {
                 var s = r.GetString();
                 if (string.IsNullOrWhiteSpace(s))
                     return null;
@@ -832,8 +726,7 @@ namespace Gelato
             return null;
         }
 
-        public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o)
-        {
+        public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o) {
             if (v.HasValue)
                 w.WriteNumberValue(v.Value);
             else

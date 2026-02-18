@@ -11,7 +11,6 @@ using Jellyfin.Data;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
-using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Extensions;
 using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
@@ -29,10 +28,8 @@ using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Decorators
-{
-    public sealed class MediaSourceManagerDecorator : IMediaSourceManager
-    {
+namespace Gelato.Decorators {
+    public sealed class MediaSourceManagerDecorator : IMediaSourceManager {
         private readonly IMediaSourceManager _inner;
         private readonly ILogger<MediaSourceManagerDecorator> _log;
         private readonly IHttpContextAccessor _http;
@@ -51,8 +48,7 @@ namespace Gelato.Decorators
             GelatoItemRepository repo,
             IDirectoryService directoryService,
             Lazy<GelatoManager> manager
-        )
-        {
+        ) {
             _inner = inner ?? throw new ArgumentNullException(nameof(inner));
             _log = log ?? throw new ArgumentNullException(nameof(log));
             _http = http ?? throw new ArgumentNullException(nameof(http));
@@ -66,8 +62,7 @@ namespace Gelato.Decorators
             BaseItem item,
             bool enablePathSubstitution,
             User user = null
-        )
-        {
+        ) {
             var manager = _manager.Value;
             _log.LogDebug(
                 "GetStaticMediaSources {Id}",
@@ -75,12 +70,10 @@ namespace Gelato.Decorators
             );
             var ctx = _http?.HttpContext;
             Guid userId;
-            if (user != null)
-            {
+            if (user != null) {
                 userId = user.Id;
             }
-            else
-            {
+            else {
                 ctx.TryGetUserId(out userId);
             }
 
@@ -88,8 +81,7 @@ namespace Gelato.Decorators
             if (
                 (!cfg.EnableMixed && !manager.IsGelato(item))
                 || (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
-            )
-            {
+            ) {
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
             }
 
@@ -103,38 +95,34 @@ namespace Gelato.Decorators
                 ? id.ToString()
                 : item.Id.ToString();
 
-            if (userId != Guid.Empty)
-            {
+            if (userId != Guid.Empty) {
                 cacheKey = $"{userId.ToString()}:{cacheKey}";
             }
 
-            if (!allowSync)
-            {
+            if (!allowSync) {
                 _log.LogDebug(
                     "GetStaticMediaSources not a sync-eligible call. action={Action} uri={Uri}",
                     actionName,
                     uri?.ToString()
                 );
             }
-            else if (uri is not null && !manager.HasStreamSync(cacheKey))
-            {
+            else if (uri is not null && !manager.HasStreamSync(cacheKey)) {
                 // Bug in web UI that calls the detail page twice. So that's why there's a lock.
                 _lock
                     .RunSingleFlightAsync(
                         item.Id,
-                        async ct =>
-                        {
+                        async ct => {
                             _log.LogDebug(
                                 "GetStaticMediaSources refreshing streams for {Id}",
                                 item.Id
                             );
-                            try
-                            {
-                                await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
-                                manager.SetStreamSync(cacheKey);
+                            try {
+                                var count = await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                                if (count > 0) {
+                                    manager.SetStreamSync(cacheKey);
+                                }
                             }
-                            catch (Exception ex)
-                            {
+                            catch (Exception ex) {
                                 _log.LogError(ex, "Failed to sync streams");
                             }
                         }
@@ -147,18 +135,15 @@ namespace Gelato.Decorators
             }
 
             var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user)
-            //  .Where(x => manager.IsGelato(x) && !manager.IsStream(x))
               .ToList();
 
             // we dont use jellyfins alternate versions crap. So we have to load it ourselves
 
             InternalItemsQuery query;
 
-            if (item.GetBaseItemKind() == BaseItemKind.Episode)
-            {
+            if (item.GetBaseItemKind() == BaseItemKind.Episode) {
                 var episode = (Episode)item;
-                query = new InternalItemsQuery
-                {
+                query = new InternalItemsQuery {
                     IncludeItemTypes = new[] { item.GetBaseItemKind() },
                     ParentId = episode.SeasonId,
                     Recursive = false,
@@ -166,14 +151,12 @@ namespace Gelato.Decorators
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    IsVirtualItem = true,
+                    Tags = new[] { GelatoManager.StreamTag },
                     IndexNumber = episode.IndexNumber,
                 };
             }
-            else
-            {
-                query = new InternalItemsQuery
-                {
+            else {
+                query = new InternalItemsQuery {
                     IncludeItemTypes = new[] { item.GetBaseItemKind() },
                     HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
                     Recursive = false,
@@ -181,7 +164,7 @@ namespace Gelato.Decorators
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    IsVirtualItem = true,
+                    Tags = new[] { GelatoManager.StreamTag },
                 };
             }
 
@@ -195,8 +178,7 @@ namespace Gelato.Decorators
             (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
         ))
     .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
-    .Select(s =>
-    {
+    .Select(s => {
         var k = GetVersionInfo(
             enablePathSubstitution,
             s,
@@ -205,26 +187,24 @@ namespace Gelato.Decorators
             user
         );
 
-        if (user is not null)
-        {
+        if (user is not null) {
             _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
         }
 
         return k;
     })
     .ToList();
-                
-                _log.LogInformation(
-                    "Found {s} streams. UserId={Action} GelatoId={Uri}",
-                    gelatoSources.Count,
-                    userId,
-                    item.GetProviderId("Stremio")
-                );
+
+            _log.LogInformation(
+                "Found {s} streams. UserId={Action} GelatoId={Uri}",
+                gelatoSources.Count,
+                userId,
+                item.GetProviderId("Stremio")
+            );
 
             sources.AddRange(gelatoSources);
 
-            if (sources.Count > 1)
-            {
+            if (sources.Count > 1) {
                 // remove primary from list when there are streams
                 sources = sources
                     .Where(k => !k.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase))
@@ -233,8 +213,7 @@ namespace Gelato.Decorators
             }
 
             // failsafe. mediasources cannot be null
-            if (sources.Count == 0)
-            {
+            if (sources.Count == 0) {
                 sources.Add(
                     GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
                 );
@@ -243,41 +222,30 @@ namespace Gelato.Decorators
             if (sources.Count > 0)
                 sources[0].Type = MediaSourceType.Default;
 
-            //  if (mediaSourceId == item.Id)
-            //  {
-            // use primary id for first result. This is needed as some dlients dont listen to static media sources and ust use the primary id
-            // yes this gives other issues. but im tired
-            // sources[0].ETag = sources[0].Id;
             sources[0].Id = item.Id.ToString("N");
-            //}
 
             return sources;
         }
 
-        public void AddParts(IEnumerable<IMediaSourceProvider> providers)
-        {
+        public void AddParts(IEnumerable<IMediaSourceProvider> providers) {
             _providers = providers.ToArray();
             _inner.AddParts(providers);
         }
 
-        public IReadOnlyList<MediaStream> GetMediaStreams(Guid itemId)
-        {
+        public IReadOnlyList<MediaStream> GetMediaStreams(Guid itemId) {
             return _inner.GetMediaStreams(itemId);
         }
 
         public async Task<List<MediaStream>> GetSubtitleStreams(
             BaseItem item,
             MediaSourceInfo source
-        )
-        {
+        ) {
             var manager = _manager.Value;
 
             var subtitles = manager.GetStremioSubtitlesCache(item.Id);
-            if (subtitles is null)
-            {
+            if (subtitles is null) {
                 var uri = StremioUri.FromBaseItem(item);
-                if (uri is null)
-                {
+                if (uri is null) {
                     _log.LogError($"unable to build stremio uri for {item.Name}");
                     return new List<MediaStream>(); // Return empty list instead of void
                 }
@@ -294,19 +262,16 @@ namespace Gelato.Decorators
 
             var streams = new List<MediaStream>();
 
-            if (subtitles == null || !subtitles.Any())
-            {
+            if (subtitles == null || !subtitles.Any()) {
                 _log.LogDebug($"GetSubtitleStreams: no subtitles found");
                 return streams;
             }
 
             var index = 0; // Start from 0 since this is a new list
             var limitedSubtitles = subtitles.GroupBy(s => s.Lang).SelectMany(g => g.Take(2));
-            foreach (var s in limitedSubtitles)
-            {
+            foreach (var s in limitedSubtitles) {
                 streams.Add(
-                    new MediaStream
-                    {
+                    new MediaStream {
                         Type = MediaStreamType.Subtitle,
                         Index = index,
                         Language = s.Lang,
@@ -325,8 +290,7 @@ namespace Gelato.Decorators
             return streams;
         }
 
-        public string GuessSubtitleCodec(string? urlOrPath)
-        {
+        public string GuessSubtitleCodec(string? urlOrPath) {
             if (string.IsNullOrWhiteSpace(urlOrPath))
                 return "subrip";
 
@@ -347,8 +311,7 @@ namespace Gelato.Decorators
             return "srt";
         }
 
-        public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query)
-        {
+        public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query) {
             return _inner.GetMediaStreams(query).ToList();
         }
 
@@ -364,13 +327,11 @@ namespace Gelato.Decorators
             bool allowMediaProbe,
             bool enablePathSubstitution,
             CancellationToken ct
-        )
-        {
+        ) {
             var pathAndQuery =
                 _http.HttpContext.Request.Path + _http.HttpContext.Request.QueryString;
 
-            if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
-            {
+            if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)) {
                 return await _inner
                     .GetPlaybackMediaSources(
                         item,
@@ -389,18 +350,12 @@ namespace Gelato.Decorators
                 (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
                 || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
 
-            //BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
-            //    Guid.TryParse(s.Id, out var g)
-            //        ? (_libraryManager.GetItemById(g) ?? fallback)
-            //        : fallback;
-
             BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
                 Guid.TryParse(s.ETag, out var g)
                     ? (_libraryManager.GetItemById(g) ?? fallback)
                     : fallback;
 
-            static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
-            {
+            static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id) {
                 if (!id.HasValue)
                     return list.FirstOrDefault();
 
@@ -437,32 +392,23 @@ namespace Gelato.Decorators
                 return sources;
 
             var owner = ResolveOwnerFor(selected, item);
-            if (manager.IsPrimaryVersion(owner as Video) && owner.Id != item.Id)
-            {
+            if (manager.IsPrimaryVersion(owner as Video) && owner.Id != item.Id) {
                 sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
                 selected = SelectByIdOrFirst(sources, mediaSourceId);
-                Console.Write("Not same");
                 if (selected is null)
                     return sources;
             }
 
-            if (NeedsProbe(selected))
-            {
-                var v = owner.IsVirtualItem;
-                owner.IsVirtualItem = false;
-
+            if (NeedsProbe(selected)) {
                 await owner
                     .RefreshMetadata(
-                        new MetadataRefreshOptions(_directoryService)
-                        {
+                        new MetadataRefreshOptions(_directoryService) {
                             EnableRemoteContentProbe = true,
                             MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                         },
                         ct
                     )
                     .ConfigureAwait(false);
-
-                owner.IsVirtualItem = v;
 
                 await owner
                     .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
@@ -477,16 +423,14 @@ namespace Gelato.Decorators
                 sources = refreshed;
             }
 
-            if (GelatoPlugin.Instance!.Configuration.EnableSubs)
-            {
+            if (GelatoPlugin.Instance!.Configuration.EnableSubs) {
                 var subtitleStreams = await GetSubtitleStreams(item, selected)
                     .ConfigureAwait(false);
 
                 var streams = selected.MediaStreams?.ToList() ?? new List<MediaStream>();
 
                 var index = streams.LastOrDefault()?.Index ?? -1;
-                foreach (var s in subtitleStreams)
-                {
+                foreach (var s in subtitleStreams) {
                     index++;
                     s.Index = index;
                     streams.Add(s);
@@ -495,8 +439,7 @@ namespace Gelato.Decorators
                 selected.MediaStreams = streams;
             }
 
-            if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
-            {
+            if (item.RunTimeTicks is null && selected.RunTimeTicks is not null) {
                 item.RunTimeTicks = selected.RunTimeTicks;
                 await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                     .ConfigureAwait(false);
@@ -591,8 +534,7 @@ namespace Gelato.Decorators
             MediaSourceType type,
             HttpContext ctx,
             User user = null
-        )
-        {
+        ) {
             ArgumentNullException.ThrowIfNull(item);
 
             var streamName = item.GelatoData<string>("name");
@@ -600,8 +542,7 @@ namespace Gelato.Decorators
             var bingeGroup = item.GelatoData<string>("bingeGroup");
             var richName = !string.IsNullOrEmpty(streamDesc) ? $"{streamName}\n{streamDesc}" : streamName;
 
-            var info = new MediaSourceInfo
-            {
+            var info = new MediaSourceInfo {
                 Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
                 ETag = item.Id.ToString("N", CultureInfo.InvariantCulture),
                 Protocol = MediaProtocol.Http,
@@ -618,16 +559,14 @@ namespace Gelato.Decorators
             };
 
             // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
-            if (!string.IsNullOrEmpty(bingeGroup))
-            {
+            if (!string.IsNullOrEmpty(bingeGroup)) {
                 info.RequiredHttpHeaders = new Dictionary<string, string>
                 {
                     { "X-Gelato-BingeGroup", bingeGroup }
                 };
             }
 
-            if (user is not null)
-            {
+            if (user is not null) {
                 info.SupportsTranscoding = user.HasPermission(
                     PermissionKind.EnableVideoPlaybackTranscoding
                 );
@@ -635,25 +574,27 @@ namespace Gelato.Decorators
                     PermissionKind.EnablePlaybackRemuxing
                 );
             }
-            if (string.IsNullOrEmpty(info.Path))
-            {
+            if (string.IsNullOrEmpty(info.Path)) {
                 info.Type = MediaSourceType.Placeholder;
             }
 
             var video = item as Video;
-            if (video is not null)
-            {
+            if (video is not null) {
                 info.IsoType = video.IsoType;
                 info.VideoType = video.VideoType;
                 info.Video3DFormat = video.Video3DFormat;
                 info.Timestamp = video.Timestamp;
                 info.IsRemote = true;
+
+                if (video.IsShortcut) {
+                    info.IsRemote = true;
+                    info.Path = video.ShortcutPath;
+                }
             }
 
             // massive cheat. clients will direct play remote files directly. But we always want to proxy it.
             // just fake a real file.
-            if (ctx.GetActionName() == "GetPostedPlaybackInfo")
-            {
+            if (ctx.GetActionName() == "GetPostedPlaybackInfo") {
                 info.IsRemote = false;
                 info.Protocol = MediaProtocol.File;
             }

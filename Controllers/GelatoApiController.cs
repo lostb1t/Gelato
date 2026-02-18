@@ -8,6 +8,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Gelato.Common;
 using Gelato.Configuration;
 using MediaBrowser.Common.Configuration;
 using Microsoft.AspNetCore.Authorization;
@@ -16,14 +17,12 @@ using Microsoft.Extensions.Logging;
 using MonoTorrent;
 using MonoTorrent.Client;
 using MonoTorrent.Streaming;
-using Gelato.Common;
 
 namespace Gelato;
 
 [ApiController]
 [Route("gelato")]
-public sealed class GelatoApiController : ControllerBase
-{
+public sealed class GelatoApiController : ControllerBase {
     private readonly ILogger<GelatoApiController> _log;
     private readonly IApplicationPaths _appPaths;
     private readonly GelatoManager _gelatoManager;
@@ -33,8 +32,7 @@ public sealed class GelatoApiController : ControllerBase
         ILogger<GelatoApiController> log,
         IApplicationPaths appPaths,
         GelatoManager gelatoManager
-    )
-    {
+    ) {
         _log = log;
         _appPaths = appPaths;
         _gelatoManager = gelatoManager;
@@ -47,32 +45,22 @@ public sealed class GelatoApiController : ControllerBase
     public async Task<ActionResult<StremioMeta>> GelatoMeta(
         [FromRoute, Required] StremioMediaType stremioMetaType,
         [FromRoute, Required] string id
-    )
-    {
+    ) {
         var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
         var meta = await cfg.stremio.GetMetaAsync(id, stremioMetaType);
-        if (meta is null)
-        {
+        if (meta is null) {
             return NotFound();
         }
         return meta;
     }
 
-    [HttpGet("catalogs")]
-    [Authorize]
-    public async Task<ActionResult<List<StremioCatalog>>> GetCatalogs()
-    {
-        HttpContext.TryGetUserId(out var userId);
-        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
-        var manifest = await cfg.stremio.GetManifestAsync();
-        return Ok(manifest?.Catalogs ?? new List<StremioCatalog>());
-    }
+// [HttpGet("catalogs")]
+// Moved to CatalogController
 
     [HttpGet("subtitles/{itemId}")]
     public ActionResult<IEnumerable<StremioSubtitle>> GetSubtitles(
         [FromRoute, Required] Guid itemId
-    )
-    {
+    ) {
         var subs = _gelatoManager.GetStremioSubtitlesCache(itemId);
         return Ok(subs ?? new List<StremioSubtitle>());
     }
@@ -83,8 +71,7 @@ public sealed class GelatoApiController : ControllerBase
         [FromQuery] int? idx,
         [FromQuery] string? filename,
         [FromQuery] string? trackers
-    )
-    {
+    ) {
         var remoteIp = HttpContext.Connection.RemoteIpAddress;
         if (
             remoteIp == null
@@ -100,8 +87,7 @@ public sealed class GelatoApiController : ControllerBase
 
         var ct = HttpContext.RequestAborted;
 
-        var settings = new EngineSettingsBuilder
-        {
+        var settings = new EngineSettingsBuilder {
             MaximumConnections = 40,
             MaximumDownloadRate = GelatoPlugin.Instance!.Configuration.P2PDLSpeed,
             MaximumUploadRate = GelatoPlugin.Instance!.Configuration.P2PULSpeed,
@@ -118,8 +104,7 @@ public sealed class GelatoApiController : ControllerBase
         var manager = await engine.AddStreamingAsync(magnet, _downloadPath);
         await manager.StartAsync();
 
-        if (!manager.HasMetadata)
-        {
+        if (!manager.HasMetadata) {
             while (!manager.HasMetadata && !ct.IsCancellationRequested)
                 await Task.Delay(100, ct);
 
@@ -145,8 +130,7 @@ public sealed class GelatoApiController : ControllerBase
 
         var timerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var timer = new System.Threading.Timer(
-            _ =>
-            {
+            _ => {
                 _log.LogDebug(
                     "file: {File}, progress: {Progress:0.00}%, dl: {DL}/s, ul: {UL}/s, peers: {Peers}, seeds: {Seeds}, leechers: {Leechs}, bytes: {Bytes}",
                     selected.Path,
@@ -168,26 +152,21 @@ public sealed class GelatoApiController : ControllerBase
         var stream = await manager.StreamProvider.CreateStreamAsync(selected, ct);
 
         // Register cleanup for both normal completion and cancellation
-        ct.Register(() =>
-        {
+        ct.Register(() => {
             _log.LogInformation("Client disconnected. Cleaning up resources...");
-            try
-            {
+            try {
                 timerCts.Cancel();
             }
             catch { }
-            try
-            {
+            try {
                 timer.Dispose();
             }
             catch { }
-            try
-            {
+            try {
                 manager.StopAsync().GetAwaiter().GetResult();
             }
             catch { }
-            try
-            {
+            try {
                 engine.Dispose();
             }
             catch { }
@@ -197,10 +176,8 @@ public sealed class GelatoApiController : ControllerBase
         return File(stream, GuessContentType(selected.Path), enableRangeProcessing: true);
     }
 
-    private static ITorrentManagerFile PickHeuristic(TorrentManager manager)
-    {
-        static bool LikelyVideo(ITorrentManagerFile f)
-        {
+    private static ITorrentManagerFile PickHeuristic(TorrentManager manager) {
+        static bool LikelyVideo(ITorrentManagerFile f) {
             var name = Path.GetFileName(f.Path);
             var ext = Path.GetExtension(name).ToLowerInvariant();
             if (name.Contains("sample", StringComparison.OrdinalIgnoreCase))
@@ -234,8 +211,7 @@ public sealed class GelatoApiController : ControllerBase
         return manager.Files.OrderByDescending(LikelyVideo).ThenByDescending(f => f.Length).First();
     }
 
-    private static InfoHashes? TryParseInfoHashes(string s)
-    {
+    private static InfoHashes? TryParseInfoHashes(string s) {
         s = s.Trim();
 
         if (Regex.IsMatch(s, "^[A-Fa-f0-9]{40}$"))
@@ -269,11 +245,9 @@ public sealed class GelatoApiController : ControllerBase
             "udp://tracker.openbittorrent.com:6969/announce",
         };
 
-    private static string GuessContentType(string path)
-    {
+    private static string GuessContentType(string path) {
         var ext = Path.GetExtension(path).ToLowerInvariant();
-        return ext switch
-        {
+        return ext switch {
             ".mp4" => "video/mp4",
             ".mkv" => "video/x-matroska",
             ".webm" => "video/webm",

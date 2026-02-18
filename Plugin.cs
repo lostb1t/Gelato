@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Gelato.Configuration;
+using Gelato.Services;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller.Library;
@@ -11,14 +12,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato;
 
-public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
-{
+public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages {
     private readonly ILogger<GelatoPlugin> _log;
     private readonly ILibraryManager _library;
     private readonly GelatoManager _manager;
     public ConcurrentDictionary<Guid, PluginConfiguration> UserConfigs { get; } = new();
     private readonly IHttpClientFactory _http;
     private readonly GelatoStremioProviderFactory _stremioFactory;
+    public PalcoCacheService PalcoCache { get; } // Migrated Palco Cache Service
 
     public GelatoPlugin(
         IApplicationPaths applicationPaths,
@@ -27,16 +28,17 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         ILogger<GelatoPlugin> log,
         IHttpClientFactory http,
         GelatoStremioProviderFactory stremioFactory,
+        PalcoCacheService palcoCache,
         ILibraryManager library
     )
-        : base(applicationPaths, xmlSerializer)
-    {
+        : base(applicationPaths, xmlSerializer) {
         Instance = this;
         _log = log;
         _library = library;
         _manager = manager;
         _http = http;
         _stremioFactory = stremioFactory;
+        PalcoCache = palcoCache;
     }
 
     public static GelatoPlugin? Instance { get; private set; }
@@ -46,21 +48,17 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Description => "on-demand MediaSources and optional image suppression.";
 
     /// <inheritdoc />
-    public IEnumerable<PluginPageInfo> GetPages()
-    {
+    public IEnumerable<PluginPageInfo> GetPages() {
         var prefix = GetType().Namespace;
-        yield return new PluginPageInfo
-        {
+        yield return new PluginPageInfo {
             Name = "config",
             EmbeddedResourcePath = prefix + ".Config.config.html",
         };
     }
 
-    public override void UpdateConfiguration(BasePluginConfiguration configuration)
-    {
+    public override void UpdateConfiguration(BasePluginConfiguration configuration) {
         var cfg = (PluginConfiguration)configuration;
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISABLE_P2P")))
-        {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISABLE_P2P"))) {
             cfg.P2PEnabled = false;
         }
         base.UpdateConfiguration(cfg);
@@ -69,17 +67,13 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         UserConfigs.Clear();
     }
 
-    public PluginConfiguration GetConfig(Guid userId)
-    {
-        try
-        {
+    public PluginConfiguration GetConfig(Guid userId) {
+        try {
             return UserConfigs.GetOrAdd(
                 userId,
-                _ =>
-                {
+                _ => {
                     var cfg = Instance?.Configuration;
-                    if (userId != Guid.Empty)
-                    {
+                    if (userId != Guid.Empty) {
                         var userConfig = Instance?.Configuration.UserConfigs.FirstOrDefault(u =>
                             u.UserId == userId
                         );
@@ -95,9 +89,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 }
             );
         }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "Error getting config");
+        catch (Exception ex) {
+            _log.LogWarning(ex, "Error getting config");
             return new PluginConfiguration();
         }
     }

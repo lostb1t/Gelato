@@ -7,7 +7,6 @@ using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Subtitles;
@@ -21,10 +20,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Configuration
-{
-    public class PluginConfiguration : BasePluginConfiguration
-    {
+namespace Gelato.Configuration {
+    public class PluginConfiguration : BasePluginConfiguration {
         public string MoviePath { get; set; } =
             Path.Combine(Path.GetTempPath(), "gelato", "movies");
         public string SeriesPath { get; set; } =
@@ -46,10 +43,10 @@ namespace Gelato.Configuration
         public int MaxCollectionItems { get; set; } = 100;
         public bool DisableSearch { get; set; } = false;
 
+        public List<CatalogConfig> Catalogs { get; set; } = new();
         public List<UserConfig> UserConfigs { get; set; } = new List<UserConfig>();
 
-        public string GetBaseUrl()
-        {
+        public string GetBaseUrl() {
             if (string.IsNullOrWhiteSpace(Url))
                 throw new InvalidOperationException("Gelato Url not configured.");
 
@@ -73,19 +70,16 @@ namespace Gelato.Configuration
         [XmlIgnore]
         public Folder? SeriesFolder;
 
-        public PluginConfiguration GetEffectiveConfig(Guid userId)
-        {
+        public PluginConfiguration GetEffectiveConfig(Guid userId) {
             var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
-            if (userConfig is null)
-            {
+            if (userConfig is null) {
                 return this;
             }
             return userConfig.ApplyOverrides(this);
         }
     }
 
-    public class UserConfig
-    {
+    public class UserConfig {
         public Guid UserId { get; set; }
         public string Url { get; set; } = "";
         public string MoviePath { get; set; } = "";
@@ -95,10 +89,8 @@ namespace Gelato.Configuration
         /// <summary>
         /// Apply user overrides to base configuration - replaces all overridable fields
         /// </summary>
-        public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig)
-        {
-            return new PluginConfiguration
-            {
+        public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig) {
+            return new PluginConfiguration {
                 // User overridable fields - all required, no fallback to baseConfig
                 Url = Url,
                 MoviePath = MoviePath,
@@ -125,8 +117,7 @@ namespace Gelato.Configuration
         }
     }
 
-    public class GelatoStremioProviderFactory
-    {
+    public class GelatoStremioProviderFactory {
         private readonly ILibraryManager _library;
         private readonly IHttpClientFactory _http;
         private readonly ILoggerFactory _log;
@@ -135,15 +126,13 @@ namespace Gelato.Configuration
             ILibraryManager library,
             IHttpClientFactory http,
             ILoggerFactory log
-        )
-        {
+        ) {
             _library = library;
             _http = http;
             _log = log;
         }
 
-        public GelatoStremioProvider Create(Guid userId)
-        {
+        public GelatoStremioProvider Create(Guid userId) {
             var cfg = GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId);
             return new GelatoStremioProvider(
                 cfg.GetBaseUrl(),
@@ -152,13 +141,20 @@ namespace Gelato.Configuration
             );
         }
 
-        public GelatoStremioProvider Create(PluginConfiguration cfg)
-        {
+        public GelatoStremioProvider Create(PluginConfiguration cfg) {
             return new GelatoStremioProvider(
                 cfg.GetBaseUrl(),
                 _http,
                 _log.CreateLogger<GelatoStremioProvider>()
             );
         }
+    }
+    public class CatalogConfig {
+        public string Id { get; set; } = "";
+        public string Type { get; set; } = "movie";
+        public string Name { get; set; } = "";
+        public bool Enabled { get; set; } = false;
+        public int MaxItems { get; set; } = 100;
+        public string Url { get; set; } = "";
     }
 }

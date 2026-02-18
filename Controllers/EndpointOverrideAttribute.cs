@@ -8,19 +8,16 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 
-namespace Gelato.Controllers
-{
+namespace Gelato.Controllers {
     /// <summary>
     /// This endpoint method overrides the given endpoint method
     /// Credits to: https://github.com/stenlan/JellyGuard
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
     public class EndpointOverrideAttribute<TControllerClass> : HttpMethodAttribute
-        where TControllerClass : class
-    {
+        where TControllerClass : class {
         public EndpointOverrideAttribute(string methodName)
-            : base([])
-        {
+            : base([]) {
             var targetMethod =
                 typeof(TControllerClass).GetMethod(methodName)
                 ?? throw new ArgumentException(
@@ -66,8 +63,7 @@ namespace Gelato.Controllers
             this.Order = order - 1;
         }
 
-        private static string GetBackingFieldName(string propertyName)
-        {
+        private static string GetBackingFieldName(string propertyName) {
             return string.Format("<{0}>k__BackingField", propertyName);
         }
     }
