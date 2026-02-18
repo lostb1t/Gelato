@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,10 +28,55 @@ public sealed class GelatoItemRepository : IItemRepository {
         _http = http ?? throw new ArgumentNullException(nameof(http));
     }
 
-    public void DeleteItem(params IReadOnlyList<Guid> ids) => _inner.DeleteItem(ids);
+    // Gelato's own code (PurgeStreams, SaveItems stale cleanup) sets this
+    // to true so the DeleteItem guard lets the call through.
+    [ThreadStatic]
+    public static bool SuppressGuard;
 
-    public void SaveItems(IReadOnlyList<BaseItem> items, CancellationToken cancellationToken) =>
+    public void DeleteItem(params IReadOnlyList<Guid> ids) {
+        // When Gelato itself is the caller, skip protection.
+        if (SuppressGuard) {
+            _inner.DeleteItem(ids);
+            return;
+        }
+
+        // Protect gelato-stream items from being deleted by the library scanner.
+        var protected_ids = new HashSet<Guid>();
+        foreach (var id in ids) {
+            var item = _inner.RetrieveItem(id);
+            if (item is not null && GelatoManager.HasStreamTag(item)) {
+                protected_ids.Add(id);
+            }
+        }
+        if (protected_ids.Count > 0) {
+            var filtered = ids.Where(id => !protected_ids.Contains(id)).ToList();
+            if (filtered.Count > 0)
+                _inner.DeleteItem(filtered);
+            return;
+        }
+        _inner.DeleteItem(ids);
+    }
+
+    public void SaveItems(IReadOnlyList<BaseItem> items, CancellationToken cancellationToken) {
+        // Prevent the library scanner from overwriting Gelato stream items.
+        // When the scanner discovers .strm files on disk, it resolves them into
+        // new BaseItem objects WITHOUT the gelato-stream tag. If we let these
+        // through, they'd overwrite the tagged items and break Gelato's tracking.
+        var dominated = new HashSet<Guid>();
+        foreach (var item in items) {
+            if (GelatoManager.HasStreamTag(item)) continue; // Gelato's own saves pass through
+            var existing = _inner.RetrieveItem(item.Id);
+            if (existing is not null && GelatoManager.HasStreamTag(existing)) {
+                dominated.Add(item.Id);
+            }
+        }
+        if (dominated.Count > 0) {
+            var filtered = items.Where(i => !dominated.Contains(i.Id)).ToList();
+            _inner.SaveItems(filtered, cancellationToken);
+            return;
+        }
         _inner.SaveItems(items, cancellationToken);
+    }
 
     public void SaveImages(BaseItem item) => _inner.SaveImages(item);
 

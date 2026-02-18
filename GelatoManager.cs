@@ -460,7 +460,8 @@ public class GelatoManager {
             .GetItemList(query)
             .OfType<Video>()
             .Where(v => IsStream(v))
-            .ToDictionary(v => v.GelatoData<Guid>("guid"));
+            .GroupBy(v => v.GelatoData<Guid>("guid"))
+            .ToDictionary(g => g.Key, g => g.First());
 
         var newVideos = new List<Video>();
 
@@ -531,7 +532,7 @@ public class GelatoManager {
             newVideos.Add(target);
         }
 
-        newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
+        newVideos = SaveItemsStrm(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
 
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
         var stale = existing.Values
@@ -1160,7 +1161,7 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
                 item.ShortcutPath = item.Path;
                 item.IsShortcut = true;
                 item.Path = BuildStrmPath(item, parent);
-                // Ensure parent directory exists for resolvers that hit System.IO directly
+                // Ensure parent directory exists
                 var dir = Path.GetDirectoryName(item.Path);
                 if (!string.IsNullOrEmpty(dir))
                     Directory.CreateDirectory(dir);
@@ -1175,10 +1176,50 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
                 item.DateLastSaved = now;
             }
 
+            var oldId = item.Id;
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
-            parent.AddChild(item);
+            // If the path changed, the ID changes too.  Delete the stale record
+            // so we don't end up with two DB entries for the same logical stream.
+            if (oldId != Guid.Empty && oldId != item.Id) {
+                try {
+                    Decorators.GelatoItemRepository.SuppressGuard = true;
+                    _repo.DeleteItem(oldId);
+                } finally {
+                    Decorators.GelatoItemRepository.SuppressGuard = false;
+                }
+            }
+
+            // Parent the item to the folder that actually contains its file on
+            // disk, so the scanner's currentChildren dict matches the resolved
+            // .strm files and items survive ValidateChildrenInternal2.
+            //
+            // For movies the .strm lives inside a subfolder (e.g.
+            //   /movies/Star Trek (2009)/something.strm)
+            // so the parent must be the "Star Trek (2009)" Folder, not root.
+            var strmDir = item.IsFolder ? null : Path.GetDirectoryName(item.Path);
+            if (!string.IsNullOrEmpty(strmDir) && strmDir != parent.Path) {
+                var folderId = _library.GetNewItemId(strmDir, typeof(Folder));
+                var folder = _library.GetItemById(folderId) as Folder;
+                if (folder is null) {
+                    folder = new Folder {
+                        Id = folderId,
+                        Path = strmDir,
+                        Name = Path.GetFileName(strmDir),
+                    };
+                    parent.AddChild(folder);
+                    var ts = DateTime.UtcNow;
+                    folder.DateLastRefreshed = ts;
+                    folder.DateLastSaved = ts;
+                    _repo.SaveItems(new List<BaseItem> { folder }, CancellationToken.None);
+                    _library.RegisterItem(folder);
+                }
+                folder.AddChild(item);
+            }
+            else {
+                parent.AddChild(item);
+            }
 
         }
         _repo.SaveItems(items.ToList(), CancellationToken.None);
