@@ -11,7 +11,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
  <a href="https://discord.gg/rEbhk4RBhs">
     <img src="https://img.shields.io/badge/Talk%20on-Discord-brightgreen">
-  </a>
+</a>
 
 ### Features
 - **Unified Search** – Jellyfin search now pulls results from Stremio addons
