@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.1.3] - 2026-02-19\n\n### 🐛 Bug Fixes\n\n- Also purge 0.25 streams\n",
+        "checksum": "b17043ec8085d1030d7fbd5615d7f61a",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.3/gelato_0.26.1.3.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-19T16:26:03Z",
+        "version": "0.26.1.3"
+      },
+      {
         "changelog": "## [0.26.1.2] - 2026-02-19\n\n### 🐛 Bug Fixes\n\n- Mark existing stream as a non virtual\n- Remove stale catalog from importer\n\n### 🚜 Refactor\n\n- Import form\n\n### 🎨 Styling\n\n- Typo\n",
         "checksum": "9b691d550fb50f5a526608c7bbc939ef",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.2/gelato_0.26.1.2.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-01-20T20:19:33Z",
         "version": "0.25.1.6"
-      },
-      {
-        "changelog": "## [0.25.1.5] - 2026-01-20\n\n### 🐛 Bug Fixes\n\n- Legacy placeholder path\n",
-        "checksum": "f9c851d36fa2497ea8ee44b2cd77f7ed",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.5/gelato_0.25.1.5.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-01-20T18:40:50Z",
-        "version": "0.25.1.5"
       }
     ]
   }
