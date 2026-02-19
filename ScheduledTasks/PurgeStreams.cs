@@ -66,8 +66,7 @@ namespace Gelato.Tasks {
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
-                IsDeadPerson = true,
-                Tags = new[] { GelatoManager.StreamTag },
+                IsDeadPerson = true
             };
 
             var streams = _library
