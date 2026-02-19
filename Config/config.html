@@ -53,19 +53,7 @@
               <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
               <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
             </div>
-
-            <div class="checkboxContainer checkboxContainer-withDescription">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkCreateCollections" />
-                <span>Create collections from catalogs</span>
-              </label>
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum items per
-                collection:</label>
-              <input is="emby-input" type="number" id="txtMaxCollectionItems" class="emby-input" />
-            </div>
+       
 
             <div class="checkboxContainer checkboxContainer-withDescription">
               <label>
@@ -128,12 +116,19 @@
               </div>
 
               <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum items an collection should hold:</label>
+                <input is="emby-input" type="number" id="txtMaxCollectionItems" class="emby-input" />
+              </div>
+
+              <div class="inputContainer">
                 <label class="inputLabel inputLabelUnfocused" for="txtCatalogMaxItems">Maximum items to show per catalog
                   section:</label>
                 <input is="emby-input" type="number" id="txtCatalogMaxItems" class="emby-input" />
-                <div class="fieldDescription">Default limit for newly enabled catalogs.</div>
+                <div class="fieldDescription">Default limit for catalogs.</div>
               </div>
 
+                        <h3 class="sectionTitle">Importer</h3>
+            
               <div id="catalogsList"
                 style="max-height: 600px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(0,0,0,0.2);">
                 <!-- Catalogs rendered here -->
@@ -142,7 +137,7 @@
               <div style="margin-top: 1.5em; display: flex; justify-content: flex-end;">
                 <button type="button" is="emby-button" class="raised emby-button" id="btnImportAll"
                   style="background: #00a4dc; color: #fff;">
-                  <span>Import All Enabled</span>
+                  <span>Import</span>
                 </button>
               </div>
             </div>
@@ -270,8 +265,7 @@
         const txtMoviePath = page.querySelector('#txtMoviePath');
         const txtSeriesPath = page.querySelector('#txtSeriesPath');
         const txtCatalogMaxItems = page.querySelector('#txtCatalogMaxItems');
-        const chkCreateCollections = page.querySelector('#chkCreateCollections');
-        const txtMaxCollectionItems = page.querySelector('#txtMaxCollectionItems');
+
         const txtStreamTTL = page.querySelector('#txtStreamTTL');
         const chkEnableSubs = page.querySelector('#chkEnableSubs');
         const chkEnableMixed = page.querySelector('#chkEnableMixed');
@@ -308,7 +302,15 @@
             catalogsList.innerHTML = '<div style="padding: 2em; text-align: center;"><div class="mdl-spinner mdl-js-spinner is-active"></div><p>Loading catalogs...</p></div>';
 
             const response = await window.ApiClient.getJSON(window.ApiClient.getUrl('gelato/catalogs'));
-            allCatalogs = response || [];
+            allCatalogs = (response || []).map(cat => ({
+              Id: cat.Id || '',
+              Type: cat.Type || '',
+              Name: cat.Name || '',
+              Enabled: cat.Enabled || false,
+              MaxItems: cat.MaxItems || 0,
+              CreateCollection: cat.CreateCollection || false,
+              Url: cat.Url || ''
+            }));
             renderCatalogs();
           } catch (e) {
             console.error('Error loading catalogs:', e);
@@ -347,7 +349,8 @@
           header.innerHTML = `
                 <th style="padding: 10px;">Name</th>
                 <th style="padding: 10px;">Type</th>
-                <th style="padding: 10px; text-align: center;">Enabled</th>
+                <th style="padding: 10px; text-align: center;">Library import</th>
+                <th style="padding: 10px;">Create Collection</th>
                 <th style="padding: 10px;">Items per catalog</th>
                 <th style="padding: 10px; text-align: right;">Actions</th>
             `;
@@ -377,19 +380,45 @@
             enabledCheck.type = 'checkbox';
             enabledCheck.checked = cat.Enabled;
             enabledCheck.is = 'emby-checkbox';
+            enabledCheck.dataset.catalogId = cat.Id;
+            enabledCheck.dataset.catalogType = cat.Type;
+            enabledCheck.dataset.field = 'Enabled';
             enabledCell.appendChild(enabledCheck);
             row.appendChild(enabledCell);
 
-            // Max Items
+            // Create Collection
+            const collCell = document.createElement('td');
+            collCell.style.padding = '10px';
+            collCell.style.textAlign = 'center';
+            const collCheck = document.createElement('input');
+            collCheck.type = 'checkbox';
+            collCheck.checked = cat.CreateCollection;
+            collCheck.disabled = !cat.Enabled;
+            collCheck.style.opacity = cat.Enabled ? '1' : '0.45';
+            collCheck.is = 'emby-checkbox';
+            collCheck.dataset.catalogId = cat.Id;
+            collCheck.dataset.catalogType = cat.Type;
+            collCheck.dataset.field = 'CreateCollection';
+            collCell.appendChild(collCheck);
+            row.appendChild(collCell);
+
+            // Items per catalog
             const maxCell = document.createElement('td');
             maxCell.style.padding = '10px';
+            const globalMax = parseInt(txtCatalogMaxItems.value) || 100;
             const maxInput = document.createElement('input');
             maxInput.type = 'number';
-            maxInput.value = cat.MaxItems;
+            maxInput.value = cat.MaxItems > 0 ? cat.MaxItems : globalMax;
+            maxInput.disabled = !cat.Enabled;
             maxInput.style.width = '70px';
+            maxInput.style.opacity = cat.Enabled ? '1' : '0.45';
             maxInput.is = 'emby-input';
             maxInput.classList.add('emby-input');
             maxInput.style.padding = '4px';
+            maxInput.dataset.catalogId = cat.Id;
+            maxInput.dataset.catalogType = cat.Type;
+            maxInput.dataset.field = 'MaxItems';
+
             maxCell.appendChild(maxInput);
             row.appendChild(maxCell);
 
@@ -397,23 +426,6 @@
             const actionCell = document.createElement('td');
             actionCell.style.padding = '10px';
             actionCell.style.textAlign = 'right';
-
-            const btnContainer = document.createElement('div');
-            btnContainer.style.display = 'flex';
-            btnContainer.style.justifyContent = 'flex-end';
-            btnContainer.style.gap = '10px';
-
-            const saveBtn = document.createElement('button');
-            saveBtn.type = 'button';
-            saveBtn.textContent = 'Save';
-            saveBtn.className = 'raised emby-button';
-            saveBtn.is = 'emby-button';
-            saveBtn.style.padding = '0.3em 0.8em';
-            saveBtn.onclick = async () => {
-              cat.Enabled = enabledCheck.checked;
-              cat.MaxItems = parseInt(maxInput.value) || 100;
-              await updateCatalogConfig(cat);
-            };
 
             const importBtn = document.createElement('button');
             importBtn.type = 'button';
@@ -423,13 +435,24 @@
             importBtn.style.background = '#00a4dc';
             importBtn.style.color = '#fff';
             importBtn.style.padding = '0.3em 0.8em';
+            importBtn.disabled = !cat.Enabled;
+            importBtn.style.opacity = cat.Enabled ? '1' : '0.45';
             importBtn.onclick = async () => {
               await triggerImport(cat);
             };
 
-            btnContainer.appendChild(saveBtn);
-            btnContainer.appendChild(importBtn);
-            actionCell.appendChild(btnContainer);
+            // Toggle all row controls when Enabled changes
+            enabledCheck.addEventListener('change', () => {
+              const on = enabledCheck.checked;
+              maxInput.disabled = !on;
+              maxInput.style.opacity = on ? '1' : '0.45';
+              collCheck.disabled = !on;
+              collCheck.style.opacity = on ? '1' : '0.45';
+              importBtn.disabled = !on;
+              importBtn.style.opacity = on ? '1' : '0.45';
+            });
+
+            actionCell.appendChild(importBtn);
             row.appendChild(actionCell);
             table.appendChild(row);
           });
@@ -440,7 +463,6 @@
         async function updateCatalogConfig(cat) {
           Dashboard.showLoadingMsg();
           try {
-            // FIXED: Use string concatenation
             const url = window.ApiClient.getUrl('gelato/catalogs/' + encodeURIComponent(cat.Id) + '/' + encodeURIComponent(cat.Type) + '/config');
             await window.ApiClient.ajax({
               type: "POST",
@@ -448,13 +470,31 @@
               data: JSON.stringify(cat),
               contentType: 'application/json'
             });
-            Dashboard.alert("Saved.");
           } catch (e) {
             console.error(e);
-            Dashboard.alert("Error saving config.");
+            Dashboard.alert("Error saving catalog config.");
           } finally {
             Dashboard.hideLoadingMsg();
           }
+        }
+
+        function collectCatalogStatesFromDOM() {
+          const rows = catalogsList.querySelectorAll('tr');
+          rows.forEach(row => {
+            const enabledCheck = row.querySelector('input[data-field="Enabled"]');
+            const collCheck = row.querySelector('input[data-field="CreateCollection"]');
+            const maxInput = row.querySelector('input[data-field="MaxItems"]');
+            if (!enabledCheck || !collCheck || !maxInput) return;
+
+            const catId = enabledCheck.dataset.catalogId;
+            const catType = enabledCheck.dataset.catalogType;
+            const cat = allCatalogs.find(c => c.Id === catId && c.Type === catType);
+            if (!cat) return;
+
+            cat.Enabled = enabledCheck.checked;
+            cat.CreateCollection = collCheck.checked;
+            cat.MaxItems = parseInt(maxInput.value) || 0;
+          });
         }
 
         async function triggerImport(cat) {
@@ -474,7 +514,7 @@
         }
 
         async function triggerImportAll() {
-          if (!confirm('Start import for all enabled catalogs?')) return;
+          if (!confirm('Start import?')) return;
           Dashboard.showLoadingMsg();
           try {
             const url = window.ApiClient.getUrl('gelato/catalogs/import-all');
@@ -499,8 +539,6 @@
             if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
             if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
             if (txtCatalogMaxItems) txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
-            if (chkCreateCollections) chkCreateCollections.checked = cfg.CreateCollections || false;
-            if (txtMaxCollectionItems) txtMaxCollectionItems.value = cfg.MaxCollectionItems || 3600;
             if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
             if (chkEnableSubs) chkEnableSubs.checked = cfg.EnableSubs || false;
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
@@ -533,8 +571,6 @@
             // Only take catalog settings if Elements exist (might be hidden, but inputs exist in DOM)
             // Actually they are in DOM always, just display:none
             cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
-            cfg.CreateCollections = chkCreateCollections.checked;
-            cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 3600;
             cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
             cfg.EnableSubs = chkEnableSubs.checked;
             cfg.EnableMixed = chkEnableMixed.checked;
@@ -545,6 +581,10 @@
 
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
+
+            // Collect catalog UI state and apply to config being saved
+            collectCatalogStatesFromDOM();
+            cfg.Catalogs = allCatalogs;
 
             // Handle User Configs
             // Use currentConfig.UserConfigs which contains any unsaved user overrides

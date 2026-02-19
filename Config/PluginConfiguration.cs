@@ -154,7 +154,9 @@ namespace Gelato.Configuration {
         public string Type { get; set; } = "movie";
         public string Name { get; set; } = "";
         public bool Enabled { get; set; } = false;
-        public int MaxItems { get; set; } = 100;
+        /// <summary>0 means "use global CatalogMaxItems".</summary>
+        public int MaxItems { get; set; } = 0;
+        public bool CreateCollection { get; set; } = false;
         public string Url { get; set; } = "";
     }
 }

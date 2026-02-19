@@ -60,12 +60,14 @@ public class CatalogImportService {
             return;
         }
 
-        _logger.LogInformation("Starting import for catalog {Name} ({Id}) - Limit: {Limit}", config.Name, catalogId, config.MaxItems);
+        var globalMaxItems = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
+        var maxItems = config.MaxItems > 0 ? config.MaxItems : globalMaxItems;
+
+        _logger.LogInformation("Starting import for catalog {Name} ({Id}) - Limit: {Limit}", config.Name, catalogId, maxItems);
 
         var items = new List<StremioMeta>();
         int skip = 0;
-        // Fetch items in batches until limit reached
-        while (items.Count < config.MaxItems) {
+        while (items.Count < maxItems) {
             ct.ThrowIfCancellationRequested();
             
             // Fetch next page
@@ -73,7 +75,7 @@ public class CatalogImportService {
             if (batch == null || batch.Count == 0) break;
 
             foreach (var meta in batch) {
-                if (items.Count >= config.MaxItems) break;
+                if (items.Count >= maxItems) break;
                 items.Add(meta);
             }
             
@@ -143,8 +145,8 @@ public class CatalogImportService {
              }).ConfigureAwait(false);
         }
 
-        // Handle Collection
-        if (GelatoPlugin.Instance!.Configuration.CreateCollections && importedIds.Any()) {
+        // Handle Collection (per-catalog setting)
+        if (config.CreateCollection && importedIds.Any()) {
             await UpdateCollectionAsync(config, importedIds.ToList()).ConfigureAwait(false);
         }
 
@@ -199,9 +201,7 @@ public class CatalogImportService {
                     await _collectionManager.RemoveFromCollectionAsync(collection.Id, currentChildren).ConfigureAwait(false);
                 }
                 
-                // Limit collection items if configured
-                var maxCollectionItems = GelatoPlugin.Instance!.Configuration.MaxCollectionItems;
-                var itemsToAdd = ids.Take(maxCollectionItems).ToList();
+                var itemsToAdd = ids.ToList();
 
                 await _collectionManager.AddToCollectionAsync(collection.Id, itemsToAdd).ConfigureAwait(false);
                 _logger.LogInformation("Updated collection {Name} with {Count} items", config.Name, itemsToAdd.Count);

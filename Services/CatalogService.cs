@@ -35,8 +35,9 @@ public class CatalogService {
                     Id = mCatalog.Id,
                     Type = mCatalog.Type,
                     Name = mCatalog.Name,
-                    Enabled = false, // Default to disabled
-                    MaxItems = config.CatalogMaxItems > 0 ? config.CatalogMaxItems : 100,
+                    Enabled = false,
+                    MaxItems = 0, // 0 = use global CatalogMaxItems
+                    CreateCollection = false,
                     Url = "" 
                 };
                 config.Catalogs.Add(existing);
@@ -59,8 +60,7 @@ public class CatalogService {
         if (existing != null) {
             existing.Enabled = updatedConfig.Enabled;
             existing.MaxItems = updatedConfig.MaxItems;
-            // Name, Id, Type are generally fetching-only, but we can allow name override if we want.
-            // For now, only settings.
+            existing.CreateCollection = updatedConfig.CreateCollection;
         } else {
             config.Catalogs.Add(updatedConfig);
         }

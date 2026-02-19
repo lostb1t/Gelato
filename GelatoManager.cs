@@ -876,8 +876,8 @@ public class GelatoManager {
                 ForceSave = true,
             };
             
-            SaveItem(series, seriesRootFolder);
             await series.RefreshMetadata(options, ct).ConfigureAwait(false);
+            series = (Series)SaveItem(series, seriesRootFolder);
             await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
