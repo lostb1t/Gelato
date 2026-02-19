@@ -954,7 +954,7 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
         
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
-                SaveItem(season, series);
+series.AddChild(season);
                 seasonsInserted++;
             }
 
@@ -1017,7 +1017,7 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
 
-                SaveItem(episode, season);
+season.AddChild(episode);
 
                 episodesInserted++;
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
