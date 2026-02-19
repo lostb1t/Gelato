@@ -25,6 +25,8 @@ public class CatalogService {
             return config.Catalogs;
         }
 
+        List<CatalogConfig> catalogs = new List<CatalogConfig>();
+        
         // Merge manifest catalogs with local config
         foreach (var mCatalog in manifest.Catalogs) {
             if (mCatalog.IsSearchCapable()) continue; // Skip search catalogs
@@ -40,11 +42,14 @@ public class CatalogService {
                     CreateCollection = false,
                     Url = "" 
                 };
-                config.Catalogs.Add(existing);
+                
             } else {
                 // Update basic info from manifest just in case
                 existing.Name = mCatalog.Name; 
             }
+            catalogs.Add(existing);
+            config.Catalogs = catalogs;
+            
         }
 
         // Save if we added new ones (optional, but good for persistence)
