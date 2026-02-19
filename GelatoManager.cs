@@ -500,7 +500,7 @@ public class GelatoManager {
             }
 
             target.Name = primary.Name;
-            target.PresentationUniqueKey = primary.PresentationUniqueKey;
+           // target.PresentationUniqueKey = primary.PresentationUniqueKey;
             target.Tags = new[] { StreamTag };
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
@@ -509,6 +509,7 @@ public class GelatoManager {
             target.PremiereDate = primary.PremiereDate;
             target.Path = path;
             target.IsVirtualItem = false;
+            target.SetParent(parent);
 
             var users = target.GelatoData<List<Guid>>("userIds") ?? new List<Guid>();
             if (!users.Contains(userId)) {
@@ -530,8 +531,8 @@ public class GelatoManager {
             newVideos.Add(target);
         }
 
-        newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
-
+        //newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
+_repo.SaveItems(newVideos, ct);
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
         var stale = existing.Values
             .Where(m =>
@@ -876,8 +877,9 @@ public class GelatoManager {
                 ForceSave = true,
             };
             
+series.ParentId = seriesRootFolder.Id;
             await series.RefreshMetadata(options, ct).ConfigureAwait(false);
-            series = (Series)SaveItem(series, seriesRootFolder);
+            seriesRootFolder.AddChild(series);
             await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
@@ -1129,9 +1131,9 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
         }
         _repo.SaveItems(items.ToList(), CancellationToken.None);
 
-        foreach (var item in items) {
-            _library.RegisterItem(item);
-        }
+     //   foreach (var item in items) {
+     //       _library.RegisterItem(item);
+     //   }
         ;
         return items;
     } 
@@ -1194,13 +1196,14 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
 
         var Id = meta.Id;
 
-        switch (meta.Type) {
+        switch (meta.Type)
+        {
             case StremioMediaType.Series:
-                item = new Series { Id = _library.GetNewItemId(Id, typeof(Series)) };
+                item = new Series { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)) };
                 break;
 
             case StremioMediaType.Movie:
-                item = new Movie { Id = _library.GetNewItemId(Id, typeof(Movie)) };
+                item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Movie)) };
                 break;
 
             case StremioMediaType.Episode:
@@ -1210,8 +1213,8 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
                 _log.LogWarning("unsupported type {type}", meta.Type);
                 return null;
         }
-            ;
-
+        ;
+    
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{Id}";
@@ -1254,7 +1257,9 @@ var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
         item.ProductionYear = meta.GetYear();
 
         item.Overview = meta.Description ?? meta.Overview;
-
+item.DateModified = DateTime.UtcNow;
+                item.DateLastSaved = DateTime.UtcNow;
+        
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary)) {
             item.ImageInfos = new List<ItemImageInfo>
