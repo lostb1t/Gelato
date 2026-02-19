@@ -120,12 +120,7 @@
                 <input is="emby-input" type="number" id="txtMaxCollectionItems" class="emby-input" />
               </div>
 
-              <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="txtCatalogMaxItems">Maximum items to show per catalog
-                  section:</label>
-                <input is="emby-input" type="number" id="txtCatalogMaxItems" class="emby-input" />
-                <div class="fieldDescription">Default limit for catalogs.</div>
-              </div>
+
 
                         <h3 class="sectionTitle">Importer</h3>
             
@@ -264,7 +259,7 @@
         const txtUrl = page.querySelector('#txtUrl');
         const txtMoviePath = page.querySelector('#txtMoviePath');
         const txtSeriesPath = page.querySelector('#txtSeriesPath');
-        const txtCatalogMaxItems = page.querySelector('#txtCatalogMaxItems');
+        const txtMaxCollectionItems = page.querySelector('#txtMaxCollectionItems');
 
         const txtStreamTTL = page.querySelector('#txtStreamTTL');
         const chkEnableSubs = page.querySelector('#chkEnableSubs');
@@ -301,16 +296,29 @@
             // Show loading spinner in list
             catalogsList.innerHTML = '<div style="padding: 2em; text-align: center;"><div class="mdl-spinner mdl-js-spinner is-active"></div><p>Loading catalogs...</p></div>';
 
+            // Get current configuration to preserve user settings
+            const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
+            const savedCatalogs = cfg.Catalogs || [];
+
             const response = await window.ApiClient.getJSON(window.ApiClient.getUrl('gelato/catalogs'));
-            allCatalogs = (response || []).map(cat => ({
-              Id: cat.Id || '',
-              Type: cat.Type || '',
-              Name: cat.Name || '',
-              Enabled: cat.Enabled || false,
-              MaxItems: cat.MaxItems || 0,
-              CreateCollection: cat.CreateCollection || false,
-              Url: cat.Url || ''
-            }));
+            
+            // Merge server catalogs with saved user preferences
+            allCatalogs = (response || []).map(serverCat => {
+              // Find matching saved catalog
+              const savedCat = savedCatalogs.find(s => s.Id === serverCat.Id && s.Type === serverCat.Type);
+              
+              return {
+                Id: serverCat.Id || '',
+                Type: serverCat.Type || '',
+                Name: serverCat.Name || '',
+                // Use saved user preference if available, otherwise use server default
+                Enabled: savedCat ? savedCat.Enabled : (serverCat.Enabled || false),
+                MaxItems: savedCat ? savedCat.MaxItems : (serverCat.MaxItems || 0),
+                CreateCollection: savedCat ? savedCat.CreateCollection : (serverCat.CreateCollection || false),
+                Url: serverCat.Url || ''
+              };
+            });
+            
             renderCatalogs();
           } catch (e) {
             console.error('Error loading catalogs:', e);
@@ -403,10 +411,9 @@
             // Items per catalog
             const maxCell = document.createElement('td');
             maxCell.style.padding = '10px';
-            const globalMax = parseInt(txtCatalogMaxItems.value) || 100;
             const maxInput = document.createElement('input');
             maxInput.type = 'number';
-            maxInput.value = cat.MaxItems > 0 ? cat.MaxItems : globalMax;
+            maxInput.value = cat.MaxItems > 0 ? cat.MaxItems : 100;
             maxInput.disabled = !cat.Enabled;
             maxInput.style.width = '70px';
             maxInput.style.opacity = cat.Enabled ? '1' : '0.45';
@@ -535,7 +542,7 @@
             if (txtUrl) txtUrl.value = cfg.Url || "";
             if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
             if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
-            if (txtCatalogMaxItems) txtCatalogMaxItems.value = cfg.CatalogMaxItems || "";
+            if (txtMaxCollectionItems) txtMaxCollectionItems.value = cfg.MaxCollectionItems || 100;
             if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
             if (chkEnableSubs) chkEnableSubs.checked = cfg.EnableSubs || false;
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
@@ -565,9 +572,10 @@
             cfg.MoviePath = txtMoviePath.value.trim();
             cfg.SeriesPath = txtSeriesPath.value.trim();
 
-            // Only take catalog settings if Elements exist (might be hidden, but inputs exist in DOM)
-            // Actually they are in DOM always, just display:none
-            cfg.CatalogMaxItems = parseInt(txtCatalogMaxItems.value) || null;
+            // Max collection items
+            cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 100;
+            
+            // Stream TTL
             cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
             cfg.EnableSubs = chkEnableSubs.checked;
             cfg.EnableMixed = chkEnableMixed.checked;
@@ -579,9 +587,15 @@
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
 
-            // Collect catalog UI state and apply to config being saved
-            collectCatalogStatesFromDOM();
-            cfg.Catalogs = allCatalogs;
+            // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
+            if (allCatalogs.length > 0) {
+              collectCatalogStatesFromDOM();
+              cfg.Catalogs = allCatalogs;
+            } else {
+              // If catalogs haven't been loaded, keep the existing catalog configuration
+              // This prevents overwriting catalog settings when saving from other tabs
+              cfg.Catalogs = cfg.Catalogs || [];
+            }
 
             // Handle User Configs
             // Use currentConfig.UserConfigs which contains any unsaved user overrides
