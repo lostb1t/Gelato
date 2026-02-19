@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.1.6] - 2026-02-19\n\n### 🐛 Bug Fixes\n\n- Revert item creation to 0.25\n",
+        "checksum": "27caf03f727e85678a4a19a79c295e82",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.6/gelato_0.26.1.6.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-19T19:35:02Z",
+        "version": "0.26.1.6"
+      },
+      {
         "changelog": "## [0.26.1.5] - 2026-02-19\n\n### 🐛 Bug Fixes\n\n- Revert item creation to 0.25\n",
         "checksum": "151c4054b2be2bc36b1b10437e642002",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.5/gelato_0.26.1.5.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-01-23T12:33:56Z",
         "version": "0.25.1.9"
-      },
-      {
-        "changelog": "## [0.25.1.8] - 2026-01-23\n\n### 🐛 Bug Fixes\n\n- Dont refresh streams for non user\n",
-        "checksum": "faac3a2dd9fcfe3a07b3b7bc471d7e3c",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.8/gelato_0.25.1.8.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-01-23T11:55:35Z",
-        "version": "0.25.1.8"
       }
     ]
   }
