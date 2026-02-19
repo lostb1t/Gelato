@@ -349,10 +349,10 @@
           header.innerHTML = `
                 <th style="padding: 10px;">Name</th>
                 <th style="padding: 10px;">Type</th>
-                <th style="padding: 10px; text-align: center;">Library import</th>
-                <th style="padding: 10px;">Create Collection</th>
-                <th style="padding: 10px;">Items per catalog</th>
-                <th style="padding: 10px; text-align: right;">Actions</th>
+                <th style="padding: 10px;">Emabled</th>
+                <th style="padding: 10px;">Collection</th>
+                <th style="padding: 10px;">Max items</th>
+                <th style="padding: 10px;">Actions</th>
             `;
           table.appendChild(header);
 
@@ -375,7 +375,6 @@
             // Enabled
             const enabledCell = document.createElement('td');
             enabledCell.style.padding = '10px';
-            enabledCell.style.textAlign = 'center';
             const enabledCheck = document.createElement('input');
             enabledCheck.type = 'checkbox';
             enabledCheck.checked = cat.Enabled;
@@ -389,7 +388,6 @@
             // Create Collection
             const collCell = document.createElement('td');
             collCell.style.padding = '10px';
-            collCell.style.textAlign = 'center';
             const collCheck = document.createElement('input');
             collCheck.type = 'checkbox';
             collCheck.checked = cat.CreateCollection;
@@ -425,7 +423,6 @@
             // Actions
             const actionCell = document.createElement('td');
             actionCell.style.padding = '10px';
-            actionCell.style.textAlign = 'right';
 
             const importBtn = document.createElement('button');
             importBtn.type = 'button';
