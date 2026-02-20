@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.1.8] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Lock the tage field to prevent it from being modified\n",
+        "checksum": "5724440f78f29b4e64d9a1bb30869a31",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.8/gelato_0.26.1.8.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-20T12:59:53Z",
+        "version": "0.26.1.8"
+      },
+      {
         "changelog": "## [0.26.1.7] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Validate library after import so collections dont dissapear\n- Catalog import form save not persisting\n",
         "checksum": "f0323ce96be4e05729af5897a80db323",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.7/gelato_0.26.1.7.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-01-23T18:28:22Z",
         "version": "0.25.3.0"
-      },
-      {
-        "changelog": "## [0.25.2.0] - 2026-01-23\n\n### 🚀 Features\n\n- Check if user as access on insert\n",
-        "checksum": "200c98e8b92148f4f7f41374e5dcd1e8",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.2.0/gelato_0.25.2.0.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-01-23T16:06:27Z",
-        "version": "0.25.2.0"
       }
     ]
   }
