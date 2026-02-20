@@ -530,7 +530,7 @@ public class GelatoManager {
                 target.SetGelatoData("filename", s.BehaviorHints.Filename);
             }
             target.SetGelatoData("index", index);
-            target.SetGelatoData("guid", id);
+            target.SetGelatoData("guid", target.Id);
 
             newVideos.Add(target);
         }
