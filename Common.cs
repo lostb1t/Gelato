@@ -411,6 +411,7 @@ public static class ActionContextExtensions {
         "GetMovieRecommendations",
         "GetSuggestionsLegacy",
         "GetSuggestions",
+        "GetItemCounts"
     };
 
     private static readonly HashSet<string> InsertableActionNames = new(
