@@ -48,9 +48,9 @@ public class CatalogService {
                 existing.Name = mCatalog.Name; 
             }
             catalogs.Add(existing);
-            config.Catalogs = catalogs;
             
         }
+        config.Catalogs = catalogs;
 
         // Save if we added new ones (optional, but good for persistence)
         GelatoPlugin.Instance.SaveConfiguration();
