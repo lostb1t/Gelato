@@ -246,6 +246,7 @@ public class CatalogImportService {
             current++;
             progress?.Report((double)current / total * 100);
         }
+                    progress?.Report(100);
         await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
     }
 }
