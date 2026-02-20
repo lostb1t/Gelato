@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.2.1] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Added GetResumeItemsLegacy route to stream filter\n",
+        "checksum": "62dbb77235e7c1387251ece3a031d820",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.2.1/gelato_0.26.2.1.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-20T17:53:30Z",
+        "version": "0.26.2.1"
+      },
+      {
         "changelog": "## [0.26.2.0] - 2026-02-20\n\n### 🚀 Features\n\n- Use import task from plugin ui for feedback\n",
         "checksum": "5904a8a9298df4148819098c160b89a7",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.2.0/gelato_0.26.2.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-01-29T18:13:36Z",
         "version": "0.25.3.4"
-      },
-      {
-        "changelog": "## [0.25.3.3] - 2026-01-27\n\n### 🐛 Bug Fixes\n\n- Remove wonky catalog pagination import check\n",
-        "checksum": "cd205c0f5d6ad827e751e83818dc499b",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.3/gelato_0.25.3.3.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-01-27T12:22:38Z",
-        "version": "0.25.3.3"
       }
     ]
   }
