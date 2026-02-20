@@ -5,8 +5,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.Library;
-using System.ComponentModel.DataAnnotations;
-using static Gelato.Configuration.PluginConfiguration;
 using MediaBrowser.Model.Tasks;
 
 namespace Gelato.Controllers;
@@ -20,7 +18,7 @@ public class CatalogController : ControllerBase {
     private readonly CatalogImportService _importService;
     private readonly ILibraryManager _libraryManager;
     private readonly ITaskManager _taskManager;
-    
+
     public CatalogController(
         ILogger<CatalogController> logger,
         CatalogService catalogService,
@@ -52,7 +50,7 @@ public class CatalogController : ControllerBase {
         if (config.Id != id || config.Type != type) {
             return BadRequest("ID/Type mismatch");
         }
-        
+
         _catalogService.UpdateCatalogConfig(config);
         return Ok();
     }
@@ -63,20 +61,20 @@ public class CatalogController : ControllerBase {
         [FromRoute] string type
     ) {
         _logger.LogInformation("Manual import triggered for {Id} {Type}", id, type);
-        
+
         // Run in background? Or await?
-        // User probably wants to know it started. 
+        // User probably wants to know it started.
         // Awaiting might timeout if it takes long.
         // But existing implementations awaited.
         // Let's fire and forget but log, or return accepted.
-        // "Straight approach" -> maybe just await it so user sees errors? 
+        // "Straight approach" -> maybe just await it so user sees errors?
         // But browser timeout is 2 mins usually. Import can take longer.
         // Better to run in background.
-        
+
         _ = Task.Run(async () => {
              try {
-                 await _importService.ImportCatalogAsync(id, type, Guid.Empty, CancellationToken.None);
-await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+                 await _importService.ImportCatalogAsync(id, type, CancellationToken.None);
+                 await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
              } catch (Exception ex) {
                  _logger.LogError(ex, "Error in manual import for {Id}", id);
              }
@@ -87,7 +85,7 @@ await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationT
     [HttpPost("import-all")]
     public ActionResult ImportAll() {
         _logger.LogInformation("Manual import triggered for all enabled catalogs");
-        
+
         _ = Task.Run(async () => {
              try {
                 _taskManager.CancelIfRunningAndQueue<GelatoCatalogItemsSyncTask>();

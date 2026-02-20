@@ -1,35 +1,12 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Gelato;
-using Gelato.Common;
-using Jellyfin.Data.Enums;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Tasks;
-using Microsoft.Extensions.Logging;
 
 namespace Gelato.Tasks {
     public sealed class SyncRunningSeriesTask : IScheduledTask {
-        private readonly ILibraryManager _library;
-        private readonly ILogger<SyncRunningSeriesTask> _log;
-        private readonly IFileSystem _fs;
         private readonly GelatoManager _manager;
 
         public SyncRunningSeriesTask(
-            ILibraryManager library,
-            ILogger<SyncRunningSeriesTask> log,
-            IFileSystem fs,
             GelatoManager manager
         ) {
-            _library = library;
-            _log = log;
-            _fs = fs;
             _manager = manager;
         }
 

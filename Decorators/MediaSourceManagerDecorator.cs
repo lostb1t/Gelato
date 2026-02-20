@@ -1,21 +1,12 @@
-#nullable enable
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Gelato.Common;
-using Gelato.Configuration;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Extensions;
-using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.IO;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Persistence;
@@ -24,7 +15,6 @@ using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
-using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -36,7 +26,6 @@ namespace Gelato.Decorators {
         private readonly ILibraryManager _libraryManager;
         private readonly GelatoItemRepository _repo;
         private readonly Lazy<GelatoManager> _manager;
-        private IMediaSourceProvider[] _providers;
         private readonly IDirectoryService _directoryService;
         private readonly KeyLock _lock = new();
 
@@ -180,7 +169,6 @@ namespace Gelato.Decorators {
     .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
     .Select(s => {
         var k = GetVersionInfo(
-            enablePathSubstitution,
             s,
             MediaSourceType.Grouping,
             ctx,
@@ -215,7 +203,7 @@ namespace Gelato.Decorators {
             // failsafe. mediasources cannot be null
             if (sources.Count == 0) {
                 sources.Add(
-                    GetVersionInfo(enablePathSubstitution, item, MediaSourceType.Default, ctx, user)
+                    GetVersionInfo(item, MediaSourceType.Default, ctx, user)
                 );
             }
 
@@ -228,7 +216,6 @@ namespace Gelato.Decorators {
         }
 
         public void AddParts(IEnumerable<IMediaSourceProvider> providers) {
-            _providers = providers.ToArray();
             _inner.AddParts(providers);
         }
 
@@ -328,9 +315,6 @@ namespace Gelato.Decorators {
             bool enablePathSubstitution,
             CancellationToken ct
         ) {
-            var pathAndQuery =
-                _http.HttpContext.Request.Path + _http.HttpContext.Request.QueryString;
-
             if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)) {
                 return await _inner
                     .GetPlaybackMediaSources(
@@ -378,7 +362,7 @@ namespace Gelato.Decorators {
                         && sources.Count > 0
                         && Guid.TryParse(sources[0].Id, out var fromSource)
                             ? fromSource
-                            : (Guid?)null
+                            : null
                     );
 
             _log.LogDebug(
@@ -419,8 +403,6 @@ namespace Gelato.Decorators {
 
                 if (selected is null)
                     return refreshed;
-
-                sources = refreshed;
             }
 
             if (GelatoPlugin.Instance!.Configuration.EnableSubs) {
@@ -529,7 +511,6 @@ namespace Gelato.Decorators {
             );
 
         private MediaSourceInfo GetVersionInfo(
-            bool enablePathSubstitution,
             BaseItem item,
             MediaSourceType type,
             HttpContext ctx,

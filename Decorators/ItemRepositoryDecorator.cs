@@ -1,11 +1,6 @@
 #nullable disable
 #pragma warning disable CS1591
 
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Gelato.Common;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
@@ -45,10 +40,6 @@ public sealed class GelatoItemRepository : IItemRepository {
 
     public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter) {
         return _inner.GetItemList(ApplyFilters(filter));
-    }
-
-    public IReadOnlyList<BaseItem> GetNoScopeItemList(InternalItemsQuery filter) {
-        return _inner.GetItemList(filter);
     }
 
     public InternalItemsQuery ApplyFilters(InternalItemsQuery filter) {

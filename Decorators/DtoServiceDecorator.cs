@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities; // User
 using MediaBrowser.Controller.Dto;
@@ -27,7 +25,7 @@ namespace Gelato.Decorators {
             BaseItem? owner = null
         ) {
             var dto = _inner.GetBaseItemDto(item, options, user, owner);
-            Patch(dto, item, user, owner, options, false);
+            Patch(dto, false);
             return dto;
         }
 
@@ -46,7 +44,7 @@ namespace Gelato.Decorators {
 
             var list = _inner.GetBaseItemDtos(items, options, user, owner);
             for (int i = 0; i < list.Count; i++) {
-                Patch(list[i], item: null, user, owner, options, true);
+                Patch(list[i], true);
             }
             return list;
         }
@@ -58,31 +56,14 @@ namespace Gelato.Decorators {
             User? user = null
         ) {
             var dto = _inner.GetItemByNameDto(item, options, taggedItems, user);
-            Patch(dto, item, user, owner: null, options, false);
+            Patch(dto, false);
             return dto;
-        }
-
-        // Not bulletproof, but providerIds are often not available
-        static bool IsGelato(BaseItemDto dto) {
-            return dto.LocationType == LocationType.Remote
-                && (
-                    dto.Type == BaseItemKind.Movie
-                    || dto.Type == BaseItemKind.Episode
-                    || dto.Type == BaseItemKind.Series
-                    || dto.Type == BaseItemKind.Season
-                );
         }
 
         private void Patch(
             BaseItemDto dto,
-            BaseItem? item,
-            User? user,
-            BaseItem? owner,
-            DtoOptions options,
             bool IsList
         ) {
-            var manager = _manager.Value;
-
             // mark if placeholder
             if (
                 !IsList

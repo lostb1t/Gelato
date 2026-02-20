@@ -1,24 +1,13 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
-using Jellyfin.Database.Implementations.Entities;
-using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -42,23 +31,6 @@ public sealed class StremioUri {
         @"^stremio://(?<type>movie|series)/(?<ext>[^/\s]+)(?:/(?<stream>[^/\s]+))?$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase
     );
-
-    public static StremioUri FromString(string value) {
-        if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("Value cannot be null or empty.", nameof(value));
-
-        if (TryParse(value.ToLowerInvariant(), out var sid) && sid is not null)
-            return sid;
-
-        throw new FormatException($"Invalid StremioId string: {value}");
-    }
-
-    public static StremioUri? FromMeta(StremioMeta meta) {
-        if (TryParse(meta.Id, out var sid) && sid is not null)
-            return sid;
-
-        return null;
-    }
 
     public static StremioUri? FromBaseItem(BaseItem item) {
         if (item is null)
@@ -91,7 +63,7 @@ public sealed class StremioUri {
         }
 
         if (kind == BaseItemKind.Episode) {
-            var ep = (MediaBrowser.Controller.Entities.TV.Episode)item;
+            var ep = (Episode)item;
             var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
             if (
                 string.IsNullOrWhiteSpace(seriesImdb)
@@ -107,38 +79,6 @@ public sealed class StremioUri {
         return null;
     }
 
-    public static StremioUri Parse(string id) {
-        if (string.IsNullOrWhiteSpace(id))
-            throw new ArgumentException("Value cannot be null or empty.", nameof(id));
-
-        var m = Rx.Match(id);
-        if (!m.Success)
-            throw new FormatException($"Invalid StremioId: {id}");
-
-        var typeStr = m.Groups["type"].Value.ToLowerInvariant();
-        var ext = m.Groups["ext"].Value;
-        var stream = m.Groups["stream"].Success ? m.Groups["stream"].Value : null;
-
-        var mediaType = typeStr switch {
-            "movie" => StremioMediaType.Movie,
-            "series" => StremioMediaType.Series,
-            _ => throw new FormatException($"Unknown media type in StremioId: {typeStr}"),
-        };
-
-        return new StremioUri(mediaType, ext, stream);
-    }
-
-    public static bool TryParse(string id, out StremioUri? value) {
-        try {
-            value = Parse(id);
-            return true;
-        }
-        catch {
-            value = null;
-            return false;
-        }
-    }
-
     public override string ToString() {
         var type = MediaType == StremioMediaType.Movie ? "movie" : "series";
         return StreamId is null
@@ -146,28 +86,11 @@ public sealed class StremioUri {
             : $"stremio://{type}/{ExternalId}/{StreamId}";
     }
 
-    // without stream id
-    public string ToBaseString() {
-        var type = MediaType == StremioMediaType.Movie ? "movie" : "series";
-        return $"stremio://{type}/{ExternalId}";
-    }
-
     public Guid ToGuid() {
         using var md5 = MD5.Create();
         var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(ToString()));
         return new Guid(hash);
     }
-
-    // Convenience builders
-    public StremioUri WithStream(string streamId) => new(MediaType, ExternalId, streamId);
-
-    public StremioUri WithoutStream() => new(MediaType, ExternalId, null);
-
-    public static StremioUri Movie(string externalId, string? streamId = null) =>
-        new(StremioMediaType.Movie, externalId, streamId);
-
-    public static StremioUri Series(string externalId, string? streamId = null) =>
-        new(StremioMediaType.Series, externalId, streamId);
 }
 
 public static class Utils {
@@ -206,21 +129,6 @@ public static class Utils {
     }
 }
 
-public sealed class TimedBlock : IDisposable {
-    private readonly Stopwatch _sw;
-    private readonly string _label;
-
-    public TimedBlock(string label) {
-        _label = label;
-        _sw = Stopwatch.StartNew();
-    }
-
-    public void Dispose() {
-        _sw.Stop();
-        Console.WriteLine($"{_label} took {_sw.ElapsedMilliseconds} ms");
-    }
-}
-
 public sealed class KeyLock {
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _queues = new();
     private readonly ConcurrentDictionary<Guid, Lazy<Task>> _inflight = new();
@@ -240,21 +148,6 @@ public sealed class KeyLock {
         return lazy.Value;
     }
 
-    public Task<T> RunSingleFlightAsync<T>(
-        Guid key,
-        Func<CancellationToken, Task<T>> action,
-        CancellationToken ct = default
-    ) {
-        var lazy = _inflight.GetOrAdd(
-            key,
-            _ => new Lazy<Task>(
-                () => Once(key, action, ct),
-                LazyThreadSafetyMode.ExecutionAndPublication
-            )
-        );
-        return (Task<T>)lazy.Value;
-    }
-
     public async Task RunQueuedAsync(
         Guid key,
         Func<CancellationToken, Task> action,
@@ -270,70 +163,9 @@ public sealed class KeyLock {
         }
     }
 
-    public async Task<T> RunQueuedAsync<T>(
-        Guid key,
-        Func<CancellationToken, Task<T>> action,
-        CancellationToken ct = default
-    ) {
-        var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await sem.WaitAsync(ct).ConfigureAwait(false);
-        try {
-            return await action(ct).ConfigureAwait(false);
-        }
-        finally {
-            ReleaseAndMaybeRemove(key, sem);
-        }
-    }
-
-    public async Task<bool> TryRunQueuedAsync(
-        Guid key,
-        Func<CancellationToken, Task> action,
-        CancellationToken ct = default
-    ) {
-        var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false))
-            return false;
-        try {
-            await action(ct).ConfigureAwait(false);
-            return true;
-        }
-        finally {
-            ReleaseAndMaybeRemove(key, sem);
-        }
-    }
-
-    public async Task<(bool ran, T result)> TryRunQueuedAsync<T>(
-        Guid key,
-        Func<CancellationToken, Task<T>> action,
-        CancellationToken ct = default
-    ) {
-        var sem = _queues.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        if (!await sem.WaitAsync(0, ct).ConfigureAwait(false))
-            return (false, default!);
-        try {
-            return (true, await action(ct).ConfigureAwait(false));
-        }
-        finally {
-            ReleaseAndMaybeRemove(key, sem);
-        }
-    }
-
     private async Task Once(Guid key, Func<CancellationToken, Task> action, CancellationToken ct) {
         try {
             await action(ct).ConfigureAwait(false);
-        }
-        finally {
-            _inflight.TryRemove(key, out _);
-        }
-    }
-
-    private async Task<T> Once<T>(
-        Guid key,
-        Func<CancellationToken, Task<T>> action,
-        CancellationToken ct
-    ) {
-        try {
-            return await action(ct).ConfigureAwait(false);
         }
         finally {
             _inflight.TryRemove(key, out _);
@@ -442,14 +274,6 @@ public static class ActionContextExtensions {
 
     public static string? GetActionName(this HttpContext ctx) =>
         ctx.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>()?.ActionName;
-
-    public static bool IsApiRequest(this ActionExecutingContext ctx) =>
-        ctx.GetActionName() is not null;
-
-    public static bool IsApiRequest(this HttpContext ctx) => ctx.GetActionName() is not null;
-
-    public static bool IsApiListing(this ActionExecutingContext ctx) =>
-        ctx.GetActionName() is string actionName && BaseItemListActionNames.Contains(actionName);
 
     public static bool IsApiListing(this HttpContext ctx) {
         var actionName = ctx.GetActionName();
@@ -578,27 +402,6 @@ public static class ActionContextExtensions {
 
         value = defaultValue;
         return false;
-    }
-}
-
-public static class StringExtensions {
-    public static HashSet<BaseItemKind> ParseBaseItemKinds(this string value) {
-        var kinds = new HashSet<BaseItemKind>();
-
-        if (string.IsNullOrWhiteSpace(value))
-            return kinds;
-
-        foreach (
-            var raw in value.Split(
-                ',',
-                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries
-            )
-        ) {
-            if (Enum.TryParse<BaseItemKind>(raw, true, out var kind))
-                kinds.Add(kind);
-        }
-
-        return kinds;
     }
 }
 

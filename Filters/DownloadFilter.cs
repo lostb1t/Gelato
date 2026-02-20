@@ -1,22 +1,14 @@
-using System.Net.Http;
 using Gelato.Common;
 using Jellyfin.Database.Implementations.Entities;
-using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
 
 public sealed class DownloadFilter : IAsyncActionFilter {
     private readonly ILibraryManager _library;
-    private readonly IHttpClientFactory _http;
-    private readonly ILogger<DownloadFilter> _log;
     private readonly GelatoManager _manager;
     private readonly IUserManager _userManager;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -24,16 +16,12 @@ public sealed class DownloadFilter : IAsyncActionFilter {
 
     public DownloadFilter(
         ILibraryManager library,
-        IHttpClientFactory http,
         GelatoManager manager,
         IUserManager userManager,
         IMediaSourceManager mediaSourceManager,
-        IHttpClientFactory httpClientFactory,
-        ILogger<DownloadFilter> log
+        IHttpClientFactory httpClientFactory
     ) {
         _library = library;
-        _http = http;
-        _log = log;
         _mediaSourceManager = mediaSourceManager;
         _manager = manager;
         _httpClientFactory = httpClientFactory;
@@ -54,7 +42,6 @@ public sealed class DownloadFilter : IAsyncActionFilter {
             return;
         }
 
-        var principal = ctx.HttpContext.User;
         var userIdStr = ctx
             .HttpContext.User.Claims.FirstOrDefault(c =>
                 c.Type == "UserId" || c.Type == "Jellyfin-UserId"
@@ -118,6 +105,5 @@ public sealed class DownloadFilter : IAsyncActionFilter {
         }
 
         await next();
-        return;
     }
 }

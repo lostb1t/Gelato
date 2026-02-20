@@ -1,22 +1,14 @@
 #pragma warning disable SA1611, SA1591, SA1615, CS0165
 
-using System;
 using System.ComponentModel.DataAnnotations;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using Gelato.Common;
-using Gelato.Configuration;
 using MediaBrowser.Common.Configuration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using MonoTorrent;
 using MonoTorrent.Client;
-using MonoTorrent.Streaming;
 
 namespace Gelato;
 
@@ -24,7 +16,6 @@ namespace Gelato;
 [Route("gelato")]
 public sealed class GelatoApiController : ControllerBase {
     private readonly ILogger<GelatoApiController> _log;
-    private readonly IApplicationPaths _appPaths;
     private readonly GelatoManager _gelatoManager;
     private readonly string _downloadPath;
 
@@ -34,9 +25,8 @@ public sealed class GelatoApiController : ControllerBase {
         GelatoManager gelatoManager
     ) {
         _log = log;
-        _appPaths = appPaths;
         _gelatoManager = gelatoManager;
-        _downloadPath = Path.Combine(_appPaths.CachePath, "gelato-torrents");
+        _downloadPath = Path.Combine(appPaths.CachePath, "gelato-torrents");
         Directory.CreateDirectory(_downloadPath);
     }
 

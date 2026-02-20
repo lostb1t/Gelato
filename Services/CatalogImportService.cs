@@ -1,9 +1,7 @@
 using Gelato.Configuration;
-using Gelato.Services;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
 using Jellyfin.Data.Enums; // Potentially needed for BaseItemKind
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -16,7 +14,6 @@ namespace Gelato.Services;
 public class CatalogImportService {
     private readonly ILogger<CatalogImportService> _log;
     private readonly GelatoManager _manager;
-    private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly CatalogService _catalogService;
     private readonly ICollectionManager _collectionManager;
     private readonly ILibraryManager _libraryManager;
@@ -24,20 +21,18 @@ public class CatalogImportService {
     public CatalogImportService(
         ILogger<CatalogImportService> logger,
         GelatoManager manager,
-        GelatoStremioProviderFactory stremioFactory,
         CatalogService catalogService,
         ICollectionManager collectionManager,
         ILibraryManager libraryManager
     ) {
         _log = logger;
         _manager = manager;
-        _stremioFactory = stremioFactory;
         _catalogService = catalogService;
         _collectionManager = collectionManager;
         _libraryManager = libraryManager;
     }
 
-    public async Task ImportCatalogAsync(string catalogId, string type, Guid userId, CancellationToken ct, IProgress<double>? progress = null) {
+    public async Task ImportCatalogAsync(string catalogId, string type, CancellationToken ct, IProgress<double>? progress = null) {
         {
             var catalogCfg = _catalogService.GetCatalogConfig(catalogId, type);
             if (catalogCfg == null) {
@@ -53,8 +48,6 @@ public class CatalogImportService {
             var stremio = cfg.stremio;
             var seriesFolder = cfg.SeriesFolder;
             var movieFolder = cfg.MovieFolder;
-            var createCollections = cfg.CreateCollections;
-            var collectionMaxItems = cfg.MaxCollectionItems;
 
             if (seriesFolder is null) {
                 _log.LogWarning("No series root folder found");
@@ -241,12 +234,13 @@ public class CatalogImportService {
             _log.LogInformation("Processing enabled catalog: {Name}", cat.Name);
 
             // Create specific progress reporter for this catalog if needed, or just log
-            await ImportCatalogAsync(cat.Id, cat.Type, Guid.Empty, ct).ConfigureAwait(false);
+            await ImportCatalogAsync(cat.Id, cat.Type, ct).ConfigureAwait(false);
 
             current++;
             progress?.Report((double)current / total * 100);
         }
-                    progress?.Report(100);
+
+        progress?.Report(100);
         await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
     }
 }

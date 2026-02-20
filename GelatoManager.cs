@@ -395,14 +395,14 @@ public class GelatoManager {
         var inv = CultureInfo.InvariantCulture;
         var stopwatch = Stopwatch.StartNew();
         if (IsStream(item as Video)) {
-            _log.LogWarning($"SyncStreams: item is a stream, skipping");
+            _log.LogWarning("SyncStreams: item is a stream, skipping");
             return 0;
         }
 
         var isEpisode = item is Episode;
         var parent = isEpisode ? item.GetParent() as Folder : TryGetMovieFolder(userId);
         if (parent is null) {
-            _log.LogWarning($"SyncStreams: no parent, skipping");
+            _log.LogWarning("SyncStreams: no parent, skipping");
             return 0;
         }
 
@@ -1195,7 +1195,7 @@ public class GelatoManager {
         return items;
     }
 
-    public BaseItem IntoBaseItem(StremioMeta meta, Folder parent = null, bool createStrm = false) {
+    public BaseItem IntoBaseItem(StremioMeta meta) {
         BaseItem item;
 
         var Id = meta.Id;

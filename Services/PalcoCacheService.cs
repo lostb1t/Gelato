@@ -1,9 +1,6 @@
 using Microsoft.Data.Sqlite;
 using MediaBrowser.Common.Configuration;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.IO;
 
 namespace Gelato.Services;
 

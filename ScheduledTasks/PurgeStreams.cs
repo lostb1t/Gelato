@@ -1,17 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Gelato;
-using Gelato.Common;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Persistence;
-using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -21,19 +10,15 @@ namespace Gelato.Tasks {
 
         private readonly GelatoManager _manager;
         private readonly ILibraryManager _library;
-        private readonly IItemRepository _repo;
 
         public PurgeGelatoStreamsTask(
             ILibraryManager libraryManager,
             ILogger<PurgeGelatoStreamsTask> log,
-            IItemRepository repo,
             GelatoManager manager
         ) {
             _log = log;
             _library = libraryManager;
-
             _manager = manager;
-            _repo = repo;
         }
 
         public string Name => "Purge streams";

@@ -1,25 +1,13 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Gelato.Common;
-using Gelato.Configuration;
 using Jellyfin.Database.Implementations.Entities;
-using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Persistence;
-using MediaBrowser.Controller.Providers;
-using MediaBrowser.Model.IO;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
 
 public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
-    private readonly ILibraryManager _library;
-    private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly ILogger<InsertActionFilter> _log;
     private readonly GelatoManager _manager;
     private readonly KeyLock _lock = new();
@@ -27,14 +15,10 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
     public int Order => 1;
 
     public InsertActionFilter(
-        ILibraryManager library,
         GelatoManager manager,
-          IUserManager userManager,
-        GelatoStremioProviderFactory stremioFactory,
+        IUserManager userManager,
         ILogger<InsertActionFilter> log
     ) {
-        _library = library;
-        _stremioFactory = stremioFactory;
         _manager = manager;
         _userManager = userManager;
         _log = log;
@@ -66,7 +50,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
             return;
         }
 
-        var item = _manager.IntoBaseItem(stremioMeta, root);
+        var item = _manager.IntoBaseItem(stremioMeta);
         var existing = _manager.FindExistingItem(item, user);
         if (existing is not null) {
             _log.LogInformation(

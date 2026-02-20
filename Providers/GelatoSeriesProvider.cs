@@ -1,12 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Gelato.Common;
-using Gelato.Configuration;
-using Jellyfin.Data.Enums;
 using Jellyfin.Data.Events;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -22,7 +14,6 @@ namespace Gelato.Providers {
         private readonly ILogger<GelatoSeriesProvider> _log;
         private readonly ILibraryManager _libraryManager;
         private readonly GelatoManager _manager;
-        private readonly GelatoStremioProviderFactory _stremioFactory;
         private readonly IProviderManager _provider;
         private readonly ConcurrentDictionary<Guid, DateTime> _syncCache = new();
         private static readonly TimeSpan CacheExpiry = TimeSpan.FromMinutes(2);
@@ -30,15 +21,12 @@ namespace Gelato.Providers {
         public GelatoSeriesProvider(
             ILogger<GelatoSeriesProvider> logger,
             ILibraryManager libraryManager,
-            GelatoStremioProviderFactory stremioFactory,
             IProviderManager provider,
             GelatoManager manager
         ) {
             _log = logger;
             _libraryManager = libraryManager;
-            _stremioFactory = stremioFactory;
             _manager = manager;
-
             _provider = provider;
 
             _provider.RefreshStarted += OnProviderManagerRefreshStarted;

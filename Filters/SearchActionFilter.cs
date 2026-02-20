@@ -1,42 +1,25 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using Gelato.Common;
 using Gelato.Configuration;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters {
     public class SearchActionFilter : IAsyncActionFilter, IOrderedFilter {
-        private readonly ILibraryManager _library;
-        private readonly IItemRepository _repo;
-        private readonly IMediaSourceManager _mediaSources;
         private readonly IDtoService _dtoService;
         private readonly ILogger<SearchActionFilter> _log;
         private readonly GelatoManager _manager;
 
         public SearchActionFilter(
-            ILibraryManager library,
-            IItemRepository repo,
-            IMediaSourceManager mediaSources,
             IDtoService dtoService,
             GelatoManager manager,
             ILogger<SearchActionFilter> log
         ) {
-            _library = library;
             _manager = manager;
-            _repo = repo;
-            _mediaSources = mediaSources;
             _dtoService = dtoService;
             _log = log;
         }
@@ -76,7 +59,7 @@ namespace Gelato.Filters {
             ctx.TryGetActionArgument("startIndex", out var start, 0);
             ctx.TryGetActionArgument("limit", out var limit, 25);
 
-            var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, userId);
+            var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg);
 
             _log.LogInformation(
                 "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
@@ -135,8 +118,7 @@ namespace Gelato.Filters {
         private async Task<List<StremioMeta>> SearchMetasAsync(
             string searchTerm,
             HashSet<BaseItemKind> requestedTypes,
-            PluginConfiguration cfg,
-            Guid userId
+            PluginConfiguration cfg
         ) {
             var tasks = new List<Task<IReadOnlyList<StremioMeta>>>();
 
@@ -183,7 +165,7 @@ namespace Gelato.Filters {
             var dtos = new List<BaseItemDto>(metas.Count);
 
             foreach (var meta in metas) {
-                var baseItem = _manager.IntoBaseItem(meta, null);
+                var baseItem = _manager.IntoBaseItem(meta);
                 if (baseItem is null)
                     continue;
 

@@ -5,7 +5,6 @@ using System.Net.Mime;
 using System.Text.Json;
 using Gelato.Services;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
@@ -63,10 +62,10 @@ public class PalcoCacheController : ControllerBase
 
         // Update request index for listing
         var indexJson = Cache.Get("requests-index", RegistrationNs);
-        var index = string.IsNullOrEmpty(indexJson) 
-            ? new List<string>() 
+        var index = string.IsNullOrEmpty(indexJson)
+            ? new List<string>()
             : JsonSerializer.Deserialize<List<string>>(indexJson) ?? new List<string>();
-        
+
         var requestId = request.Id.Replace("request-", "");
         if (!index.Contains(requestId))
         {
@@ -91,7 +90,7 @@ public class PalcoCacheController : ControllerBase
                     var userMessage = userData.TryGetProperty("userMessage", out var m) ? m.GetString() : "";
 
                     var adminEmail = !string.IsNullOrEmpty(smtp.AdminEmail) ? smtp.AdminEmail : smtp.Username;
-                    
+
                     if (!string.IsNullOrEmpty(adminEmail))
                     {
                         using var client = new SmtpClient(smtp.Host, smtp.Port)
@@ -101,7 +100,7 @@ public class PalcoCacheController : ControllerBase
                         };
 
                         var body = $"A new user has requested access to your server.\n\nUsername: {userName}\nEmail: {userEmail}";
-                        
+
                         if (!string.IsNullOrEmpty(userMessage))
                         {
                             body += $"\n\nMessage from User:\n{userMessage}";
@@ -166,7 +165,7 @@ public class PalcoCacheController : ControllerBase
     {
         if (Cache == null) return StatusCode(503);
         var deleted = Cache.Delete(key, ns);
-        
+
         // If deleting a request, also remove from index
         if (key.StartsWith("request-") && ns == RegistrationNs)
         {
@@ -182,7 +181,7 @@ public class PalcoCacheController : ControllerBase
                 }
             }
         }
-        
+
         _logger.LogInformation("[Gelato] Palco Deleted: {Key} from {Ns}, success={Deleted}", key, ns, deleted);
         return Ok(new { success = true, deleted });
     }

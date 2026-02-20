@@ -112,7 +112,7 @@ namespace Gelato {
                 }
 
                 if (MovieSearchCatalog == null) {
-                    _log.LogWarning("manifest has no search-capable movie catalog", url);
+                    _log.LogWarning("manifest has no search-capable movie catalog");
                 }
                 else {
                     _log.LogInformation(
@@ -122,7 +122,7 @@ namespace Gelato {
                 }
 
                 if (SeriesSearchCatalog == null) {
-                    _log.LogWarning("manifest has no search-capable series catalog", url);
+                    _log.LogWarning("manifest has no search-capable series catalog");
                 }
                 else {
                     _log.LogInformation(
