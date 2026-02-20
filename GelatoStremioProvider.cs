@@ -27,8 +27,14 @@ public class GelatoStremioProvider(
     private string BuildUrl(string[] segments, IEnumerable<string>? extras = null) {
         var parts = segments.Select(Uri.EscapeDataString).ToArray();
         var path = string.Join("/", parts);
-        var extrasPart =
-            extras != null && extras.Any() ? "/" + string.Join("&", extras) : string.Empty;
+
+        var extrasPart = string.Empty;
+        if (extras != null)
+        {
+            var enumerable = extras.ToList();
+            extrasPart = enumerable.Count != 0 ? "/" + string.Join("&", enumerable) : string.Empty;
+        }
+
         var url = $"{baseUrl}/{path}{extrasPart}.json";
         url = url.Replace("%3A", ":").Replace("%3a", ":");
         return url;
@@ -85,7 +91,7 @@ public class GelatoStremioProvider(
                         )
                     )
                     .OrderBy(c =>
-                        c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
+                        c.Id.Contains("people", StringComparison.OrdinalIgnoreCase)
                     )
                     .FirstOrDefault();
 
@@ -98,7 +104,7 @@ public class GelatoStremioProvider(
                         )
                     )
                     .OrderBy(c =>
-                        c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
+                        c.Id.Contains("people", StringComparison.OrdinalIgnoreCase)
                     )
                     .FirstOrDefault();
             }
@@ -238,6 +244,11 @@ public class GelatoStremioProvider(
     }
 }
 
+#region Request Models
+// ReSharper disable ClassNeverInstantiated.Global
+// ReSharper disable CollectionNeverUpdated.Global
+// ReSharper disable UnusedAutoPropertyAccessor.Global
+
 public class StremioManifest {
     public string Name { get; set; } = "";
     public string Id { get; set; } = "";
@@ -302,7 +313,7 @@ public struct StremioSubtitleResponse {
 }
 
 public class StremioMetaResponse {
-    public StremioMeta Meta { get; set; } = default!;
+    public StremioMeta Meta { get; set; } = null!;
 }
 
 public class StremioMeta {
@@ -333,12 +344,14 @@ public class StremioMeta {
     public DateTime? Released { get; set; }
 
     [JsonConverter(typeof(SafeStringEnumConverter<StremioStatus>))]
+    // ReSharper disable once MemberCanBePrivate.Global
     public StremioStatus? Status { get; set; } = StremioStatus.Unknown;
 
     [JsonConverter(typeof(NullableIntLenientConverter))]
     public int? Year { get; set; }
     public string? Slug { get; set; }
     public List<StremioTrailerStream>? TrailerStreams { get; set; }
+    // ReSharper disable once InconsistentNaming
     public StremioAppExtras? App_Extras { get; set; }
     public string? Thumbnail { get; set; }
     public int? Episode { get; set; }
@@ -433,7 +446,7 @@ public class StremioMeta {
     }
 
     public bool IsValid() {
-        return Id is not null && !Id.Contains("error");
+        return !Id.Contains("error");
     }
 
     public bool IsReleased(int bufferDays = 0) {
@@ -557,10 +570,8 @@ public class StremioStream {
         else {
             key = Url;
         }
-
-        using var md5 = System.Security.Cryptography.MD5.Create();
         var bytes = System.Text.Encoding.UTF8.GetBytes(key);
-        var hash = md5.ComputeHash(bytes);
+        var hash = System.Security.Cryptography.MD5.HashData(bytes);
         return new Guid(hash);
     }
 
@@ -617,6 +628,11 @@ public enum StremioStatus {
     Continuing,
 }
 
+// ReSharper restore UnusedAutoPropertyAccessor.Global
+// ReSharper restore CollectionNeverUpdated.Global
+// ReSharper restore ClassNeverInstantiated.Global
+#endregion
+
 public class SafeStringEnumConverter<T> : JsonConverter<T>
     where T : struct, Enum {
     public override T Read(
@@ -645,12 +661,10 @@ public class SafeStringEnumConverter<T> : JsonConverter<T>
 
 public sealed class NullableIntLenientConverter : JsonConverter<int?> {
     public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) {
-        switch (r.TokenType)
-        {
+        switch (r.TokenType) {
             case JsonTokenType.Number:
-                return r.TryGetInt32(out var i) ? i : (int?)null;
+                return r.TryGetInt32(out var i) ? i : null;
             case JsonTokenType.String:
-            {
                 var s = r.GetString();
                 if (string.IsNullOrWhiteSpace(s))
                     return null;
@@ -661,7 +675,6 @@ public sealed class NullableIntLenientConverter : JsonConverter<int?> {
                     CultureInfo.InvariantCulture,
                     out var v
                 ) ? v : null;
-            }
             case JsonTokenType.Null:
             default:
                 return null;

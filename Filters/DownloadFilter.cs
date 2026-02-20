@@ -39,7 +39,7 @@ public sealed class DownloadFilter(
 
             var item = library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
 
-            if (manager.IsStremio(item)) {
+            if (item != null && manager.IsStremio(item)) {
                 var path = item.Path;
 
                 // some clients do not send mediasource id. the use the itemid in the query

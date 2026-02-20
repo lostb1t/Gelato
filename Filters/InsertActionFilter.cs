@@ -40,16 +40,17 @@ public class InsertActionFilter(
             return;
         }
 
-        var item = manager.IntoBaseItem(stremioMeta);
-        var existing = manager.FindExistingItem(item, user);
-        if (existing is not null) {
-            log.LogInformation(
-                "Media already exists; redirecting to canonical id {Id}",
-                existing.Id
-            );
-            ctx.ReplaceGuid(existing.Id);
-            await next();
-            return;
+        if (manager.IntoBaseItem(stremioMeta) is { } item) {
+            var existing = manager.FindExistingItem(item, user);
+            if (existing is not null) {
+                log.LogInformation(
+                    "Media already exists; redirecting to canonical id {Id}",
+                    existing.Id
+                );
+                ctx.ReplaceGuid(existing.Id);
+                await next();
+                return;
+            }
         }
 
         // Fetch full metadata

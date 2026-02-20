@@ -63,16 +63,16 @@ public class CatalogImportService(
                     .GetCatalogMetasAsync(catalogId, type, search: null, skip: skip)
                     .ConfigureAwait(false);
 
-                if (page is null || page.Count == 0) {
+                if (page.Count == 0) {
                     break;
                 }
 
                 await Parallel.ForEachAsync(
                     page,
                     opts,
-                    async (meta, ct) => {
+                    async (meta, ctInner) => {
                         var p = Interlocked.Increment(ref processed);
-                        ct.ThrowIfCancellationRequested();
+                        ctInner.ThrowIfCancellationRequested();
                         if (p > maxItems) {
                             return;
                         }
@@ -101,7 +101,7 @@ public class CatalogImportService(
                                         true,
                                         true,
                                         baseItemKind == BaseItemKind.Series,
-                                        ct
+                                        ctInner
                                     )
                                     .ConfigureAwait(false);
 
@@ -111,7 +111,7 @@ public class CatalogImportService(
                                 logger.LogError(
                                     "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
                                     catalogId,
-                                    meta?.Id,
+                                    meta.Id,
                                     ex.Message,
                                     ex.StackTrace
                                 );
@@ -193,7 +193,7 @@ public class CatalogImportService(
                     Recursive = false
                 }).Select(i => i.Id).ToList();
 
-                if (currentChildren.Any()) {
+                if (currentChildren.Count != 0) {
                     await collectionManager.RemoveFromCollectionAsync(collection.Id, currentChildren).ConfigureAwait(false);
                 }
 

@@ -42,24 +42,20 @@ public sealed class StremioUri {
         if (!string.IsNullOrWhiteSpace(stremioId))
             uri = new StremioUri(mediaType, stremioId);
 
-        switch (kind)
-        {
-            case BaseItemKind.Movie:
-            {
+        switch (kind) {
+            case BaseItemKind.Movie: {
                 var imdb = item.GetProviderId(MetadataProvider.Imdb);
                 return string.IsNullOrWhiteSpace(imdb)
                     ? uri
                     : new StremioUri(StremioMediaType.Movie, imdb);
             }
-            case BaseItemKind.Series:
-            {
+            case BaseItemKind.Series: {
                 var imdb = item.GetProviderId(MetadataProvider.Imdb);
                 return string.IsNullOrWhiteSpace(imdb)
                     ? uri
                     : new StremioUri(StremioMediaType.Series, imdb);
             }
-            case BaseItemKind.Episode:
-            {
+            case BaseItemKind.Episode: {
                 var ep = (Episode)item;
                 var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
                 if (
@@ -383,8 +379,8 @@ public static class ActionContextExtensions {
     public static bool TryGetActionArgument<T>(
         this ActionExecutingContext ctx,
         string key,
-        out T? value,
-        T? defaultValue = default
+        out T value,
+        T defaultValue = default
     ) {
         if (ctx.ActionArguments.TryGetValue(key, out var objValue) && objValue is T typedValue) {
             value = typedValue;

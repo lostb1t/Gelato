@@ -80,7 +80,7 @@ public sealed class GelatoApiController : ControllerBase {
         var settings = new EngineSettingsBuilder {
             MaximumConnections = 40,
             MaximumDownloadRate = GelatoPlugin.Instance!.Configuration.P2PDLSpeed,
-            MaximumUploadRate = GelatoPlugin.Instance!.Configuration.P2PULSpeed,
+            MaximumUploadRate = GelatoPlugin.Instance.Configuration.P2PULSpeed,
         }.ToSettings();
 
         var engine = new ClientEngine(settings);
@@ -146,20 +146,27 @@ public sealed class GelatoApiController : ControllerBase {
             _log.LogInformation("Client disconnected. Cleaning up resources...");
             try {
                 timerCts.Cancel();
+            } catch {
+                // ignored
             }
-            catch { }
+
             try {
                 timer.Dispose();
+            } catch {
+                // ignored
             }
-            catch { }
+
             try {
                 manager.StopAsync().GetAwaiter().GetResult();
+            } catch {
+                // ignored
             }
-            catch { }
+
             try {
                 engine.Dispose();
+            } catch {
+                // ignored
             }
-            catch { }
         });
 
         Response.Headers.AcceptRanges = "bytes";

@@ -57,7 +57,7 @@ public sealed class PlaylistManagerDecorator(
                 && !string.IsNullOrEmpty(linkedChild.Path)
             ) {
                 var matchingItem = gelatoItems.FirstOrDefault(item =>
-                    item.Path == linkedChild.Path
+                    item != null && item.Path == linkedChild.Path
                 );
 
                 if (matchingItem != null) {

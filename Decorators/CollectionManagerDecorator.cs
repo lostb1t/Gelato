@@ -57,7 +57,7 @@ public sealed class CollectionManagerDecorator(
                 && !string.IsNullOrEmpty(linkedChild.Path)
             ) {
                 var matchingItem = gelatoItems.FirstOrDefault(item =>
-                    item.Path == linkedChild.Path
+                    item?.Path == linkedChild.Path
                 );
 
                 if (matchingItem != null) {
