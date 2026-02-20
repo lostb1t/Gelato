@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -502,6 +503,11 @@ public class GelatoManager {
             target.Name = primary.Name;
            // target.PresentationUniqueKey = primary.PresentationUniqueKey;
             target.Tags = new[] { StreamTag };
+            
+            var locked = target.LockedFields?.ToList() ?? new List<MetadataField>();
+            if (!locked.Contains(MetadataField.Tags)) locked.Add(MetadataField.Tags);
+            target.LockedFields = locked.ToArray();
+            
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
