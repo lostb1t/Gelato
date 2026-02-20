@@ -400,6 +400,7 @@ public static class ActionContextExtensions {
         "GetItemsByUserIdLegacy",
         "NextUp",
         "GetResumeItems",
+        "GetResumeItemsLegacy",
         "GetNextUp",
         "GetEpisodes",
         "GetSimilarItems",
