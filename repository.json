@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.1.7] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Validate library after import so collections dont dissapear\n- Catalog import form save not persisting\n",
+        "checksum": "f0323ce96be4e05729af5897a80db323",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.7/gelato_0.26.1.7.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-20T09:12:08Z",
+        "version": "0.26.1.7"
+      },
+      {
         "changelog": "## [0.26.1.6] - 2026-02-19\n\n### 🐛 Bug Fixes\n\n- Revert item creation to 0.25\n",
         "checksum": "27caf03f727e85678a4a19a79c295e82",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.6/gelato_0.26.1.6.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-01-23T16:06:27Z",
         "version": "0.25.2.0"
-      },
-      {
-        "changelog": "## [0.25.1.9] - 2026-01-23\n\n### 🐛 Bug Fixes\n\n- Save users to stream, so that probe data os shared\n",
-        "checksum": "9dde0f61907426cbae269c0cc7fc53ba",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.1.9/gelato_0.25.1.9.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-01-23T12:33:56Z",
-        "version": "0.25.1.9"
       }
     ]
   }
