@@ -3,6 +3,7 @@ using Gelato.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Controller.Library;
 using System.ComponentModel.DataAnnotations;
 using static Gelato.Configuration.PluginConfiguration;
 
@@ -15,15 +16,17 @@ public class CatalogController : ControllerBase {
     private readonly ILogger<CatalogController> _logger;
     private readonly CatalogService _catalogService;
     private readonly CatalogImportService _importService;
-
+    private readonly ILibraryManager _libraryManager;
     public CatalogController(
         ILogger<CatalogController> logger,
         CatalogService catalogService,
-        CatalogImportService importService
+        CatalogImportService importService,
+                  ILibraryManager libraryManager
     ) {
         _logger = logger;
         _catalogService = catalogService;
         _importService = importService;
+                _libraryManager = libraryManager;
     }
 
     [HttpGet]
@@ -67,6 +70,7 @@ public class CatalogController : ControllerBase {
         _ = Task.Run(async () => {
              try {
                  await _importService.ImportCatalogAsync(id, type, Guid.Empty, CancellationToken.None);
+await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
              } catch (Exception ex) {
                  _logger.LogError(ex, "Error in manual import for {Id}", id);
              }
