@@ -34,7 +34,7 @@ public class SearchActionFilter(
 
         // Strip "local:" prefix if present and pass through to default handler
         if (searchTerm.StartsWith("local:", StringComparison.OrdinalIgnoreCase)) {
-            ctx.ActionArguments["searchTerm"] = searchTerm.Substring(6).Trim();
+            ctx.ActionArguments["searchTerm"] = searchTerm[6..].Trim();
             await next();
             return;
         }
@@ -92,7 +92,6 @@ public class SearchActionFilter(
         // If mediaTypes=Video, exclude Series
         if (
             ctx.TryGetActionArgument<MediaType[]>("mediaTypes", out var mediaTypes)
-            && mediaTypes != null
             && mediaTypes.Contains(MediaType.Video)
         ) {
             requested.Remove(BaseItemKind.Series);

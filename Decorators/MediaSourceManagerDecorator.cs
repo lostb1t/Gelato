@@ -47,15 +47,14 @@ public sealed class MediaSourceManagerDecorator(
         Guid userId;
         if (user != null) {
             userId = user.Id;
-        }
-        else {
+        } else {
             ctx.TryGetUserId(out userId);
         }
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
             (!cfg.EnableMixed && !manager1.IsGelato(item))
-            || (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
+            || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
         ) {
             return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
         }

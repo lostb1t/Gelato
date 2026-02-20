@@ -135,7 +135,7 @@ public sealed class GelatoSeriesProvider
     }
 
     private bool IsEnabledForLibrary(BaseItem item) {
-        Series? series = item switch {
+        var series = item switch {
             Episode episode => episode.Series,
             Season season => season.Series,
             _ => item as Series,

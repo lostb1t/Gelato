@@ -10,7 +10,7 @@ namespace Gelato.Filters;
 /// Looks for both "MediaSourceId" and "RouteMediaSourceId", stores as "MediaSourceId".
 /// </summary>
 public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter {
-    public int Order { get; set; } = 3;
+    public int Order { get; init; } = 3;
 
     private const string ItemsKey = "MediaSourceId";
     private static readonly string[] InputKeys = ["MediaSourceId", "RouteMediaSourceId"];
