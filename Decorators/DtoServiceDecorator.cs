@@ -8,11 +8,9 @@ using MediaBrowser.Model.Entities;
 namespace Gelato.Decorators {
     public sealed class DtoServiceDecorator : IDtoService {
         private readonly IDtoService _inner;
-        private readonly Lazy<GelatoManager> _manager;
 
-        public DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> manager) {
+        public DtoServiceDecorator(IDtoService inner) {
             _inner = inner;
-            _manager = manager;
         }
 
         public double? GetPrimaryImageAspectRatio(BaseItem item) =>
@@ -36,15 +34,16 @@ namespace Gelato.Decorators {
             BaseItem? owner = null
         ) {
             // im going to hell for this
-            BaseItem item = items.FirstOrDefault();
+            var item = items.FirstOrDefault();
 
             if (item != null && item.GetBaseItemKind() == BaseItemKind.BoxSet) {
                 options.EnableUserData = false;
             }
 
             var list = _inner.GetBaseItemDtos(items, options, user, owner);
-            for (int i = 0; i < list.Count; i++) {
-                Patch(list[i], true);
+            foreach (var itemDto in list)
+            {
+                Patch(itemDto, true);
             }
             return list;
         }
@@ -62,20 +61,18 @@ namespace Gelato.Decorators {
 
         private void Patch(
             BaseItemDto dto,
-            bool IsList
-        ) {
+            bool isList
+        )
+        {
             // mark if placeholder
-            if (
-                !IsList
-                    && dto.MediaSources?.Length == 1
-                    && dto.Path is not null
-                    && dto.MediaSources[0]
-                        .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
-            ) {
-                dto.LocationType = LocationType.Virtual;
-                dto.Path = null;
-                dto.CanDownload = false;
-            }
+            if (isList
+                || dto.MediaSources?.Length != 1
+                || dto.Path is null
+                || !dto.MediaSources[0]
+                    .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)) return;
+            dto.LocationType = LocationType.Virtual;
+            dto.Path = null;
+            dto.CanDownload = false;
         }
     }
 }

@@ -13,7 +13,7 @@ public class PalcoCacheService : IDisposable
     private readonly string _dbPath;
     private readonly ILogger<PalcoCacheService> _logger;
     private SqliteConnection? _connection;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     public PalcoCacheService(IApplicationPaths appPaths, ILogger<PalcoCacheService> logger)
     {

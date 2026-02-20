@@ -42,8 +42,8 @@ namespace Gelato.Providers {
             object? sender,
             GenericEventArgs<BaseItem> genericEventArgs
         ) {
-            var cfg = GelatoPlugin.Instance?.GetConfig(Guid.Empty);
-            var stremio = cfg?.stremio;
+            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+            var stremio = cfg.Stremio;
             if (stremio == null) {
                 _log.LogWarning(
                     "Gelato not configured (stremio provider missing); skipping refresh."
@@ -65,8 +65,7 @@ namespace Gelato.Providers {
                 return;
             }
 
-            var series = genericEventArgs.Argument as Series;
-            if (series is null) {
+            if (genericEventArgs.Argument is not Series series) {
                 _log.LogTrace("{Name} is not a Series", genericEventArgs.Argument.Name);
                 return;
             }
@@ -110,12 +109,12 @@ namespace Gelato.Providers {
             _log.LogInformation("synced series tree for {Name}", series.Name);
         }
 
-        public async Task<MetadataResult<Series>> GetMetadata(
+        public Task<MetadataResult<Series>> GetMetadata(
             SeriesInfo info,
             CancellationToken cancellationToken
         ) {
             var result = new MetadataResult<Series> { HasMetadata = false, QueriedById = true };
-            return result;
+            return Task.FromResult(result);
         }
 
         public bool SupportsSearch => false;
@@ -124,9 +123,7 @@ namespace Gelato.Providers {
             SeriesInfo searchInfo,
             CancellationToken cancellationToken
         ) {
-            return Task.FromResult<IEnumerable<RemoteSearchResult>>(
-                Array.Empty<RemoteSearchResult>()
-            );
+            return Task.FromResult<IEnumerable<RemoteSearchResult>>([]);
         }
 
         public Task<HttpResponseMessage> GetImageResponse(

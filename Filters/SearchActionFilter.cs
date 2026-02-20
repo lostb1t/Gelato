@@ -1,5 +1,4 @@
-using Gelato.Common;
-using Gelato.Configuration;
+using Gelato.Config;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Model.Dto;
@@ -36,7 +35,7 @@ namespace Gelato.Filters {
                 cfg.DisableSearch
                 || !ctx.IsApiSearchAction()
                 || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
-                || !await cfg.stremio.IsReady()
+                || !await cfg.Stremio.IsReady()
             ) {
                 await next();
                 return;
@@ -79,26 +78,22 @@ namespace Gelato.Filters {
         }
 
         private HashSet<BaseItemKind> GetRequestedItemTypes(ActionExecutingContext ctx) {
-            var requested = new HashSet<BaseItemKind>(
-                new[] { BaseItemKind.Movie, BaseItemKind.Series }
-            );
+            var requested = new HashSet<BaseItemKind>([BaseItemKind.Movie, BaseItemKind.Series]);
 
             // Already parsed as BaseItemKind[] by model binder
             if (
                 ctx.TryGetActionArgument<BaseItemKind[]>("includeItemTypes", out var includeTypes)
-                && includeTypes != null
-                && includeTypes.Length > 0
+                && includeTypes is { Length: > 0 }
             ) {
                 requested = new HashSet<BaseItemKind>(includeTypes);
                 // Only keep Movie and Series
-                requested.IntersectWith(new[] { BaseItemKind.Movie, BaseItemKind.Series });
+                requested.IntersectWith([BaseItemKind.Movie, BaseItemKind.Series]);
             }
 
             // Remove excluded types
             if (
                 ctx.TryGetActionArgument<BaseItemKind[]>("excludeItemTypes", out var excludeTypes)
-                && excludeTypes != null
-                && excludeTypes.Length > 0
+                && excludeTypes is { Length: > 0 }
             ) {
                 requested.ExceptWith(excludeTypes);
             }
@@ -123,7 +118,7 @@ namespace Gelato.Filters {
             var tasks = new List<Task<IReadOnlyList<StremioMeta>>>();
 
             if (requestedTypes.Contains(BaseItemKind.Movie) && cfg.MovieFolder is not null) {
-                tasks.Add(cfg.stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
+                tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
             }
             else if (requestedTypes.Contains(BaseItemKind.Movie)) {
                 _log.LogWarning(
@@ -132,7 +127,7 @@ namespace Gelato.Filters {
             }
 
             if (requestedTypes.Contains(BaseItemKind.Series) && cfg.SeriesFolder is not null) {
-                tasks.Add(cfg.stremio.SearchAsync(searchTerm, StremioMediaType.Series));
+                tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Series));
             }
             else if (requestedTypes.Contains(BaseItemKind.Series)) {
                 _log.LogWarning(

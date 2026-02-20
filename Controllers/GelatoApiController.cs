@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 using MonoTorrent;
 using MonoTorrent.Client;
 
-namespace Gelato;
+namespace Gelato.Controllers;
 
 [ApiController]
 [Route("gelato")]
@@ -37,17 +37,17 @@ public sealed class GelatoApiController : ControllerBase {
         [FromRoute, Required] string id
     ) {
         var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-        var meta = await cfg.stremio.GetMetaAsync(id, stremioMetaType);
+        var meta = await cfg.Stremio.GetMetaAsync(id, stremioMetaType);
         if (meta is null) {
             return NotFound();
         }
         return meta;
     }
 
-// [HttpGet("catalogs")]
-// Moved to CatalogController
+    // [HttpGet("catalogs")]
+    // Moved to CatalogController
 
-    [HttpGet("subtitles/{itemId}")]
+    [HttpGet("subtitles/{itemId:guid}")]
     public ActionResult<IEnumerable<StremioSubtitle>> GetSubtitles(
         [FromRoute, Required] Guid itemId
     ) {
@@ -102,8 +102,8 @@ public sealed class GelatoApiController : ControllerBase {
                 return StatusCode(503, "Metadata not yet available.");
         }
 
-        ITorrentManagerFile selected =
-            (idx is int i && i >= 0 && i < manager.Files.Count)
+        var selected =
+            idx is { } i and >= 0 && i < manager.Files.Count
                 ? manager.Files[i]
                 : (
                     !string.IsNullOrWhiteSpace(filename)
@@ -119,7 +119,7 @@ public sealed class GelatoApiController : ControllerBase {
                 );
 
         var timerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var timer = new System.Threading.Timer(
+        var timer = new Timer(
             _ => {
                 _log.LogDebug(
                     "file: {File}, progress: {Progress:0.00}%, dl: {DL}/s, ul: {UL}/s, peers: {Peers}, seeds: {Seeds}, leechers: {Leechs}, bytes: {Bytes}",
@@ -162,11 +162,13 @@ public sealed class GelatoApiController : ControllerBase {
             catch { }
         });
 
-        Response.Headers["Accept-Ranges"] = "bytes";
+        Response.Headers.AcceptRanges = "bytes";
         return File(stream, GuessContentType(selected.Path), enableRangeProcessing: true);
     }
 
     private static ITorrentManagerFile PickHeuristic(TorrentManager manager) {
+        return manager.Files.OrderByDescending(LikelyVideo).ThenByDescending(f => f.Length).First();
+
         static bool LikelyVideo(ITorrentManagerFile f) {
             var name = Path.GetFileName(f.Path);
             var ext = Path.GetExtension(name).ToLowerInvariant();
@@ -175,30 +177,28 @@ public sealed class GelatoApiController : ControllerBase {
             if (
                 ext
                 is ".srt"
-                    or ".ass"
-                    or ".ssa"
-                    or ".sub"
-                    or ".idx"
-                    or ".nfo"
-                    or ".txt"
-                    or ".jpg"
-                    or ".jpeg"
-                    or ".png"
-                    or ".gif"
+                or ".ass"
+                or ".ssa"
+                or ".sub"
+                or ".idx"
+                or ".nfo"
+                or ".txt"
+                or ".jpg"
+                or ".jpeg"
+                or ".png"
+                or ".gif"
             )
                 return false;
             return ext
                 is ".mkv"
-                    or ".mp4"
-                    or ".m4v"
-                    or ".avi"
-                    or ".mov"
-                    or ".wmv"
-                    or ".ts"
-                    or ".m2ts";
+                or ".mp4"
+                or ".m4v"
+                or ".avi"
+                or ".mov"
+                or ".wmv"
+                or ".ts"
+                or ".m2ts";
         }
-
-        return manager.Files.OrderByDescending(LikelyVideo).ThenByDescending(f => f.Length).First();
     }
 
     private static InfoHashes? TryParseInfoHashes(string s) {
@@ -226,14 +226,13 @@ public sealed class GelatoApiController : ControllerBase {
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string[] DefaultTrackers() =>
-        new[]
-        {
-            "udp://tracker.opentrackr.org:1337/announce",
+    [
+        "udp://tracker.opentrackr.org:1337/announce",
             "udp://open.stealth.si:80/announce",
             "udp://tracker.torrent.eu.org:451/announce",
             "udp://explodie.org:6969/announce",
-            "udp://tracker.openbittorrent.com:6969/announce",
-        };
+            "udp://tracker.openbittorrent.com:6969/announce"
+    ];
 
     private static string GuessContentType(string path) {
         var ext = Path.GetExtension(path).ToLowerInvariant();

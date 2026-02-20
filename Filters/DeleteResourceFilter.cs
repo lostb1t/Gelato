@@ -1,5 +1,3 @@
-using Gelato.Common;
-using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Mvc;
@@ -38,7 +36,7 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             ctx.GetActionName() != "DeleteItem"
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
-            || _userManager.GetUserById(userId) is not User user
+            || _userManager.GetUserById(userId) is not { } user
         )
         {
             await next();
@@ -76,8 +74,8 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
     {
         var query = new InternalItemsQuery
         {
-            IncludeItemTypes = new[] { video.GetBaseItemKind() },
-            HasAnyProviderId = new() { { "Stremio", video.ProviderIds["Stremio"] } },
+            IncludeItemTypes = [video.GetBaseItemKind()],
+            HasAnyProviderId = new Dictionary<string, string> { { "Stremio", video.ProviderIds["Stremio"] } },
             Recursive = false,
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,

@@ -45,24 +45,23 @@ public sealed class CollectionManagerDecorator : ICollectionManager {
         _inner.CreateCollectionAsync(options);
 
     public async Task AddToCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) {
-        await _inner.AddToCollectionAsync(collectionId, itemIds).ConfigureAwait(false);
+        var guids = itemIds as Guid[] ?? itemIds.ToArray();
+        await _inner.AddToCollectionAsync(collectionId, guids).ConfigureAwait(false);
 
-        var collection = _libraryManager.GetItemById(collectionId) as BoxSet;
-        if (collection is null)
+        if (_libraryManager.GetItemById(collectionId) is not BoxSet collection)
             return;
 
-        var addedItems = itemIds
+        var gelatoItems = guids
             .Select(id => _libraryManager.GetItemById(id))
-            .Where(item => item is not null)
+            .Where(item => item is not null && _manager.Value.IsGelato(item))
             .ToList();
 
-        var gelatoItems = addedItems.Where(_manager.Value.IsGelato).ToList();
         if (gelatoItems.Count == 0)
             return;
 
         var needsFix = false;
 
-        for (int i = 0; i < collection.LinkedChildren.Length; i++) {
+        for (var i = 0; i < collection.LinkedChildren.Length; i++) {
             var linkedChild = collection.LinkedChildren[i];
 
             if (

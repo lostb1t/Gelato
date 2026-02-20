@@ -2,7 +2,7 @@ using Gelato.Services;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Tasks;
+namespace Gelato.ScheduledTasks;
 
 public sealed class GelatoCatalogItemsSyncTask : IScheduledTask {
     private readonly ILogger<GelatoCatalogItemsSyncTask> _log;
@@ -21,7 +21,7 @@ public sealed class GelatoCatalogItemsSyncTask : IScheduledTask {
     public string Description => "Imports items from enabled Stremio catalogs into Jellyfin.";
     public string Category => "Gelato";
 
-    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct) {
         _log.LogInformation("Starting Gelato catalog sync task...");

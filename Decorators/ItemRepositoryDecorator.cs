@@ -1,7 +1,6 @@
 #nullable disable
 #pragma warning disable CS1591
 
-using Gelato.Common;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
@@ -42,45 +41,38 @@ public sealed class GelatoItemRepository : IItemRepository {
         return _inner.GetItemList(ApplyFilters(filter));
     }
 
-    public InternalItemsQuery ApplyFilters(InternalItemsQuery filter) {
-        var ctx = _http?.HttpContext;
-        var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
+    private InternalItemsQuery ApplyFilters(InternalItemsQuery filter) {
+        var ctx = _http.HttpContext;
+        var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
 
         if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null) {
             filter.IsDeadPerson = null;
-            if (
-                (
-                    !filter.IncludeItemTypes.Any()
-                    || filter
-                        .IncludeItemTypes.Intersect(
-                            new[] { BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode }
-                        )
-                        .Any()
-                )
-            ) {
-                if (filter.ExcludeTags is null || filter.ExcludeTags.Length == 0) {
-                    filter.ExcludeTags = new[] { GelatoManager.StreamTag };
-                }
-                if (filter.MaxPremiereDate is null && filterUnreleased) {
-                    // we dont have access to the query so can make a proper statement.
-                    var days =
-                        (
-                            filter.IncludeItemTypes.Contains(BaseItemKind.Series)
-                            || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
-                        )
-                            ? 0
-                            : bufferDays;
-                    filter.MaxPremiereDate = DateTime.Today.AddDays((double)days);
-                }
+            if (filter.IncludeItemTypes.Length != 0
+                 && !filter
+                     .IncludeItemTypes.Intersect(
+                         [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
+                     )
+                     .Any()) return filter;
+            if (filter.ExcludeTags.Length == 0) {
+                filter.ExcludeTags = [GelatoManager.StreamTag];
             }
+
+            if (filter.MaxPremiereDate is not null || !filterUnreleased) return filter;
+
+            // we dont have access to the query so can make a proper statement.
+            var days = filter.IncludeItemTypes.Contains(BaseItemKind.Series)
+                       || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
+                ? 0
+                : bufferDays;
+            filter.MaxPremiereDate = DateTime.Today.AddDays(days);
         }
         else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person)) {
             filter.IsDeadPerson = null;
         }
         else if (filter.IsMissing == true) {
             // jf deletes virtual items when theres a valid primary version. So just dont return it
-            filter.ExcludeTags = new[] { GelatoManager.StreamTag };
+            filter.ExcludeTags = [GelatoManager.StreamTag];
         }
         return filter;
     }

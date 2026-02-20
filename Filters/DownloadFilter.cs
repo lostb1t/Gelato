@@ -1,4 +1,3 @@
-using Gelato.Common;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -32,19 +31,14 @@ public sealed class DownloadFilter : IAsyncActionFilter {
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
     ) {
-        if (ctx.GetActionName() != "GetDownload") {
-            await next();
-            return;
-        }
-
-        if (!ctx.TryGetRouteGuid(out var guid)) {
+        if (ctx.GetActionName() != "GetDownload" || !ctx.TryGetRouteGuid(out var guid)) {
             await next();
             return;
         }
 
         var userIdStr = ctx
             .HttpContext.User.Claims.FirstOrDefault(c =>
-                c.Type == "UserId" || c.Type == "Jellyfin-UserId"
+                c.Type is "UserId" or "Jellyfin-UserId"
             )
             ?.Value;
 
@@ -92,7 +86,7 @@ public sealed class DownloadFilter : IAsyncActionFilter {
                         fileName = "download";
                 }
 
-                if (resp.Content.Headers.ContentLength is long len) {
+                if (resp.Content.Headers.ContentLength is { } len) {
                     ctx.HttpContext.Response.ContentLength = len;
                 }
 

@@ -13,10 +13,7 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter {
     public int Order { get; set; } = 3;
 
     private const string ItemsKey = "MediaSourceId";
-    private static readonly string[] InputKeys = new[] { "MediaSourceId", "RouteMediaSourceId" };
-
-
-    public PlaybackInfoFilter() {}
+    private static readonly string[] InputKeys = ["MediaSourceId", "RouteMediaSourceId"];
 
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
@@ -36,7 +33,7 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter {
             || TryFromQuery(ctx.HttpContext.Request, out id)
         ) {
             if (!string.IsNullOrWhiteSpace(id))
-                ctx.HttpContext.Items[ItemsKey] = id!;
+                ctx.HttpContext.Items[ItemsKey] = id;
         }
 
         await next();

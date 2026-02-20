@@ -228,7 +228,7 @@ public class PalcoCacheController : ControllerBase
                 From = new MailAddress(request.FromAddress, request.FromName),
                 Subject = request.Subject,
                 Body = request.Body,
-                IsBodyHtml = request.Body.Contains("<")
+                IsBodyHtml = request.Body.Contains('<')
             };
             mail.To.Add(request.To);
 

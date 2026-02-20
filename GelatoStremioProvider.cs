@@ -1,10 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Gelato.Common;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
@@ -13,8 +10,8 @@ namespace Gelato {
         private readonly IHttpClientFactory _http;
         private readonly ILogger<GelatoStremioProvider> _log;
         private StremioManifest? _manifest;
-        public StremioCatalog? MovieSearchCatalog { get; private set; }
-        public StremioCatalog? SeriesSearchCatalog { get; private set; }
+        private StremioCatalog? _movieSearchCatalog;
+        private StremioCatalog? _seriesSearchCatalog;
         private static readonly JsonSerializerOptions JsonOpts = new() {
             PropertyNameCaseInsensitive = true,
         };
@@ -37,10 +34,10 @@ namespace Gelato {
         }
 
         private string BuildUrl(string[] segments, IEnumerable<string>? extras = null) {
-            var parts = segments.Select(s => s == null ? "" : Uri.EscapeDataString(s)).ToArray();
+            var parts = segments.Select(Uri.EscapeDataString).ToArray();
             var path = string.Join("/", parts);
             var extrasPart =
-                (extras != null && extras.Any()) ? "/" + string.Join("&", extras) : string.Empty;
+                extras != null && extras.Any() ? "/" + string.Join("&", extras) : string.Empty;
             var url = $"{_baseUrl}/{path}{extrasPart}.json";
             url = url.Replace("%3A", ":").Replace("%3a", ":");
             return url;
@@ -80,54 +77,58 @@ namespace Gelato {
         public async Task<StremioManifest?> GetManifestAsync(bool force = false) {
             if (!force && _manifest is not null)
                 return _manifest;
-            try {
+            try
+            {
                 var url = $"{_baseUrl}/manifest.json";
                 var m = await GetJsonAsync<StremioManifest>(url);
                 _manifest = m;
 
-                if (m?.Catalogs != null) {
-                    MovieSearchCatalog = m
+                if (m?.Catalogs != null)
+                {
+                    _movieSearchCatalog = m
                         .Catalogs.Where(c =>
-                            c.Type.ToLower() == StremioMediaType.Movie.ToString().ToLower()
-                            && c.Extra?.Any(e =>
+                            string.Equals(c.Type, nameof(StremioMediaType.Movie),
+                                StringComparison.CurrentCultureIgnoreCase)
+                            && c.Extra.Any(e =>
                                 string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
-                            ) == true
+                            )
                         )
-                  .OrderBy(c =>
-    c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
-)
+                        .OrderBy(c =>
+                            c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
+                        )
                         .FirstOrDefault();
 
-                    SeriesSearchCatalog = m
+                    _seriesSearchCatalog = m
                         .Catalogs.Where(c =>
-                            c.Type.ToLower() == StremioMediaType.Series.ToString().ToLower()
-                            && c.Extra?.Any(e =>
+                            string.Equals(c.Type, nameof(StremioMediaType.Series),
+                                StringComparison.CurrentCultureIgnoreCase)
+                            && c.Extra.Any(e =>
                                 string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
-                            ) == true
+                            )
                         )
-                .OrderBy(c =>
-    c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
-)
+                        .OrderBy(c =>
+                            c.Id?.Contains("people", StringComparison.OrdinalIgnoreCase) == true
+                        )
                         .FirstOrDefault();
                 }
 
-                if (MovieSearchCatalog == null) {
+                if (_movieSearchCatalog == null) {
                     _log.LogWarning("manifest has no search-capable movie catalog");
                 }
                 else {
                     _log.LogInformation(
                         "manifest uses movie search catalog: {Id}",
-                        MovieSearchCatalog.Id
+                        _movieSearchCatalog.Id
                     );
                 }
 
-                if (SeriesSearchCatalog == null) {
+                if (_seriesSearchCatalog == null) {
                     _log.LogWarning("manifest has no search-capable series catalog");
                 }
                 else {
                     _log.LogInformation(
                         "manifest uses series search catalog: {Id}",
-                        SeriesSearchCatalog.Id
+                        _seriesSearchCatalog.Id
                     );
                 }
                 return m;
@@ -144,7 +145,7 @@ namespace Gelato {
         }
 
         public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType) {
-            var url = BuildUrl(new[] { "meta", mediaType.ToString().ToLower(), id });
+            var url = BuildUrl(["meta", mediaType.ToString().ToLower(), id]);
             var r = await GetJsonAsync<StremioMetaResponse>(url);
             return r?.Meta;
         }
@@ -161,7 +162,7 @@ namespace Gelato {
                 id = $"tmdb:{id}";
             }
             var url = BuildUrl(
-                new string[] { "meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id }
+                ["meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id]
             );
             var r = await GetJsonAsync<StremioMetaResponse>(url);
             return r?.Meta;
@@ -171,11 +172,11 @@ namespace Gelato {
             return await GetStreamsAsync(uri.ExternalId, uri.MediaType);
         }
 
-        public async Task<List<StremioStream>> GetStreamsAsync(
+        private async Task<List<StremioStream>> GetStreamsAsync(
             string id,
             StremioMediaType mediaType
         ) {
-            var url = BuildUrl(new[] { "stream", mediaType.ToString().ToLower(), id });
+            var url = BuildUrl(["stream", mediaType.ToString().ToLower(), id]);
             var r = await GetJsonAsync<StremioStreamsResponse>(url);
 
             var error = r?.GetError();
@@ -183,18 +184,18 @@ namespace Gelato {
                 throw new InvalidOperationException($"Stremio returned an error: {error}");
             }
 
-            return r?.Streams ?? new();
+            return r?.Streams ?? [];
         }
 
         public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName) {
-            string[] extras = Array.Empty<string>();
+            var extras = Array.Empty<string>();
 
             if (!string.IsNullOrEmpty(fileName)) {
-                extras = new[] { $"filename={fileName}" };
+                extras = [$"filename={fileName}"];
             }
 
             var url = BuildUrl(
-                new[] { "subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId },
+                ["subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId],
                 extras
             );
             var r = await GetJsonAsync<StremioSubtitleResponse>(url);
@@ -214,9 +215,9 @@ namespace Gelato {
                 extras.Add($"skip={skip}");
 
             // seen maybe one type thats capital, but thats their issue
-            var url = BuildUrl(new[] { "catalog", mediaType.ToLower(), id }, extras);
+            var url = BuildUrl(["catalog", mediaType.ToLower(), id], extras);
             var r = await GetJsonAsync<StremioCatalogResponse>(url);
-            return r?.Metas ?? new();
+            return r?.Metas ?? [];
         }
 
         public async Task<IReadOnlyList<StremioMeta>> SearchAsync(
@@ -226,11 +227,11 @@ namespace Gelato {
         ) {
             var manifest = await GetManifestAsync();
             if (manifest == null)
-                return Array.Empty<StremioMeta>();
+                return [];
 
-            StremioCatalog? catalog = mediaType switch {
-                StremioMediaType.Movie => MovieSearchCatalog,
-                StremioMediaType.Series => SeriesSearchCatalog,
+            var catalog = mediaType switch {
+                StremioMediaType.Movie => _movieSearchCatalog,
+                StremioMediaType.Series => _seriesSearchCatalog,
                 _ => null,
             };
 
@@ -239,29 +240,10 @@ namespace Gelato {
                     "SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.",
                     mediaType
                 );
-                return Array.Empty<StremioMeta>();
+                return [];
             }
 
             return await GetCatalogMetasAsync(catalog.Id, mediaType.ToString(), query, skip);
-        }
-
-        private static (string? type, string? extId) ResolveKey(BaseItem entity) {
-            string? type = entity switch {
-                Movie => "movie",
-                Series => "series",
-                Episode => "series",
-                _ => null,
-            };
-
-            var imdb = entity.GetProviderId(MetadataProvider.Imdb);
-            if (!string.IsNullOrWhiteSpace(imdb))
-                return (type, imdb);
-
-            var tmdb = entity.GetProviderId(MetadataProvider.Tmdb);
-            if (!string.IsNullOrWhiteSpace(tmdb))
-                return (type, $"tmdb:{tmdb}");
-
-            return (type, null);
         }
     }
 
@@ -333,7 +315,7 @@ namespace Gelato {
     }
 
     public class StremioMeta {
-        public string? Id { get; set; }
+        public required string Id { get; set; }
 
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public StremioMediaType Type { get; set; } = StremioMediaType.Unknown;
@@ -401,15 +383,15 @@ namespace Gelato {
 
             if (!string.IsNullOrWhiteSpace(Id)) {
                 if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase)) {
-                    dict[MetadataProvider.Tmdb.ToString()] = Id.Substring("tmdb:".Length);
+                    dict[nameof(MetadataProvider.Tmdb)] = Id["tmdb:".Length..];
                 }
                 else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase)) {
-                    dict[MetadataProvider.Imdb.ToString()] = Id;
+                    dict[nameof(MetadataProvider.Imdb)] = Id;
                 }
             }
 
             if (!string.IsNullOrWhiteSpace(ImdbId)) {
-                dict[MetadataProvider.Imdb.ToString()] = ImdbId;
+                dict[nameof(MetadataProvider.Imdb)] = ImdbId;
             }
 
             return dict;
@@ -419,7 +401,7 @@ namespace Gelato {
             if (Year is not null)
                 return Year;
 
-            if (Released is DateTime dt)
+            if (Released is { } dt)
                 return dt.Year;
 
             // "2007-2019", "2020-", or "2015"
@@ -449,7 +431,7 @@ namespace Gelato {
         }
 
         public DateTime? GetPremiereDate() {
-            if (Released is DateTime dt)
+            if (Released is { } dt)
                 return dt;
 
             var year = GetYear();
@@ -460,11 +442,7 @@ namespace Gelato {
         }
 
         public bool IsValid() {
-            if (Id is not null && !Id.Contains("error")) {
-                return true;
-            }
-
-            return false;
+            return Id is not null && !Id.Contains("error");
         }
 
         public bool IsReleased(int bufferDays = 0) {
@@ -570,10 +548,7 @@ namespace Gelato {
             if (!string.IsNullOrWhiteSpace(Title)) {
                 return Title;
             }
-            if (!string.IsNullOrWhiteSpace(Name)) {
-                return Name;
-            }
-            return "";
+            return !string.IsNullOrWhiteSpace(Name) ? Name : "";
         }
 
         public Guid GetGuid() {
@@ -602,8 +577,7 @@ namespace Gelato {
             if (string.IsNullOrWhiteSpace(Url))
                 return false;
 
-            Uri uri;
-            if (!Uri.TryCreate(Url, UriKind.Absolute, out uri))
+            if (!Uri.TryCreate(Url, UriKind.Absolute, out var uri))
                 return false;
 
             return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
@@ -671,9 +645,7 @@ namespace Gelato {
                     return (T)Enum.ToObject(typeof(T), i);
             }
             reader.Skip();
-            if (Enum.TryParse<T>("Unknown", true, out var fb))
-                return fb;
-            return default;
+            return Enum.TryParse<T>("Unknown", true, out var fb) ? fb : default;
         }
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options) =>
@@ -682,28 +654,27 @@ namespace Gelato {
 
     public sealed class NullableIntLenientConverter : JsonConverter<int?> {
         public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) {
-            if (r.TokenType == JsonTokenType.Number)
-                return r.TryGetInt32(out var i) ? i : (int?)null;
+            switch (r.TokenType)
+            {
+                case JsonTokenType.Number:
+                    return r.TryGetInt32(out var i) ? i : (int?)null;
+                case JsonTokenType.String:
+                {
+                    var s = r.GetString();
+                    if (string.IsNullOrWhiteSpace(s))
+                        return null;
 
-            if (r.TokenType == JsonTokenType.String) {
-                var s = r.GetString();
-                if (string.IsNullOrWhiteSpace(s))
+                    return int.TryParse(
+                        s,
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out var v
+                    ) ? v : null;
+                }
+                case JsonTokenType.Null:
+                default:
                     return null;
-
-                return int.TryParse(
-                    s,
-                    NumberStyles.Integer,
-                    CultureInfo.InvariantCulture,
-                    out var v
-                )
-                    ? v
-                    : (int?)null;
             }
-
-            if (r.TokenType == JsonTokenType.Null)
-                return null;
-
-            return null;
         }
 
         public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o) {

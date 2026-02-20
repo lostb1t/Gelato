@@ -1,5 +1,4 @@
 using System.Globalization;
-using Gelato.Common;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
@@ -50,14 +49,14 @@ namespace Gelato.Decorators {
         public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
             BaseItem item,
             bool enablePathSubstitution,
-            User user = null
+            User? user = null
         ) {
             var manager = _manager.Value;
             _log.LogDebug(
                 "GetStaticMediaSources {Id}",
                 item.Id
             );
-            var ctx = _http?.HttpContext;
+            var ctx = _http.HttpContext;
             Guid userId;
             if (user != null) {
                 userId = user.Id;
@@ -80,7 +79,7 @@ namespace Gelato.Decorators {
 
             var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
             var video = item as Video;
-            string cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
+            var cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
                 ? id.ToString()
                 : item.Id.ToString();
 
@@ -120,7 +119,7 @@ namespace Gelato.Decorators {
                     .GetResult();
 
                 // refresh item
-                item = _libraryManager.GetItemById(item.Id);
+                _libraryManager.GetItemById(item.Id);
             }
 
             var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user)
@@ -133,55 +132,55 @@ namespace Gelato.Decorators {
             if (item.GetBaseItemKind() == BaseItemKind.Episode) {
                 var episode = (Episode)item;
                 query = new InternalItemsQuery {
-                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
+                    IncludeItemTypes = [item.GetBaseItemKind()],
                     ParentId = episode.SeasonId,
                     Recursive = false,
                     GroupByPresentationUniqueKey = false,
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    Tags = new[] { GelatoManager.StreamTag },
+                    Tags = [GelatoManager.StreamTag],
                     IndexNumber = episode.IndexNumber,
                 };
             }
             else {
                 query = new InternalItemsQuery {
-                    IncludeItemTypes = new[] { item.GetBaseItemKind() },
-                    HasAnyProviderId = new() { { "Stremio", item.GetProviderId("Stremio") } },
+                    IncludeItemTypes = [item.GetBaseItemKind()],
+                    HasAnyProviderId = new Dictionary<string, string> { { "Stremio", item.GetProviderId("Stremio") } },
                     Recursive = false,
                     GroupByPresentationUniqueKey = false,
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
-                    Tags = new[] { GelatoManager.StreamTag },
+                    Tags = [GelatoManager.StreamTag],
                 };
             }
 
             var gelatoSources = _repo
-    .GetItemList(query)
-    .OfType<Video>()
-    .Where(x =>
-        manager.IsGelato(x) &&
-        (
-            userId == Guid.Empty ||
-            (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
-        ))
-    .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
-    .Select(s => {
-        var k = GetVersionInfo(
-            s,
-            MediaSourceType.Grouping,
-            ctx,
-            user
-        );
+                .GetItemList(query)
+                .OfType<Video>()
+                .Where(x =>
+                    manager.IsGelato(x) &&
+                    (
+                        userId == Guid.Empty ||
+                        (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
+                    ))
+                .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
+                .Select(s => {
+                    var k = GetVersionInfo(
+                        s,
+                        MediaSourceType.Grouping,
+                        ctx,
+                        user
+                    );
 
-        if (user is not null) {
-            _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
-        }
+                    if (user is not null) {
+                        _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
+                    }
 
-        return k;
-    })
-    .ToList();
+                    return k;
+                })
+                .ToList();
 
             _log.LogInformation(
                 "Found {s} streams. UserId={Action} GelatoId={Uri}",
@@ -242,7 +241,7 @@ namespace Gelato.Decorators {
 
                 var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
                 subtitles = await cfg
-                    .stremio.GetSubtitlesAsync(uri, filename)
+                    .Stremio.GetSubtitlesAsync(uri, filename)
                     .ConfigureAwait(false);
                 manager.SetStremioSubtitlesCache(item.Id, subtitles);
             }
@@ -330,26 +329,6 @@ namespace Gelato.Decorators {
             var manager = _manager.Value;
             var ctx = _http.HttpContext;
 
-            static bool NeedsProbe(MediaSourceInfo s) =>
-                (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
-                || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
-
-            BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
-                Guid.TryParse(s.ETag, out var g)
-                    ? (_libraryManager.GetItemById(g) ?? fallback)
-                    : fallback;
-
-            static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id) {
-                if (!id.HasValue)
-                    return list.FirstOrDefault();
-
-                var target = id.Value;
-
-                return list.FirstOrDefault(s =>
-                        !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
-                    ) ?? list.FirstOrDefault();
-            }
-
             var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
 
             Guid? mediaSourceId =
@@ -427,7 +406,27 @@ namespace Gelato.Decorators {
                     .ConfigureAwait(false);
             }
 
-            return new[] { selected };
+            return [selected];
+
+            static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id) {
+                if (!id.HasValue)
+                    return list.FirstOrDefault();
+
+                var target = id.Value;
+
+                return list.FirstOrDefault(s =>
+                    !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
+                ) ?? list.FirstOrDefault();
+            }
+
+            static bool NeedsProbe(MediaSourceInfo s) =>
+                (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
+                || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
+
+            BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
+                Guid.TryParse(s.ETag, out var g)
+                    ? _libraryManager.GetItemById(g) ?? fallback
+                    : fallback;
         }
 
         public Task<MediaSourceInfo> GetMediaSource(
@@ -514,7 +513,7 @@ namespace Gelato.Decorators {
             BaseItem item,
             MediaSourceType type,
             HttpContext ctx,
-            User user = null
+            User? user = null
         ) {
             ArgumentNullException.ThrowIfNull(item);
 
@@ -559,8 +558,7 @@ namespace Gelato.Decorators {
                 info.Type = MediaSourceType.Placeholder;
             }
 
-            var video = item as Video;
-            if (video is not null) {
+            if (item is Video video) {
                 info.IsoType = video.IsoType;
                 info.VideoType = video.VideoType;
                 info.Video3DFormat = video.Video3DFormat;

@@ -27,9 +27,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter {
         ResourceExecutionDelegate next
     ) {
         if (
-            ctx.ActionDescriptor is not ControllerActionDescriptor cad
-            || cad.ActionName != "GetItemImage"
-        ) {
+            ctx.ActionDescriptor is not ControllerActionDescriptor { ActionName: "GetItemImage" }) {
             await next();
             return;
         }
@@ -75,8 +73,6 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter {
                 ctx.HttpContext.Response.Body,
                 ctx.HttpContext.RequestAborted
             );
-
-            return;
         }
         catch (Exception ex) {
             _log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);

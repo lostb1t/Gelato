@@ -1,6 +1,6 @@
 using MediaBrowser.Model.Tasks;
 
-namespace Gelato.Tasks {
+namespace Gelato.ScheduledTasks {
     public sealed class SyncRunningSeriesTask : IScheduledTask {
         private readonly GelatoManager _manager;
 
@@ -17,21 +17,21 @@ namespace Gelato.Tasks {
         public string Category => "Gelato";
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() {
-            return new[]
-            {
+            return
+            [
                 new TaskTriggerInfo
                 {
                     Type = TaskTriggerInfoType.IntervalTrigger,
                     IntervalTicks = TimeSpan.FromHours(24).Ticks,
-                },
-            };
+                }
+            ];
         }
 
         public async Task ExecuteAsync(
             IProgress<double> progress,
             CancellationToken cancellationToken
         ) {
-            await _manager.SyncSeries(true, Guid.Empty, progress, cancellationToken);
+            await _manager.SyncSeries(Guid.Empty, cancellationToken);
         }
     }
 }

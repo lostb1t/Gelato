@@ -1,6 +1,6 @@
-using Gelato.Configuration;
+using Gelato.Config;
+using Gelato.ScheduledTasks;
 using Gelato.Services;
-using Gelato.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -82,6 +82,7 @@ public class CatalogController : ControllerBase {
 
         return Accepted();
     }
+
     [HttpPost("import-all")]
     public ActionResult ImportAll() {
         _logger.LogInformation("Manual import triggered for all enabled catalogs");

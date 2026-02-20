@@ -4,7 +4,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Tasks {
+namespace Gelato.ScheduledTasks {
     public sealed class PurgeGelatoStreamsTask : IScheduledTask {
         private readonly ILogger<PurgeGelatoStreamsTask> _log;
 
@@ -27,26 +27,26 @@ namespace Gelato.Tasks {
         public string Category => "Gelato Maintenance";
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() {
-            return new[]
-            {
+            return
+            [
                 new TaskTriggerInfo
                 {
                     Type = TaskTriggerInfoType.IntervalTrigger,
                     IntervalTicks = TimeSpan.FromDays(7).Ticks,
-                },
-            };
+                }
+            ];
         }
 
-        public async Task ExecuteAsync(
+        public Task ExecuteAsync(
             IProgress<double> progress,
             CancellationToken cancellationToken
         ) {
             _log.LogInformation("purging streams");
 
             var query = new InternalItemsQuery {
-                IncludeItemTypes = new[] { BaseItemKind.Movie, BaseItemKind.Episode },
+                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
                 Recursive = true,
-                HasAnyProviderId = new()
+                HasAnyProviderId = new Dictionary<string, string>
                 {
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
@@ -60,9 +60,9 @@ namespace Gelato.Tasks {
                 .Where(v => _manager.IsStream(v))
                 .ToArray();
 
-            int total = streams.Length;
+            var total = streams.Length;
 
-            int done = 0;
+            var done = 0;
 
             foreach (var item in streams) {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -86,6 +86,7 @@ namespace Gelato.Tasks {
             _manager.ClearCache();
 
             _log.LogInformation("stream purge completed");
+            return Task.CompletedTask;
         }
     }
 }

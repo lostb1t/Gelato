@@ -1,11 +1,10 @@
 using System.Text.Json.Serialization;
 using System.Xml.Serialization;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Plugins;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Configuration {
+namespace Gelato.Config {
     public class PluginConfiguration : BasePluginConfiguration {
         public string MoviePath { get; set; } =
             Path.Combine(Path.GetTempPath(), "gelato", "movies");
@@ -28,8 +27,8 @@ namespace Gelato.Configuration {
         public int MaxCollectionItems { get; set; } = 100;
         public bool DisableSearch { get; set; } = false;
 
-        public List<CatalogConfig> Catalogs { get; set; } = new();
-        public List<UserConfig> UserConfigs { get; set; } = new List<UserConfig>();
+        public List<CatalogConfig> Catalogs { get; set; } = [];
+        public List<UserConfig> UserConfigs { get; set; } = [];
 
         public string GetBaseUrl() {
             if (string.IsNullOrWhiteSpace(Url))
@@ -45,7 +44,7 @@ namespace Gelato.Configuration {
 
         [JsonIgnore]
         [XmlIgnore]
-        public GelatoStremioProvider? stremio;
+        public GelatoStremioProvider? Stremio;
 
         [JsonIgnore]
         [XmlIgnore]
@@ -57,10 +56,7 @@ namespace Gelato.Configuration {
 
         public PluginConfiguration GetEffectiveConfig(Guid userId) {
             var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
-            if (userConfig is null) {
-                return this;
-            }
-            return userConfig.ApplyOverrides(this);
+            return userConfig is null ? this : userConfig.ApplyOverrides(this);
         }
     }
 
@@ -103,16 +99,13 @@ namespace Gelato.Configuration {
     }
 
     public class GelatoStremioProviderFactory {
-        private readonly ILibraryManager _library;
         private readonly IHttpClientFactory _http;
         private readonly ILoggerFactory _log;
 
         public GelatoStremioProviderFactory(
-            ILibraryManager library,
             IHttpClientFactory http,
             ILoggerFactory log
         ) {
-            _library = library;
             _http = http;
             _log = log;
         }

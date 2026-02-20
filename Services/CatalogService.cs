@@ -1,4 +1,4 @@
-using Gelato.Configuration;
+using Gelato.Config;
 
 namespace Gelato.Services;
 
@@ -20,7 +20,7 @@ public class CatalogService {
             return config.Catalogs;
         }
 
-        List<CatalogConfig> catalogs = new List<CatalogConfig>();
+        List<CatalogConfig> catalogs = [];
 
         // Merge manifest catalogs with local config
         foreach (var mCatalog in manifest.Catalogs) {

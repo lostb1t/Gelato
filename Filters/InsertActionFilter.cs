@@ -1,4 +1,3 @@
-using Gelato.Common;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -32,8 +31,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
             !ctx.IsInsertableAction()
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
-            || _userManager.GetUserById(userId) is not User user
-            || _manager.GetStremioMeta(guid) is not StremioMeta stremioMeta
+            || _userManager.GetUserById(userId) is not { } user
+            || _manager.GetStremioMeta(guid) is not { } stremioMeta
         ) {
             await next();
             return;
@@ -64,7 +63,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
 
         // Fetch full metadata
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
-        var meta = await cfg.stremio.GetMetaAsync(
+        var meta = await cfg.Stremio.GetMetaAsync(
             stremioMeta.ImdbId ?? stremioMeta.Id,
             stremioMeta.Type
         );

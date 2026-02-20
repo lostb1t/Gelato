@@ -1,13 +1,14 @@
-using Gelato.Configuration;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
-using Jellyfin.Data.Enums; // Potentially needed for BaseItemKind
+using Jellyfin.Data.Enums;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using MediaBrowser.Controller.Entities.Movies;
 using System.Diagnostics;
-using Gelato.Common; // For BoxSet
+using Gelato.Config;
+
+// For BoxSet
 
 namespace Gelato.Services;
 
@@ -45,7 +46,7 @@ public class CatalogImportService {
                 return;
             }
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-            var stremio = cfg.stremio;
+            var stremio = cfg.Stremio;
             var seriesFolder = cfg.SeriesFolder;
             var movieFolder = cfg.MovieFolder;
 
@@ -177,7 +178,7 @@ public class CatalogImportService {
     private async Task<BoxSet?> GetOrCreateBoxSetAsync(CatalogConfig config) {
         var id = $"{config.Type}.{config.Id}";
         var collection = _libraryManager.GetItemList(new InternalItemsQuery {
-            IncludeItemTypes = new[] { BaseItemKind.BoxSet },
+            IncludeItemTypes = [BaseItemKind.BoxSet],
             CollapseBoxSetItems = false,
             Recursive = true,
             HasAnyProviderId = new Dictionary<string, string> { { "Stremio", id } }
@@ -226,8 +227,8 @@ public class CatalogImportService {
         var catalogs = await _catalogService.GetCatalogsAsync(Guid.Empty);
         var enabled = catalogs.Where(c => c.Enabled).ToList();
 
-        int current = 0;
-        int total = enabled.Count;
+        var current = 0;
+        var total = enabled.Count;
 
         foreach (var cat in enabled) {
             ct.ThrowIfCancellationRequested();
