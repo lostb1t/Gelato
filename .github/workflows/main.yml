@@ -1,0 +1,15 @@
+﻿name: Main Build
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@master
+    with:
+      dotnet-version: "9.0.*"
+      dotnet-target: "net9.0"

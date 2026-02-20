@@ -1,0 +1,19 @@
+﻿name: PR Build
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@master
+    if: github.event.pull_request.draft == false
+    with:
+      dotnet-version: "9.0.*"
+      dotnet-target: "net9.0"
