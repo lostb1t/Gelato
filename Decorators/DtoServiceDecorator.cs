@@ -6,15 +6,9 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 
 namespace Gelato.Decorators {
-    public sealed class DtoServiceDecorator : IDtoService {
-        private readonly IDtoService _inner;
-
-        public DtoServiceDecorator(IDtoService inner) {
-            _inner = inner;
-        }
-
+    public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService {
         public double? GetPrimaryImageAspectRatio(BaseItem item) =>
-            _inner.GetPrimaryImageAspectRatio(item);
+            inner.GetPrimaryImageAspectRatio(item);
 
         public BaseItemDto GetBaseItemDto(
             BaseItem item,
@@ -22,7 +16,7 @@ namespace Gelato.Decorators {
             User? user = null,
             BaseItem? owner = null
         ) {
-            var dto = _inner.GetBaseItemDto(item, options, user, owner);
+            var dto = inner.GetBaseItemDto(item, options, user, owner);
             Patch(dto, false);
             return dto;
         }
@@ -40,7 +34,7 @@ namespace Gelato.Decorators {
                 options.EnableUserData = false;
             }
 
-            var list = _inner.GetBaseItemDtos(items, options, user, owner);
+            var list = inner.GetBaseItemDtos(items, options, user, owner);
             foreach (var itemDto in list)
             {
                 Patch(itemDto, true);
@@ -54,7 +48,7 @@ namespace Gelato.Decorators {
             List<BaseItem>? taggedItems,
             User? user = null
         ) {
-            var dto = _inner.GetItemByNameDto(item, options, taggedItems, user);
+            var dto = inner.GetItemByNameDto(item, options, taggedItems, user);
             Patch(dto, false);
             return dto;
         }

@@ -5,22 +5,11 @@ using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.ScheduledTasks {
-    public sealed class PurgeGelatoStreamsTask : IScheduledTask {
-        private readonly ILogger<PurgeGelatoStreamsTask> _log;
-
-        private readonly GelatoManager _manager;
-        private readonly ILibraryManager _library;
-
-        public PurgeGelatoStreamsTask(
-            ILibraryManager libraryManager,
-            ILogger<PurgeGelatoStreamsTask> log,
-            GelatoManager manager
-        ) {
-            _log = log;
-            _library = libraryManager;
-            _manager = manager;
-        }
-
+    public sealed class PurgeGelatoStreamsTask(
+        ILibraryManager libraryManager,
+        ILogger<PurgeGelatoStreamsTask> log,
+        GelatoManager manager)
+        : IScheduledTask {
         public string Name => "Purge streams";
         public string Key => "PurgeGelatoStreamsTask";
         public string Description => "Removes all stremio streams";
@@ -41,7 +30,7 @@ namespace Gelato.ScheduledTasks {
             IProgress<double> progress,
             CancellationToken cancellationToken
         ) {
-            _log.LogInformation("purging streams");
+            log.LogInformation("purging streams");
 
             var query = new InternalItemsQuery {
                 IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
@@ -54,10 +43,10 @@ namespace Gelato.ScheduledTasks {
                 IsDeadPerson = true
             };
 
-            var streams = _library
+            var streams = libraryManager
                 .GetItemList(query)
                 .OfType<Video>()
-                .Where(v => _manager.IsStream(v))
+                .Where(v => manager.IsStream(v))
                 .ToArray();
 
             var total = streams.Length;
@@ -68,13 +57,13 @@ namespace Gelato.ScheduledTasks {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 try {
-                    _library.DeleteItem(
+                    libraryManager.DeleteItem(
             item,
             new DeleteOptions { DeleteFileLocation = true },
             true);
                 }
                 catch (Exception ex) {
-                    _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
+                    log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
                 }
 
                 done++;
@@ -83,9 +72,9 @@ namespace Gelato.ScheduledTasks {
             }
 
             progress?.Report(100.0);
-            _manager.ClearCache();
+            manager.ClearCache();
 
-            _log.LogInformation("stream purge completed");
+            log.LogInformation("stream purge completed");
             return Task.CompletedTask;
         }
     }

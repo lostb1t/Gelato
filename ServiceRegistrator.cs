@@ -51,23 +51,16 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         });
     }
 
-    public class GelatoService : IHostedService {
-        private readonly IConfiguration _config;
-        private readonly ILogger<GelatoService> _log;
-
-        public GelatoService(IConfiguration config, ILogger<GelatoService> log) {
-            _config = config;
-            _log = log;
-        }
-
+    public class GelatoService(IConfiguration config, ILogger<GelatoService> log)
+        : IHostedService {
         public Task StartAsync(CancellationToken cancellationToken) {
             var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
             var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "40M";
 
-            _config["FFmpeg:probesize"] = probe;
-            _config["FFmpeg:analyzeduration"] = analyze;
+            config["FFmpeg:probesize"] = probe;
+            config["FFmpeg:analyzeduration"] = analyze;
 
-            _log.LogInformation(
+            log.LogInformation(
                 "Gelato: set FFmpeg:probesize={Probe}, FFmpeg:analyzeduration={Analyze}",
                 probe,
                 analyze

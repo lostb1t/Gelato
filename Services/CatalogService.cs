@@ -2,18 +2,10 @@ using Gelato.Config;
 
 namespace Gelato.Services;
 
-public class CatalogService {
-    private readonly GelatoStremioProviderFactory _stremioFactory;
-
-    public CatalogService(
-        GelatoStremioProviderFactory stremioFactory
-    ) {
-        _stremioFactory = stremioFactory;
-    }
-
+public class CatalogService(GelatoStremioProviderFactory stremioFactory) {
     public async Task<List<CatalogConfig>> GetCatalogsAsync(Guid userId) {
         var config = GelatoPlugin.Instance!.Configuration;
-        var provider = _stremioFactory.Create(userId);
+        var provider = stremioFactory.Create(userId);
         var manifest = await provider.GetManifestAsync();
 
         if (manifest?.Catalogs == null) {

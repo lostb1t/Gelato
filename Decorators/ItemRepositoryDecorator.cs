@@ -12,33 +12,28 @@ using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
-public sealed class GelatoItemRepository : IItemRepository {
-    private readonly IItemRepository _inner;
-    private readonly IHttpContextAccessor _http;
+public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
+    : IItemRepository {
+    private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
 
-    public GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http) {
-        _inner = inner;
-        _http = http ?? throw new ArgumentNullException(nameof(http));
-    }
-
-    public void DeleteItem(params IReadOnlyList<Guid> ids) => _inner.DeleteItem(ids);
+    public void DeleteItem(params IReadOnlyList<Guid> ids) => inner.DeleteItem(ids);
 
     public void SaveItems(IReadOnlyList<BaseItem> items, CancellationToken cancellationToken) =>
-        _inner.SaveItems(items, cancellationToken);
+        inner.SaveItems(items, cancellationToken);
 
-    public void SaveImages(BaseItem item) => _inner.SaveImages(item);
+    public void SaveImages(BaseItem item) => inner.SaveImages(item);
 
-    public BaseItem RetrieveItem(Guid id) => _inner.RetrieveItem(id);
+    public BaseItem RetrieveItem(Guid id) => inner.RetrieveItem(id);
 
     public QueryResult<BaseItem> GetItems(InternalItemsQuery filter) {
-        return _inner.GetItems(ApplyFilters(filter));
+        return inner.GetItems(ApplyFilters(filter));
     }
 
     public IReadOnlyList<Guid> GetItemIdsList(InternalItemsQuery filter) =>
-        _inner.GetItemIdsList(ApplyFilters(filter));
+        inner.GetItemIdsList(ApplyFilters(filter));
 
     public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter) {
-        return _inner.GetItemList(ApplyFilters(filter));
+        return inner.GetItemList(ApplyFilters(filter));
     }
 
     private InternalItemsQuery ApplyFilters(InternalItemsQuery filter) {
@@ -80,60 +75,60 @@ public sealed class GelatoItemRepository : IItemRepository {
     public IReadOnlyList<BaseItem> GetLatestItemList(
         InternalItemsQuery filter,
         CollectionType collectionType
-    ) => _inner.GetLatestItemList(filter, collectionType);
+    ) => inner.GetLatestItemList(filter, collectionType);
 
     public IReadOnlyList<string> GetNextUpSeriesKeys(
         InternalItemsQuery filter,
         DateTime dateCutoff
-    ) => _inner.GetNextUpSeriesKeys(filter, dateCutoff);
+    ) => inner.GetNextUpSeriesKeys(filter, dateCutoff);
 
-    public void UpdateInheritedValues() => _inner.UpdateInheritedValues();
+    public void UpdateInheritedValues() => inner.UpdateInheritedValues();
 
-    public int GetCount(InternalItemsQuery filter) => _inner.GetCount(filter);
+    public int GetCount(InternalItemsQuery filter) => inner.GetCount(filter);
 
-    public ItemCounts GetItemCounts(InternalItemsQuery filter) => _inner.GetItemCounts(filter);
+    public ItemCounts GetItemCounts(InternalItemsQuery filter) => inner.GetItemCounts(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetGenres(
         InternalItemsQuery filter
-    ) => _inner.GetGenres(filter);
+    ) => inner.GetGenres(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetMusicGenres(
         InternalItemsQuery filter
-    ) => _inner.GetMusicGenres(filter);
+    ) => inner.GetMusicGenres(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetStudios(
         InternalItemsQuery filter
-    ) => _inner.GetStudios(filter);
+    ) => inner.GetStudios(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetArtists(
         InternalItemsQuery filter
-    ) => _inner.GetArtists(filter);
+    ) => inner.GetArtists(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetAlbumArtists(
         InternalItemsQuery filter
-    ) => _inner.GetAlbumArtists(filter);
+    ) => inner.GetAlbumArtists(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetAllArtists(
         InternalItemsQuery filter
-    ) => _inner.GetAllArtists(filter);
+    ) => inner.GetAllArtists(filter);
 
-    public IReadOnlyList<string> GetMusicGenreNames() => _inner.GetMusicGenreNames();
+    public IReadOnlyList<string> GetMusicGenreNames() => inner.GetMusicGenreNames();
 
-    public IReadOnlyList<string> GetStudioNames() => _inner.GetStudioNames();
+    public IReadOnlyList<string> GetStudioNames() => inner.GetStudioNames();
 
-    public IReadOnlyList<string> GetGenreNames() => _inner.GetGenreNames();
+    public IReadOnlyList<string> GetGenreNames() => inner.GetGenreNames();
 
-    public IReadOnlyList<string> GetAllArtistNames() => _inner.GetAllArtistNames();
+    public IReadOnlyList<string> GetAllArtistNames() => inner.GetAllArtistNames();
 
-    public Task<bool> ItemExistsAsync(Guid id) => _inner.ItemExistsAsync(id);
+    public Task<bool> ItemExistsAsync(Guid id) => inner.ItemExistsAsync(id);
 
     public bool GetIsPlayed(User user, Guid id, bool recursive) =>
-        _inner.GetIsPlayed(user, id, recursive);
+        inner.GetIsPlayed(user, id, recursive);
 
     public IReadOnlyDictionary<string, MusicArtist[]> FindArtists(
         IReadOnlyList<string> artistNames
-    ) => _inner.FindArtists(artistNames);
+    ) => inner.FindArtists(artistNames);
 
     public Task ReattachUserDataAsync(BaseItem item, CancellationToken cancellationToken) =>
-        _inner.ReattachUserDataAsync(item, cancellationToken);
+        inner.ReattachUserDataAsync(item, cancellationToken);
 }

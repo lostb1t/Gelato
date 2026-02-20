@@ -8,52 +8,40 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators;
 
-public sealed class CollectionManagerDecorator : ICollectionManager {
-    private readonly ICollectionManager _inner;
-    private readonly Lazy<GelatoManager> _manager;
-    private readonly ILibraryManager _libraryManager;
-    private readonly ILogger<CollectionManagerDecorator> _log;
-
-    public CollectionManagerDecorator(
-        ICollectionManager inner,
-        Lazy<GelatoManager> manager,
-        ILibraryManager libraryManager,
-        ILogger<CollectionManagerDecorator> log
-    ) {
-        _inner = inner;
-        _manager = manager;
-        _libraryManager = libraryManager;
-        _log = log;
-    }
-
+public sealed class CollectionManagerDecorator(
+    ICollectionManager inner,
+    Lazy<GelatoManager> manager,
+    ILibraryManager libraryManager,
+    ILogger<CollectionManagerDecorator> log)
+    : ICollectionManager {
     public event EventHandler<CollectionCreatedEventArgs>? CollectionCreated {
-        add => _inner.CollectionCreated += value;
-        remove => _inner.CollectionCreated -= value;
+        add => inner.CollectionCreated += value;
+        remove => inner.CollectionCreated -= value;
     }
 
     public event EventHandler<CollectionModifiedEventArgs>? ItemsAddedToCollection {
-        add => _inner.ItemsAddedToCollection += value;
-        remove => _inner.ItemsAddedToCollection -= value;
+        add => inner.ItemsAddedToCollection += value;
+        remove => inner.ItemsAddedToCollection -= value;
     }
 
     public event EventHandler<CollectionModifiedEventArgs>? ItemsRemovedFromCollection {
-        add => _inner.ItemsRemovedFromCollection += value;
-        remove => _inner.ItemsRemovedFromCollection -= value;
+        add => inner.ItemsRemovedFromCollection += value;
+        remove => inner.ItemsRemovedFromCollection -= value;
     }
 
     public Task<BoxSet> CreateCollectionAsync(CollectionCreationOptions options) =>
-        _inner.CreateCollectionAsync(options);
+        inner.CreateCollectionAsync(options);
 
     public async Task AddToCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) {
         var guids = itemIds as Guid[] ?? itemIds.ToArray();
-        await _inner.AddToCollectionAsync(collectionId, guids).ConfigureAwait(false);
+        await inner.AddToCollectionAsync(collectionId, guids).ConfigureAwait(false);
 
-        if (_libraryManager.GetItemById(collectionId) is not BoxSet collection)
+        if (libraryManager.GetItemById(collectionId) is not BoxSet collection)
             return;
 
         var gelatoItems = guids
-            .Select(id => _libraryManager.GetItemById(id))
-            .Where(item => item is not null && _manager.Value.IsGelato(item))
+            .Select(libraryManager.GetItemById)
+            .Where(item => item is not null && manager.Value.IsGelato(item))
             .ToList();
 
         if (gelatoItems.Count == 0)
@@ -73,7 +61,7 @@ public sealed class CollectionManagerDecorator : ICollectionManager {
                 );
 
                 if (matchingItem != null) {
-                    _log.LogDebug(
+                    log.LogDebug(
                         "Fixing Gelato LinkedChild with path {Path} for item {Id}",
                         linkedChild.Path,
                         matchingItem.Id
@@ -89,7 +77,7 @@ public sealed class CollectionManagerDecorator : ICollectionManager {
         }
 
         if (needsFix) {
-            _log.LogDebug(
+            log.LogDebug(
                 "Fixing {Count} Gelato items in collection {Name}",
                 gelatoItems.Count,
                 collection.Name
@@ -101,11 +89,11 @@ public sealed class CollectionManagerDecorator : ICollectionManager {
     }
 
     public Task RemoveFromCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) =>
-        _inner.RemoveFromCollectionAsync(collectionId, itemIds);
+        inner.RemoveFromCollectionAsync(collectionId, itemIds);
 
     public IEnumerable<BaseItem> CollapseItemsWithinBoxSets(IEnumerable<BaseItem> items, User user) =>
-        _inner.CollapseItemsWithinBoxSets(items, user);
+        inner.CollapseItemsWithinBoxSets(items, user);
 
     public Task<Folder?> GetCollectionsFolder(bool createIfNeeded) =>
-        _inner.GetCollectionsFolder(createIfNeeded);
+        inner.GetCollectionsFolder(createIfNeeded);
 }

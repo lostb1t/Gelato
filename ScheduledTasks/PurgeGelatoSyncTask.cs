@@ -6,21 +6,11 @@ using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.ScheduledTasks {
-    public sealed class PurgeGelatoSyncTask : IScheduledTask {
-        private readonly ILogger<PurgeGelatoSyncTask> _log;
-        private readonly GelatoManager _manager;
-        private readonly ILibraryManager _library;
-
-        public PurgeGelatoSyncTask(
-            ILibraryManager libraryManager,
-            ILogger<PurgeGelatoSyncTask> log,
-            GelatoManager manager
-        ) {
-            _log = log;
-            _library = libraryManager;
-            _manager = manager;
-        }
-
+    public sealed class PurgeGelatoSyncTask(
+        ILibraryManager libraryManager,
+        ILogger<PurgeGelatoSyncTask> log,
+        GelatoManager manager)
+        : IScheduledTask {
         public string Name => "WARNING: purge all gelato items";
         public string Key => "PurgeGelatoSyncTask";
         public string Description => "Removes all stremio items (local items are kept)";
@@ -31,7 +21,7 @@ namespace Gelato.ScheduledTasks {
         public Task ExecuteAsync(IProgress<double> progress, CancellationToken ct) {
             var stats = new ConcurrentDictionary<BaseItemKind, int>();
 
-            var items = _library
+            var items = libraryManager
                 .GetItemList(new InternalItemsQuery {
                     IncludeItemTypes =
                     [
@@ -50,7 +40,7 @@ namespace Gelato.ScheduledTasks {
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
                 })
-                .Where(i => _manager.IsGelato(i))
+                .Where(manager.IsGelato)
                 .ToList();
 
             var totalItems = items.Count;
@@ -59,13 +49,13 @@ namespace Gelato.ScheduledTasks {
             foreach (var item in items) {
                 var kind = item.GetBaseItemKind();
                 try {
-                    _library.DeleteItem(
+                    libraryManager.DeleteItem(
                         item,
                         new DeleteOptions { DeleteFileLocation = true },
                         true);
                 }
                 catch (Exception ex) {
-                    _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
+                    log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
                 }
 
                 stats.AddOrUpdate(kind, 1, (_, count) => count + 1);
@@ -75,13 +65,13 @@ namespace Gelato.ScheduledTasks {
                 progress?.Report(currentProgress);
             }
 
-            _manager.ClearCache();
+            manager.ClearCache();
             progress?.Report(100.0);
 
             var parts = stats.Select(kv => $"{kv.Key}={kv.Value}");
             var line = string.Join(", ", parts);
 
-            _log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
+            log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
             return Task.CompletedTask;
         }
     }

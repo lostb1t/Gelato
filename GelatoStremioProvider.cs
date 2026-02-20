@@ -6,29 +6,19 @@ using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato {
-    public class GelatoStremioProvider {
-        private readonly IHttpClientFactory _http;
-        private readonly ILogger<GelatoStremioProvider> _log;
+    public class GelatoStremioProvider(
+        string baseUrl,
+        IHttpClientFactory http,
+        ILogger<GelatoStremioProvider> log) {
         private StremioManifest? _manifest;
         private StremioCatalog? _movieSearchCatalog;
         private StremioCatalog? _seriesSearchCatalog;
         private static readonly JsonSerializerOptions JsonOpts = new() {
             PropertyNameCaseInsensitive = true,
         };
-        private readonly string _baseUrl;
-
-        public GelatoStremioProvider(
-            string baseUrl,
-            IHttpClientFactory http,
-            ILogger<GelatoStremioProvider> log
-        ) {
-            _http = http;
-            _log = log;
-            _baseUrl = baseUrl;
-        }
 
         private HttpClient NewClient() {
-            var c = _http.CreateClient(nameof(GelatoStremioProvider));
+            var c = http.CreateClient(nameof(GelatoStremioProvider));
             c.Timeout = TimeSpan.FromSeconds(30);
             return c;
         }
@@ -38,20 +28,20 @@ namespace Gelato {
             var path = string.Join("/", parts);
             var extrasPart =
                 extras != null && extras.Any() ? "/" + string.Join("&", extras) : string.Empty;
-            var url = $"{_baseUrl}/{path}{extrasPart}.json";
+            var url = $"{baseUrl}/{path}{extrasPart}.json";
             url = url.Replace("%3A", ":").Replace("%3a", ":");
             return url;
         }
 
         private async Task<T?> GetJsonAsync<T>(string url) {
-            _log.LogDebug("GetJsonAsync: requesting {Url}", url);
+            log.LogDebug("GetJsonAsync: requesting {Url}", url);
 
             try {
                 var c = NewClient();
                 var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
 
                 if (!resp.IsSuccessStatusCode) {
-                    _log.LogWarning(
+                    log.LogWarning(
                         "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
                         url,
                         resp.StatusCode,
@@ -69,7 +59,7 @@ namespace Gelato {
                 return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
             }
             catch (Exception ex) {
-                _log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
+                log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
                 throw;
             }
         }
@@ -79,7 +69,7 @@ namespace Gelato {
                 return _manifest;
             try
             {
-                var url = $"{_baseUrl}/manifest.json";
+                var url = $"{baseUrl}/manifest.json";
                 var m = await GetJsonAsync<StremioManifest>(url);
                 _manifest = m;
 
@@ -113,20 +103,20 @@ namespace Gelato {
                 }
 
                 if (_movieSearchCatalog == null) {
-                    _log.LogWarning("manifest has no search-capable movie catalog");
+                    log.LogWarning("manifest has no search-capable movie catalog");
                 }
                 else {
-                    _log.LogInformation(
+                    log.LogInformation(
                         "manifest uses movie search catalog: {Id}",
                         _movieSearchCatalog.Id
                     );
                 }
 
                 if (_seriesSearchCatalog == null) {
-                    _log.LogWarning("manifest has no search-capable series catalog");
+                    log.LogWarning("manifest has no search-capable series catalog");
                 }
                 else {
-                    _log.LogInformation(
+                    log.LogInformation(
                         "manifest uses series search catalog: {Id}",
                         _seriesSearchCatalog.Id
                     );
@@ -134,7 +124,7 @@ namespace Gelato {
                 return m;
             }
             catch (Exception ex) {
-                _log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
+                log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
                 return null;
             }
         }
@@ -153,10 +143,10 @@ namespace Gelato {
         public async Task<StremioMeta?> GetMetaAsync(BaseItem item) {
             var id = item.GetProviderId("Imdb");
             if (id is null) {
-                _log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
+                log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
                 id = item.GetProviderId("Tmdb");
                 if (id is null) {
-                    _log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
+                    log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
                     return null;
                 }
                 id = $"tmdb:{id}";
@@ -236,7 +226,7 @@ namespace Gelato {
             };
 
             if (catalog == null) {
-                _log.LogError(
+                log.LogError(
                     "SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.",
                     mediaType
                 );

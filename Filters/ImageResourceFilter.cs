@@ -7,21 +7,11 @@ namespace Gelato.Filters;
 /// <summary>
 ///  Replaces image requests from stremio sources
 /// </summary>
-public sealed class ImageResourceFilter : IAsyncResourceFilter {
-    private readonly IHttpClientFactory _http;
-    private readonly ILogger<ImageResourceFilter> _log;
-    private readonly GelatoManager _manager;
-
-    public ImageResourceFilter(
-        IHttpClientFactory http,
-        GelatoManager manager,
-        ILogger<ImageResourceFilter> log
-    ) {
-        _http = http;
-        _log = log;
-        _manager = manager;
-    }
-
+public sealed class ImageResourceFilter(
+    IHttpClientFactory http,
+    GelatoManager manager,
+    ILogger<ImageResourceFilter> log)
+    : IAsyncResourceFilter {
     public async Task OnResourceExecutionAsync(
         ResourceExecutingContext ctx,
         ResourceExecutionDelegate next
@@ -42,7 +32,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter {
             return;
         }
 
-        var stremioMeta = _manager.GetStremioMeta(guid);
+        var stremioMeta = manager.GetStremioMeta(guid);
         if (stremioMeta?.Poster is null) {
             await next();
             return;
@@ -51,7 +41,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter {
         var url = stremioMeta.Poster;
 
         try {
-            var client = _http.CreateClient();
+            var client = http.CreateClient();
             using var res = await client.GetAsync(
                 url,
                 HttpCompletionOption.ResponseHeadersRead,
@@ -75,7 +65,7 @@ public sealed class ImageResourceFilter : IAsyncResourceFilter {
             );
         }
         catch (Exception ex) {
-            _log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);
+            log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);
             await next();
         }
     }

@@ -98,32 +98,23 @@ namespace Gelato.Config {
         }
     }
 
-    public class GelatoStremioProviderFactory {
-        private readonly IHttpClientFactory _http;
-        private readonly ILoggerFactory _log;
-
-        public GelatoStremioProviderFactory(
-            IHttpClientFactory http,
-            ILoggerFactory log
-        ) {
-            _http = http;
-            _log = log;
-        }
-
+    public class GelatoStremioProviderFactory(
+        IHttpClientFactory http,
+        ILoggerFactory log) {
         public GelatoStremioProvider Create(Guid userId) {
             var cfg = GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId);
             return new GelatoStremioProvider(
                 cfg.GetBaseUrl(),
-                _http,
-                _log.CreateLogger<GelatoStremioProvider>()
+                http,
+                log.CreateLogger<GelatoStremioProvider>()
             );
         }
 
         public GelatoStremioProvider Create(PluginConfiguration cfg) {
             return new GelatoStremioProvider(
                 cfg.GetBaseUrl(),
-                _http,
-                _log.CreateLogger<GelatoStremioProvider>()
+                http,
+                log.CreateLogger<GelatoStremioProvider>()
             );
         }
     }

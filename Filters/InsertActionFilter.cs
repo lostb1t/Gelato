@@ -6,22 +6,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
 
-public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
-    private readonly ILogger<InsertActionFilter> _log;
-    private readonly GelatoManager _manager;
+public class InsertActionFilter(
+    GelatoManager manager,
+    IUserManager userManager,
+    ILogger<InsertActionFilter> log)
+    : IAsyncActionFilter, IOrderedFilter {
     private readonly KeyLock _lock = new();
-    private readonly IUserManager _userManager;
     public int Order => 1;
-
-    public InsertActionFilter(
-        GelatoManager manager,
-        IUserManager userManager,
-        ILogger<InsertActionFilter> log
-    ) {
-        _manager = manager;
-        _userManager = userManager;
-        _log = log;
-    }
 
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
@@ -31,8 +22,8 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
             !ctx.IsInsertableAction()
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
-            || _userManager.GetUserById(userId) is not { } user
-            || _manager.GetStremioMeta(guid) is not { } stremioMeta
+            || userManager.GetUserById(userId) is not { } user
+            || manager.GetStremioMeta(guid) is not { } stremioMeta
         ) {
             await next();
             return;
@@ -41,18 +32,18 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
         // Get root folder
         var isSeries = stremioMeta.Type == StremioMediaType.Series;
         var root = isSeries
-            ? _manager.TryGetSeriesFolder(userId)
-            : _manager.TryGetMovieFolder(userId);
+            ? manager.TryGetSeriesFolder(userId)
+            : manager.TryGetMovieFolder(userId);
         if (root is null) {
-            _log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
+            log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
             await next();
             return;
         }
 
-        var item = _manager.IntoBaseItem(stremioMeta);
-        var existing = _manager.FindExistingItem(item, user);
+        var item = manager.IntoBaseItem(stremioMeta);
+        var existing = manager.FindExistingItem(item, user);
         if (existing is not null) {
-            _log.LogInformation(
+            log.LogInformation(
                 "Media already exists; redirecting to canonical id {Id}",
                 existing.Id
             );
@@ -68,7 +59,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
             stremioMeta.Type
         );
         if (meta is null) {
-            _log.LogError(
+            log.LogError(
                 "aio meta not found for {Id} {Type}, maybe try aiometadata as meta addon.",
                 stremioMeta.Id,
                 stremioMeta.Type
@@ -81,7 +72,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
         var baseItem = await InsertMetaAsync(guid, root, meta, user);
         if (baseItem is not null) {
             ctx.ReplaceGuid(baseItem.Id);
-            _manager.RemoveStremioMeta(guid);
+            manager.RemoveStremioMeta(guid);
         }
 
         await next();
@@ -100,7 +91,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
             guid,
             async ct => {
                 meta.Guid = guid;
-                (baseItem, created) = await _manager.InsertMeta(
+                (baseItem, created) = await manager.InsertMeta(
                     root,
                     meta,
                     user,
@@ -113,7 +104,7 @@ public class InsertActionFilter : IAsyncActionFilter, IOrderedFilter {
         );
 
         if (baseItem is not null && created)
-            _log.LogInformation("inserted new media: {Name}", baseItem.Name);
+            log.LogInformation("inserted new media: {Name}", baseItem.Name);
 
         return baseItem;
     }

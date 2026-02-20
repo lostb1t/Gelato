@@ -8,21 +8,11 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters {
-    public class SearchActionFilter : IAsyncActionFilter, IOrderedFilter {
-        private readonly IDtoService _dtoService;
-        private readonly ILogger<SearchActionFilter> _log;
-        private readonly GelatoManager _manager;
-
-        public SearchActionFilter(
-            IDtoService dtoService,
-            GelatoManager manager,
-            ILogger<SearchActionFilter> log
-        ) {
-            _manager = manager;
-            _dtoService = dtoService;
-            _log = log;
-        }
-
+    public class SearchActionFilter(
+        IDtoService dtoService,
+        GelatoManager manager,
+        ILogger<SearchActionFilter> log)
+        : IAsyncActionFilter, IOrderedFilter {
         public int Order => 1;
 
         public async Task OnActionExecutionAsync(
@@ -60,7 +50,7 @@ namespace Gelato.Filters {
 
             var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg);
 
-            _log.LogInformation(
+            log.LogInformation(
                 "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
                 searchTerm,
                 string.Join(",", requestedTypes),
@@ -121,7 +111,7 @@ namespace Gelato.Filters {
                 tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
             }
             else if (requestedTypes.Contains(BaseItemKind.Movie)) {
-                _log.LogWarning(
+                log.LogWarning(
                     "No movie folder found, please add your gelato path to a library and rescan. skipping search"
                 );
             }
@@ -130,7 +120,7 @@ namespace Gelato.Filters {
                 tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Series));
             }
             else if (requestedTypes.Contains(BaseItemKind.Series)) {
-                _log.LogWarning(
+                log.LogWarning(
                     "No series folder found, please add your gelato path to a library and rescan. skipping search"
                 );
             }
@@ -160,16 +150,16 @@ namespace Gelato.Filters {
             var dtos = new List<BaseItemDto>(metas.Count);
 
             foreach (var meta in metas) {
-                var baseItem = _manager.IntoBaseItem(meta);
+                var baseItem = manager.IntoBaseItem(meta);
                 if (baseItem is null)
                     continue;
 
-                var dto = _dtoService.GetBaseItemDto(baseItem, options);
+                var dto = dtoService.GetBaseItemDto(baseItem, options);
                 var stremioUri = StremioUri.FromBaseItem(baseItem);
                 dto.Id = stremioUri.ToGuid();
                 dtos.Add(dto);
 
-                _manager.SaveStremioMeta(dto.Id, meta);
+                manager.SaveStremioMeta(dto.Id, meta);
             }
 
             return dtos;

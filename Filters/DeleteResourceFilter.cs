@@ -6,26 +6,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
 
-public sealed class DeleteResourceFilter : IAsyncActionFilter
-{
-    private readonly ILibraryManager _library;
-    private readonly ILogger<DeleteResourceFilter> _log;
-    private readonly GelatoManager _manager;
-    private readonly IUserManager _userManager;
-
-    public DeleteResourceFilter(
-        ILibraryManager library,
-        GelatoManager manager,
-        IUserManager userManager,
-        ILogger<DeleteResourceFilter> log
-    )
-    {
-        _library = library;
-        _log = log;
-        _manager = manager;
-        _userManager = userManager;
-    }
-
+public sealed class DeleteResourceFilter(
+    ILibraryManager library,
+    GelatoManager manager,
+    IUserManager userManager,
+    ILogger<DeleteResourceFilter> log)
+    : IAsyncActionFilter {
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
@@ -36,17 +22,17 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             ctx.GetActionName() != "DeleteItem"
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
-            || _userManager.GetUserById(userId) is not { } user
+            || userManager.GetUserById(userId) is not { } user
         )
         {
             await next();
             return;
         }
 
-        var item = _library.GetItemById<BaseItem>(guid, user);
+        var item = library.GetItemById<BaseItem>(guid, user);
 
         // Only handle Gelato items that user can delete
-        if (item is null || !_manager.IsGelato(item) || !_manager.CanDelete(item, user))
+        if (item is null || !manager.IsGelato(item) || !manager.CanDelete(item, user))
         {
             await next();
             return;
@@ -59,14 +45,14 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
 
     private void DeleteItem(BaseItem item)
     {
-        if (item is Video video && _manager.IsPrimaryVersion(video))
+        if (item is Video video && manager.IsPrimaryVersion(video))
         {
             DeleteStreams(video);
         }
         else
         {
-            _log.LogInformation("Deleting {Name}", item.Name);
-            _library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
+            log.LogInformation("Deleting {Name}", item.Name);
+            library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
         }
     }
 
@@ -84,11 +70,11 @@ public sealed class DeleteResourceFilter : IAsyncActionFilter
             IsDeadPerson = true,
         };
 
-        var sources = _library.GetItemList(query).OfType<Video>();
+        var sources = library.GetItemList(query).OfType<Video>();
         foreach (var alt in sources)
         {
-            _log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
-            _library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = true }, true);
+            log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
+            library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = true }, true);
         }
     }
 }

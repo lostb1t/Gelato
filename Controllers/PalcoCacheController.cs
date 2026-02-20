@@ -17,18 +17,11 @@ namespace Gelato.Controllers;
 [ApiController]
 [Route("Palco")]
 [Authorize]
-public class PalcoCacheController : ControllerBase
-{
-    private readonly ILogger<PalcoCacheController> _logger;
+public class PalcoCacheController(ILogger<PalcoCacheController> logger) : ControllerBase {
     private const string RegistrationNs = "anfiteatro-registration";
 
     // Access the service via GelatoPlugin instance or injection
     private PalcoCacheService? Cache => GelatoPlugin.Instance?.PalcoCache;
-
-    public PalcoCacheController(ILogger<PalcoCacheController> logger)
-    {
-        _logger = logger;
-    }
 
     // ========== PUBLIC ENDPOINTS (No Auth) ==========
 
@@ -58,20 +51,20 @@ public class PalcoCacheController : ControllerBase
 
         // Store request
         Cache.Set(request.Id, request.Data, request.TtlSeconds, RegistrationNs);
-        _logger.LogInformation("[Gelato] Palco Registration request received: {Id}", request.Id);
+        logger.LogInformation("[Gelato] Palco Registration request received: {Id}", request.Id);
 
         // Update request index for listing
         var indexJson = Cache.Get("requests-index", RegistrationNs);
         var index = string.IsNullOrEmpty(indexJson)
-            ? new List<string>()
-            : JsonSerializer.Deserialize<List<string>>(indexJson) ?? new List<string>();
+            ? []
+            : JsonSerializer.Deserialize<List<string>>(indexJson) ?? [];
 
         var requestId = request.Id.Replace("request-", "");
         if (!index.Contains(requestId))
         {
             index.Add(requestId);
             Cache.Set("requests-index", JsonSerializer.Serialize(index), 0, RegistrationNs);
-            _logger.LogInformation("[Gelato] Palco Request added to index: {Id}", requestId);
+            logger.LogInformation("[Gelato] Palco Request added to index: {Id}", requestId);
         }
 
         // Notify admin via email if SMTP is configured
@@ -93,11 +86,9 @@ public class PalcoCacheController : ControllerBase
 
                     if (!string.IsNullOrEmpty(adminEmail))
                     {
-                        using var client = new SmtpClient(smtp.Host, smtp.Port)
-                        {
-                            EnableSsl = true,
-                            Credentials = new NetworkCredential(smtp.Username, smtp.Password)
-                        };
+                        using var client = new SmtpClient(smtp.Host, smtp.Port);
+                        client.EnableSsl = true;
+                        client.Credentials = new NetworkCredential(smtp.Username, smtp.Password);
 
                         var body = $"A new user has requested access to your server.\n\nUsername: {userName}\nEmail: {userEmail}";
 
@@ -117,14 +108,14 @@ public class PalcoCacheController : ControllerBase
                         mail.To.Add(adminEmail);
 
                         await client.SendMailAsync(mail);
-                        _logger.LogInformation("[Gelato] Palco Admin notification sent to {AdminEmail} for registration: {Id}", adminEmail, requestId);
+                        logger.LogInformation("[Gelato] Palco Admin notification sent to {AdminEmail} for registration: {Id}", adminEmail, requestId);
                     }
                 }
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "[Gelato] Palco Failed to send admin notification email");
+            logger.LogWarning(ex, "[Gelato] Palco Failed to send admin notification email");
         }
 
         return Ok(new { success = true, requestId });
@@ -153,7 +144,7 @@ public class PalcoCacheController : ControllerBase
     {
         if (Cache == null) return StatusCode(503);
         Cache.Set(key, request.Value, request.TtlSeconds, ns);
-        _logger.LogInformation("[Gelato] Palco Saved: {Key} in {Ns}", key, ns);
+        logger.LogInformation("[Gelato] Palco Saved: {Key} in {Ns}", key, ns);
         return Ok(new { success = true });
     }
 
@@ -173,16 +164,16 @@ public class PalcoCacheController : ControllerBase
             var indexJson = Cache.Get("requests-index", RegistrationNs);
             if (!string.IsNullOrEmpty(indexJson))
             {
-                var index = JsonSerializer.Deserialize<List<string>>(indexJson) ?? new List<string>();
+                var index = JsonSerializer.Deserialize<List<string>>(indexJson) ?? [];
                 if (index.Remove(requestId))
                 {
                     Cache.Set("requests-index", JsonSerializer.Serialize(index), 0, RegistrationNs);
-                    _logger.LogInformation("[Gelato] Palco Request removed from index: {Id}", requestId);
+                    logger.LogInformation("[Gelato] Palco Request removed from index: {Id}", requestId);
                 }
             }
         }
 
-        _logger.LogInformation("[Gelato] Palco Deleted: {Key} from {Ns}, success={Deleted}", key, ns, deleted);
+        logger.LogInformation("[Gelato] Palco Deleted: {Key} from {Ns}, success={Deleted}", key, ns, deleted);
         return Ok(new { success = true, deleted });
     }
 
@@ -217,11 +208,9 @@ public class PalcoCacheController : ControllerBase
     {
         try
         {
-            using var client = new SmtpClient(request.SmtpHost, request.SmtpPort)
-            {
-                EnableSsl = true,
-                Credentials = new NetworkCredential(request.SmtpUsername, request.SmtpPassword)
-            };
+            using var client = new SmtpClient(request.SmtpHost, request.SmtpPort);
+            client.EnableSsl = true;
+            client.Credentials = new NetworkCredential(request.SmtpUsername, request.SmtpPassword);
 
             var mail = new MailMessage
             {
@@ -233,12 +222,12 @@ public class PalcoCacheController : ControllerBase
             mail.To.Add(request.To);
 
             await client.SendMailAsync(mail);
-            _logger.LogInformation("[Gelato] Palco Email sent to {To}", request.To);
+            logger.LogInformation("[Gelato] Palco Email sent to {To}", request.To);
             return Ok(new { success = true });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "[Gelato] Palco Email failed to {To}", request.To);
+            logger.LogError(ex, "[Gelato] Palco Email failed to {To}", request.To);
             return Ok(new { success = false, error = ex.Message });
         }
     }

@@ -18,40 +18,26 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators {
-    public sealed class MediaSourceManagerDecorator : IMediaSourceManager {
-        private readonly IMediaSourceManager _inner;
-        private readonly ILogger<MediaSourceManagerDecorator> _log;
-        private readonly IHttpContextAccessor _http;
-        private readonly ILibraryManager _libraryManager;
-        private readonly GelatoItemRepository _repo;
-        private readonly Lazy<GelatoManager> _manager;
-        private readonly IDirectoryService _directoryService;
+    public sealed class MediaSourceManagerDecorator(
+        IMediaSourceManager inner,
+        ILibraryManager libraryManager,
+        ILogger<MediaSourceManagerDecorator> log,
+        IHttpContextAccessor http,
+        GelatoItemRepository repo,
+        IDirectoryService directoryService,
+        Lazy<GelatoManager> manager)
+        : IMediaSourceManager {
+        private readonly IMediaSourceManager _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        private readonly ILogger<MediaSourceManagerDecorator> _log = log ?? throw new ArgumentNullException(nameof(log));
+        private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
         private readonly KeyLock _lock = new();
-
-        public MediaSourceManagerDecorator(
-            IMediaSourceManager inner,
-            ILibraryManager libraryManager,
-            ILogger<MediaSourceManagerDecorator> log,
-            IHttpContextAccessor http,
-            GelatoItemRepository repo,
-            IDirectoryService directoryService,
-            Lazy<GelatoManager> manager
-        ) {
-            _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-            _log = log ?? throw new ArgumentNullException(nameof(log));
-            _http = http ?? throw new ArgumentNullException(nameof(http));
-            _manager = manager;
-            _libraryManager = libraryManager;
-            _directoryService = directoryService;
-            _repo = repo;
-        }
 
         public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
             BaseItem item,
             bool enablePathSubstitution,
             User? user = null
         ) {
-            var manager = _manager.Value;
+            var manager1 = manager.Value;
             _log.LogDebug(
                 "GetStaticMediaSources {Id}",
                 item.Id
@@ -67,7 +53,7 @@ namespace Gelato.Decorators {
 
             var cfg = GelatoPlugin.Instance!.GetConfig(userId);
             if (
-                (!cfg.EnableMixed && !manager.IsGelato(item))
+                (!cfg.EnableMixed && !manager1.IsGelato(item))
                 || (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
             ) {
                 return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -94,7 +80,7 @@ namespace Gelato.Decorators {
                     uri?.ToString()
                 );
             }
-            else if (uri is not null && !manager.HasStreamSync(cacheKey)) {
+            else if (uri is not null && !manager1.HasStreamSync(cacheKey)) {
                 // Bug in web UI that calls the detail page twice. So that's why there's a lock.
                 _lock
                     .RunSingleFlightAsync(
@@ -105,9 +91,9 @@ namespace Gelato.Decorators {
                                 item.Id
                             );
                             try {
-                                var count = await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                                var count = await manager1.SyncStreams(item, userId, ct).ConfigureAwait(false);
                                 if (count > 0) {
-                                    manager.SetStreamSync(cacheKey);
+                                    manager1.SetStreamSync(cacheKey);
                                 }
                             }
                             catch (Exception ex) {
@@ -119,7 +105,7 @@ namespace Gelato.Decorators {
                     .GetResult();
 
                 // refresh item
-                _libraryManager.GetItemById(item.Id);
+                libraryManager.GetItemById(item.Id);
             }
 
             var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user)
@@ -156,11 +142,11 @@ namespace Gelato.Decorators {
                 };
             }
 
-            var gelatoSources = _repo
+            var gelatoSources = repo
                 .GetItemList(query)
                 .OfType<Video>()
                 .Where(x =>
-                    manager.IsGelato(x) &&
+                    manager1.IsGelato(x) &&
                     (
                         userId == Guid.Empty ||
                         (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
@@ -226,9 +212,9 @@ namespace Gelato.Decorators {
             BaseItem item,
             MediaSourceInfo source
         ) {
-            var manager = _manager.Value;
+            var manager1 = manager.Value;
 
-            var subtitles = manager.GetStremioSubtitlesCache(item.Id);
+            var subtitles = manager1.GetStremioSubtitlesCache(item.Id);
             if (subtitles is null) {
                 var uri = StremioUri.FromBaseItem(item);
                 if (uri is null) {
@@ -243,7 +229,7 @@ namespace Gelato.Decorators {
                 subtitles = await cfg
                     .Stremio.GetSubtitlesAsync(uri, filename)
                     .ConfigureAwait(false);
-                manager.SetStremioSubtitlesCache(item.Id, subtitles);
+                manager1.SetStremioSubtitlesCache(item.Id, subtitles);
             }
 
             var streams = new List<MediaStream>();
@@ -326,7 +312,7 @@ namespace Gelato.Decorators {
                     .ConfigureAwait(false);
             }
 
-            var manager = _manager.Value;
+            var manager1 = manager.Value;
             var ctx = _http.HttpContext;
 
             var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -337,7 +323,7 @@ namespace Gelato.Decorators {
                 && Guid.TryParse(idStr, out var fromCtx)
                     ? fromCtx
                     : (
-                        manager.IsPrimaryVersion(item as Video)
+                        manager1.IsPrimaryVersion(item as Video)
                         && sources.Count > 0
                         && Guid.TryParse(sources[0].Id, out var fromSource)
                             ? fromSource
@@ -355,7 +341,7 @@ namespace Gelato.Decorators {
                 return sources;
 
             var owner = ResolveOwnerFor(selected, item);
-            if (manager.IsPrimaryVersion(owner as Video) && owner.Id != item.Id) {
+            if (manager1.IsPrimaryVersion(owner as Video) && owner.Id != item.Id) {
                 sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
                 selected = SelectByIdOrFirst(sources, mediaSourceId);
                 if (selected is null)
@@ -365,7 +351,7 @@ namespace Gelato.Decorators {
             if (NeedsProbe(selected)) {
                 await owner
                     .RefreshMetadata(
-                        new MetadataRefreshOptions(_directoryService) {
+                        new MetadataRefreshOptions(directoryService) {
                             EnableRemoteContentProbe = true,
                             MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                         },
@@ -425,7 +411,7 @@ namespace Gelato.Decorators {
 
             BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
                 Guid.TryParse(s.ETag, out var g)
-                    ? _libraryManager.GetItemById(g) ?? fallback
+                    ? libraryManager.GetItemById(g) ?? fallback
                     : fallback;
         }
 

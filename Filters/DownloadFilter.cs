@@ -6,27 +6,13 @@ using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Gelato.Filters;
 
-public sealed class DownloadFilter : IAsyncActionFilter {
-    private readonly ILibraryManager _library;
-    private readonly GelatoManager _manager;
-    private readonly IUserManager _userManager;
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IMediaSourceManager _mediaSourceManager;
-
-    public DownloadFilter(
-        ILibraryManager library,
-        GelatoManager manager,
-        IUserManager userManager,
-        IMediaSourceManager mediaSourceManager,
-        IHttpClientFactory httpClientFactory
-    ) {
-        _library = library;
-        _mediaSourceManager = mediaSourceManager;
-        _manager = manager;
-        _httpClientFactory = httpClientFactory;
-        _userManager = userManager;
-    }
-
+public sealed class DownloadFilter(
+    ILibraryManager library,
+    GelatoManager manager,
+    IUserManager userManager,
+    IMediaSourceManager mediaSourceManager,
+    IHttpClientFactory httpClientFactory)
+    : IAsyncActionFilter {
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
@@ -44,24 +30,24 @@ public sealed class DownloadFilter : IAsyncActionFilter {
 
         User? user = null;
         if (Guid.TryParse(userIdStr, out var userId)) {
-            user = _userManager.GetUserById(userId);
+            user = userManager.GetUserById(userId);
         }
 
         if (user is not null) {
             var mediaSourceIdStr = ctx.HttpContext.Items["MediaSourceId"] as string;
             var hasMediaSourceId = Guid.TryParse(mediaSourceIdStr, out var mediaSourceId);
 
-            var item = _library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
+            var item = library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
 
-            if (_manager.IsStremio(item)) {
+            if (manager.IsStremio(item)) {
                 var path = item.Path;
 
                 // some clients do not send mediasource id. the use the itemid in the query
-                if (!hasMediaSourceId || !_manager.IsStream(item)) {
-                    path = _mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
+                if (!hasMediaSourceId || !manager.IsStream(item)) {
+                    path = mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
                 }
 
-                var client = _httpClientFactory.CreateClient();
+                var client = httpClientFactory.CreateClient();
 
                 var resp = await client.GetAsync(
                     path,

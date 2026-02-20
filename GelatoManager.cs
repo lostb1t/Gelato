@@ -18,54 +18,34 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato;
 
-public class GelatoManager {
+public class GelatoManager(
+    ILoggerFactory loggerFactory,
+    IProviderManager provider,
+    GelatoItemRepository repo,
+    IFileSystem fileSystem,
+    IMemoryCache memoryCache,
+    IServerConfigurationManager serverConfig,
+    ILibraryManager libraryManager,
+    IDirectoryService directoryService) {
     public const string StreamTag = "gelato-stream";
 
-    private readonly ILogger<GelatoManager> _log;
-    private readonly ILibraryManager _library;
-    private readonly GelatoItemRepository _repo;
-    private readonly IFileSystem _fileSystem;
-    private readonly IProviderManager _provider;
-    private readonly IMemoryCache _memoryCache;
-    private readonly IServerConfigurationManager _serverConfig;
-    private readonly IDirectoryService _directoryService;
-
-    public GelatoManager(
-        ILoggerFactory loggerFactory,
-        IProviderManager provider,
-        GelatoItemRepository repo,
-        IFileSystem fileSystem,
-        IMemoryCache memoryCache,
-        IServerConfigurationManager serverConfig,
-        ILibraryManager libraryManager,
-        IDirectoryService directoryService
-    ) {
-        _memoryCache = memoryCache;
-        _log = loggerFactory.CreateLogger<GelatoManager>();
-        _provider = provider;
-        _serverConfig = serverConfig;
-        _repo = repo;
-        _library = libraryManager;
-        _fileSystem = fileSystem;
-        _directoryService = directoryService;
-
-    }
+    private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
     private int GetHttpPort() {
-        var networkConfig = _serverConfig.GetNetworkConfiguration();
+        var networkConfig = serverConfig.GetNetworkConfiguration();
         return networkConfig.InternalHttpPort;
     }
 
     public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs) {
-        _memoryCache.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
+        memoryCache.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
     }
 
     public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid) {
-        return _memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
+        return memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
     }
 
     public void SetStreamSync(string guid) {
-        _memoryCache.Set(
+        memoryCache.Set(
             $"streamsync:{guid}",
             guid,
             TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
@@ -73,25 +53,25 @@ public class GelatoManager {
     }
 
     public bool HasStreamSync(string guid) {
-        return _memoryCache.TryGetValue($"streamsync:{guid}", out _);
+        return memoryCache.TryGetValue($"streamsync:{guid}", out _);
     }
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta) {
-        _memoryCache.Set($"meta:{guid}", meta, TimeSpan.FromMinutes(360));
+        memoryCache.Set($"meta:{guid}", meta, TimeSpan.FromMinutes(360));
     }
 
     public StremioMeta? GetStremioMeta(Guid guid) {
-        return _memoryCache.TryGetValue($"meta:{guid}", out var value)
+        return memoryCache.TryGetValue($"meta:{guid}", out var value)
             ? value as StremioMeta
             : null;
     }
 
     public void RemoveStremioMeta(Guid guid) {
-        _memoryCache.Remove($"meta:{guid}");
+        memoryCache.Remove($"meta:{guid}");
     }
 
     public void ClearCache() {
-        if (_memoryCache is MemoryCache cache) {
+        if (memoryCache is MemoryCache cache) {
             cache.Compact(1.0);
         }
 
@@ -135,7 +115,7 @@ public class GelatoManager {
         }
 
         SeedFolder(path);
-        return _repo
+        return repo
             .GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
@@ -158,7 +138,7 @@ public class GelatoManager {
             IsDeadPerson = true, // skip filter marker
         };
 
-        return _library
+        return libraryManager
             .GetItemList(query)
             .FirstOrDefault(x =>
             {
@@ -278,7 +258,7 @@ public class GelatoManager {
         }
 
         if (refreshItem) {
-            var options = new MetadataRefreshOptions(new DirectoryService(_fileSystem)) {
+            var options = new MetadataRefreshOptions(new DirectoryService(fileSystem)) {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = false,
@@ -287,10 +267,10 @@ public class GelatoManager {
             };
 
             if (queueRefreshItem) {
-                _provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
+                provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
             }
             else {
-                _provider.RefreshFullItem(baseItem, options, ct);
+                provider.RefreshFullItem(baseItem, options, ct);
             }
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
@@ -322,7 +302,7 @@ public class GelatoManager {
             IsDeadPerson = true,
         };
 
-        foreach (var item in _library.GetItemList(q))
+        foreach (var item in libraryManager.GetItemList(q))
         {
             yield return item;
         }
@@ -403,7 +383,7 @@ public class GelatoManager {
             //  IsVirtualItem = true,
         };
 
-        var existing = _repo
+        var existing = repo
             .GetItemList(query)
             .OfType<Video>()
             .Where(IsStream)
@@ -431,7 +411,7 @@ public class GelatoManager {
                 target =
                     isEpisode && item is Episode e
                         ? new Episode {
-                            Id = _library.GetNewItemId(path, typeof(Episode)),
+                            Id = libraryManager.GetNewItemId(path, typeof(Episode)),
                             SeriesId = e.SeriesId,
                             SeriesName = e.SeriesName,
                             SeasonId = e.SeasonId,
@@ -440,7 +420,7 @@ public class GelatoManager {
                             ParentIndexNumber = e.ParentIndexNumber,
                             PremiereDate = e.PremiereDate,
                         }
-                        : new Movie { Id = _library.GetNewItemId(path, typeof(Movie)) };
+                        : new Movie { Id = libraryManager.GetNewItemId(path, typeof(Movie)) };
             }
 
             target.Name = primary.Name;
@@ -480,7 +460,7 @@ public class GelatoManager {
         }
 
         //newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
-        _repo.SaveItems(newVideos, ct);
+        repo.SaveItems(newVideos, ct);
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
         var stale = existing.Values
             .Where(m =>
@@ -496,14 +476,14 @@ public class GelatoManager {
                 _item.SetGelatoData("userIds", users);
             }
             if (users.Count == 0) {
-                _library.DeleteItem(
+                libraryManager.DeleteItem(
               _item,
               new DeleteOptions { DeleteFileLocation = true },
               true);
             }
         }
 
-        _repo.SaveItems(stale, ct);
+        repo.SaveItems(stale, ct);
         newVideos.Add(primary);
         // MergeVersions(newVideos.ToArray());
 
@@ -535,7 +515,7 @@ public class GelatoManager {
     /// <param name="user"></param>
     /// <returns></returns>
     public virtual bool CanDelete(BaseItem item, User user) {
-        var allCollectionFolders = _library.GetUserRootFolder().Children.OfType<Folder>().ToList();
+        var allCollectionFolders = libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
 
         return item.IsAuthorizedToDelete(user, allCollectionFolders);
     }
@@ -597,7 +577,7 @@ public class GelatoManager {
             if (series.Id == Guid.Empty)
                 series.Id = Guid.NewGuid();
 
-            var options = new MetadataRefreshOptions(_directoryService) {
+            var options = new MetadataRefreshOptions(directoryService) {
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
                 ImageRefreshMode = MetadataRefreshMode.FullRefresh,
                 ReplaceAllImages = false,
@@ -611,7 +591,7 @@ public class GelatoManager {
             await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
-        var existingSeasonsDict = _library
+        var existingSeasonsDict = libraryManager
             .GetItemList(
                 new InternalItemsQuery {
                     ParentId = series.Id,
@@ -686,7 +666,7 @@ public class GelatoManager {
             }
 
             // Get existing episodes once per season and create dictionary
-            var existingEpisodeNumbers = _library
+            var existingEpisodeNumbers = libraryManager
                 .GetItemList(
                     new InternalItemsQuery {
                         ParentId = season.Id,
@@ -768,7 +748,7 @@ public class GelatoManager {
         CancellationToken cancellationToken
     ) {
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
-        var seriesItems = _library
+        var seriesItems = libraryManager
             .GetItemList(
                 new InternalItemsQuery {
                     IncludeItemTypes = [BaseItemKind.Series],
@@ -843,14 +823,14 @@ public class GelatoManager {
             item.DateLastSaved = now;
 
 
-            item.Id = _library.GetNewItemId(item.Path, item.GetType());
+            item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
             parent.AddChild(item);
 
         }
 
-        _repo.SaveItems(baseItems, CancellationToken.None);
+        repo.SaveItems(baseItems, CancellationToken.None);
         return baseItems;
     }
 
@@ -862,15 +842,15 @@ public class GelatoManager {
 
         switch (meta.Type) {
             case StremioMediaType.Series:
-                item = new Series { Id = meta.Guid ?? _library.GetNewItemId(id, typeof(Series)) };
+                item = new Series { Id = meta.Guid ?? libraryManager.GetNewItemId(id, typeof(Series)) };
                 break;
 
             case StremioMediaType.Movie:
-                item = new Movie { Id = meta.Guid ?? _library.GetNewItemId(id, typeof(Movie)) };
+                item = new Movie { Id = meta.Guid ?? libraryManager.GetNewItemId(id, typeof(Movie)) };
                 break;
 
             case StremioMediaType.Episode:
-                item = new Episode { Id = _library.GetNewItemId(id, typeof(Episode)) };
+                item = new Episode { Id = libraryManager.GetNewItemId(id, typeof(Episode)) };
                 break;
             default:
                 _log.LogWarning("unsupported type {type}", meta.Type);
