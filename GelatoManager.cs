@@ -139,12 +139,10 @@ public class GelatoManager {
         _log.LogDebug("Cache cleared");
     }
 
-    public static void SeedFolder(string path)
-    {
+    public static void SeedFolder(string path) {
         Directory.CreateDirectory(path);
         var seed = System.IO.Path.Combine(path, "stub.txt");
-        if (!File.Exists(seed))
-        {
+        if (!File.Exists(seed)) {
             File.WriteAllText(
                 seed,
                 "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
@@ -319,7 +317,7 @@ public class GelatoManager {
             await baseItem
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                 .ConfigureAwait(false);
-            
+
         }
         else {
             baseItem = await SyncSeriesTreesAsync(cfg, meta, ct).ConfigureAwait(false);
@@ -501,13 +499,13 @@ public class GelatoManager {
             }
 
             target.Name = primary.Name;
-           // target.PresentationUniqueKey = primary.PresentationUniqueKey;
+            // target.PresentationUniqueKey = primary.PresentationUniqueKey;
             target.Tags = new[] { StreamTag };
-            
+
             var locked = target.LockedFields?.ToList() ?? new List<MetadataField>();
             if (!locked.Contains(MetadataField.Tags)) locked.Add(MetadataField.Tags);
             target.LockedFields = locked.ToArray();
-            
+
             target.ProviderIds = providerIds;
             target.RunTimeTicks = primary.RunTimeTicks ?? item.RunTimeTicks;
             target.LinkedAlternateVersions = Array.Empty<LinkedChild>();
@@ -538,7 +536,7 @@ public class GelatoManager {
         }
 
         //newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
-_repo.SaveItems(newVideos, ct);
+        _repo.SaveItems(newVideos, ct);
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
         var stale = existing.Values
             .Where(m =>
@@ -677,7 +675,7 @@ _repo.SaveItems(newVideos, ct);
     }
 
     public static void CreateStrmFile(string path, string content) {
-      var directory = Path.GetDirectoryName(path);
+        var directory = Path.GetDirectoryName(path);
         //   Console.WriteLine(path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
@@ -882,8 +880,8 @@ _repo.SaveItems(newVideos, ct);
                 ReplaceAllMetadata = true,
                 ForceSave = true,
             };
-            
-series.ParentId = seriesRootFolder.Id;
+
+            series.ParentId = seriesRootFolder.Id;
             await series.RefreshMetadata(options, ct).ConfigureAwait(false);
             seriesRootFolder.AddChild(series);
             await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
@@ -949,18 +947,18 @@ series.ParentId = seriesRootFolder.Id;
                     // important
                     ParentId = series.Id
                 };
-                
-var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
-        if (!string.IsNullOrWhiteSpace(primary)) {
-            season.ImageInfos = new List<ItemImageInfo>
-            {
+
+                var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
+                if (!string.IsNullOrWhiteSpace(primary)) {
+                    season.ImageInfos = new List<ItemImageInfo>
+                    {
                 new ItemImageInfo { Type = ImageType.Primary, Path = primary },
             }.ToArray();
-        }
-        
+                }
+
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
-series.AddChild(season);
+                series.AddChild(season);
                 seasonsInserted++;
             }
 
@@ -1023,7 +1021,7 @@ series.AddChild(season);
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
 
-season.AddChild(episode);
+                season.AddChild(episode);
 
                 episodesInserted++;
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
@@ -1032,7 +1030,7 @@ season.AddChild(episode);
 
         stopwatch.Stop();
 
-        _log.LogInformation(
+        _log.LogDebug(
             "Sync completed for {SeriesName}: {SeasonsInserted} season(s) and {EpisodesInserted} episode(s) in {Dur}",
             series.Name,
             seasonsInserted,
@@ -1117,16 +1115,16 @@ season.AddChild(episode);
         return SaveItems(new[] { item }, parent).FirstOrDefault();
     }
 
-       public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
+    public IEnumerable<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent) {
         foreach (var item in items) {
 
-          
-              
 
-                var now = DateTime.UtcNow;
-                item.DateModified = now;
-                item.DateLastRefreshed = now;
-                item.DateLastSaved = now;
+
+
+            var now = DateTime.UtcNow;
+            item.DateModified = now;
+            item.DateLastRefreshed = now;
+            item.DateLastSaved = now;
 
 
             item.Id = _library.GetNewItemId(item.Path, item.GetType());
@@ -1137,13 +1135,13 @@ season.AddChild(episode);
         }
         _repo.SaveItems(items.ToList(), CancellationToken.None);
 
-     //   foreach (var item in items) {
-     //       _library.RegisterItem(item);
-     //   }
+        //   foreach (var item in items) {
+        //       _library.RegisterItem(item);
+        //   }
         ;
         return items;
-    } 
-    
+    }
+
     public IEnumerable<BaseItem> SaveItemsStrm(IEnumerable<BaseItem> items, Folder parent) {
         foreach (var item in items) {
 
@@ -1174,7 +1172,7 @@ season.AddChild(episode);
 
                 // Write the .strm file for videos (Movies/Episodes)
                 if (item is Video)
-                   CreateStrmFile(item.Path, item.ShortcutPath);
+                    CreateStrmFile(item.Path, item.ShortcutPath);
 
                 var now = DateTime.UtcNow;
                 item.DateModified = now;
@@ -1202,8 +1200,7 @@ season.AddChild(episode);
 
         var Id = meta.Id;
 
-        switch (meta.Type)
-        {
+        switch (meta.Type) {
             case StremioMediaType.Series:
                 item = new Series { Id = meta.Guid ?? _library.GetNewItemId(Id, typeof(Series)) };
                 break;
@@ -1220,7 +1217,7 @@ season.AddChild(episode);
                 return null;
         }
         ;
-    
+
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
         item.Path = $"gelato://stub/{Id}";
@@ -1263,9 +1260,9 @@ season.AddChild(episode);
         item.ProductionYear = meta.GetYear();
 
         item.Overview = meta.Description ?? meta.Overview;
-item.DateModified = DateTime.UtcNow;
-                item.DateLastSaved = DateTime.UtcNow;
-        
+        item.DateModified = DateTime.UtcNow;
+        item.DateLastSaved = DateTime.UtcNow;
+
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary)) {
             item.ImageInfos = new List<ItemImageInfo>

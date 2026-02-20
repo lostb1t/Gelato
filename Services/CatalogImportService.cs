@@ -7,12 +7,14 @@ using MediaBrowser.Model.Entities;
 using Jellyfin.Data.Enums; // Potentially needed for BaseItemKind
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
-using MediaBrowser.Controller.Entities.Movies; // For BoxSet
+using MediaBrowser.Controller.Entities.Movies;
+using System.Diagnostics;
+using Gelato.Common; // For BoxSet
 
 namespace Gelato.Services;
 
 public class CatalogImportService {
-    private readonly ILogger<CatalogImportService> _logger;
+    private readonly ILogger<CatalogImportService> _log;
     private readonly GelatoManager _manager;
     private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly CatalogService _catalogService;
@@ -27,7 +29,7 @@ public class CatalogImportService {
         ICollectionManager collectionManager,
         ILibraryManager libraryManager
     ) {
-        _logger = logger;
+        _log = logger;
         _manager = manager;
         _stremioFactory = stremioFactory;
         _catalogService = catalogService;
@@ -36,121 +38,147 @@ public class CatalogImportService {
     }
 
     public async Task ImportCatalogAsync(string catalogId, string type, Guid userId, CancellationToken ct, IProgress<double>? progress = null) {
-        var config = _catalogService.GetCatalogConfig(catalogId, type);
-        if (config == null) {
-            _logger.LogWarning("Catalog config not found for {Id} {Type}", catalogId, type);
-            return;
-        }
-
-        if (!config.Enabled) {
-             _logger.LogInformation("Catalog {Id} {Type} is disabled, skipping.", catalogId, type);
-             return;
-        }
-
-        var provider = _stremioFactory.Create(userId);
-        var isSeries = string.Equals(type, "series", StringComparison.OrdinalIgnoreCase);
-        
-        // Determine root folder
-        var rootFolder = isSeries 
-            ? _manager.TryGetSeriesFolder(userId) 
-            : _manager.TryGetMovieFolder(userId);
-
-        if (rootFolder == null) {
-            _logger.LogError("Root folder not configured for {Type}", type);
-            return;
-        }
-
-        var globalMaxItems = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
-        var maxItems = config.MaxItems > 0 ? config.MaxItems : globalMaxItems;
-
-        _logger.LogInformation("Starting import for catalog {Name} ({Id}) - Limit: {Limit}", config.Name, catalogId, maxItems);
-
-        var items = new List<StremioMeta>();
-        int skip = 0;
-        while (items.Count < maxItems) {
-            ct.ThrowIfCancellationRequested();
-            
-            // Fetch next page
-            var batch = await provider.GetCatalogMetasAsync(catalogId, type, skip: skip).ConfigureAwait(false);
-            if (batch == null || batch.Count == 0) break;
-
-            foreach (var meta in batch) {
-                if (items.Count >= maxItems) break;
-                items.Add(meta);
+        {
+            var catalogCfg = _catalogService.GetCatalogConfig(catalogId, type);
+            if (catalogCfg == null) {
+                _log.LogWarning("Catalog config not found for {Id} {Type}", catalogId, type);
+                return;
             }
-            
-            skip += batch.Count;
-            // Heuristic for end of catalog if page is small (assuming default page size usually >= 20 or similar)
-            if (batch.Count < 20) break; 
-        }
 
-        _logger.LogInformation("Fetched {Count} items for catalog {Name}", items.Count, config.Name);
+            if (!catalogCfg.Enabled) {
+                _log.LogInformation("Catalog {Id} {Type} is disabled, skipping.", catalogId, type);
+                return;
+            }
+            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+            var stremio = cfg.stremio;
+            var seriesFolder = cfg.SeriesFolder;
+            var movieFolder = cfg.MovieFolder;
+            var createCollections = cfg.CreateCollections;
+            var collectionMaxItems = cfg.MaxCollectionItems;
 
-        // Process items
-        int processed = 0;
-        int total = items.Count;
-        var importedIds = new ConcurrentBag<Guid>();
+            if (seriesFolder is null) {
+                _log.LogWarning("No series root folder found");
+            }
 
-        if (isSeries) {
-            // Sequential processing for Series to avoid rate limits on deep metadata fetching
-            foreach (var meta in items) {
-                ct.ThrowIfCancellationRequested();
-                try {
-                    var (item, _) = await _manager.InsertMeta(
-                        rootFolder, 
-                        meta, 
-                        null, 
-                        allowRemoteRefresh: true, 
-                        refreshItem: true, 
-                        queueRefreshItem: false, 
-                        ct: ct
-                    ).ConfigureAwait(false);
-                    
-                    if (item != null) importedIds.Add(item.Id);
+            if (movieFolder is null) {
+                _log.LogWarning("No movie root folder found");
+            }
 
-                } catch (Exception ex) {
-                    _logger.LogError(ex, "Error importing series {Name}", meta.Name);
+
+            var maxItems = catalogCfg.MaxItems > 0 ? catalogCfg.MaxItems : cfg.CatalogMaxItems;
+            long done = 0;
+
+            var opts = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct };
+
+            var stopwatch = Stopwatch.StartNew();
+            _log.LogInformation("Starting import for catalog {Name} ({Id}) - Limit: {Limit}", catalogCfg.Name, catalogId, maxItems);
+
+            try {
+                var skip = 0;
+                var processed = 0;
+                var importedIds = new ConcurrentBag<Guid>();
+
+                while (processed < maxItems) {
+                    ct.ThrowIfCancellationRequested();
+
+                    var page = await stremio
+                        .GetCatalogMetasAsync(catalogId, type, search: null, skip: skip)
+                        .ConfigureAwait(false);
+
+                    if (page is null || page.Count == 0) {
+                        break;
+                    }
+
+                    await Parallel.ForEachAsync(
+                        page,
+                        opts,
+                        async (meta, ct) => {
+                            var p = Interlocked.Increment(ref processed);
+                            ct.ThrowIfCancellationRequested();
+                            if (p > maxItems) {
+                                return;
+                            }
+
+                            //meta_ids.TryAdd(meta.Id, 0);
+                            var mediaType = meta.Type;
+                            var baseItemKind = mediaType.ToBaseItem();
+
+                            // catalog can contain multiple types.
+
+                            var root =
+                                baseItemKind == BaseItemKind.Series ? seriesFolder
+                                : baseItemKind == BaseItemKind.Movie ? movieFolder
+                                : null;
+
+                            if (root is not null) {
+                                try {
+                                    var (item, _) = await _manager
+                                        .InsertMeta(
+                                            root,
+                                            meta,
+                                            null,
+                                            true,
+                                            true,
+                                            baseItemKind == BaseItemKind.Series,
+                                            ct
+                                        )
+                                        .ConfigureAwait(false);
+
+                                    if (item != null) importedIds.Add(item.Id);
+                                }
+                                catch (Exception ex) {
+                                    _log.LogError(
+                                        "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                        catalogId,
+                                        meta?.Id,
+                                        ex.Message,
+                                        ex.StackTrace
+                                    );
+                                }
+                            }
+
+                            var current = Interlocked.Increment(ref done);
+                            progress?.Report(Math.Min(100, current / (double)maxItems * 100.0));
+                        }
+                    );
+
+                    skip += page.Count;
                 }
-                
-                processed++;
-                progress?.Report((double)processed / total * 100);
+
+                if (catalogCfg.CreateCollection) {
+                    await UpdateCollectionAsync(catalogCfg, importedIds.ToList())
+                        .ConfigureAwait(false);
+                    importedIds.Clear();
+                }
+
+                _log.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processed);
             }
-        } else {
-             // Parallel processing for Movies
-             var parallelOptions = new ParallelOptions {
-                 MaxDegreeOfParallelism = 5,
-                 CancellationToken = ct
-             };
+            catch (OperationCanceledException ex) {
+                _log.LogWarning(
+                    ex,
+                    "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
+                        catalogId
+                );
+            }
+            catch (Exception ex) {
+                _log.LogError(
+                    ex,
+                    "Catalog sync failed for {Id}: {Message}",
+                    catalogCfg.Id,
+                    ex.Message
+                );
+            }
 
-             await Parallel.ForEachAsync(items, parallelOptions, async (meta, token) => {
-                 try {
-                     var (item, _) = await _manager.InsertMeta(
-                         rootFolder, 
-                         meta, 
-                         null, 
-                         allowRemoteRefresh: true, 
-                         refreshItem: true, 
-                         queueRefreshItem: false, 
-                         token
-                     ).ConfigureAwait(false);
-                     
-                     if (item != null) importedIds.Add(item.Id);
-
-                 } catch (Exception ex) {
-                     _logger.LogError(ex, "Error importing movie {Name}", meta.Name);
-                 }
-                 
-                 Interlocked.Increment(ref processed);
-                 progress?.Report((double)processed / total * 100);
-             }).ConfigureAwait(false);
+            stopwatch.Stop();
+            progress?.Report(100);
+            _log.LogInformation(
+                "Catalog {catalog} sync completed in {Minutes}m {Seconds}s ({TotalSeconds:F2}s total)",
+                catalogCfg.Name,
+                (int)stopwatch.Elapsed.TotalMinutes,
+                stopwatch.Elapsed.Seconds,
+                stopwatch.Elapsed.TotalSeconds
+            );
         }
-
-        // Handle Collection (per-catalog setting)
-        if (config.CreateCollection && importedIds.Any()) {
-            await UpdateCollectionAsync(config, importedIds.ToList()).ConfigureAwait(false);
-        }
-
-        _logger.LogInformation("Finished importing catalog {Name}", config.Name);
     }
 
     private async Task<BoxSet?> GetOrCreateBoxSetAsync(CatalogConfig config) {
@@ -168,7 +196,7 @@ public class CatalogImportService {
                 IsLocked = true,
                 ProviderIds = new Dictionary<string, string> { { "Stremio", id } }
             }).ConfigureAwait(false);
-            
+
             collection.DisplayOrder = "Default";
             await collection.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
         }
@@ -179,56 +207,45 @@ public class CatalogImportService {
         try {
             var collection = await GetOrCreateBoxSetAsync(config).ConfigureAwait(false);
             if (collection != null) {
-                // We supplement the collection, or replace? 
-                // Existing logic seemed to replace children?
-                // "RemoveFromCollectionAsync(collection.Id, childrenIds)"
-                // Yes, it replaces the content to match the catalog.
-                
+
                 var currentChildren = _libraryManager.GetItemList(new InternalItemsQuery {
                     Parent = collection,
                     Recursive = false
                 }).Select(i => i.Id).ToList();
 
-                // To match "Straight approach" and behave like a catalog sync:
-                // We should probably ensure the collection reflects the catalog.
-                // But we only imported 'MaxItems'.
-                // If we remove everything else, we might lose items if MaxItems < Total.
-                // But usually catalogs are "Top 100" etc.
-                // I'll follow the replacement logic but maybe only remove what's NOT in the new list IF we assume we fetched everything intended.
-                // The previous logic removed ALL children and added new ones. I'll stick to that.
-                
                 if (currentChildren.Any()) {
                     await _collectionManager.RemoveFromCollectionAsync(collection.Id, currentChildren).ConfigureAwait(false);
                 }
-                
+
                 var itemsToAdd = ids.ToList();
 
                 await _collectionManager.AddToCollectionAsync(collection.Id, itemsToAdd).ConfigureAwait(false);
-                _logger.LogInformation("Updated collection {Name} with {Count} items", config.Name, itemsToAdd.Count);
+                _log.LogInformation("Updated collection {Name} with {Count} items", config.Name, itemsToAdd.Count);
             }
-        } catch (Exception ex) {
-            _logger.LogError(ex, "Error updating collection for {Name}", config.Name);
+        }
+        catch (Exception ex) {
+            _log.LogError(ex, "Error updating collection for {Name}", config.Name);
         }
     }
 
     public async Task SyncAllEnabledAsync(CancellationToken ct, IProgress<double>? progress = null) {
-         // Force refresh of catalog list from manifest first
-         var catalogs = await _catalogService.GetCatalogsAsync(Guid.Empty);
-         var enabled = catalogs.Where(c => c.Enabled).ToList();
+        // Force refresh of catalog list from manifest first
+        var catalogs = await _catalogService.GetCatalogsAsync(Guid.Empty);
+        var enabled = catalogs.Where(c => c.Enabled).ToList();
 
-         int current = 0;
-         int total = enabled.Count;
+        int current = 0;
+        int total = enabled.Count;
 
-         foreach (var cat in enabled) {
-             ct.ThrowIfCancellationRequested();
-             _logger.LogInformation("Processing enabled catalog: {Name}", cat.Name);
-             
-             // Create specific progress reporter for this catalog if needed, or just log
-             await ImportCatalogAsync(cat.Id, cat.Type, Guid.Empty, ct).ConfigureAwait(false);
-             
-             current++;
-             progress?.Report((double)current / total * 100);
-         }
-         await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+        foreach (var cat in enabled) {
+            ct.ThrowIfCancellationRequested();
+            _log.LogInformation("Processing enabled catalog: {Name}", cat.Name);
+
+            // Create specific progress reporter for this catalog if needed, or just log
+            await ImportCatalogAsync(cat.Id, cat.Type, Guid.Empty, ct).ConfigureAwait(false);
+
+            current++;
+            progress?.Report((double)current / total * 100);
+        }
+        await _libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
     }
 }
