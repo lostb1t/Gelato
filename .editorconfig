@@ -8,26 +8,3 @@ trim_trailing_whitespace = true
 insert_final_newline = true
 end_of_line = lf
 max_line_length = 100
-
-csharp_indent_block_contents = true:warning
-csharp_indent_case_contents = true:warning
-csharp_indent_case_contents_when_block = true:warning
-csharp_indent_labels = one_less_than_current:warning
-csharp_indent_switch_labels = true:warning
-
-# Wrapping preferences
-csharp_preserve_single_line_blocks = true:warning
-csharp_preserve_single_line_statements = false:warning
-
-# Indentation for wrapped lines
-csharp_indent_braces = false:warning
-csharp_indent_case_contents = true:warning
-
-csharp_new_line_before_open_brace = all:warning
-
-# Fully spelled analyzer severities
-dotnet_sort_system_directives_first = true:warning
-dotnet_style_qualification_for_field = false:suggestion
-dotnet_style_qualification_for_property = false:suggestion
-dotnet_style_qualification_for_method = false:suggestion
-dotnet_style_prefer_auto_properties = true:suggestion
