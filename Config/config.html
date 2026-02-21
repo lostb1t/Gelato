@@ -108,7 +108,8 @@
 
               <div class="inputContainer" style="display: flex; gap: 1em; align-items: center; margin-bottom: 1em;">
                 <div style="flex-grow: 1;">
-                  <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type..."
+                  <!--suppress HtmlFormInputWithoutLabel -->
+                    <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type..."
                     is="emby-input" class="emby-input" />
                 </div>
                 <button type="button" is="emby-button" class="raised emby-button"
@@ -116,25 +117,22 @@
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum items an collection should hold:</label>
+                <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum items a collection should hold:</label>
                 <input is="emby-input" type="number" id="txtMaxCollectionItems" class="emby-input" />
-                            <div class="fieldDescription">NOTE: Please disable the collection cleanup task!
-              </div>
-
-
-
-                        <h3 class="sectionTitle">Importer</h3>
+                <div class="fieldDescription">NOTE: Please disable the collection cleanup task!</div>
+                <h3 class="sectionTitle">Importer</h3>
             
-              <div id="catalogsList"
-                style="max-height: 600px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(0,0,0,0.2);">
-                <!-- Catalogs rendered here -->
-              </div>
+                <div id="catalogsList"
+                  style="max-height: 600px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(0,0,0,0.2);">
+                  <!-- Catalogs rendered here -->
+                </div>
 
-              <div style="margin-top: 1.5em; display: flex; justify-content: flex-end;">
-                <button type="button" is="emby-button" class="raised emby-button" id="btnImportAll"
-                  style="background: #00a4dc; color: #fff;">
-                  <span>Import</span>
-                </button>
+                <div style="margin-top: 1.5em; display: flex; justify-content: flex-end;">
+                  <button type="button" is="emby-button" class="raised emby-button" id="btnImportAll"
+                    style="background: #00a4dc; color: #fff;">
+                    <span>Import</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -285,9 +283,6 @@
         const txtUserMoviePath = page.querySelector('#txtUserMoviePath');
         const txtUserSeriesPath = page.querySelector('#txtUserSeriesPath');
         const chkUserDisableSearch = page.querySelector('#chkUserDisableSearch');
-
-        const btnAddOverride = page.querySelector('#btnAddOverride');
-        const btnCancelOverride = page.querySelector('#btnCancelOverride');
 
         let currentConfig = null;
         let users = [];
