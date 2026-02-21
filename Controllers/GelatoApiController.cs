@@ -232,13 +232,12 @@ public sealed class GelatoApiController : ControllerBase {
             : Uri.UnescapeDataString(trackers)
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    private static string[] DefaultTrackers() =>
-    [
+    private static string[] DefaultTrackers() => [
         "udp://tracker.opentrackr.org:1337/announce",
-            "udp://open.stealth.si:80/announce",
-            "udp://tracker.torrent.eu.org:451/announce",
-            "udp://explodie.org:6969/announce",
-            "udp://tracker.openbittorrent.com:6969/announce"
+        "udp://open.stealth.si:80/announce",
+        "udp://tracker.torrent.eu.org:451/announce",
+        "udp://explodie.org:6969/announce",
+        "udp://tracker.openbittorrent.com:6969/announce"
     ];
 
     private static string GuessContentType(string path) {

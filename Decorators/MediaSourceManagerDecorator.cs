@@ -28,9 +28,12 @@ public sealed class MediaSourceManagerDecorator(
     IDirectoryService directoryService,
     Lazy<GelatoManager> manager)
     : IMediaSourceManager {
-    private readonly IMediaSourceManager _inner = inner ?? throw new ArgumentNullException(nameof(inner));
-    private readonly ILogger<MediaSourceManagerDecorator> _log = log ?? throw new ArgumentNullException(nameof(log));
-    private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
+    private readonly IMediaSourceManager _inner =
+        inner ?? throw new ArgumentNullException(nameof(inner));
+    private readonly ILogger<MediaSourceManagerDecorator> _log =
+        log ?? throw new ArgumentNullException(nameof(log));
+    private readonly IHttpContextAccessor _http =
+        http ?? throw new ArgumentNullException(nameof(http));
     private readonly KeyLock _lock = new();
 
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
@@ -79,8 +82,7 @@ public sealed class MediaSourceManagerDecorator(
                 actionName,
                 uri?.ToString()
             );
-        }
-        else if (uri is not null && !manager1.HasStreamSync(cacheKey)) {
+        } else if (uri is not null && !manager1.HasStreamSync(cacheKey)) {
             // Bug in web UI that calls the detail page twice. So that's why there's a lock.
             _lock
                 .RunSingleFlightAsync(
@@ -91,12 +93,12 @@ public sealed class MediaSourceManagerDecorator(
                             item.Id
                         );
                         try {
-                            var count = await manager1.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                            var count = await manager1.SyncStreams(item, userId, ct)
+                                .ConfigureAwait(false);
                             if (count > 0) {
                                 manager1.SetStreamSync(cacheKey);
                             }
-                        }
-                        catch (Exception ex) {
+                        } catch (Exception ex) {
                             _log.LogError(ex, "Failed to sync streams");
                         }
                     }
@@ -128,11 +130,11 @@ public sealed class MediaSourceManagerDecorator(
                 Tags = [GelatoManager.StreamTag],
                 IndexNumber = episode.IndexNumber,
             };
-        }
-        else {
+        } else {
             query = new InternalItemsQuery {
                 IncludeItemTypes = [item.GetBaseItemKind()],
-                HasAnyProviderId = new Dictionary<string, string> { { "Stremio", item.GetProviderId("Stremio") } },
+                HasAnyProviderId = new Dictionary<string, string>
+                    { { "Stremio", item.GetProviderId("Stremio") } },
                 Recursive = false,
                 GroupByPresentationUniqueKey = false,
                 GroupBySeriesPresentationUniqueKey = false,
@@ -506,7 +508,8 @@ public sealed class MediaSourceManagerDecorator(
         var streamName = item.GelatoData<string>("name");
         var streamDesc = item.GelatoData<string>("description");
         var bingeGroup = item.GelatoData<string>("bingeGroup");
-        var richName = !string.IsNullOrEmpty(streamDesc) ? $"{streamName}\n{streamDesc}" : streamName;
+        var richName = !string.IsNullOrEmpty(streamDesc) ? $"{streamName}\n{streamDesc}"
+            : streamName;
 
         var info = new MediaSourceInfo {
             Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
@@ -526,8 +529,7 @@ public sealed class MediaSourceManagerDecorator(
 
         // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
         if (!string.IsNullOrEmpty(bingeGroup)) {
-            info.RequiredHttpHeaders = new Dictionary<string, string>
-            {
+            info.RequiredHttpHeaders = new Dictionary<string, string> {
                 { "X-Gelato-BingeGroup", bingeGroup }
             };
         }

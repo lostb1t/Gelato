@@ -15,16 +15,14 @@ public sealed class DeleteResourceFilter(
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
-    )
-    {
+    ) {
         // Only intercept DeleteItem actions with valid user
         if (
             ctx.GetActionName() != "DeleteItem"
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
             || userManager.GetUserById(userId) is not { } user
-        )
-        {
+        ) {
             await next();
             return;
         }
@@ -32,8 +30,7 @@ public sealed class DeleteResourceFilter(
         var item = library.GetItemById<BaseItem>(guid, user);
 
         // Only handle Gelato items that user can delete
-        if (item is null || !manager.IsGelato(item) || !manager.CanDelete(item, user))
-        {
+        if (item is null || !manager.IsGelato(item) || !manager.CanDelete(item, user)) {
             await next();
             return;
         }
@@ -43,25 +40,20 @@ public sealed class DeleteResourceFilter(
         ctx.Result = new NoContentResult();
     }
 
-    private void DeleteItem(BaseItem item)
-    {
-        if (item is Video video && manager.IsPrimaryVersion(video))
-        {
+    private void DeleteItem(BaseItem item) {
+        if (item is Video video && manager.IsPrimaryVersion(video)) {
             DeleteStreams(video);
-        }
-        else
-        {
+        } else {
             log.LogInformation("Deleting {Name}", item.Name);
             library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
         }
     }
 
-    private void DeleteStreams(Video video)
-    {
-        var query = new InternalItemsQuery
-        {
+    private void DeleteStreams(Video video) {
+        var query = new InternalItemsQuery {
             IncludeItemTypes = [video.GetBaseItemKind()],
-            HasAnyProviderId = new Dictionary<string, string> { { "Stremio", video.ProviderIds["Stremio"] } },
+            HasAnyProviderId = new Dictionary<string, string>
+                { { "Stremio", video.ProviderIds["Stremio"] } },
             Recursive = false,
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,
@@ -71,8 +63,7 @@ public sealed class DeleteResourceFilter(
         };
 
         var sources = library.GetItemList(query).OfType<Video>();
-        foreach (var alt in sources)
-        {
+        foreach (var alt in sources) {
             log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
             library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = true }, true);
         }

@@ -17,10 +17,8 @@ public sealed class PurgeGelatoStreamsTask(
     public string Category => "Gelato Maintenance";
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() {
-        return
-        [
-            new TaskTriggerInfo
-            {
+        return [
+            new TaskTriggerInfo {
                 Type = TaskTriggerInfoType.IntervalTrigger,
                 IntervalTicks = TimeSpan.FromDays(7).Ticks,
             }
@@ -36,8 +34,7 @@ public sealed class PurgeGelatoStreamsTask(
         var query = new InternalItemsQuery {
             IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
             Recursive = true,
-            HasAnyProviderId = new Dictionary<string, string>
-            {
+            HasAnyProviderId = new Dictionary<string, string> {
                 { "Stremio", string.Empty },
                 { "stremio", string.Empty },
             },
@@ -62,8 +59,7 @@ public sealed class PurgeGelatoStreamsTask(
                     item,
                     new DeleteOptions { DeleteFileLocation = true },
                     true);
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
             }
 

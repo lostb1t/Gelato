@@ -109,8 +109,7 @@ public class SearchActionFilter(
 
         if (requestedTypes.Contains(BaseItemKind.Movie) && cfg.MovieFolder is not null) {
             tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
-        }
-        else if (requestedTypes.Contains(BaseItemKind.Movie)) {
+        } else if (requestedTypes.Contains(BaseItemKind.Movie)) {
             log.LogWarning(
                 "No movie folder found, please add your gelato path to a library and rescan. skipping search"
             );
@@ -118,8 +117,7 @@ public class SearchActionFilter(
 
         if (requestedTypes.Contains(BaseItemKind.Series) && cfg.SeriesFolder is not null) {
             tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Series));
-        }
-        else if (requestedTypes.Contains(BaseItemKind.Series)) {
+        } else if (requestedTypes.Contains(BaseItemKind.Series)) {
             log.LogWarning(
                 "No series folder found, please add your gelato path to a library and rescan. skipping search"
             );

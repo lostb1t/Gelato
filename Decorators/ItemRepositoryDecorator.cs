@@ -14,7 +14,8 @@ namespace Gelato.Decorators;
 
 public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
     : IItemRepository {
-    private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
+    private readonly IHttpContextAccessor _http =
+        http ?? throw new ArgumentNullException(nameof(http));
 
     public void DeleteItem(params IReadOnlyList<Guid> ids) => inner.DeleteItem(ids);
 
@@ -44,16 +45,18 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null) {
             filter.IsDeadPerson = null;
             if (filter.IncludeItemTypes.Length != 0
-                 && !filter
-                     .IncludeItemTypes.Intersect(
-                         [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
-                     )
-                     .Any()) return filter;
+                && !filter
+                    .IncludeItemTypes.Intersect(
+                        [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
+                    )
+                    .Any())
+                return filter;
             if (filter.ExcludeTags.Length == 0) {
                 filter.ExcludeTags = [GelatoManager.StreamTag];
             }
 
-            if (filter.MaxPremiereDate is not null || !filterUnreleased) return filter;
+            if (filter.MaxPremiereDate is not null || !filterUnreleased)
+                return filter;
 
             // we dont have access to the query so can make a proper statement.
             var days = filter.IncludeItemTypes.Contains(BaseItemKind.Series)
@@ -61,11 +64,9 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
                 ? 0
                 : bufferDays;
             filter.MaxPremiereDate = DateTime.Today.AddDays(days);
-        }
-        else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person)) {
+        } else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person)) {
             filter.IsDeadPerson = null;
-        }
-        else if (filter.IsMissing == true) {
+        } else if (filter.IsMissing == true) {
             // jf deletes virtual items when theres a valid primary version. So just dont return it
             filter.ExcludeTags = [GelatoManager.StreamTag];
         }

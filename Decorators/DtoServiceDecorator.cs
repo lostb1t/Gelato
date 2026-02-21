@@ -36,8 +36,7 @@ public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService {
         }
 
         var list = inner.GetBaseItemDtos(items, options, user, owner);
-        foreach (var itemDto in list)
-        {
+        foreach (var itemDto in list) {
             Patch(itemDto, true);
         }
         return list;
@@ -57,14 +56,14 @@ public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService {
     private void Patch(
         BaseItemDto dto,
         bool isList
-    )
-    {
+    ) {
         // mark if placeholder
         if (isList
             || dto.MediaSources?.Length != 1
             || dto.Path is null
             || !dto.MediaSources[0]
-                .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)) return;
+                .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase))
+            return;
         dto.LocationType = LocationType.Virtual;
         dto.Path = null;
         dto.CanDownload = false;

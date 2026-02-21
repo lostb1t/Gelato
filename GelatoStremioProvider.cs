@@ -29,8 +29,7 @@ public class GelatoStremioProvider(
         var path = string.Join("/", parts);
 
         var extrasPart = string.Empty;
-        if (extras != null)
-        {
+        if (extras != null) {
             var enumerable = extras.ToList();
             extrasPart = enumerable.Count != 0 ? "/" + string.Join("&", enumerable) : string.Empty;
         }
@@ -64,8 +63,7 @@ public class GelatoStremioProvider(
 
             await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
             return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
             throw;
         }
@@ -74,14 +72,12 @@ public class GelatoStremioProvider(
     public async Task<StremioManifest?> GetManifestAsync(bool force = false) {
         if (!force && _manifest is not null)
             return _manifest;
-        try
-        {
+        try {
             var url = $"{baseUrl}/manifest.json";
             var m = await GetJsonAsync<StremioManifest>(url);
             _manifest = m;
 
-            if (m?.Catalogs != null)
-            {
+            if (m?.Catalogs != null) {
                 _movieSearchCatalog = m
                     .Catalogs.Where(c =>
                         string.Equals(c.Type, nameof(StremioMediaType.Movie),
@@ -111,8 +107,7 @@ public class GelatoStremioProvider(
 
             if (_movieSearchCatalog == null) {
                 log.LogWarning("manifest has no search-capable movie catalog");
-            }
-            else {
+            } else {
                 log.LogInformation(
                     "manifest uses movie search catalog: {Id}",
                     _movieSearchCatalog.Id
@@ -121,16 +116,14 @@ public class GelatoStremioProvider(
 
             if (_seriesSearchCatalog == null) {
                 log.LogWarning("manifest has no search-capable series catalog");
-            }
-            else {
+            } else {
                 log.LogInformation(
                     "manifest uses series search catalog: {Id}",
                     _seriesSearchCatalog.Id
                 );
             }
             return m;
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
             return null;
         }
@@ -245,10 +238,10 @@ public class GelatoStremioProvider(
 }
 
 #region Request Models
+
 // ReSharper disable ClassNeverInstantiated.Global
 // ReSharper disable CollectionNeverUpdated.Global
 // ReSharper disable UnusedAutoPropertyAccessor.Global
-
 public class StremioManifest {
     public string Name { get; set; } = "";
     public string Id { get; set; } = "";
@@ -388,8 +381,7 @@ public class StremioMeta {
         if (!string.IsNullOrWhiteSpace(Id)) {
             if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase)) {
                 dict[nameof(MetadataProvider.Tmdb)] = Id["tmdb:".Length..];
-            }
-            else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase)) {
+            } else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase)) {
                 dict[nameof(MetadataProvider.Imdb)] = Id;
             }
         }
@@ -560,14 +552,12 @@ public class StremioStream {
 
         if (!string.IsNullOrEmpty(InfoHash)) {
             key = InfoHash;
-        }
-        else if (
+        } else if (
             !string.IsNullOrEmpty(BehaviorHints?.BingeGroup)
             && !string.IsNullOrEmpty(BehaviorHints?.Filename)
         ) {
             key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename}";
-        }
-        else {
+        } else {
             key = Url;
         }
         var bytes = System.Text.Encoding.UTF8.GetBytes(key);
@@ -631,6 +621,7 @@ public enum StremioStatus {
 // ReSharper restore UnusedAutoPropertyAccessor.Global
 // ReSharper restore CollectionNeverUpdated.Global
 // ReSharper restore ClassNeverInstantiated.Global
+
 #endregion
 
 public class SafeStringEnumConverter<T> : JsonConverter<T>

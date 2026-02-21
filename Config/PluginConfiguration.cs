@@ -119,6 +119,7 @@ public class GelatoStremioProviderFactory(
         );
     }
 }
+
 public class CatalogConfig {
     public string Id { get; set; } = "";
     public string Type { get; set; } = "movie";

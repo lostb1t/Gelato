@@ -44,30 +44,30 @@ public sealed class StremioUri {
 
         switch (kind) {
             case BaseItemKind.Movie: {
-                var imdb = item.GetProviderId(MetadataProvider.Imdb);
-                return string.IsNullOrWhiteSpace(imdb)
-                    ? uri
-                    : new StremioUri(StremioMediaType.Movie, imdb);
-            }
+                    var imdb = item.GetProviderId(MetadataProvider.Imdb);
+                    return string.IsNullOrWhiteSpace(imdb)
+                        ? uri
+                        : new StremioUri(StremioMediaType.Movie, imdb);
+                }
             case BaseItemKind.Series: {
-                var imdb = item.GetProviderId(MetadataProvider.Imdb);
-                return string.IsNullOrWhiteSpace(imdb)
-                    ? uri
-                    : new StremioUri(StremioMediaType.Series, imdb);
-            }
+                    var imdb = item.GetProviderId(MetadataProvider.Imdb);
+                    return string.IsNullOrWhiteSpace(imdb)
+                        ? uri
+                        : new StremioUri(StremioMediaType.Series, imdb);
+                }
             case BaseItemKind.Episode: {
-                var ep = (Episode)item;
-                var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
-                if (
-                    string.IsNullOrWhiteSpace(seriesImdb)
-                    || ep.ParentIndexNumber is null
-                    || ep.IndexNumber is null
-                )
-                    return uri;
+                    var ep = (Episode)item;
+                    var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
+                    if (
+                        string.IsNullOrWhiteSpace(seriesImdb)
+                        || ep.ParentIndexNumber is null
+                        || ep.IndexNumber is null
+                    )
+                        return uri;
 
-                var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
-                return new StremioUri(StremioMediaType.Series, ext);
-            }
+                    var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
+                    return new StremioUri(StremioMediaType.Series, ext);
+                }
         }
 
         return null;
@@ -101,8 +101,7 @@ public static class Utils {
         try {
             ts = System.Xml.XmlConvert.ToTimeSpan(input);
             return ts.Ticks;
-        }
-        catch {
+        } catch {
             // ignore
         }
         // Regex fallback for human formats like "2h29min"
@@ -150,8 +149,7 @@ public sealed class KeyLock {
         await sem.WaitAsync(ct).ConfigureAwait(false);
         try {
             await action(ct).ConfigureAwait(false);
-        }
-        finally {
+        } finally {
             ReleaseAndMaybeRemove(key, sem);
         }
     }
@@ -159,8 +157,7 @@ public sealed class KeyLock {
     private async Task Once(Guid key, Func<CancellationToken, Task> action, CancellationToken ct) {
         try {
             await action(ct).ConfigureAwait(false);
-        }
-        finally {
+        } finally {
             _inflight.TryRemove(key, out _);
         }
     }
@@ -178,7 +175,8 @@ public static class EnumMappingExtensions {
     public static StremioMediaType ToStremio(this BaseItemKind kind) {
         return kind switch {
             BaseItemKind.Movie => StremioMediaType.Movie,
-            BaseItemKind.Series or BaseItemKind.Season or BaseItemKind.Episode => StremioMediaType.Series,
+            BaseItemKind.Series or BaseItemKind.Season or BaseItemKind.Episode => StremioMediaType
+                .Series,
             _ => StremioMediaType.Unknown,
         };
     }
@@ -197,28 +195,25 @@ public static class EnumMappingExtensions {
 }
 
 public static class ActionContextExtensions {
-    private static readonly string[] RouteGuidKeys =
-    [
+    private static readonly string[] RouteGuidKeys = [
         "id",
         "Id",
         "ID",
         "itemId",
         "ItemId",
-        "ItemID"
+        "ItemID",
     ];
 
     private static readonly HashSet<string> SearchActionNames = new(
         StringComparer.OrdinalIgnoreCase
-    )
-    {
+    ) {
         "GetItems",
         "GetItemsByUserIdLegacy",
     };
 
     private static readonly HashSet<string> BaseItemListActionNames = new(
         StringComparer.OrdinalIgnoreCase
-    )
-    {
+    ) {
         "GetItems",
         "GetItemsByUserIdLegacy",
         "NextUp",
@@ -234,13 +229,12 @@ public static class ActionContextExtensions {
         "GetMovieRecommendations",
         "GetSuggestionsLegacy",
         "GetSuggestions",
-        "GetItemCounts"
+        "GetItemCounts",
     };
 
     private static readonly HashSet<string> InsertableActionNames = new(
         StringComparer.OrdinalIgnoreCase
-    )
-    {
+    ) {
         "GetItems",
         "GetItem",
         "GetItemLegacy",
@@ -254,8 +248,7 @@ public static class ActionContextExtensions {
 
     private static readonly HashSet<string> InsertableListActionNames = new(
         StringComparer.OrdinalIgnoreCase
-    )
-    {
+    ) {
         "GetItems",
         "GetItemsByUserIdLegacy",
     };
@@ -277,14 +270,15 @@ public static class ActionContextExtensions {
     public static bool IsInsertableAction(this HttpContext ctx) {
         var actionName = ctx.GetActionName();
         return actionName != null
-            && InsertableActionNames.Contains(actionName)
-            && (
-                !InsertableListActionNames.Contains(actionName)
-                || InsertableListActionNames.Contains(actionName) && IsSingleItemList(ctx)
-            );
+               && InsertableActionNames.Contains(actionName)
+               && (
+                   !InsertableListActionNames.Contains(actionName)
+                   || InsertableListActionNames.Contains(actionName) && IsSingleItemList(ctx)
+               );
     }
 
-    public static bool IsInsertableAction(this ActionExecutingContext ctx) => ctx.HttpContext.IsInsertableAction();
+    public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
+        ctx.HttpContext.IsInsertableAction();
 
     private static bool IsSingleItemList(HttpContext ctx) {
         var q = ctx.Request.Query;
@@ -402,8 +396,7 @@ public static class BaseItemExtensions {
             return dict != null && dict.TryGetValue(key, out var el)
                 ? el.Deserialize<T>()
                 : default;
-        }
-        catch {
+        } catch {
             return default;
         }
     }
@@ -416,8 +409,7 @@ public static class BaseItemExtensions {
                 ? new Dictionary<string, JsonElement>()
                 : JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(item.ExternalId)
                   ?? new Dictionary<string, JsonElement>();
-        }
-        catch {
+        } catch {
             data = new Dictionary<string, JsonElement>();
         }
 

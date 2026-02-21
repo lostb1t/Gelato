@@ -103,8 +103,7 @@ public sealed class GelatoSeriesProvider
             }
 
             await _manager.SyncSeriesTreesAsync(cfg, meta, CancellationToken.None);
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             _log.LogError(ex, "failed sync series for {Name}", series.Name);
         }
         _log.LogInformation("synced series tree for {Name}", series.Name);

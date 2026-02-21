@@ -91,7 +91,8 @@ public sealed class CollectionManagerDecorator(
     public Task RemoveFromCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) =>
         inner.RemoveFromCollectionAsync(collectionId, itemIds);
 
-    public IEnumerable<BaseItem> CollapseItemsWithinBoxSets(IEnumerable<BaseItem> items, User user) =>
+    public IEnumerable<BaseItem>
+        CollapseItemsWithinBoxSets(IEnumerable<BaseItem> items, User user) =>
         inner.CollapseItemsWithinBoxSets(items, user);
 
     public Task<Folder?> GetCollectionsFolder(bool createIfNeeded) =>

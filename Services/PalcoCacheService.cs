@@ -1,5 +1,5 @@
-using Microsoft.Data.Sqlite;
 using MediaBrowser.Common.Configuration;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Services;
@@ -45,22 +45,24 @@ public class PalcoCacheService : IDisposable {
 
     public string? Get(string key, string ns = "") {
         lock (_lock) {
-            if (_connection == null) return null;
+            if (_connection == null)
+                return null;
 
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT value, expires_at FROM cache WHERE key = @key AND namespace = @ns";
+            cmd.CommandText =
+                "SELECT value, expires_at FROM cache WHERE key = @key AND namespace = @ns";
             cmd.Parameters.AddWithValue("@key", key);
             cmd.Parameters.AddWithValue("@ns", ns);
 
             using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return null; // Not found
+            if (!reader.Read())
+                return null; // Not found
 
             var expiresAt = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
             // Check expiry
-            if (expiresAt.HasValue && expiresAt.Value < now)
-            {
+            if (expiresAt.HasValue && expiresAt.Value < now) {
                 Delete(key, ns); // Lazy delete
                 return null;
             }
@@ -71,7 +73,8 @@ public class PalcoCacheService : IDisposable {
 
     public void Set(string key, string value, int ttlSeconds = 0, string ns = "") {
         lock (_lock) {
-            if (_connection == null) return;
+            if (_connection == null)
+                return;
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             long? expiresAt = ttlSeconds > 0 ? now + ttlSeconds : null;
@@ -85,7 +88,8 @@ public class PalcoCacheService : IDisposable {
             cmd.Parameters.AddWithValue("@key", key);
             cmd.Parameters.AddWithValue("@value", value);
             cmd.Parameters.AddWithValue("@created", now);
-            cmd.Parameters.AddWithValue("@expires", expiresAt.HasValue ? expiresAt.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue("@expires",
+                expiresAt.HasValue ? expiresAt.Value : DBNull.Value);
             cmd.Parameters.AddWithValue("@ns", ns);
             cmd.ExecuteNonQuery();
         }
@@ -93,7 +97,8 @@ public class PalcoCacheService : IDisposable {
 
     public bool Delete(string key, string ns = "") {
         lock (_lock) {
-            if (_connection == null) return false;
+            if (_connection == null)
+                return false;
 
             // Remove specific key in namespace
             using var cmd = _connection.CreateCommand();
@@ -108,14 +113,16 @@ public class PalcoCacheService : IDisposable {
         var result = new Dictionary<string, string>();
         foreach (var key in keys) {
             var value = Get(key, ns);
-            if (value != null) result[key] = value;
+            if (value != null)
+                result[key] = value;
         }
         return result;
     }
 
     public (int total, int expired, long size) GetStats() {
         lock (_lock) {
-            if (_connection == null) return (0, 0, 0);
+            if (_connection == null)
+                return (0, 0, 0);
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -124,7 +131,8 @@ public class PalcoCacheService : IDisposable {
             var total = Convert.ToInt32(cmd1.ExecuteScalar());
 
             using var cmd2 = _connection.CreateCommand();
-            cmd2.CommandText = "SELECT COUNT(*) FROM cache WHERE expires_at IS NOT NULL AND expires_at < @now";
+            cmd2.CommandText =
+                "SELECT COUNT(*) FROM cache WHERE expires_at IS NOT NULL AND expires_at < @now";
             cmd2.Parameters.AddWithValue("@now", now);
             var expired = Convert.ToInt32(cmd2.ExecuteScalar());
 

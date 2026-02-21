@@ -122,7 +122,8 @@ public sealed class GelatoManager(
 
     private BaseItem? Exist(StremioMeta meta, User user) {
         var item = IntoBaseItem(meta);
-        if (item?.ProviderIds is { Count: > 0 }) return FindExistingItem(item, user);
+        if (item?.ProviderIds is { Count: > 0 })
+            return FindExistingItem(item, user);
         _log.LogWarning("Gelato: Missing provider ids, skipping");
         return null;
     }
@@ -139,10 +140,8 @@ public sealed class GelatoManager(
 
         return libraryManager
             .GetItemList(query)
-            .FirstOrDefault(x =>
-            {
-                return x switch
-                {
+            .FirstOrDefault(x => {
+                return x switch {
                     null => false,
                     Video v => !IsStream(v),
                     _ => true
@@ -197,7 +196,8 @@ public sealed class GelatoManager(
                 return (existing, false);
             }
             var lookupId = meta.ImdbId ?? meta.Id;
-            var aioMeta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+            var aioMeta =
+                await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
             if (aioMeta is null) {
                 _log.LogWarning(
@@ -253,8 +253,7 @@ public sealed class GelatoManager(
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                 .ConfigureAwait(false);
 
-        }
-        else {
+        } else {
             baseItem = await SyncSeriesTreesAsync(cfg, meta, ct).ConfigureAwait(false);
         }
 
@@ -274,8 +273,7 @@ public sealed class GelatoManager(
 
             if (queueRefreshItem) {
                 provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
-            }
-            else {
+            } else {
                 _ = provider.RefreshFullItem(baseItem, options, ct);
             }
         }
@@ -308,8 +306,7 @@ public sealed class GelatoManager(
             IsDeadPerson = true,
         };
 
-        foreach (var item in libraryManager.GetItemList(q))
-        {
+        foreach (var item in libraryManager.GetItemList(q)) {
             yield return item;
         }
     }
@@ -331,7 +328,8 @@ public sealed class GelatoManager(
         _log.LogDebug($"SyncStreams for {item.Id}");
         var stopwatch = Stopwatch.StartNew();
         if (item is not Video video) {
-            _log.LogWarning("SyncStreams: item is not a Video type, itemType={ItemType}", item.GetType().Name);
+            _log.LogWarning("SyncStreams: item is not a Video type, itemType={ItemType}",
+                item.GetType().Name);
             return 0;
         }
 
@@ -402,12 +400,12 @@ public sealed class GelatoManager(
             var path = s.IsFile()
                 ? s.Url
                 : $"http://127.0.0.1:{httpPort}/gelato/stream?ih={s.InfoHash}"
-                    + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
-                    + (
-                        s.Sources is { Count: > 0 }
-                            ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}"
-                            : ""
-                    );
+                  + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
+                  + (
+                      s.Sources is { Count: > 0 }
+                          ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}"
+                          : ""
+                  );
 
             var id = s.GetGuid();
             var isNew = !existing.TryGetValue(id, out var target);
@@ -432,7 +430,8 @@ public sealed class GelatoManager(
             target.Tags = [StreamTag];
 
             var locked = target.LockedFields?.ToList() ?? [];
-            if (!locked.Contains(MetadataField.Tags)) locked.Add(MetadataField.Tags);
+            if (!locked.Contains(MetadataField.Tags))
+                locked.Add(MetadataField.Tags);
             target.LockedFields = locked.ToArray();
 
             target.ProviderIds = providerIds;
@@ -482,9 +481,9 @@ public sealed class GelatoManager(
             }
             if (users.Count == 0) {
                 libraryManager.DeleteItem(
-              staleItem,
-              new DeleteOptions { DeleteFileLocation = true },
-              true);
+                    staleItem,
+                    new DeleteOptions { DeleteFileLocation = true },
+                    true);
             }
         }
 
@@ -501,11 +500,13 @@ public sealed class GelatoManager(
     }
 
     public bool IsPrimaryVersion(Video item) {
-        return !HasStreamTag(item) && string.IsNullOrWhiteSpace(item.PrimaryVersionId) && !item.IsVirtualItem;
+        return !HasStreamTag(item) && string.IsNullOrWhiteSpace(item.PrimaryVersionId)
+                                   && !item.IsVirtualItem;
     }
 
     private static bool HasStreamTag(BaseItem item) {
-        return item.Tags is not null && item.Tags.Contains(StreamTag, StringComparer.OrdinalIgnoreCase);
+        return item.Tags is not null
+               && item.Tags.Contains(StreamTag, StringComparer.OrdinalIgnoreCase);
     }
 
     public bool IsStream(Video item) {
@@ -519,7 +520,8 @@ public sealed class GelatoManager(
     /// <param name="user"></param>
     /// <returns></returns>
     public bool CanDelete(BaseItem item, User user) {
-        var allCollectionFolders = libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
+        var allCollectionFolders =
+            libraryManager.GetUserRootFolder().Children.OfType<Folder>().ToList();
 
         return item.IsAuthorizedToDelete(user, allCollectionFolders);
     }
@@ -548,7 +550,9 @@ public sealed class GelatoManager(
         var stopwatch = Stopwatch.StartNew();
         // Group episodes by season
         var seasonGroups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
-            .Where(e => e.Season.HasValue && (e.Episode.HasValue || e.Number.HasValue)) // Filter out invalid episodes early
+            .Where(e =>
+                e.Season.HasValue
+                && (e.Episode.HasValue || e.Number.HasValue)) // Filter out invalid episodes early
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode ?? e.Number)
             .GroupBy(e => e.Season!.Value)
@@ -574,7 +578,8 @@ public sealed class GelatoManager(
         }
 
 
-        if (GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind(), seriesRootFolder) is not Series series) {
+        if (GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind(), seriesRootFolder)
+            is not Series series) {
             series = tmpSeries;
             if (series.Id == Guid.Empty)
                 series.Id = Guid.NewGuid();
@@ -745,7 +750,7 @@ public sealed class GelatoManager(
             series.Name,
             seasonsInserted,
             episodesInserted,
-              stopwatch.Elapsed.TotalSeconds
+            stopwatch.Elapsed.TotalSeconds
         );
 
         return series;
@@ -761,8 +766,7 @@ public sealed class GelatoManager(
                 new InternalItemsQuery {
                     IncludeItemTypes = [BaseItemKind.Series],
                     SeriesStatuses = [SeriesStatus.Continuing],
-                    HasAnyProviderId = new Dictionary<string, string>
-                    {
+                    HasAnyProviderId = new Dictionary<string, string> {
                         { "Stremio", string.Empty },
                         { "stremio", string.Empty },
                     },
@@ -799,8 +803,7 @@ public sealed class GelatoManager(
                 }
                 await SyncSeriesTreesAsync(cfg, meta, cancellationToken);
                 processed++;
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 _log.LogError(
                     ex,
                     "SyncSeries: failed for {Name} ({Id}). Error: {ErrorMessage}",
@@ -875,8 +878,7 @@ public sealed class GelatoManager(
 
         // NOTICE: do this only for show and movie. cause the parent imdb is used for season abd episodes
         if (meta.Type is not StremioMediaType.Episode && !string.IsNullOrWhiteSpace(id)) {
-            var providerMappings = new (string Prefix, string Provider, bool StripPrefix)[]
-            {
+            var providerMappings = new (string Prefix, string Provider, bool StripPrefix)[] {
                 ("tmdb:", nameof(MetadataProvider.Tmdb), true),
                 ("tt", nameof(MetadataProvider.Imdb), false),
                 ("anidb:", "AniDB", true),
@@ -888,7 +890,8 @@ public sealed class GelatoManager(
             };
 
             foreach (var (prefix, prov, stripPrefix) in providerMappings) {
-                if (!id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!id.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    continue;
 
                 var providerId = stripPrefix ? id[prefix.Length..] : id;
                 item.SetProviderId(prov, providerId);

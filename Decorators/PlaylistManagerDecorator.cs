@@ -32,7 +32,9 @@ public sealed class PlaylistManagerDecorator(
     public Task RemoveUserFromShares(Guid playlistId, Guid userId, PlaylistUserPermissions share) =>
         inner.RemoveUserFromShares(playlistId, userId, share);
 
-    public async Task AddItemToPlaylistAsync(Guid playlistId, IReadOnlyCollection<Guid> itemIds, Guid userId) {
+    public async Task AddItemToPlaylistAsync(Guid playlistId,
+        IReadOnlyCollection<Guid> itemIds,
+        Guid userId) {
         await inner.AddItemToPlaylistAsync(playlistId, itemIds, userId).ConfigureAwait(false);
 
         if (libraryManager.GetItemById(playlistId) is not Playlist playlist)
@@ -97,7 +99,10 @@ public sealed class PlaylistManagerDecorator(
     public Folder GetPlaylistsFolder(Guid userId) =>
         inner.GetPlaylistsFolder(userId);
 
-    public Task MoveItemAsync(string playlistId, string entryId, int newIndex, Guid callingUserId) =>
+    public Task MoveItemAsync(string playlistId,
+        string entryId,
+        int newIndex,
+        Guid callingUserId) =>
         inner.MoveItemAsync(playlistId, entryId, newIndex, callingUserId);
 
     public Task RemovePlaylistsAsync(Guid userId) =>
