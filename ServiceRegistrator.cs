@@ -33,7 +33,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<CatalogImportService>();
         services.AddSingleton<PalcoCacheService>(); // Palco Migration
         services.AddHostedService<GelatoService>();
-        services.AddTransient<Microsoft.AspNetCore.Hosting.IStartupFilter, Cavea.Api.UIInjectionStartupFilter>();
+        services.AddTransient<Microsoft.AspNetCore.Hosting.IStartupFilter, UIInjectionStartupFilter>();
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
