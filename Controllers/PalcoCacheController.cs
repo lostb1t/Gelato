@@ -42,8 +42,10 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
     [HttpPost("Registration/Request")]
     [AllowAnonymous]
     [Consumes(MediaTypeNames.Application.Json)]
-    public async Task<ActionResult> SubmitRegistrationRequest([FromBody] RegistrationRequest request) {
-        if (Cache == null) return StatusCode(503, new { error = "Cache unavailable" });
+    public async Task<ActionResult> SubmitRegistrationRequest(
+        [FromBody] RegistrationRequest request) {
+        if (Cache == null)
+            return StatusCode(503, new { error = "Cache unavailable" });
         if (string.IsNullOrEmpty(request.Id) || !request.Id.StartsWith("request-"))
             return BadRequest(new { error = "Invalid request ID" });
 
@@ -72,18 +74,23 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
                 if (smtp != null && !string.IsNullOrEmpty(smtp.Host)) {
                     // Extract user details
                     var userData = JsonSerializer.Deserialize<JsonElement>(request.Data);
-                    var userName = userData.TryGetProperty("name", out var n) ? n.GetString() : "Unknown";
-                    var userEmail = userData.TryGetProperty("email", out var e) ? e.GetString() : "Unknown";
-                    var userMessage = userData.TryGetProperty("userMessage", out var m) ? m.GetString() : "";
+                    var userName = userData.TryGetProperty("name", out var n) ? n.GetString()
+                        : "Unknown";
+                    var userEmail = userData.TryGetProperty("email", out var e) ? e.GetString()
+                        : "Unknown";
+                    var userMessage = userData.TryGetProperty("userMessage", out var m)
+                        ? m.GetString() : "";
 
-                    var adminEmail = !string.IsNullOrEmpty(smtp.AdminEmail) ? smtp.AdminEmail : smtp.Username;
+                    var adminEmail = !string.IsNullOrEmpty(smtp.AdminEmail) ? smtp.AdminEmail
+                        : smtp.Username;
 
                     if (!string.IsNullOrEmpty(adminEmail)) {
                         using var client = new SmtpClient(smtp.Host, smtp.Port);
                         client.EnableSsl = true;
                         client.Credentials = new NetworkCredential(smtp.Username, smtp.Password);
 
-                        var body = $"A new user has requested access to your server.\n\nUsername: {userName}\nEmail: {userEmail}";
+                        var body =
+                            $"A new user has requested access to your server.\n\nUsername: {userName}\nEmail: {userEmail}";
 
                         if (!string.IsNullOrEmpty(userMessage)) {
                             body += $"\n\nMessage from User:\n{userMessage}";
@@ -92,19 +99,21 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
                         body += "\n\nPlease review this request in the Anfiteatro admin panel.";
 
                         var mail = new MailMessage {
-                            From = new MailAddress(smtp.FromAddress ?? smtp.Username, smtp.FromName ?? "Anfiteatro"),
+                            From = new MailAddress(smtp.FromAddress ?? smtp.Username,
+                                smtp.FromName ?? "Anfiteatro"),
                             Subject = $"New Registration Request: {userName}",
                             Body = body
                         };
                         mail.To.Add(adminEmail);
 
                         await client.SendMailAsync(mail);
-                        logger.LogInformation("[Gelato] Palco Admin notification sent to {AdminEmail} for registration: {Id}", adminEmail, requestId);
+                        logger.LogInformation(
+                            "[Gelato] Palco Admin notification sent to {AdminEmail} for registration: {Id}",
+                            adminEmail, requestId);
                     }
                 }
             }
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             logger.LogWarning(ex, "[Gelato] Palco Failed to send admin notification email");
         }
 
@@ -118,9 +127,11 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
     /// </summary>
     [HttpGet("Cache/{key}")]
     public ActionResult Get([FromRoute] string key, [FromQuery] string ns = "") {
-        if (Cache == null) return StatusCode(503);
+        if (Cache == null)
+            return StatusCode(503);
         var value = Cache.Get(key, ns);
-        if (value == null) return NotFound();
+        if (value == null)
+            return NotFound();
         return Ok(new { Key = key, Value = value, Namespace = ns });
     }
 
@@ -129,8 +140,11 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
     /// </summary>
     [HttpPost("Cache/{key}")]
     [Consumes(MediaTypeNames.Application.Json)]
-    public ActionResult Set([FromRoute] string key, [FromBody] SetRequest request, [FromQuery] string ns = "") {
-        if (Cache == null) return StatusCode(503);
+    public ActionResult Set([FromRoute] string key,
+        [FromBody] SetRequest request,
+        [FromQuery] string ns = "") {
+        if (Cache == null)
+            return StatusCode(503);
         Cache.Set(key, request.Value, request.TtlSeconds, ns);
         logger.LogInformation("[Gelato] Palco Saved: {Key} in {Ns}", key, ns);
         return Ok(new { success = true });
@@ -141,7 +155,8 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
     /// </summary>
     [HttpDelete("Cache/{key}")]
     public ActionResult Delete([FromRoute] string key, [FromQuery] string ns = "") {
-        if (Cache == null) return StatusCode(503);
+        if (Cache == null)
+            return StatusCode(503);
         var deleted = Cache.Delete(key, ns);
 
         // If deleting a request, also remove from index
@@ -152,12 +167,14 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
                 var index = JsonSerializer.Deserialize<List<string>>(indexJson) ?? [];
                 if (index.Remove(requestId)) {
                     Cache.Set("requests-index", JsonSerializer.Serialize(index), 0, RegistrationNs);
-                    logger.LogInformation("[Gelato] Palco Request removed from index: {Id}", requestId);
+                    logger.LogInformation("[Gelato] Palco Request removed from index: {Id}",
+                        requestId);
                 }
             }
         }
 
-        logger.LogInformation("[Gelato] Palco Deleted: {Key} from {Ns}, success={Deleted}", key, ns, deleted);
+        logger.LogInformation("[Gelato] Palco Deleted: {Key} from {Ns}, success={Deleted}", key, ns,
+            deleted);
         return Ok(new { success = true, deleted });
     }
 
@@ -166,8 +183,10 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
     /// </summary>
     [HttpPost("Cache/Bulk")]
     [Consumes(MediaTypeNames.Application.Json)]
-    public ActionResult<Dictionary<string, string>> GetBulk([FromBody] BulkRequest request, [FromQuery] string ns = "") {
-        if (Cache == null) return StatusCode(503);
+    public ActionResult<Dictionary<string, string>> GetBulk([FromBody] BulkRequest request,
+        [FromQuery] string ns = "") {
+        if (Cache == null)
+            return StatusCode(503);
         return Ok(Cache.GetBulk(request.Keys, ns));
     }
 
@@ -176,7 +195,8 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
     /// </summary>
     [HttpGet("Cache/Stats")]
     public ActionResult GetStats() {
-        if (Cache == null) return StatusCode(503);
+        if (Cache == null)
+            return StatusCode(503);
         var (total, expired, size) = Cache.GetStats();
         return Ok(new { TotalEntries = total, ExpiredEntries = expired, DatabaseSizeBytes = size });
     }
@@ -203,8 +223,7 @@ public class PalcoCacheController(ILogger<PalcoCacheController> logger) : Contro
             await client.SendMailAsync(mail);
             logger.LogInformation("[Gelato] Palco Email sent to {To}", request.To);
             return Ok(new { success = true });
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             logger.LogError(ex, "[Gelato] Palco Email failed to {To}", request.To);
             return Ok(new { success = false, error = ex.Message });
         }

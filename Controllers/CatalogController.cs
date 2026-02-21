@@ -1,11 +1,11 @@
 using Gelato.Config;
 using Gelato.ScheduledTasks;
 using Gelato.Services;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Tasks;
 
 namespace Gelato.Controllers;
 
@@ -59,12 +59,14 @@ public class CatalogController(
         // Better to run in background.
 
         _ = Task.Run(async () => {
-             try {
-                 await importService.ImportCatalogAsync(id, type, CancellationToken.None);
-                 await libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
-             } catch (Exception ex) {
-                 logger.LogError(ex, "Error in manual import for {Id}", id);
-             }
+            try {
+                await importService.ImportCatalogAsync(id, type, CancellationToken.None);
+                await libraryManager
+                    .ValidateMediaLibrary(new Progress<double>(), CancellationToken.None)
+                    .ConfigureAwait(false);
+            } catch (Exception ex) {
+                logger.LogError(ex, "Error in manual import for {Id}", id);
+            }
         });
 
         return Task.FromResult<ActionResult>(Accepted());

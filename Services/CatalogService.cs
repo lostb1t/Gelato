@@ -16,9 +16,11 @@ public class CatalogService(GelatoStremioProviderFactory stremioFactory) {
 
         // Merge manifest catalogs with local config
         foreach (var mCatalog in manifest.Catalogs) {
-            if (mCatalog.IsSearchCapable()) continue; // Skip search catalogs
+            if (mCatalog.IsSearchCapable())
+                continue; // Skip search catalogs
 
-            var existing = config.Catalogs.FirstOrDefault(c => c.Id == mCatalog.Id && c.Type == mCatalog.Type);
+            var existing =
+                config.Catalogs.FirstOrDefault(c => c.Id == mCatalog.Id && c.Type == mCatalog.Type);
             if (existing == null) {
                 existing = new CatalogConfig {
                     Id = mCatalog.Id,
@@ -47,7 +49,8 @@ public class CatalogService(GelatoStremioProviderFactory stremioFactory) {
 
     public void UpdateCatalogConfig(CatalogConfig updatedConfig) {
         var config = GelatoPlugin.Instance!.Configuration;
-        var existing = config.Catalogs.FirstOrDefault(c => c.Id == updatedConfig.Id && c.Type == updatedConfig.Type);
+        var existing = config.Catalogs.FirstOrDefault(c =>
+            c.Id == updatedConfig.Id && c.Type == updatedConfig.Type);
 
         if (existing != null) {
             existing.Enabled = updatedConfig.Enabled;

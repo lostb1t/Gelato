@@ -63,8 +63,7 @@ public sealed class ImageResourceFilter(
                 ctx.HttpContext.Response.Body,
                 ctx.HttpContext.RequestAborted
             );
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);
             await next();
         }

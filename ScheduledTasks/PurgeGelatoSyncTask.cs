@@ -24,15 +24,13 @@ public sealed class PurgeGelatoSyncTask(
 
         var items = libraryManager
             .GetItemList(new InternalItemsQuery {
-                IncludeItemTypes =
-                [
+                IncludeItemTypes = [
                     BaseItemKind.Movie,
                     BaseItemKind.Series,
                     BaseItemKind.BoxSet
                 ],
                 Recursive = true,
-                HasAnyProviderId = new Dictionary<string, string>
-                {
+                HasAnyProviderId = new Dictionary<string, string> {
                     { "Stremio", string.Empty },
                     { "stremio", string.Empty },
                 },
@@ -54,8 +52,7 @@ public sealed class PurgeGelatoSyncTask(
                     item,
                     new DeleteOptions { DeleteFileLocation = true },
                     true);
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
             }
 

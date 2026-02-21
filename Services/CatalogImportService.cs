@@ -1,12 +1,12 @@
-using MediaBrowser.Controller.Collections;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Library;
-using Jellyfin.Data.Enums;
-using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
-using MediaBrowser.Controller.Entities.Movies;
 using System.Diagnostics;
 using Gelato.Config;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Collections;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Library;
+using Microsoft.Extensions.Logging;
 
 // For BoxSet
 
@@ -18,7 +18,10 @@ public class CatalogImportService(
     CatalogService catalogService,
     ICollectionManager collectionManager,
     ILibraryManager libraryManager) {
-    public async Task ImportCatalogAsync(string catalogId, string type, CancellationToken ct, IProgress<double>? progress = null) {
+    public async Task ImportCatalogAsync(string catalogId,
+        string type,
+        CancellationToken ct,
+        IProgress<double>? progress = null) {
         var catalogCfg = catalogService.GetCatalogConfig(catalogId, type);
         if (catalogCfg == null) {
             logger.LogWarning("Catalog config not found for {Id} {Type}", catalogId, type);
@@ -49,7 +52,8 @@ public class CatalogImportService(
         var opts = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct };
 
         var stopwatch = Stopwatch.StartNew();
-        logger.LogInformation("Starting import for catalog {Name} ({Id}) - Limit: {Limit}", catalogCfg.Name, catalogId, maxItems);
+        logger.LogInformation("Starting import for catalog {Name} ({Id}) - Limit: {Limit}",
+            catalogCfg.Name, catalogId, maxItems);
 
         try {
             var skip = 0;
@@ -84,8 +88,7 @@ public class CatalogImportService(
                         // catalog can contain multiple types.
 
                         var root =
-                            baseItemKind switch
-                            {
+                            baseItemKind switch {
                                 BaseItemKind.Series => seriesFolder,
                                 BaseItemKind.Movie => movieFolder,
                                 _ => null
@@ -105,9 +108,9 @@ public class CatalogImportService(
                                     )
                                     .ConfigureAwait(false);
 
-                                if (item != null) importedIds.Add(item.Id);
-                            }
-                            catch (Exception ex) {
+                                if (item != null)
+                                    importedIds.Add(item.Id);
+                            } catch (Exception ex) {
                                 logger.LogError(
                                     "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
                                     catalogId,
@@ -133,15 +136,13 @@ public class CatalogImportService(
             }
 
             logger.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processed);
-        }
-        catch (OperationCanceledException ex) {
+        } catch (OperationCanceledException ex) {
             logger.LogWarning(
                 ex,
                 "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
-                    catalogId
+                catalogId
             );
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             logger.LogError(
                 ex,
                 "Catalog sync failed for {Id}: {Message}",
@@ -178,7 +179,9 @@ public class CatalogImportService(
             }).ConfigureAwait(false);
 
             collection.DisplayOrder = "Default";
-            await collection.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+            await collection
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                .ConfigureAwait(false);
         }
         return collection;
     }
@@ -194,21 +197,25 @@ public class CatalogImportService(
                 }).Select(i => i.Id).ToList();
 
                 if (currentChildren.Count != 0) {
-                    await collectionManager.RemoveFromCollectionAsync(collection.Id, currentChildren).ConfigureAwait(false);
+                    await collectionManager
+                        .RemoveFromCollectionAsync(collection.Id, currentChildren)
+                        .ConfigureAwait(false);
                 }
 
                 var itemsToAdd = ids.ToList();
 
-                await collectionManager.AddToCollectionAsync(collection.Id, itemsToAdd).ConfigureAwait(false);
-                logger.LogInformation("Updated collection {Name} with {Count} items", config.Name, itemsToAdd.Count);
+                await collectionManager.AddToCollectionAsync(collection.Id, itemsToAdd)
+                    .ConfigureAwait(false);
+                logger.LogInformation("Updated collection {Name} with {Count} items", config.Name,
+                    itemsToAdd.Count);
             }
-        }
-        catch (Exception ex) {
+        } catch (Exception ex) {
             logger.LogError(ex, "Error updating collection for {Name}", config.Name);
         }
     }
 
-    public async Task SyncAllEnabledAsync(CancellationToken ct, IProgress<double>? progress = null) {
+    public async Task
+        SyncAllEnabledAsync(CancellationToken ct, IProgress<double>? progress = null) {
         // Force refresh of catalog list from manifest first
         var catalogs = await catalogService.GetCatalogsAsync(Guid.Empty);
         var enabled = catalogs.Where(c => c.Enabled).ToList();
@@ -228,6 +235,7 @@ public class CatalogImportService(
         }
 
         progress?.Report(100);
-        await libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+        await libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None)
+            .ConfigureAwait(false);
     }
 }
