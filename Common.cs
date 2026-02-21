@@ -275,6 +275,16 @@ public static class ActionContextExtensions {
         ctx.GetActionName() is { } actionName && SearchActionNames.Contains(actionName);
 
     public static bool IsInsertableAction(this HttpContext ctx) {
+        // If the gelato flag is explicitly present, respect it: true => insertable, false => not insertable
+        if (ctx.Items.TryGetValue("gelato", out var gelatoVal)) {
+
+            if (gelatoVal is bool bv)
+                return bv;
+            if (gelatoVal is string sv && bool.TryParse(sv, out var parsed))
+                return parsed;
+            // If present but unparsable, fall through to default behavior
+        }
+
         var actionName = ctx.GetActionName();
         return actionName != null
             && InsertableActionNames.Contains(actionName)

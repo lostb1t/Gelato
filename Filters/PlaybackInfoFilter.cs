@@ -35,7 +35,7 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter {
             if (!string.IsNullOrWhiteSpace(id))
                 ctx.HttpContext.Items[ItemsKey] = id;
         }
-
+        
         await next();
     }
 

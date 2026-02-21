@@ -15,6 +15,7 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators;
@@ -44,6 +45,12 @@ public sealed class MediaSourceManagerDecorator(
             item.Id
         );
         var ctx = _http.HttpContext;
+        if (ctx != null) {
+            try {
+                var fullUrl = ctx.Request.GetDisplayUrl();
+                _log.LogInformation("Request URL: {Url}", fullUrl);
+            } catch { }
+        }
         Guid userId;
         if (user != null) {
             userId = user.Id;
