@@ -446,14 +446,32 @@ public class GelatoManager {
             .Where(s => s is not null)
             .ToList();
 
-        // Get existing streams
-        var query = new InternalItemsQuery {
-            IncludeItemTypes = new[] { isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie },
-            HasAnyProviderId = providerIds,
-            Recursive = true,
-            IsDeadPerson = true,
-            //  IsVirtualItem = true,
-        };
+        // Get existing streams for the current item scope only.
+        // For episodes, constrain by season + episode index to avoid reusing
+        // rows from other episodes that happen to share provider ids.
+        InternalItemsQuery query;
+        if (isEpisode && item is Episode ep)
+        {
+            query = new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Episode },
+                ParentId = ep.SeasonId,
+                IndexNumber = ep.IndexNumber,
+                Recursive = false,
+                IsDeadPerson = true,
+            };
+        }
+        else
+        {
+            query = new InternalItemsQuery
+            {
+                IncludeItemTypes = new[] { BaseItemKind.Movie },
+                HasAnyProviderId = providerIds,
+                Recursive = true,
+                IsDeadPerson = true,
+              //  IsVirtualItem = true,
+            };
+        }
 
         var existing = _repo
             .GetItemList(query)
@@ -462,6 +480,8 @@ public class GelatoManager {
             .ToDictionary(v => v.GelatoData<Guid>("guid"));
 
         var newVideos = new List<Video>();
+        var usedIds = new HashSet<Guid>();
+        var collisionCount = 0;
 
         for (int i = 0; i < acceptable.Count; i++) {
             var s = acceptable[i];
@@ -477,6 +497,39 @@ public class GelatoManager {
                     );
 
             var id = s.GetGuid();
+            if (!usedIds.Add(id))
+            {
+                collisionCount++;
+                id = StableGuidFromString(
+                    string.Join(
+                        "|",
+                        "gelato-collision",
+                        id.ToString("N", inv),
+                        s.Url ?? string.Empty,
+                        s.GetName(),
+                        s.Description ?? string.Empty,
+                        s.Quality ?? string.Empty,
+                        s.Audio ?? string.Empty,
+                        s.Subtitle ?? string.Empty,
+                        s.BehaviorHints?.Filename ?? string.Empty,
+                        i.ToString(inv)
+                    )
+                );
+
+                while (!usedIds.Add(id))
+                {
+                    id = StableGuidFromString(
+                        string.Join("|", "gelato-collision-retry", id.ToString("N", inv), i.ToString(inv))
+                    );
+                }
+
+                _log.LogDebug(
+                    "SyncStreams collision resolved for item={ItemId} index={Index} stream={StreamName}",
+                    item.Id,
+                    index,
+                    s.GetName()
+                );
+            }
             //var id = Guid.NewGuid();
             // var target = existing.GetValueOrDefault(id);
             Video target;
@@ -496,6 +549,19 @@ public class GelatoManager {
                             PremiereDate = e.PremiereDate,
                         }
                         : new Movie { Id = _library.GetNewItemId(path, typeof(Movie)) };
+            }
+            // When reusing an existing episode row, 
+            // explicitly reassign episode metadata (SeriesId, SeasonId, IndexNumber, etc.).
+            // prevents stale episode linkage from old reused rows.
+            if (isEpisode && item is Episode sourceEp && target is Episode targetEp)
+            {
+                targetEp.SeriesId = sourceEp.SeriesId;
+                targetEp.SeriesName = sourceEp.SeriesName;
+                targetEp.SeasonId = sourceEp.SeasonId;
+                targetEp.SeasonName = sourceEp.SeasonName;
+                targetEp.IndexNumber = sourceEp.IndexNumber;
+                targetEp.ParentIndexNumber = sourceEp.ParentIndexNumber;
+                targetEp.PremiereDate = sourceEp.PremiereDate;
             }
 
             target.Name = primary.Name;
@@ -520,8 +586,8 @@ public class GelatoManager {
                 users.Add(userId);
                 target.SetGelatoData("userIds", users);
             }
-
-            target.SetGelatoData("name", s.Name);
+            
+            target.SetGelatoData("name", s.GetName());
             target.SetGelatoData("description", s.Description);
             if (!string.IsNullOrEmpty(s.BehaviorHints?.BingeGroup)) {
                 target.SetGelatoData("bingeGroup", s.BehaviorHints.BingeGroup);
@@ -566,10 +632,18 @@ public class GelatoManager {
         stopwatch.Stop();
 
         _log.LogInformation(
-            $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
+            $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count} collisions={collisionCount}"
         );
 
         return acceptable.Count;
+    }
+    // needed for deterministic collision fallback IDs (stable across runs, not random)
+    private static Guid StableGuidFromString(string key)
+    {
+        using var md5 = System.Security.Cryptography.MD5.Create();
+        var bytes = Encoding.UTF8.GetBytes(key);
+        var hash = md5.ComputeHash(bytes);
+        return new Guid(hash);
     }
 
     public async Task MergeVersions(Video[] items) {
