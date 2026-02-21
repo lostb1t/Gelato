@@ -1,9 +1,6 @@
 using Microsoft.Data.Sqlite;
 using MediaBrowser.Common.Configuration;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.IO;
 
 namespace Gelato.Services;
 
@@ -11,15 +8,13 @@ namespace Gelato.Services;
 /// SQLite-backed cache service migrated from Palco.
 /// Maintains the same DB location/name for compatibility.
 /// </summary>
-public class PalcoCacheService : IDisposable
-{
+public class PalcoCacheService : IDisposable {
     private readonly string _dbPath;
     private readonly ILogger<PalcoCacheService> _logger;
     private SqliteConnection? _connection;
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
-    public PalcoCacheService(IApplicationPaths appPaths, ILogger<PalcoCacheService> logger)
-    {
+    public PalcoCacheService(IApplicationPaths appPaths, ILogger<PalcoCacheService> logger) {
         _logger = logger;
         // Target existing Palco data folder to preserve legacy data
         var pluginDataPath = Path.Combine(appPaths.DataPath, "Palco");
@@ -28,8 +23,7 @@ public class PalcoCacheService : IDisposable
         Initialize();
     }
 
-    private void Initialize()
-    {
+    private void Initialize() {
         _connection = new SqliteConnection($"Data Source={_dbPath}");
         _connection.Open();
 
@@ -49,10 +43,8 @@ public class PalcoCacheService : IDisposable
         _logger.LogInformation("[Gelato] Palco Cache initialized at {Path}", _dbPath);
     }
 
-    public string? Get(string key, string ns = "")
-    {
-        lock (_lock)
-        {
+    public string? Get(string key, string ns = "") {
+        lock (_lock) {
             if (_connection == null) return null;
 
             using var cmd = _connection.CreateCommand();
@@ -77,10 +69,8 @@ public class PalcoCacheService : IDisposable
         }
     }
 
-    public void Set(string key, string value, int ttlSeconds = 0, string ns = "")
-    {
-        lock (_lock)
-        {
+    public void Set(string key, string value, int ttlSeconds = 0, string ns = "") {
+        lock (_lock) {
             if (_connection == null) return;
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -101,10 +91,8 @@ public class PalcoCacheService : IDisposable
         }
     }
 
-    public bool Delete(string key, string ns = "")
-    {
-        lock (_lock)
-        {
+    public bool Delete(string key, string ns = "") {
+        lock (_lock) {
             if (_connection == null) return false;
 
             // Remove specific key in namespace
@@ -116,21 +104,17 @@ public class PalcoCacheService : IDisposable
         }
     }
 
-    public Dictionary<string, string> GetBulk(IEnumerable<string> keys, string ns = "")
-    {
+    public Dictionary<string, string> GetBulk(IEnumerable<string> keys, string ns = "") {
         var result = new Dictionary<string, string>();
-        foreach (var key in keys)
-        {
+        foreach (var key in keys) {
             var value = Get(key, ns);
             if (value != null) result[key] = value;
         }
         return result;
     }
 
-    public (int total, int expired, long size) GetStats()
-    {
-        lock (_lock)
-        {
+    public (int total, int expired, long size) GetStats() {
+        lock (_lock) {
             if (_connection == null) return (0, 0, 0);
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -149,8 +133,7 @@ public class PalcoCacheService : IDisposable
         }
     }
 
-    public void Dispose()
-    {
+    public void Dispose() {
         _connection?.Close();
         _connection?.Dispose();
     }

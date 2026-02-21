@@ -1,74 +1,55 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators;
 
-public sealed class CollectionManagerDecorator : ICollectionManager {
-    private readonly ICollectionManager _inner;
-    private readonly Lazy<GelatoManager> _manager;
-    private readonly ILibraryManager _libraryManager;
-    private readonly ILogger<CollectionManagerDecorator> _log;
-
-    public CollectionManagerDecorator(
-        ICollectionManager inner,
-        Lazy<GelatoManager> manager,
-        ILibraryManager libraryManager,
-        ILogger<CollectionManagerDecorator> log
-    ) {
-        _inner = inner;
-        _manager = manager;
-        _libraryManager = libraryManager;
-        _log = log;
-    }
-
+public sealed class CollectionManagerDecorator(
+    ICollectionManager inner,
+    Lazy<GelatoManager> manager,
+    ILibraryManager libraryManager,
+    ILogger<CollectionManagerDecorator> log)
+    : ICollectionManager {
     public event EventHandler<CollectionCreatedEventArgs>? CollectionCreated {
-        add => _inner.CollectionCreated += value;
-        remove => _inner.CollectionCreated -= value;
+        add => inner.CollectionCreated += value;
+        remove => inner.CollectionCreated -= value;
     }
 
     public event EventHandler<CollectionModifiedEventArgs>? ItemsAddedToCollection {
-        add => _inner.ItemsAddedToCollection += value;
-        remove => _inner.ItemsAddedToCollection -= value;
+        add => inner.ItemsAddedToCollection += value;
+        remove => inner.ItemsAddedToCollection -= value;
     }
 
     public event EventHandler<CollectionModifiedEventArgs>? ItemsRemovedFromCollection {
-        add => _inner.ItemsRemovedFromCollection += value;
-        remove => _inner.ItemsRemovedFromCollection -= value;
+        add => inner.ItemsRemovedFromCollection += value;
+        remove => inner.ItemsRemovedFromCollection -= value;
     }
 
     public Task<BoxSet> CreateCollectionAsync(CollectionCreationOptions options) =>
-        _inner.CreateCollectionAsync(options);
+        inner.CreateCollectionAsync(options);
 
     public async Task AddToCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) {
-        await _inner.AddToCollectionAsync(collectionId, itemIds).ConfigureAwait(false);
+        var guids = itemIds as Guid[] ?? itemIds.ToArray();
+        await inner.AddToCollectionAsync(collectionId, guids).ConfigureAwait(false);
 
-        var collection = _libraryManager.GetItemById(collectionId) as BoxSet;
-        if (collection is null)
+        if (libraryManager.GetItemById(collectionId) is not BoxSet collection)
             return;
 
-        var addedItems = itemIds
-            .Select(id => _libraryManager.GetItemById(id))
-            .Where(item => item is not null)
+        var gelatoItems = guids
+            .Select(libraryManager.GetItemById)
+            .Where(item => item is not null && manager.Value.IsGelato(item))
             .ToList();
 
-        var gelatoItems = addedItems.Where(_manager.Value.IsGelato).ToList();
         if (gelatoItems.Count == 0)
             return;
 
         var needsFix = false;
 
-        for (int i = 0; i < collection.LinkedChildren.Length; i++) {
+        for (var i = 0; i < collection.LinkedChildren.Length; i++) {
             var linkedChild = collection.LinkedChildren[i];
 
             if (
@@ -76,11 +57,11 @@ public sealed class CollectionManagerDecorator : ICollectionManager {
                 && !string.IsNullOrEmpty(linkedChild.Path)
             ) {
                 var matchingItem = gelatoItems.FirstOrDefault(item =>
-                    item.Path == linkedChild.Path
+                    item?.Path == linkedChild.Path
                 );
 
                 if (matchingItem != null) {
-                    _log.LogDebug(
+                    log.LogDebug(
                         "Fixing Gelato LinkedChild with path {Path} for item {Id}",
                         linkedChild.Path,
                         matchingItem.Id
@@ -96,7 +77,7 @@ public sealed class CollectionManagerDecorator : ICollectionManager {
         }
 
         if (needsFix) {
-            _log.LogDebug(
+            log.LogDebug(
                 "Fixing {Count} Gelato items in collection {Name}",
                 gelatoItems.Count,
                 collection.Name
@@ -108,11 +89,11 @@ public sealed class CollectionManagerDecorator : ICollectionManager {
     }
 
     public Task RemoveFromCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) =>
-        _inner.RemoveFromCollectionAsync(collectionId, itemIds);
+        inner.RemoveFromCollectionAsync(collectionId, itemIds);
 
     public IEnumerable<BaseItem> CollapseItemsWithinBoxSets(IEnumerable<BaseItem> items, User user) =>
-        _inner.CollapseItemsWithinBoxSets(items, user);
+        inner.CollapseItemsWithinBoxSets(items, user);
 
     public Task<Folder?> GetCollectionsFolder(bool createIfNeeded) =>
-        _inner.GetCollectionsFolder(createIfNeeded);
+        inner.GetCollectionsFolder(createIfNeeded);
 }

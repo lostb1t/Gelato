@@ -1,105 +1,78 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Gelato;
-using Gelato.Common;
-using Gelato.Decorators;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Audio;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Configuration;
-using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Tasks {
-    public sealed class PurgeGelatoSyncTask : IScheduledTask {
-        private readonly ILogger<PurgeGelatoSyncTask> _log;
-        private readonly GelatoManager _manager;
-        private readonly ILibraryManager _library;
-        private readonly GelatoItemRepository _repo;
+namespace Gelato.ScheduledTasks;
 
-        public PurgeGelatoSyncTask(
-            ILibraryManager libraryManager,
-            ILogger<PurgeGelatoSyncTask> log,
-                    GelatoItemRepository repo,
-            GelatoManager manager
-        ) {
-            _log = log;
-            _library = libraryManager;
-            _manager = manager;
-            _repo = repo;
-        }
+public sealed class PurgeGelatoSyncTask(
+    ILibraryManager libraryManager,
+    ILogger<PurgeGelatoSyncTask> log,
+    GelatoManager manager)
+    : IScheduledTask {
+    public string Name => "WARNING: purge all gelato items";
+    public string Key => "PurgeGelatoSyncTask";
+    public string Description => "Removes all stremio items (local items are kept)";
+    public string Category => "Gelato Maintenance";
 
-        public string Name => "WARNING: purge all gelato items";
-        public string Key => "PurgeGelatoSyncTask";
-        public string Description => "Removes all stremio items (local items are kept)";
-        public string Category => "Gelato Maintenance";
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 
-        public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => Array.Empty<TaskTriggerInfo>();
+    public Task ExecuteAsync(IProgress<double> progress, CancellationToken ct) {
+        var stats = new ConcurrentDictionary<BaseItemKind, int>();
 
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct) {
-            var stats = new ConcurrentDictionary<BaseItemKind, int>();
+        var items = libraryManager
+            .GetItemList(new InternalItemsQuery {
+                IncludeItemTypes =
+                [
+                    BaseItemKind.Movie,
+                    BaseItemKind.Series,
+                    BaseItemKind.BoxSet
+                ],
+                Recursive = true,
+                HasAnyProviderId = new Dictionary<string, string>
+                {
+                    { "Stremio", string.Empty },
+                    { "stremio", string.Empty },
+                },
+                GroupByPresentationUniqueKey = false,
+                GroupBySeriesPresentationUniqueKey = false,
+                CollapseBoxSetItems = false,
+                IsDeadPerson = true,
+            })
+            .Where(manager.IsGelato)
+            .ToList();
 
-            var items = _library
-                .GetItemList(new InternalItemsQuery {
-                    IncludeItemTypes = new[]
-                    {
-                BaseItemKind.Movie,
-                BaseItemKind.Series,
-                BaseItemKind.BoxSet,
-                    },
-                    Recursive = true,
-                    HasAnyProviderId = new Dictionary<string, string>
-                    {
-                { "Stremio", string.Empty },
-                { "stremio", string.Empty },
-                    },
-                    GroupByPresentationUniqueKey = false,
-                    GroupBySeriesPresentationUniqueKey = false,
-                    CollapseBoxSetItems = false,
-                    IsDeadPerson = true,
-                })
-                .OfType<BaseItem>()
-                .Where(i => _manager.IsGelato(i))
-                .ToList();
+        var totalItems = items.Count;
+        var processedItems = 0;
 
-            int totalItems = items.Count;
-            int processedItems = 0;
-
-            foreach (var item in items) {
-                var kind = item.GetBaseItemKind();
-                try {
-                    _library.DeleteItem(
-            item,
-            new DeleteOptions { DeleteFileLocation = true },
-            true);
-                }
-                catch (Exception ex) {
-                    _log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
-                }
-
-                stats.AddOrUpdate(kind, 1, (_, count) => count + 1);
-
-                processedItems++;
-                double currentProgress = (double)processedItems / totalItems * 100;
-                progress?.Report(currentProgress);
+        foreach (var item in items) {
+            var kind = item.GetBaseItemKind();
+            try {
+                libraryManager.DeleteItem(
+                    item,
+                    new DeleteOptions { DeleteFileLocation = true },
+                    true);
+            }
+            catch (Exception ex) {
+                log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
             }
 
-            _manager.ClearCache();
-            progress?.Report(100.0);
+            stats.AddOrUpdate(kind, 1, (_, count) => count + 1);
 
-            var parts = stats.Select(kv => $"{kv.Key}={kv.Value}");
-            var line = string.Join(", ", parts);
-
-            _log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
+            processedItems++;
+            var currentProgress = (double)processedItems / totalItems * 100;
+            progress?.Report(currentProgress);
         }
+
+        manager.ClearCache();
+        progress?.Report(100.0);
+
+        var parts = stats.Select(kv => $"{kv.Key}={kv.Value}");
+        var line = string.Join(", ", parts);
+
+        log.LogInformation("Deleted: {Stats} (Total={Total})", line, stats.Values.Sum());
+        return Task.CompletedTask;
     }
 }

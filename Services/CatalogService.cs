@@ -1,32 +1,19 @@
-using Gelato.Configuration;
-using Microsoft.Extensions.Logging;
-using static Gelato.Configuration.PluginConfiguration;
+using Gelato.Config;
 
 namespace Gelato.Services;
 
-public class CatalogService {
-    private readonly ILogger<CatalogService> _logger;
-    private readonly GelatoStremioProviderFactory _stremioFactory;
-
-    public CatalogService(
-        ILogger<CatalogService> logger,
-        GelatoStremioProviderFactory stremioFactory
-    ) {
-        _logger = logger;
-        _stremioFactory = stremioFactory;
-    }
-
+public class CatalogService(GelatoStremioProviderFactory stremioFactory) {
     public async Task<List<CatalogConfig>> GetCatalogsAsync(Guid userId) {
         var config = GelatoPlugin.Instance!.Configuration;
-        var provider = _stremioFactory.Create(userId);
+        var provider = stremioFactory.Create(userId);
         var manifest = await provider.GetManifestAsync();
 
         if (manifest?.Catalogs == null) {
             return config.Catalogs;
         }
 
-        List<CatalogConfig> catalogs = new List<CatalogConfig>();
-        
+        List<CatalogConfig> catalogs = [];
+
         // Merge manifest catalogs with local config
         foreach (var mCatalog in manifest.Catalogs) {
             if (mCatalog.IsSearchCapable()) continue; // Skip search catalogs
@@ -40,15 +27,15 @@ public class CatalogService {
                     Enabled = false,
                     MaxItems = 0, // 0 = use global CatalogMaxItems
                     CreateCollection = false,
-                    Url = "" 
+                    Url = ""
                 };
-                
+
             } else {
                 // Update basic info from manifest just in case
-                existing.Name = mCatalog.Name; 
+                existing.Name = mCatalog.Name;
             }
             catalogs.Add(existing);
-            
+
         }
         config.Catalogs = catalogs;
 
@@ -61,7 +48,7 @@ public class CatalogService {
     public void UpdateCatalogConfig(CatalogConfig updatedConfig) {
         var config = GelatoPlugin.Instance!.Configuration;
         var existing = config.Catalogs.FirstOrDefault(c => c.Id == updatedConfig.Id && c.Type == updatedConfig.Type);
-        
+
         if (existing != null) {
             existing.Enabled = updatedConfig.Enabled;
             existing.MaxItems = updatedConfig.MaxItems;
@@ -69,10 +56,10 @@ public class CatalogService {
         } else {
             config.Catalogs.Add(updatedConfig);
         }
-        
+
         GelatoPlugin.Instance.SaveConfiguration();
     }
-    
+
     public CatalogConfig? GetCatalogConfig(string id, string type) {
         return GelatoPlugin.Instance!.Configuration.Catalogs
             .FirstOrDefault(c => c.Id == id && c.Type == type);

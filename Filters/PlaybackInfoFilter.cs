@@ -1,11 +1,4 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
-using Gelato.Common;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.MediaEncoding;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -17,24 +10,10 @@ namespace Gelato.Filters;
 /// Looks for both "MediaSourceId" and "RouteMediaSourceId", stores as "MediaSourceId".
 /// </summary>
 public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter {
-    public int Order { get; set; } = 3;
+    public int Order { get; init; } = 3;
 
     private const string ItemsKey = "MediaSourceId";
-    private static readonly string[] InputKeys = new[] { "MediaSourceId", "RouteMediaSourceId" };
-
-    private readonly ILibraryManager _library;
-    private readonly GelatoManager _manager;
-    private readonly IMediaSourceManager _sources;
-
-    public PlaybackInfoFilter(
-        ILibraryManager library,
-        IMediaSourceManager sources,
-        GelatoManager manager
-    ) {
-        _library = library;
-        _sources = sources;
-        _manager = manager;
-    }
+    private static readonly string[] InputKeys = ["MediaSourceId", "RouteMediaSourceId"];
 
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
@@ -54,7 +33,7 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter {
             || TryFromQuery(ctx.HttpContext.Request, out id)
         ) {
             if (!string.IsNullOrWhiteSpace(id))
-                ctx.HttpContext.Items[ItemsKey] = id!;
+                ctx.HttpContext.Items[ItemsKey] = id;
         }
 
         await next();
@@ -67,7 +46,7 @@ public sealed class PlaybackInfoFilter : IAsyncActionFilter, IOrderedFilter {
 
             foreach (var key in InputKeys) {
                 if (
-                    kv.Key.Equals(key, System.StringComparison.OrdinalIgnoreCase)
+                    kv.Key.Equals(key, StringComparison.OrdinalIgnoreCase)
                     && kv.Value is string s
                     && !string.IsNullOrWhiteSpace(s)
                 ) {

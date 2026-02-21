@@ -1,12 +1,6 @@
 #nullable disable
 #pragma warning disable CS1591
 
-using System;
-using System.Collections.Generic;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using Gelato.Common;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
@@ -18,78 +12,62 @@ using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
-public sealed class GelatoItemRepository : IItemRepository {
-    private readonly IItemRepository _inner;
-    private readonly IHttpContextAccessor _http;
+public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
+    : IItemRepository {
+    private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
 
-    public GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http) {
-        _inner = inner;
-        _http = http ?? throw new ArgumentNullException(nameof(http));
-    }
-
-    public void DeleteItem(params IReadOnlyList<Guid> ids) => _inner.DeleteItem(ids);
+    public void DeleteItem(params IReadOnlyList<Guid> ids) => inner.DeleteItem(ids);
 
     public void SaveItems(IReadOnlyList<BaseItem> items, CancellationToken cancellationToken) =>
-        _inner.SaveItems(items, cancellationToken);
+        inner.SaveItems(items, cancellationToken);
 
-    public void SaveImages(BaseItem item) => _inner.SaveImages(item);
+    public void SaveImages(BaseItem item) => inner.SaveImages(item);
 
-    public BaseItem RetrieveItem(Guid id) => _inner.RetrieveItem(id);
+    public BaseItem RetrieveItem(Guid id) => inner.RetrieveItem(id);
 
     public QueryResult<BaseItem> GetItems(InternalItemsQuery filter) {
-        return _inner.GetItems(ApplyFilters(filter));
+        return inner.GetItems(ApplyFilters(filter));
     }
 
     public IReadOnlyList<Guid> GetItemIdsList(InternalItemsQuery filter) =>
-        _inner.GetItemIdsList(ApplyFilters(filter));
+        inner.GetItemIdsList(ApplyFilters(filter));
 
     public IReadOnlyList<BaseItem> GetItemList(InternalItemsQuery filter) {
-        return _inner.GetItemList(ApplyFilters(filter));
+        return inner.GetItemList(ApplyFilters(filter));
     }
 
-    public IReadOnlyList<BaseItem> GetNoScopeItemList(InternalItemsQuery filter) {
-        return _inner.GetItemList(filter);
-    }
-
-    public InternalItemsQuery ApplyFilters(InternalItemsQuery filter) {
-        var ctx = _http?.HttpContext;
-        var filterUnreleased = GelatoPlugin.Instance.Configuration.FilterUnreleased;
+    private InternalItemsQuery ApplyFilters(InternalItemsQuery filter) {
+        var ctx = _http.HttpContext;
+        var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
 
         if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null) {
             filter.IsDeadPerson = null;
-            if (
-                (
-                    !filter.IncludeItemTypes.Any()
-                    || filter
-                        .IncludeItemTypes.Intersect(
-                            new[] { BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode }
-                        )
-                        .Any()
-                )
-            ) {
-                if (filter.ExcludeTags is null || filter.ExcludeTags.Length == 0) {
-                    filter.ExcludeTags = new[] { GelatoManager.StreamTag };
-                }
-                if (filter.MaxPremiereDate is null && filterUnreleased) {
-                    // we dont have access to the query so can make a proper statement.
-                    var days =
-                        (
-                            filter.IncludeItemTypes.Contains(BaseItemKind.Series)
-                            || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
-                        )
-                            ? 0
-                            : bufferDays;
-                    filter.MaxPremiereDate = DateTime.Today.AddDays((double)days);
-                }
+            if (filter.IncludeItemTypes.Length != 0
+                 && !filter
+                     .IncludeItemTypes.Intersect(
+                         [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
+                     )
+                     .Any()) return filter;
+            if (filter.ExcludeTags.Length == 0) {
+                filter.ExcludeTags = [GelatoManager.StreamTag];
             }
+
+            if (filter.MaxPremiereDate is not null || !filterUnreleased) return filter;
+
+            // we dont have access to the query so can make a proper statement.
+            var days = filter.IncludeItemTypes.Contains(BaseItemKind.Series)
+                       || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
+                ? 0
+                : bufferDays;
+            filter.MaxPremiereDate = DateTime.Today.AddDays(days);
         }
         else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person)) {
             filter.IsDeadPerson = null;
         }
         else if (filter.IsMissing == true) {
             // jf deletes virtual items when theres a valid primary version. So just dont return it
-            filter.ExcludeTags = new[] { GelatoManager.StreamTag };
+            filter.ExcludeTags = [GelatoManager.StreamTag];
         }
         return filter;
     }
@@ -97,60 +75,60 @@ public sealed class GelatoItemRepository : IItemRepository {
     public IReadOnlyList<BaseItem> GetLatestItemList(
         InternalItemsQuery filter,
         CollectionType collectionType
-    ) => _inner.GetLatestItemList(filter, collectionType);
+    ) => inner.GetLatestItemList(filter, collectionType);
 
     public IReadOnlyList<string> GetNextUpSeriesKeys(
         InternalItemsQuery filter,
         DateTime dateCutoff
-    ) => _inner.GetNextUpSeriesKeys(filter, dateCutoff);
+    ) => inner.GetNextUpSeriesKeys(filter, dateCutoff);
 
-    public void UpdateInheritedValues() => _inner.UpdateInheritedValues();
+    public void UpdateInheritedValues() => inner.UpdateInheritedValues();
 
-    public int GetCount(InternalItemsQuery filter) => _inner.GetCount(filter);
+    public int GetCount(InternalItemsQuery filter) => inner.GetCount(filter);
 
-    public ItemCounts GetItemCounts(InternalItemsQuery filter) => _inner.GetItemCounts(filter);
+    public ItemCounts GetItemCounts(InternalItemsQuery filter) => inner.GetItemCounts(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetGenres(
         InternalItemsQuery filter
-    ) => _inner.GetGenres(filter);
+    ) => inner.GetGenres(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetMusicGenres(
         InternalItemsQuery filter
-    ) => _inner.GetMusicGenres(filter);
+    ) => inner.GetMusicGenres(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetStudios(
         InternalItemsQuery filter
-    ) => _inner.GetStudios(filter);
+    ) => inner.GetStudios(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetArtists(
         InternalItemsQuery filter
-    ) => _inner.GetArtists(filter);
+    ) => inner.GetArtists(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetAlbumArtists(
         InternalItemsQuery filter
-    ) => _inner.GetAlbumArtists(filter);
+    ) => inner.GetAlbumArtists(filter);
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetAllArtists(
         InternalItemsQuery filter
-    ) => _inner.GetAllArtists(filter);
+    ) => inner.GetAllArtists(filter);
 
-    public IReadOnlyList<string> GetMusicGenreNames() => _inner.GetMusicGenreNames();
+    public IReadOnlyList<string> GetMusicGenreNames() => inner.GetMusicGenreNames();
 
-    public IReadOnlyList<string> GetStudioNames() => _inner.GetStudioNames();
+    public IReadOnlyList<string> GetStudioNames() => inner.GetStudioNames();
 
-    public IReadOnlyList<string> GetGenreNames() => _inner.GetGenreNames();
+    public IReadOnlyList<string> GetGenreNames() => inner.GetGenreNames();
 
-    public IReadOnlyList<string> GetAllArtistNames() => _inner.GetAllArtistNames();
+    public IReadOnlyList<string> GetAllArtistNames() => inner.GetAllArtistNames();
 
-    public Task<bool> ItemExistsAsync(Guid id) => _inner.ItemExistsAsync(id);
+    public Task<bool> ItemExistsAsync(Guid id) => inner.ItemExistsAsync(id);
 
     public bool GetIsPlayed(User user, Guid id, bool recursive) =>
-        _inner.GetIsPlayed(user, id, recursive);
+        inner.GetIsPlayed(user, id, recursive);
 
     public IReadOnlyDictionary<string, MusicArtist[]> FindArtists(
         IReadOnlyList<string> artistNames
-    ) => _inner.FindArtists(artistNames);
+    ) => inner.FindArtists(artistNames);
 
     public Task ReattachUserDataAsync(BaseItem item, CancellationToken cancellationToken) =>
-        _inner.ReattachUserDataAsync(item, cancellationToken);
+        inner.ReattachUserDataAsync(item, cancellationToken);
 }
