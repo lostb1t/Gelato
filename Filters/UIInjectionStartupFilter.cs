@@ -44,7 +44,7 @@ public class UIInjectionMiddleware
             var path = context.Request.Path.Value;
             bool isIndexRequest = path.Equals("/web/index.html", StringComparison.OrdinalIgnoreCase) ||
                                   path.Equals("/web/", StringComparison.OrdinalIgnoreCase);
-Console.WriteLine("IEIEJEJEJEIEIEIEJEIEJEJEJEJEEJJEEJEJEJEJEEJEJEJEJEJ");
+
             // If it is an index request AND injection is enabled
             if (isIndexRequest)
             {
@@ -62,7 +62,7 @@ Console.WriteLine("IEIEJEJEJEIEIEIEJEIEJEJEJEJEEJJEEJEJEJEJEEJEJEJEJEJ");
                         if (!originalHtml.Contains("<!-- Gelato Injected -->"))
                         {
                             var modifiedHtml = InjectGelatoUI(originalHtml);
-                            
+
                             context.Response.ContentType = "text/html; charset=utf-8";
                             context.Response.StatusCode = 200;
                             await context.Response.WriteAsync(modifiedHtml, Encoding.UTF8);
@@ -72,11 +72,10 @@ Console.WriteLine("IEIEJEJEJEIEIEIEJEIEJEJEJEJEEJJEEJEJEJEJEEJEJEJEJEJ");
                 }
                 catch (Exception ex)
                 {
-                    GelatoPlugin.Instance?.PalcoCache?.GetType(); // no-op to quiet analyzers
-                    // Fallback logging via plugin logger if available
-                    GelatoPlugin.Instance?.GetType(); // no-op
+                  
+
                     try { Console.WriteLine($"UIInjectionMiddleware error: {ex.Message}"); } catch {}
-                    // On error, fall through to default handler (StaticFiles)
+
                 }
             }
 
