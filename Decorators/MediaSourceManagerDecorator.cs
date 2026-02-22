@@ -16,10 +16,16 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Providers;
+//using MediaBrowser.Providers.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Chapters;
+using MediaBrowser.Model.Configuration;
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Configuration;
+using MediaBrowser.Controller.Subtitles;
+//using MediaBrowser.Providers.MediaInfo;
 
 namespace Gelato.Decorators;
 
@@ -30,6 +36,8 @@ public sealed class MediaSourceManagerDecorator(
     IHttpContextAccessor http,
     GelatoItemRepository repo,
     IDirectoryService directoryService,
+    IServerConfigurationManager config,
+   ISubtitleManager subtitleManager,
     Lazy<GelatoManager> manager,
     IMediaSegmentManager mediaSegmentManager)
     : IMediaSourceManager {
@@ -39,7 +47,8 @@ public sealed class MediaSourceManagerDecorator(
     private readonly KeyLock _lock = new();
     private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
     private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
-       private readonly IServerConfigurationManager _config;
+    private readonly IServerConfigurationManager _config = config;
+    private readonly ISubtitleManager _subtitleManager = subtitleManager;
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
@@ -296,7 +305,7 @@ public sealed class MediaSourceManagerDecorator(
                 },
                 ct
             );
-            var subtitleTask = DownloadSubtitles(owner, ct);
+            var subtitleTask = DownloadSubtitles((Video)owner, ct);
 
             // Wait for both operations to complete
             await Task.WhenAll(segmentTask, metadataTask).ConfigureAwait(false);
@@ -524,6 +533,18 @@ public sealed class MediaSourceManagerDecorator(
                 skipIfAudioTrackMatches = libraryOptions.SkipSubtitlesIfAudioTrackMatches;
                 requirePerfectMatch = libraryOptions.RequirePerfectSubtitleMatch;
             }
+            
+           // var searchResults = await _subtitleManager.SearchSubtitles(request, cancellationToken).ConfigureAwait(false);
+
+           //     var result = searchResults.FirstOrDefault();
+
+           //     if (result is not null)
+           //     {
+           //         await _subtitleManager.DownloadSubtitles(video, result.Id, cancellationToken).ConfigureAwait(false);
+
+           //         return true;
+           //     }
+           // }
 
             var downloadedLanguages = await new SubtitleDownloader(
                 _log,
