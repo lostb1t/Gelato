@@ -21,6 +21,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
+        services.AddSingleton<GelatoQueryFilter>();
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
@@ -31,9 +32,10 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton(sp => new Lazy<GelatoManager>(sp.GetRequiredService<GelatoManager>));
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
-        services.AddSingleton<PalcoCacheService>(); // Palco Migration
+        services.AddSingleton<PalcoCacheService>();
+        services.AddSingleton<IntroDbSegmentProvider>();
         services.AddHostedService<GelatoService>();
-
+        services.AddTransient<Microsoft.AspNetCore.Hosting.IStartupFilter, UIInjectionStartupFilter>();
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
@@ -44,6 +46,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {
             o.Filters.AddService<InsertActionFilter>(order: 1);
             o.Filters.AddService<SearchActionFilter>(order: 2);
+            o.Filters.AddService<GelatoQueryFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
