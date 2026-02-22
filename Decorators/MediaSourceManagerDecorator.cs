@@ -17,7 +17,8 @@ using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.MediaSegments;
-  
+using MediaBrowser.Controller.Chapters;
+
 namespace Gelato.Decorators;
 
 public sealed class MediaSourceManagerDecorator(
@@ -352,8 +353,8 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         if (NeedsProbe(selected)) {
-            //var libraryOptions = _libraryManager.GetLibraryOptions(owner);
-            //await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct).ConfigureAwait(false);
+            var libraryOptions = _libraryManager.GetLibraryOptions(owner);
+            await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct).ConfigureAwait(false);
             await owner
                 .RefreshMetadata(
                     new MetadataRefreshOptions(directoryService) {
@@ -527,6 +528,9 @@ public sealed class MediaSourceManagerDecorator(
             Type = type,
             SupportsDirectStream = true,
             SupportsDirectPlay = true,
+            // just always say yes
+            HasSegments = true
+            //HasSegments = MediaSegmentManager.HasSegments(item.Id)  
         };
 
         // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
