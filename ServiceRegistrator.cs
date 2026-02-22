@@ -12,7 +12,9 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Subtitles;
 using Microsoft.Extensions.Configuration;
+using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -45,11 +47,17 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
         services.AddHostedService<GelatoService>();
+        
+
+        // Register subtitle provider
+        services.AddSingleton<ISubtitleProvider, SubtitleProvider>();
+
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
-            .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>();
+            .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
+            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>();
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {
