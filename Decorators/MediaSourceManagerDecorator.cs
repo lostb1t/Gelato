@@ -16,7 +16,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-
+using MediaBrowser.Controller.MediaSegments;
+  
 namespace Gelato.Decorators;
 
 public sealed class MediaSourceManagerDecorator(
@@ -350,8 +351,8 @@ private readonly ILibraryManager _libraryManager;
         }
 
         if (NeedsProbe(selected)) {
-           var libraryOptions = _libraryManager.GetLibraryOptions(item);
-            await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, cancellationToken).ConfigureAwait(false);
+            var libraryOptions = _libraryManager.GetLibraryOptions(owner);
+            await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct).ConfigureAwait(false);
             await owner
                 .RefreshMetadata(
                     new MetadataRefreshOptions(directoryService) {
