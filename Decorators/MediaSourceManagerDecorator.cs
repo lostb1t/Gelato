@@ -212,80 +212,9 @@ public sealed class MediaSourceManagerDecorator(
         return _inner.GetMediaStreams(itemId);
     }
 
-    public async Task<List<MediaStream>> GetSubtitleStreams(
-        BaseItem item,
-        MediaSourceInfo source
-    ) {
-        var manager1 = manager.Value;
+    
 
-        var subtitles = manager1.GetStremioSubtitlesCache(item.Id);
-        if (subtitles is null) {
-            var uri = StremioUri.FromBaseItem(item);
-            if (uri is null) {
-                _log.LogError($"unable to build stremio uri for {item.Name}");
-                return new List<MediaStream>(); // Return empty list instead of void
-            }
-
-            Uri u = new Uri(source.Path);
-            string filename = System.IO.Path.GetFileName(u.LocalPath);
-
-            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-            subtitles = await cfg
-                .Stremio.GetSubtitlesAsync(uri, filename)
-                .ConfigureAwait(false);
-            manager1.SetStremioSubtitlesCache(item.Id, subtitles);
-        }
-
-        var streams = new List<MediaStream>();
-
-        if (subtitles == null || !subtitles.Any()) {
-            _log.LogDebug($"GetSubtitleStreams: no subtitles found");
-            return streams;
-        }
-
-        var index = 0; // Start from 0 since this is a new list
-        var limitedSubtitles = subtitles.GroupBy(s => s.Lang).SelectMany(g => g.Take(2));
-        foreach (var s in limitedSubtitles) {
-            streams.Add(
-                new MediaStream {
-                    Type = MediaStreamType.Subtitle,
-                    Index = index,
-                    Language = s.Lang,
-                    Codec = GuessSubtitleCodec(s.Url),
-                    IsExternal = true,
-                    // subtitle urls usually dont end with an extension. Breaking some clients cause they fucking check the extension instead of thr codec field.
-                    SupportsExternalStream = false,
-                    Path = s.Url,
-                    DeliveryMethod = SubtitleDeliveryMethod.External,
-                }
-            );
-            index++;
-        }
-
-        _log.LogDebug($"GetSubtitleStreams: loaded {streams.Count} subtitles");
-        return streams;
-    }
-
-    public string GuessSubtitleCodec(string? urlOrPath) {
-        if (string.IsNullOrWhiteSpace(urlOrPath))
-            return "subrip";
-
-        var s = urlOrPath.ToLowerInvariant();
-
-        if (s.Contains(".vtt"))
-            return "vtt";
-        if (s.Contains(".srt"))
-            return "srt";
-        if (s.Contains(".ass") || s.Contains(".ssa"))
-            return "ass";
-        if (s.Contains(".subf2m"))
-            return "subrip";
-        if (s.Contains("subs") && s.Contains(".strem.io"))
-            return "srt"; // Stremio proxies are always normalized to .srt
-
-        _log.LogWarning($"unkown subtitle format for {s}, defaulting to srt");
-        return "srt";
-    }
+    
 
     public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query) {
         return _inner.GetMediaStreams(query).ToList();
@@ -364,6 +293,7 @@ public sealed class MediaSourceManagerDecorator(
                 },
                 ct
             );
+            var subtitleTask = DownloadSubtitles(owner, libraryOptions, ct);
 
             // Wait for both operations to complete
             await Task.WhenAll(segmentTask, metadataTask).ConfigureAwait(false);
@@ -581,4 +511,49 @@ public sealed class MediaSourceManagerDecorator(
 
         return info;
     }
+    
+    public async Task<bool> DownloadSubtitles(Video video, SubtitleOptions options, CancellationToken cancellationToken)
+        {
+            var mediaStreams = video.GetMediaStreams();
+
+            var libraryOptions = _libraryManager.GetLibraryOptions(video);
+
+            string[] subtitleDownloadLanguages;
+            bool skipIfEmbeddedSubtitlesPresent;
+            bool skipIfAudioTrackMatches;
+            bool requirePerfectMatch;
+
+            if (libraryOptions.SubtitleDownloadLanguages is null)
+            {
+                subtitleDownloadLanguages = options.DownloadLanguages;
+                skipIfEmbeddedSubtitlesPresent = options.SkipIfEmbeddedSubtitlesPresent;
+                skipIfAudioTrackMatches = options.SkipIfAudioTrackMatches;
+                requirePerfectMatch = options.RequirePerfectMatch;
+            }
+            else
+            {
+                subtitleDownloadLanguages = libraryOptions.SubtitleDownloadLanguages;
+                skipIfEmbeddedSubtitlesPresent = libraryOptions.SkipSubtitlesIfEmbeddedSubtitlesPresent;
+                skipIfAudioTrackMatches = libraryOptions.SkipSubtitlesIfAudioTrackMatches;
+                requirePerfectMatch = libraryOptions.RequirePerfectSubtitleMatch;
+            }
+
+            var downloadedLanguages = await new SubtitleDownloader(
+                _logger,
+                _subtitleManager).DownloadSubtitles(
+                    video,
+                    mediaStreams,
+                    skipIfEmbeddedSubtitlesPresent,
+                    skipIfAudioTrackMatches,
+                    requirePerfectMatch,
+                    subtitleDownloadLanguages,
+                    libraryOptions.DisabledSubtitleFetchers,
+                    libraryOptions.SubtitleFetcherOrder,
+                    true,
+                    cancellationToken).ConfigureAwait(false);
+
+            
+
+            return true;
+        }
 }
