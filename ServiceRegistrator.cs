@@ -12,6 +12,7 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Subtitles;
 using Microsoft.Extensions.Configuration;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,8 +52,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
-            .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>();
-          //  .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>();
+            .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
+            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>();
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {

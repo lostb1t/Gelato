@@ -45,7 +45,7 @@ public sealed class MediaSourceManagerDecorator(
     private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
     private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
     private readonly IServerConfigurationManager _config = config ?? throw new ArgumentNullException(nameof(config));
-  //  private readonly ISubtitleManager _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+ //  private readonly ISubtitleManager _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
     
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
