@@ -1,10 +1,13 @@
 using Gelato.Config;
 using Gelato.Decorators;
 using Gelato.Filters;
+using Gelato.Providers;
 using Gelato.Services;
+using IntroDbPlugin.Services;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Playlists;
@@ -21,7 +24,6 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
-        services.AddSingleton<GelatoQueryFilter>();
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
@@ -33,9 +35,16 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
         services.AddSingleton<PalcoCacheService>();
-        services.AddSingleton<IntroDbSegmentProvider>();
+        
+        // Register HttpClient for IntroDbClient
+        services.AddHttpClient<IntroDbClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.introdb.app");
+            client.Timeout = TimeSpan.FromSeconds(IntroDbClient.DefaultTimeoutSeconds);
+        });
+        
+        services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
         services.AddHostedService<GelatoService>();
-        services.AddTransient<Microsoft.AspNetCore.Hosting.IStartupFilter, UIInjectionStartupFilter>();
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
@@ -46,7 +55,6 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {
             o.Filters.AddService<InsertActionFilter>(order: 1);
             o.Filters.AddService<SearchActionFilter>(order: 2);
-            o.Filters.AddService<GelatoQueryFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();

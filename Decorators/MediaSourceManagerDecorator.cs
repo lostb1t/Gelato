@@ -32,7 +32,8 @@ public sealed class MediaSourceManagerDecorator(
     private readonly ILogger<MediaSourceManagerDecorator> _log = log ?? throw new ArgumentNullException(nameof(log));
     private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
     private readonly KeyLock _lock = new();
-
+private readonly IMediaSegmentManager _mediaSegmentManager;
+private readonly ILibraryManager _libraryManager;
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
@@ -349,6 +350,8 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         if (NeedsProbe(selected)) {
+           var libraryOptions = _libraryManager.GetLibraryOptions(item);
+            await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, cancellationToken).ConfigureAwait(false);
             await owner
                 .RefreshMetadata(
                     new MetadataRefreshOptions(directoryService) {
