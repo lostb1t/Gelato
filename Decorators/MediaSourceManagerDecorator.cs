@@ -25,6 +25,7 @@ using MediaBrowser.Model.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Subtitles;
+using Gelato.Services;
 //using MediaBrowser.Providers.MediaInfo;
 
 namespace Gelato.Decorators;
@@ -546,7 +547,7 @@ public sealed class MediaSourceManagerDecorator(
            //     }
            // }
 
-            var downloadedLanguages = await new SubtitleDownloader(
+            var downloadedLanguages = await new SubtitleDownloadService(
                 _log,
                 _subtitleManager).DownloadSubtitles(
                     video,
