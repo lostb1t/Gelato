@@ -17,14 +17,14 @@ using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
-namespace Gelato.Services;
+namespace Gelato.Services
 {
     public class SubtitleDownloadService
     {
         private readonly ILogger _logger;
         private readonly ISubtitleManager _subtitleManager;
 
-        public SubtitleDownloader(ILogger logger, ISubtitleManager subtitleManager)
+        public SubtitleDownloadService(ILogger logger, ISubtitleManager subtitleManager)
         {
             _logger = logger;
             _subtitleManager = subtitleManager;

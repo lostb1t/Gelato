@@ -19,7 +19,7 @@ namespace Gelato.Providers
 {
     public sealed class SubtitleProvider : ISubtitleProvider
     {
-        private readonly GelatoStremioProvider _stremio;
+        private readonly GelatoManager _manager;
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
 
@@ -32,12 +32,12 @@ namespace Gelato.Providers
         > _subsCache = new();
 
         public SubtitleProvider(
-            GelatoStremioProvider stremio,
+            GelatoManager manager,
             IHttpClientFactory http,
             ILogger<SubtitleProvider> log
         )
         {
-            _stremio = stremio;
+            _manager = manager;
             _http = http;
             _log = log;
         }
@@ -53,7 +53,7 @@ namespace Gelato.Providers
         )
         {
             IReadOnlyList<StremioSubtitle> subs;
-
+            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
             try
             {
                 string filename;
@@ -73,7 +73,7 @@ namespace Gelato.Providers
                 var imdb = request.ProviderIds["Imdb"];
                 var stremioUri = new StremioUri(StremioMediaType.Movie, imdb);
 
-                subs = await _stremio.GetSubtitlesAsync(stremioUri, filename).ConfigureAwait(false);
+                subs = await cfg.Stremio.GetSubtitlesAsync(stremioUri, filename).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

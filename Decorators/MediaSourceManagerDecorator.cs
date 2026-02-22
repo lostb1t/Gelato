@@ -16,7 +16,6 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Providers;
-//using MediaBrowser.Providers.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.MediaSegments;
@@ -24,9 +23,6 @@ using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Configuration;
-using MediaBrowser.Controller.Subtitles;
-using Gelato.Services;
-//using MediaBrowser.Providers.MediaInfo;
 
 namespace Gelato.Decorators;
 
@@ -38,7 +34,7 @@ public sealed class MediaSourceManagerDecorator(
     GelatoItemRepository repo,
     IDirectoryService directoryService,
     IServerConfigurationManager config,
-   ISubtitleManager subtitleManager,
+   // ISubtitleManager subtitleManager,
     Lazy<GelatoManager> manager,
     IMediaSegmentManager mediaSegmentManager)
     : IMediaSourceManager {
@@ -48,8 +44,9 @@ public sealed class MediaSourceManagerDecorator(
     private readonly KeyLock _lock = new();
     private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
     private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
-    private readonly IServerConfigurationManager _config = config;
-    private readonly ISubtitleManager _subtitleManager = subtitleManager;
+    private readonly IServerConfigurationManager _config = config ?? throw new ArgumentNullException(nameof(config));
+  //  private readonly ISubtitleManager _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+    
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
@@ -512,7 +509,7 @@ public sealed class MediaSourceManagerDecorator(
     public async Task<bool> DownloadSubtitles(Video video, CancellationToken cancellationToken)
         {
             var mediaStreams = video.GetMediaStreams();
-            var subtitleOptions = _config.GetConfiguration<SubtitleOptions>("subtitles");
+        //    var subtitleOptions = _config.GetConfiguration<SubtitleOptions>("subtitles");
             var libraryOptions = _libraryManager.GetLibraryOptions(video);
 
             string[] subtitleDownloadLanguages;
@@ -522,10 +519,10 @@ public sealed class MediaSourceManagerDecorator(
 
             if (libraryOptions.SubtitleDownloadLanguages is null)
             {
-                subtitleDownloadLanguages = subtitleOptions.DownloadLanguages;
-                skipIfEmbeddedSubtitlesPresent = subtitleOptions.SkipIfEmbeddedSubtitlesPresent;
-                skipIfAudioTrackMatches = subtitleOptions.SkipIfAudioTrackMatches;
-                requirePerfectMatch = subtitleOptions.RequirePerfectMatch;
+               // subtitleDownloadLanguages = subtitleOptions.DownloadLanguages;
+              //  skipIfEmbeddedSubtitlesPresent = subtitleOptions.SkipIfEmbeddedSubtitlesPresent;
+             //   skipIfAudioTrackMatches = subtitleOptions.SkipIfAudioTrackMatches;
+              //  requirePerfectMatch = subtitleOptions.RequirePerfectMatch;
             }
             else
             {
@@ -547,19 +544,19 @@ public sealed class MediaSourceManagerDecorator(
            //     }
            // }
 
-            var downloadedLanguages = await new SubtitleDownloadService(
-                _log,
-                _subtitleManager).DownloadSubtitles(
-                    video,
-                    mediaStreams,
-                    skipIfEmbeddedSubtitlesPresent,
-                    skipIfAudioTrackMatches,
-                    requirePerfectMatch,
-                    subtitleDownloadLanguages,
-                    libraryOptions.DisabledSubtitleFetchers,
-                    libraryOptions.SubtitleFetcherOrder,
-                    true,
-                    cancellationToken).ConfigureAwait(false);
+          //  var downloadedLanguages = await new SubtitleDownloadService(
+          //      _log,
+          //      _subtitleManager).DownloadSubtitles(
+          //          video,
+          //          mediaStreams,
+          //          skipIfEmbeddedSubtitlesPresent,
+          //          skipIfAudioTrackMatches,
+          //          requirePerfectMatch,
+          //          subtitleDownloadLanguages,
+          //          libraryOptions.DisabledSubtitleFetchers,
+          //          libraryOptions.SubtitleFetcherOrder,
+          //          true,
+          //          cancellationToken).ConfigureAwait(false);
 
             
 

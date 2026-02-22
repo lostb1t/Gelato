@@ -12,7 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
-namespace IntroDbPlugin.Services;
+namespace Gelato.Services;
 
 /// <summary>
 /// Client for retrieving intro timestamps from IntroDB.
