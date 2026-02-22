@@ -1,10 +1,13 @@
 using Gelato.Config;
 using Gelato.Decorators;
 using Gelato.Filters;
+using Gelato.Providers;
 using Gelato.Services;
+using IntroDbPlugin.Services;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Playlists;
@@ -31,9 +34,17 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton(sp => new Lazy<GelatoManager>(sp.GetRequiredService<GelatoManager>));
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
-        services.AddSingleton<PalcoCacheService>(); // Palco Migration
+        services.AddSingleton<PalcoCacheService>();
+        
+        // Register HttpClient for IntroDbClient
+        services.AddHttpClient<IntroDbClient>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.introdb.app");
+            client.Timeout = TimeSpan.FromSeconds(IntroDbClient.DefaultTimeoutSeconds);
+        });
+        
+        services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
         services.AddHostedService<GelatoService>();
-
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()

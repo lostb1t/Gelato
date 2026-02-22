@@ -16,6 +16,8 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
+using MediaBrowser.Controller.MediaSegments;
+using MediaBrowser.Controller.Chapters;
 
 namespace Gelato.Decorators;
 
@@ -26,13 +28,15 @@ public sealed class MediaSourceManagerDecorator(
     IHttpContextAccessor http,
     GelatoItemRepository repo,
     IDirectoryService directoryService,
-    Lazy<GelatoManager> manager)
+    Lazy<GelatoManager> manager,
+    IMediaSegmentManager mediaSegmentManager)
     : IMediaSourceManager {
     private readonly IMediaSourceManager _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly ILogger<MediaSourceManagerDecorator> _log = log ?? throw new ArgumentNullException(nameof(log));
     private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
     private readonly KeyLock _lock = new();
-
+    private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
+    private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
@@ -168,7 +172,7 @@ public sealed class MediaSourceManagerDecorator(
             })
             .ToList();
 
-        _log.LogInformation(
+        _log.LogDebug(
             "Found {s} streams. UserId={Action} GelatoId={Uri}",
             gelatoSources.Count,
             userId,
@@ -349,15 +353,20 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         if (NeedsProbe(selected)) {
-            await owner
-                .RefreshMetadata(
-                    new MetadataRefreshOptions(directoryService) {
-                        EnableRemoteContentProbe = true,
-                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                    },
-                    ct
-                )
-                .ConfigureAwait(false);
+            var libraryOptions = _libraryManager.GetLibraryOptions(owner);
+            
+            // Run segment providers and metadata refresh in parallel
+            var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct);
+            var metadataTask = owner.RefreshMetadata(
+                new MetadataRefreshOptions(directoryService) {
+                    EnableRemoteContentProbe = true,
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                },
+                ct
+            );
+
+            // Wait for both operations to complete
+            await Task.WhenAll(segmentTask, metadataTask).ConfigureAwait(false);
 
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
@@ -522,6 +531,9 @@ public sealed class MediaSourceManagerDecorator(
             Type = type,
             SupportsDirectStream = true,
             SupportsDirectPlay = true,
+            // just always say yes
+            HasSegments = true
+            //HasSegments = MediaSegmentManager.HasSegments(item.Id)  
         };
 
         // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
