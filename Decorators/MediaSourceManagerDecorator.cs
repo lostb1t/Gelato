@@ -354,16 +354,19 @@ public sealed class MediaSourceManagerDecorator(
 
         if (NeedsProbe(selected)) {
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
-            await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct).ConfigureAwait(false);
-            await owner
-                .RefreshMetadata(
-                    new MetadataRefreshOptions(directoryService) {
-                        EnableRemoteContentProbe = true,
-                        MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                    },
-                    ct
-                )
-                .ConfigureAwait(false);
+            
+            // Run segment providers and metadata refresh in parallel
+            var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct);
+            var metadataTask = owner.RefreshMetadata(
+                new MetadataRefreshOptions(directoryService) {
+                    EnableRemoteContentProbe = true,
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                },
+                ct
+            );
+
+            // Wait for both operations to complete
+            await Task.WhenAll(segmentTask, metadataTask).ConfigureAwait(false);
 
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)

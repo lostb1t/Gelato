@@ -114,7 +114,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
 
         if (result is null)
         {
-            _logger.LogDebug(
+            _logger.LogInformation(
                 "IntroDB returned no intro for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
                 request.ItemId,
                 imdbId,
