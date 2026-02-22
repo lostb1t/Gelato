@@ -27,14 +27,15 @@ public sealed class MediaSourceManagerDecorator(
     IHttpContextAccessor http,
     GelatoItemRepository repo,
     IDirectoryService directoryService,
-    Lazy<GelatoManager> manager)
+    Lazy<GelatoManager> manager,
+    IMediaSegmentManager mediaSegmentManager)
     : IMediaSourceManager {
     private readonly IMediaSourceManager _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly ILogger<MediaSourceManagerDecorator> _log = log ?? throw new ArgumentNullException(nameof(log));
     private readonly IHttpContextAccessor _http = http ?? throw new ArgumentNullException(nameof(http));
     private readonly KeyLock _lock = new();
-private readonly IMediaSegmentManager _mediaSegmentManager;
-private readonly ILibraryManager _libraryManager;
+    private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
+    private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
@@ -170,7 +171,7 @@ private readonly ILibraryManager _libraryManager;
             })
             .ToList();
 
-        _log.LogInformation(
+        _log.LogDebug(
             "Found {s} streams. UserId={Action} GelatoId={Uri}",
             gelatoSources.Count,
             userId,
@@ -351,8 +352,8 @@ private readonly ILibraryManager _libraryManager;
         }
 
         if (NeedsProbe(selected)) {
-            var libraryOptions = _libraryManager.GetLibraryOptions(owner);
-            await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct).ConfigureAwait(false);
+            //var libraryOptions = _libraryManager.GetLibraryOptions(owner);
+            //await _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct).ConfigureAwait(false);
             await owner
                 .RefreshMetadata(
                     new MetadataRefreshOptions(directoryService) {

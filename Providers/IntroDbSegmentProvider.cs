@@ -89,7 +89,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
             _logger.LogDebug("Skipping IntroDB lookup for {ItemId}: invalid season/episode number.", request.ItemId);
             return Array.Empty<MediaSegmentDto>();
         }
-
+        Console.WriteLine("HODODODDO");
         IntroDbIntroResult? result;
         try
         {
@@ -112,7 +112,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
                 episodeNumber);
             return Array.Empty<MediaSegmentDto>();
         }
-
+        Console.WriteLine("HAHAHAHA");
         if (result is null)
         {
             _logger.LogDebug(
