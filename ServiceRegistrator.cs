@@ -39,7 +39,11 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
         services.AddSingleton<PalcoCacheService>();
-        services.AddSingleton<ISubtitleProvider, SubtitleProvider>();
+        services.AddSingleton<SubtitleProvider>();
+        services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
+        services.AddSingleton(sp => new Lazy<SubtitleProvider>(
+            sp.GetRequiredService<SubtitleProvider>
+        ));
 
         // Register HttpClient for IntroDbClient
         services.AddHttpClient<IntroDbClient>(client =>

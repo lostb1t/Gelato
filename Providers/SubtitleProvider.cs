@@ -2,7 +2,6 @@
 #pragma warning disable CS1591
 
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -13,6 +12,7 @@ using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Providers;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Providers
@@ -21,19 +21,19 @@ namespace Gelato.Providers
     {
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
+        private readonly IMemoryCache _cache;
 
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
-        // Replacement for IMemoryCache: simple TTL store
-        private static readonly ConcurrentDictionary<
-            string,
-            (StremioSubtitle Sub, DateTime Expires)
-        > _subsCache = new();
-
-        public SubtitleProvider(IHttpClientFactory http, ILogger<SubtitleProvider> log)
+        public SubtitleProvider(
+            IHttpClientFactory http,
+            ILogger<SubtitleProvider> log,
+            IMemoryCache cache
+        )
         {
             _http = http;
             _log = log;
+            _cache = cache;
         }
 
         public string Name => "Gelato Subtitles";
@@ -41,13 +41,48 @@ namespace Gelato.Providers
         public IEnumerable<VideoContentType> SupportedMediaTypes =>
             new[] { VideoContentType.Movie, VideoContentType.Episode };
 
+        /// <summary>
+        /// Fetches the subtitle list for <paramref name="uri"/>, using <see cref="IMemoryCache"/>.
+        /// On a cache miss the stremio endpoint is called and both the list and every individual
+        /// subtitle entry are stored so <see cref="GetSubtitles"/> can serve them without a
+        /// second network round-trip.
+        /// </summary>
+        public async Task<IReadOnlyList<StremioSubtitle>> GetSubtitlesAsync(
+            StremioUri uri,
+            string? fileName,
+            CancellationToken ct
+        )
+        {
+            var listKey = ListCacheKey(uri, fileName);
+
+            if (
+                _cache.TryGetValue(listKey, out IReadOnlyList<StremioSubtitle>? cached)
+                && cached is not null
+            )
+            {
+                _log.LogInformation("Subtitle list cache HIT for {Uri}", uri);
+                return cached;
+            }
+
+            _log.LogInformation("Subtitle list cache MISS for {Uri}", uri);
+
+            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+            var subs = await cfg.Stremio!.GetSubtitlesAsync(uri, fileName).ConfigureAwait(false);
+
+            _cache.Set(listKey, (IReadOnlyList<StremioSubtitle>)subs, CacheTtl);
+
+            foreach (var s in subs)
+                _cache.Set(SubCacheKey(s.Id), s, CacheTtl);
+
+            return subs;
+        }
+
         public async Task<IEnumerable<RemoteSubtitleInfo>> Search(
             SubtitleSearchRequest request,
             CancellationToken cancellationToken
         )
         {
             IReadOnlyList<StremioSubtitle> subs;
-            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
             string filename = string.Empty;
             try
             {
@@ -63,24 +98,16 @@ namespace Gelato.Providers
                     filename = Path.GetFileName(request.MediaPath);
                 }
 
-                var imdb = request.ProviderIds["Imdb"];
-                var stremioUri = new StremioUri(StremioMediaType.Movie, imdb);
+                var id = request.GetProviderId("Stremio") ?? request.GetProviderId("Imdb");
+                var stremioUri = new StremioUri(StremioMediaType.Movie, id);
 
-                subs = await cfg
-                    .Stremio.GetSubtitlesAsync(stremioUri, filename)
+                subs = await GetSubtitlesAsync(stremioUri, null, cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "Subtitle search failed for {Path}", request.MediaPath);
                 return Array.Empty<RemoteSubtitleInfo>();
-            }
-
-            var now = DateTime.UtcNow;
-            foreach (var s in subs)
-            {
-                // _log.LogDebug($"s: {s.LangCode} id: {s.Id}");
-                _subsCache[CacheKey(s.Id)] = (s, now + CacheTtl);
             }
 
             var lang = (request.TwoLetterISOLanguageName ?? "").Trim().ToLower();
@@ -98,8 +125,9 @@ namespace Gelato.Providers
             ).ToList();
 
             _log.LogInformation(
-                "Found: {Total} subtitles. After lang filter: {Filtered}",
+                "Found: {Total} subtitles. After lang ({Lang}) filter: {Filtered}",
                 subs.Count,
+                lang,
                 filtered.Count
             );
 
@@ -175,16 +203,11 @@ namespace Gelato.Providers
             CancellationToken cancellationToken
         )
         {
-            var key = CacheKey(id);
-
-            if (!_subsCache.TryGetValue(key, out var entry) || entry.Expires <= DateTime.UtcNow)
+            if (!_cache.TryGetValue(SubCacheKey(id), out StremioSubtitle sub))
             {
-                _subsCache.TryRemove(key, out _);
                 _log.LogWarning("Subtitle cache miss/expired for id={Id}", id);
                 throw new FileNotFoundException($"Subtitle not found for id {id}");
             }
-
-            var sub = entry.Sub;
 
             var client = _http.CreateClient(nameof(SubtitleProvider));
             using var resp = await client.GetAsync(
@@ -264,6 +287,9 @@ namespace Gelato.Providers
                 .Select(t => t.ToLowerInvariant())
                 .ToHashSet();
 
-        private static string CacheKey(string id) => $"gelato:subtitle:{id}";
+        private static string ListCacheKey(StremioUri uri, string? fileName) =>
+            $"gelato:subtitles:{uri}:{fileName ?? string.Empty}";
+
+        private static string SubCacheKey(string id) => $"gelato:subtitle:{id}";
     }
 }

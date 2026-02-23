@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using Gelato.Providers;
 using Gelato.Services;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
@@ -38,6 +39,7 @@ public sealed class MediaSourceManagerDecorator(
     IServerConfigurationManager config,
     //Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
+    Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
     IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders
 ) : IMediaSourceManager
@@ -56,6 +58,7 @@ public sealed class MediaSourceManagerDecorator(
     private readonly IServerConfigurationManager _config =
         config ?? throw new ArgumentNullException(nameof(config));
     private readonly Lazy<GelatoManager> _manager = manager;
+    private readonly Lazy<SubtitleProvider> _subtitleProvider = subtitleProvider;
 
     //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
     private readonly ICustomMetadataProvider<Video>? _probeProvider =
@@ -121,6 +124,34 @@ public sealed class MediaSourceManagerDecorator(
                     async ct =>
                     {
                         _log.LogDebug("GetStaticMediaSources refreshing streams for {Id}", item.Id);
+
+                        // Prewarm subtitle cache in the background if Gelato Subtitles
+                        // is enabled for this library.
+                        var libraryOptions = _libraryManager.GetLibraryOptions(item);
+                        var subtitlePrewarmEnabled =
+                            libraryOptions.SubtitleDownloadLanguages?.Length > 0
+                            && !libraryOptions.DisabledSubtitleFetchers.Contains(
+                                "Gelato Subtitles",
+                                StringComparer.OrdinalIgnoreCase
+                            );
+
+                        if (subtitlePrewarmEnabled)
+                        {
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await _subtitleProvider
+                                        .Value.GetSubtitlesAsync(uri, null, CancellationToken.None)
+                                        .ConfigureAwait(false);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _log.LogWarning(ex, "Subtitle prewarm failed for {Uri}", uri);
+                                }
+                            });
+                        }
+
                         try
                         {
                             var count = await manager
