@@ -166,7 +166,7 @@ namespace Gelato.Services
             {
                 return false;
             }
-Console.WriteLine("GOING");
+
             var request = new SubtitleSearchRequest
             {
                 ContentType = mediaType,
