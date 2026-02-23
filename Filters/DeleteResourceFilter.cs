@@ -32,7 +32,7 @@ public sealed class DeleteResourceFilter(
         var item = library.GetItemById<BaseItem>(guid, user);
 
         // Only handle Gelato items that user can delete
-        if (item is null || !manager.IsGelato(item) || !manager.CanDelete(item, user))
+        if (item is null || !item.IsGelato() || !manager.CanDelete(item, user))
         {
             await next();
             return;

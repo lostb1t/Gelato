@@ -41,7 +41,7 @@ public sealed class CollectionManagerDecorator(
 
         var gelatoItems = guids
             .Select(libraryManager.GetItemById)
-            .Where(item => item is not null && manager.Value.IsGelato(item))
+            .Where(item => item is not null && item.IsGelato())
             .ToList();
 
         if (gelatoItems.Count == 0)

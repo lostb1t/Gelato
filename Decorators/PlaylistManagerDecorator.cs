@@ -43,7 +43,7 @@ public sealed class PlaylistManagerDecorator(
             .Where(item => item is not null)
             .ToList();
 
-        var gelatoItems = addedItems.Where(manager.Value.IsGelato).ToList();
+        var gelatoItems = addedItems.Where(item => item.IsGelato()).ToList();
         if (gelatoItems.Count == 0)
             return;
 

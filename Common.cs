@@ -393,6 +393,10 @@ public static class ActionContextExtensions {
 }
 
 public static class BaseItemExtensions {
+    public static bool IsGelato(this BaseItem item) {
+        return !string.IsNullOrWhiteSpace(item.GetProviderId("Stremio"));
+    }
+
     public static bool HasStreamTag(this BaseItem item) {
         return item.Tags is not null && item.Tags.Contains(GelatoManager.StreamTag, StringComparer.OrdinalIgnoreCase);
     }

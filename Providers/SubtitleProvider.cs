@@ -96,7 +96,7 @@ namespace Gelato.Providers
                         StringComparison.OrdinalIgnoreCase
                     )
                 );
-            _log.LogDebug($"Found: {subs.Count} subtitles. After filter {filtered.Count()}");
+            _log.LogInformation($"Found: {subs.Count} subtitles. After filter {filtered.Count()}");
             return subs.Select(s => new RemoteSubtitleInfo
             {
                 Id = s.Id,

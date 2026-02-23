@@ -70,7 +70,7 @@ public sealed class MediaSourceManagerDecorator(
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
-            (!cfg.EnableMixed && !manager.IsGelato(item))
+            (!cfg.EnableMixed && !item.IsGelato())
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
         ) {
             return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -163,7 +163,7 @@ public sealed class MediaSourceManagerDecorator(
             .GetItemList(query)
             .OfType<Video>()
             .Where(x =>
-                manager.IsGelato(x) &&
+                x.IsGelato() &&
                 (
                     userId == Guid.Empty ||
                     (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)

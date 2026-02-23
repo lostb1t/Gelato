@@ -53,7 +53,13 @@ namespace Gelato.Decorators
             LibraryOptions libraryOptions,
             string subtitleId,
             CancellationToken cancellationToken)
-            => _inner.DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken);
+          
+        {
+          if (video.IsGelato()) {
+            libraryOptions.SaveSubtitlesWithMedia = false;
+          }
+          return _inner.DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken);
+        }
 
         public Task UploadSubtitle(Video video, SubtitleResponse response)
             => _inner.UploadSubtitle(video, response);
