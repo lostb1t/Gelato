@@ -513,7 +513,6 @@ public sealed class MediaSourceManagerDecorator(
             var mediaStreams = video.GetMediaStreams();
             var subtitleOptions = _config.GetConfiguration<SubtitleOptions>("subtitles");
             var libraryOptions = _libraryManager.GetLibraryOptions(video);
-Console.WriteLine("HAHSHSHAHA");
             string[] subtitleDownloadLanguages;
             bool skipIfEmbeddedSubtitlesPresent;
             bool skipIfAudioTrackMatches;
