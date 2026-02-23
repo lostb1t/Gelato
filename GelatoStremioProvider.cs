@@ -204,19 +204,12 @@ public class GelatoStremioProvider(
         return r?.Streams ?? [];
     }
 
-    public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName)
+    public async Task<List<StremioSubtitle>> GetSubtitlesAsync(
+        string id,
+        StremioMediaType mediaType
+    )
     {
-        var extras = Array.Empty<string>();
-
-        if (!string.IsNullOrEmpty(fileName))
-        {
-            extras = [$"filename={fileName}"];
-        }
-
-        var url = BuildUrl(
-            ["subtitles", uri.MediaType.ToString().ToLower(), uri.ExternalId],
-            extras
-        );
+        var url = BuildUrl(["subtitles", mediaType.ToString().ToLower(), id]);
         var r = await GetJsonAsync<StremioSubtitleResponse>(url);
         return r.Subtitles;
     }

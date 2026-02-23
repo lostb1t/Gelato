@@ -142,7 +142,11 @@ public sealed class MediaSourceManagerDecorator(
                                 try
                                 {
                                     await _subtitleProvider
-                                        .Value.GetSubtitlesAsync(uri, null, CancellationToken.None)
+                                        .Value.GetSubtitlesAsync(
+                                            uri.ExternalId,
+                                            uri.MediaType,
+                                            CancellationToken.None
+                                        )
                                         .ConfigureAwait(false);
                                 }
                                 catch (Exception ex)

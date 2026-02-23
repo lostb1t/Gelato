@@ -21,19 +21,17 @@ namespace Gelato.Providers
     {
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
-        private readonly IMemoryCache _cache;
 
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
-        public SubtitleProvider(
-            IHttpClientFactory http,
-            ILogger<SubtitleProvider> log,
-            IMemoryCache cache
-        )
+        // Static so the cache is shared across all instances — Jellyfin may create
+        // provider instances via its own assembly scanning, separate from the DI container.
+        private static readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+
+        public SubtitleProvider(IHttpClientFactory http, ILogger<SubtitleProvider> log)
         {
             _http = http;
             _log = log;
-            _cache = cache;
         }
 
         public string Name => "Gelato Subtitles";
@@ -48,26 +46,26 @@ namespace Gelato.Providers
         /// second network round-trip.
         /// </summary>
         public async Task<IReadOnlyList<StremioSubtitle>> GetSubtitlesAsync(
-            StremioUri uri,
-            string? fileName,
+            string id,
+            StremioMediaType mediaType,
             CancellationToken ct
         )
         {
-            var listKey = ListCacheKey(uri, fileName);
+            var listKey = ListCacheKey(id, mediaType);
 
             if (
                 _cache.TryGetValue(listKey, out IReadOnlyList<StremioSubtitle>? cached)
                 && cached is not null
             )
             {
-                _log.LogInformation("Subtitle list cache HIT for {Uri}", uri);
+                _log.LogInformation("Subtitle list cache HIT key={Key}", listKey);
                 return cached;
             }
 
-            _log.LogInformation("Subtitle list cache MISS for {Uri}", uri);
+            _log.LogInformation("Subtitle list cache MISS key={Key}", listKey);
 
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-            var subs = await cfg.Stremio!.GetSubtitlesAsync(uri, fileName).ConfigureAwait(false);
+            var subs = await cfg.Stremio!.GetSubtitlesAsync(id, mediaType).ConfigureAwait(false);
 
             _cache.Set(listKey, (IReadOnlyList<StremioSubtitle>)subs, CacheTtl);
 
@@ -98,10 +96,22 @@ namespace Gelato.Providers
                     filename = Path.GetFileName(request.MediaPath);
                 }
 
-                var id = request.GetProviderId("Stremio") ?? request.GetProviderId("Imdb");
-                var stremioUri = new StremioUri(StremioMediaType.Movie, id);
+                var stremioId = request.GetProviderId("Stremio");
+                if (string.IsNullOrEmpty(stremioId))
+                {
+                    _log.LogDebug(
+                        "No Stremio ID, skipping subtitle search for {Path}",
+                        request.MediaPath
+                    );
+                    return Array.Empty<RemoteSubtitleInfo>();
+                }
 
-                subs = await GetSubtitlesAsync(stremioUri, null, cancellationToken)
+                var mediaType =
+                    request.ContentType == VideoContentType.Episode
+                        ? StremioMediaType.Series
+                        : StremioMediaType.Movie;
+
+                subs = await GetSubtitlesAsync(stremioId, mediaType, cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -287,8 +297,8 @@ namespace Gelato.Providers
                 .Select(t => t.ToLowerInvariant())
                 .ToHashSet();
 
-        private static string ListCacheKey(StremioUri uri, string? fileName) =>
-            $"gelato:subtitles:{uri}:{fileName ?? string.Empty}";
+        private static string ListCacheKey(string id, StremioMediaType mediaType) =>
+            $"gelato:subtitles:{mediaType.ToString().ToLower()}/{id}";
 
         private static string SubCacheKey(string id) => $"gelato:subtitle:{id}";
     }
