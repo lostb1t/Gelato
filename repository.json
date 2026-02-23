@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.5.1] - 2026-02-23\n\n### 🐛 Bug Fixes\n\n- Remove hardcoded subtitle oang\n",
+        "checksum": "262664224c65f361d2fb6981a862f511",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.5.1/gelato_0.26.5.1.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-23T17:50:04Z",
+        "version": "0.26.5.1"
+      },
+      {
         "changelog": "## [0.26.5.0] - 2026-02-23\n\n### 🚀 Features\n\n- Move user configs to own tab\n- Prewarm subtitles\n\n### 🐛 Bug Fixes\n\n- Remove deprecated remote subs flag\n",
         "checksum": "9f2e1b75ad37d33c8e57b232123ee718",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.5.0/gelato_0.26.5.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-01T08:57:55Z",
         "version": "0.25.3.8"
-      },
-      {
-        "changelog": "## [0.25.3.7] - 2026-02-01\n\n### 🐛 Bug Fixes\n\n- PresentationUniqueKey generation\n",
-        "checksum": "270a8ebbc97e9499a6c8a40855abc277",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.7/gelato_0.25.3.7.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-01T08:01:15Z",
-        "version": "0.25.3.7"
       }
     ]
   }
