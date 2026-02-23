@@ -86,66 +86,67 @@ public class CatalogImportService(
                     break;
                 }
 
-                await Parallel.ForEachAsync(
-                    page,
-                    opts,
-                    async (meta, ctInner) =>
+                //  await Parallel.ForEachAsync(
+                //    page,
+                //     opts,
+                //      async (meta, ctInner) =>
+                foreach (var meta in page)
+                {
+                    var p = Interlocked.Increment(ref processed);
+                    ct.ThrowIfCancellationRequested();
+                    if (p > maxItems)
                     {
-                        var p = Interlocked.Increment(ref processed);
-                        ctInner.ThrowIfCancellationRequested();
-                        if (p > maxItems)
-                        {
-                            return;
-                        }
-
-                        //meta_ids.TryAdd(meta.Id, 0);
-                        var mediaType = meta.Type;
-                        var baseItemKind = mediaType.ToBaseItem();
-
-                        // catalog can contain multiple types.
-
-                        var root = baseItemKind switch
-                        {
-                            BaseItemKind.Series => seriesFolder,
-                            BaseItemKind.Movie => movieFolder,
-                            _ => null,
-                        };
-
-                        if (root is not null)
-                        {
-                            try
-                            {
-                                var (item, _) = await manager
-                                    .InsertMeta(
-                                        root,
-                                        meta,
-                                        null,
-                                        true,
-                                        true,
-                                        baseItemKind == BaseItemKind.Series,
-                                        ctInner
-                                    )
-                                    .ConfigureAwait(false);
-
-                                if (item != null)
-                                    importedIds.Add(item.Id);
-                            }
-                            catch (Exception ex)
-                            {
-                                logger.LogError(
-                                    "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
-                                    catalogId,
-                                    meta.Id,
-                                    ex.Message,
-                                    ex.StackTrace
-                                );
-                            }
-                        }
-
-                        var current = Interlocked.Increment(ref done);
-                        progress?.Report(Math.Min(100, current / (double)maxItems * 100.0));
+                        return;
                     }
-                );
+
+                    //meta_ids.TryAdd(meta.Id, 0);
+                    var mediaType = meta.Type;
+                    var baseItemKind = mediaType.ToBaseItem();
+
+                    // catalog can contain multiple types.
+
+                    var root = baseItemKind switch
+                    {
+                        BaseItemKind.Series => seriesFolder,
+                        BaseItemKind.Movie => movieFolder,
+                        _ => null,
+                    };
+
+                    if (root is not null)
+                    {
+                        try
+                        {
+                            var (item, _) = await manager
+                                .InsertMeta(
+                                    root,
+                                    meta,
+                                    null,
+                                    true,
+                                    true,
+                                    baseItemKind == BaseItemKind.Series,
+                                    ct
+                                )
+                                .ConfigureAwait(false);
+
+                            if (item != null)
+                                importedIds.Add(item.Id);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(
+                                "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                catalogId,
+                                meta.Id,
+                                ex.Message,
+                                ex.StackTrace
+                            );
+                        }
+                    }
+
+                    var current = Interlocked.Increment(ref done);
+                    progress?.Report(Math.Min(100, current / (double)maxItems * 100.0));
+                }
+                //     );
 
                 skip += page.Count;
             }
@@ -283,8 +284,8 @@ public class CatalogImportService(
         }
 
         progress?.Report(100);
-        await libraryManager
-            .ValidateMediaLibrary(new Progress<double>(), CancellationToken.None)
-            .ConfigureAwait(false);
+        // await libraryManager
+        //     .ValidateMediaLibrary(new Progress<double>(), CancellationToken.None)
+        //     .ConfigureAwait(false);
     }
 }

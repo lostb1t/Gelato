@@ -221,11 +221,11 @@ public sealed class GelatoManager(
                 );
                 return (existing, false);
             }
-            var lookupId = meta.ImdbId ?? meta.Id;
-            var aioMeta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType)
-                .ConfigureAwait(false);
 
-            if (aioMeta is null)
+            var lookupId = meta.ImdbId ?? meta.Id;
+            meta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+
+            if (meta is null)
             {
                 _log.LogWarning(
                     "InsertMeta: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",

@@ -127,10 +127,7 @@ public class GelatoStremioProvider(
             }
             else
             {
-                log.LogInformation(
-                    "manifest uses movie search catalog: {Id}",
-                    _movieSearchCatalog.Id
-                );
+                log.LogDebug("manifest uses movie search catalog: {Id}", _movieSearchCatalog.Id);
             }
 
             if (_seriesSearchCatalog == null)
@@ -139,10 +136,7 @@ public class GelatoStremioProvider(
             }
             else
             {
-                log.LogInformation(
-                    "manifest uses series search catalog: {Id}",
-                    _seriesSearchCatalog.Id
-                );
+                log.LogDebug("manifest uses series search catalog: {Id}", _seriesSearchCatalog.Id);
             }
             return m;
         }
