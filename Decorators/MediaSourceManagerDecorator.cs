@@ -507,7 +507,11 @@ public sealed class MediaSourceManagerDecorator(
     
     private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
     {
-        var tmpStrm = Path.Combine(Path.GetTempPath(), $"gelato-{owner.Id:N}.strm");
+        var gelatoFilename = owner.GelatoData<string>("filename");
+        var strmBaseName = !string.IsNullOrEmpty(gelatoFilename)
+            ? Path.GetFileNameWithoutExtension(gelatoFilename)
+            : $"{owner.Id:N}";
+        var tmpStrm = Path.Combine(Path.GetTempPath(), $"{strmBaseName}.strm");
         await File.WriteAllTextAsync(tmpStrm, streamUrl, ct).ConfigureAwait(false);
 
         var origPath     = owner.Path;
