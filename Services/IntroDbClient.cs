@@ -30,7 +30,7 @@ public sealed class IntroDbClient
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
     };
 
     private readonly HttpClient _httpClient;
@@ -55,7 +55,9 @@ public sealed class IntroDbClient
         }
 
         _httpClient.DefaultRequestHeaders.Accept.Clear();
-        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _httpClient.DefaultRequestHeaders.Accept.Add(
+            new MediaTypeWithQualityHeaderValue("application/json")
+        );
     }
 
     /// <summary>
@@ -70,7 +72,8 @@ public sealed class IntroDbClient
         string imdbId,
         int seasonNumber,
         int episodeNumber,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         if (string.IsNullOrWhiteSpace(imdbId))
         {
@@ -79,12 +82,18 @@ public sealed class IntroDbClient
 
         if (seasonNumber <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(seasonNumber), "Season number must be positive.");
+            throw new ArgumentOutOfRangeException(
+                nameof(seasonNumber),
+                "Season number must be positive."
+            );
         }
 
         if (episodeNumber <= 0)
         {
-            throw new ArgumentOutOfRangeException(nameof(episodeNumber), "Episode number must be positive.");
+            throw new ArgumentOutOfRangeException(
+                nameof(episodeNumber),
+                "Episode number must be positive."
+            );
         }
 
         Debug.Assert(!string.IsNullOrWhiteSpace(imdbId), "IMDb id must be provided.");
@@ -105,7 +114,12 @@ public sealed class IntroDbClient
 
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
-            _logger.LogWarning("IntroDB request rejected for {ImdbId} S{Season}E{Episode}.", imdbId, seasonNumber, episodeNumber);
+            _logger.LogWarning(
+                "IntroDB request rejected for {ImdbId} S{Season}E{Episode}.",
+                imdbId,
+                seasonNumber,
+                episodeNumber
+            );
             return null;
         }
 
@@ -116,23 +130,34 @@ public sealed class IntroDbClient
                 imdbId,
                 seasonNumber,
                 episodeNumber,
-                response.StatusCode);
+                response.StatusCode
+            );
             return null;
         }
 
 #if EMBY
         using var payloadStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
 #else
-        using var payloadStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var payloadStream = await response
+            .Content.ReadAsStreamAsync(cancellationToken)
+            .ConfigureAwait(false);
 #endif
-        var payload = await JsonSerializer.DeserializeAsync<IntroDbIntroResponse>(
-            payloadStream,
-            SerializerOptions,
-            cancellationToken).ConfigureAwait(false);
+        var payload = await JsonSerializer
+            .DeserializeAsync<IntroDbIntroResponse>(
+                payloadStream,
+                SerializerOptions,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
 
         if (payload == null)
         {
-            _logger.LogWarning("IntroDB response could not be parsed for {ImdbId} S{Season}E{Episode}.", imdbId, seasonNumber, episodeNumber);
+            _logger.LogWarning(
+                "IntroDB response could not be parsed for {ImdbId} S{Season}E{Episode}.",
+                imdbId,
+                seasonNumber,
+                episodeNumber
+            );
             return null;
         }
 
@@ -144,7 +169,8 @@ public sealed class IntroDbClient
                 seasonNumber,
                 episodeNumber,
                 payload.StartMs,
-                payload.EndMs);
+                payload.EndMs
+            );
             return null;
         }
 
@@ -155,7 +181,8 @@ public sealed class IntroDbClient
             payload.StartMs / MillisecondsPerSecond,
             payload.EndMs / MillisecondsPerSecond,
             payload.Confidence,
-            payload.SubmissionCount);
+            payload.SubmissionCount
+        );
     }
 
     private Uri BuildIntroUri(string imdbId, int seasonNumber, int episodeNumber)
@@ -163,7 +190,8 @@ public sealed class IntroDbClient
         var baseUri = _httpClient.BaseAddress ?? new Uri(BaseUrl, UriKind.Absolute);
         var builder = new UriBuilder(new Uri(baseUri, IntroPath))
         {
-            Query = $"imdb_id={Uri.EscapeDataString(imdbId)}&season={seasonNumber}&episode={episodeNumber}"
+            Query =
+                $"imdb_id={Uri.EscapeDataString(imdbId)}&season={seasonNumber}&episode={episodeNumber}",
         };
         return builder.Uri;
     }
@@ -200,4 +228,5 @@ public sealed record IntroDbIntroResult(
     double StartSeconds,
     double EndSeconds,
     double Confidence,
-    int SubmissionCount);
+    int SubmissionCount
+);

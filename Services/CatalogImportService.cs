@@ -1,12 +1,12 @@
-using MediaBrowser.Controller.Collections;
-using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Library;
-using Jellyfin.Data.Enums;
-using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
-using MediaBrowser.Controller.Entities.Movies;
 using System.Diagnostics;
 using Gelato.Config;
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Collections;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Library;
+using Microsoft.Extensions.Logging;
 
 // For BoxSet
 
@@ -17,15 +17,25 @@ public class CatalogImportService(
     GelatoManager manager,
     CatalogService catalogService,
     ICollectionManager collectionManager,
-    ILibraryManager libraryManager) {
-    public async Task ImportCatalogAsync(string catalogId, string type, CancellationToken ct, IProgress<double>? progress = null) {
+    ILibraryManager libraryManager
+)
+{
+    public async Task ImportCatalogAsync(
+        string catalogId,
+        string type,
+        CancellationToken ct,
+        IProgress<double>? progress = null
+    )
+    {
         var catalogCfg = catalogService.GetCatalogConfig(catalogId, type);
-        if (catalogCfg == null) {
+        if (catalogCfg == null)
+        {
             logger.LogWarning("Catalog config not found for {Id} {Type}", catalogId, type);
             return;
         }
 
-        if (!catalogCfg.Enabled) {
+        if (!catalogCfg.Enabled)
+        {
             logger.LogInformation("Catalog {Id} {Type} is disabled, skipping.", catalogId, type);
             return;
         }
@@ -34,14 +44,15 @@ public class CatalogImportService(
         var seriesFolder = cfg.SeriesFolder;
         var movieFolder = cfg.MovieFolder;
 
-        if (seriesFolder is null) {
+        if (seriesFolder is null)
+        {
             logger.LogWarning("No series root folder found");
         }
 
-        if (movieFolder is null) {
+        if (movieFolder is null)
+        {
             logger.LogWarning("No movie root folder found");
         }
-
 
         var maxItems = catalogCfg.MaxItems > 0 ? catalogCfg.MaxItems : cfg.CatalogMaxItems;
         long done = 0;
@@ -49,31 +60,41 @@ public class CatalogImportService(
         var opts = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct };
 
         var stopwatch = Stopwatch.StartNew();
-        logger.LogInformation("Starting import for catalog {Name} ({Id}) - Limit: {Limit}", catalogCfg.Name, catalogId, maxItems);
+        logger.LogInformation(
+            "Starting import for catalog {Name} ({Id}) - Limit: {Limit}",
+            catalogCfg.Name,
+            catalogId,
+            maxItems
+        );
 
-        try {
+        try
+        {
             var skip = 0;
             var processed = 0;
             var importedIds = new ConcurrentBag<Guid>();
 
-            while (processed < maxItems) {
+            while (processed < maxItems)
+            {
                 ct.ThrowIfCancellationRequested();
 
                 var page = await stremio
                     .GetCatalogMetasAsync(catalogId, type, search: null, skip: skip)
                     .ConfigureAwait(false);
 
-                if (page.Count == 0) {
+                if (page.Count == 0)
+                {
                     break;
                 }
 
                 await Parallel.ForEachAsync(
                     page,
                     opts,
-                    async (meta, ctInner) => {
+                    async (meta, ctInner) =>
+                    {
                         var p = Interlocked.Increment(ref processed);
                         ctInner.ThrowIfCancellationRequested();
-                        if (p > maxItems) {
+                        if (p > maxItems)
+                        {
                             return;
                         }
 
@@ -83,16 +104,17 @@ public class CatalogImportService(
 
                         // catalog can contain multiple types.
 
-                        var root =
-                            baseItemKind switch
-                            {
-                                BaseItemKind.Series => seriesFolder,
-                                BaseItemKind.Movie => movieFolder,
-                                _ => null
-                            };
+                        var root = baseItemKind switch
+                        {
+                            BaseItemKind.Series => seriesFolder,
+                            BaseItemKind.Movie => movieFolder,
+                            _ => null,
+                        };
 
-                        if (root is not null) {
-                            try {
+                        if (root is not null)
+                        {
+                            try
+                            {
                                 var (item, _) = await manager
                                     .InsertMeta(
                                         root,
@@ -105,9 +127,11 @@ public class CatalogImportService(
                                     )
                                     .ConfigureAwait(false);
 
-                                if (item != null) importedIds.Add(item.Id);
+                                if (item != null)
+                                    importedIds.Add(item.Id);
                             }
-                            catch (Exception ex) {
+                            catch (Exception ex)
+                            {
                                 logger.LogError(
                                     "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
                                     catalogId,
@@ -126,22 +150,24 @@ public class CatalogImportService(
                 skip += page.Count;
             }
 
-            if (catalogCfg.CreateCollection) {
-                await UpdateCollectionAsync(catalogCfg, importedIds.ToList())
-                    .ConfigureAwait(false);
+            if (catalogCfg.CreateCollection)
+            {
+                await UpdateCollectionAsync(catalogCfg, importedIds.ToList()).ConfigureAwait(false);
                 importedIds.Clear();
             }
 
             logger.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processed);
         }
-        catch (OperationCanceledException ex) {
+        catch (OperationCanceledException ex)
+        {
             logger.LogWarning(
                 ex,
                 "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
-                    catalogId
+                catalogId
             );
         }
-        catch (Exception ex) {
+        catch (Exception ex)
+        {
             logger.LogError(
                 ex,
                 "Catalog sync failed for {Id}: {Message}",
@@ -161,54 +187,82 @@ public class CatalogImportService(
         );
     }
 
-    private async Task<BoxSet?> GetOrCreateBoxSetAsync(CatalogConfig config) {
+    private async Task<BoxSet?> GetOrCreateBoxSetAsync(CatalogConfig config)
+    {
         var id = $"{config.Type}.{config.Id}";
-        var collection = libraryManager.GetItemList(new InternalItemsQuery {
-            IncludeItemTypes = [BaseItemKind.BoxSet],
-            CollapseBoxSetItems = false,
-            Recursive = true,
-            HasAnyProviderId = new Dictionary<string, string> { { "Stremio", id } }
-        }).OfType<BoxSet>().FirstOrDefault();
+        var collection = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = [BaseItemKind.BoxSet],
+                    CollapseBoxSetItems = false,
+                    Recursive = true,
+                    HasAnyProviderId = new Dictionary<string, string> { { "Stremio", id } },
+                }
+            )
+            .OfType<BoxSet>()
+            .FirstOrDefault();
 
-        if (collection is null) {
-            collection = await collectionManager.CreateCollectionAsync(new CollectionCreationOptions {
-                Name = config.Name,
-                IsLocked = true,
-                ProviderIds = new Dictionary<string, string> { { "Stremio", id } }
-            }).ConfigureAwait(false);
+        if (collection is null)
+        {
+            collection = await collectionManager
+                .CreateCollectionAsync(
+                    new CollectionCreationOptions
+                    {
+                        Name = config.Name,
+                        IsLocked = true,
+                        ProviderIds = new Dictionary<string, string> { { "Stremio", id } },
+                    }
+                )
+                .ConfigureAwait(false);
 
             collection.DisplayOrder = "Default";
-            await collection.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None).ConfigureAwait(false);
+            await collection
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                .ConfigureAwait(false);
         }
         return collection;
     }
 
-    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids) {
-        try {
+    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids)
+    {
+        try
+        {
             var collection = await GetOrCreateBoxSetAsync(config).ConfigureAwait(false);
-            if (collection != null) {
+            if (collection != null)
+            {
+                var currentChildren = libraryManager
+                    .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
+                    .Select(i => i.Id)
+                    .ToList();
 
-                var currentChildren = libraryManager.GetItemList(new InternalItemsQuery {
-                    Parent = collection,
-                    Recursive = false
-                }).Select(i => i.Id).ToList();
-
-                if (currentChildren.Count != 0) {
-                    await collectionManager.RemoveFromCollectionAsync(collection.Id, currentChildren).ConfigureAwait(false);
+                if (currentChildren.Count != 0)
+                {
+                    await collectionManager
+                        .RemoveFromCollectionAsync(collection.Id, currentChildren)
+                        .ConfigureAwait(false);
                 }
 
                 var itemsToAdd = ids.ToList();
 
-                await collectionManager.AddToCollectionAsync(collection.Id, itemsToAdd).ConfigureAwait(false);
-                logger.LogInformation("Updated collection {Name} with {Count} items", config.Name, itemsToAdd.Count);
+                await collectionManager
+                    .AddToCollectionAsync(collection.Id, itemsToAdd)
+                    .ConfigureAwait(false);
+                logger.LogInformation(
+                    "Updated collection {Name} with {Count} items",
+                    config.Name,
+                    itemsToAdd.Count
+                );
             }
         }
-        catch (Exception ex) {
+        catch (Exception ex)
+        {
             logger.LogError(ex, "Error updating collection for {Name}", config.Name);
         }
     }
 
-    public async Task SyncAllEnabledAsync(CancellationToken ct, IProgress<double>? progress = null) {
+    public async Task SyncAllEnabledAsync(CancellationToken ct, IProgress<double>? progress = null)
+    {
         // Force refresh of catalog list from manifest first
         var catalogs = await catalogService.GetCatalogsAsync(Guid.Empty);
         var enabled = catalogs.Where(c => c.Enabled).ToList();
@@ -216,7 +270,8 @@ public class CatalogImportService(
         var current = 0;
         var total = enabled.Count;
 
-        foreach (var cat in enabled) {
+        foreach (var cat in enabled)
+        {
             ct.ThrowIfCancellationRequested();
             logger.LogInformation("Processing enabled catalog: {Name}", cat.Name);
 
@@ -228,6 +283,8 @@ public class CatalogImportService(
         }
 
         progress?.Report(100);
-        await libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
+        await libraryManager
+            .ValidateMediaLibrary(new Progress<double>(), CancellationToken.None)
+            .ConfigureAwait(false);
     }
 }

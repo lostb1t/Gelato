@@ -6,11 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Config;
 
-public class PluginConfiguration : BasePluginConfiguration {
-    public string MoviePath { get; set; } =
-        Path.Combine(Path.GetTempPath(), "gelato", "movies");
-    public string SeriesPath { get; set; } =
-        Path.Combine(Path.GetTempPath(), "gelato", "series");
+public class PluginConfiguration : BasePluginConfiguration
+{
+    public string MoviePath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "movies");
+    public string SeriesPath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "series");
     public int StreamTTL { get; set; } = 3600;
     public int CatalogMaxItems { get; set; } = 100;
     public string Url { get; set; } = "";
@@ -30,7 +29,8 @@ public class PluginConfiguration : BasePluginConfiguration {
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
-    public string GetBaseUrl() {
+    public string GetBaseUrl()
+    {
         if (string.IsNullOrWhiteSpace(Url))
             throw new InvalidOperationException("Gelato Url not configured.");
 
@@ -54,13 +54,15 @@ public class PluginConfiguration : BasePluginConfiguration {
     [XmlIgnore]
     public Folder? SeriesFolder;
 
-    public PluginConfiguration GetEffectiveConfig(Guid userId) {
+    public PluginConfiguration GetEffectiveConfig(Guid userId)
+    {
         var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
         return userConfig is null ? this : userConfig.ApplyOverrides(this);
     }
 }
 
-public class UserConfig {
+public class UserConfig
+{
     public Guid UserId { get; set; }
     public string Url { get; set; } = "";
     public string MoviePath { get; set; } = "";
@@ -70,8 +72,10 @@ public class UserConfig {
     /// <summary>
     /// Apply user overrides to base configuration - replaces all overridable fields
     /// </summary>
-    public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig) {
-        return new PluginConfiguration {
+    public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig)
+    {
+        return new PluginConfiguration
+        {
             // User overridable fields - all required, no fallback to baseConfig
             Url = Url,
             MoviePath = MoviePath,
@@ -97,10 +101,10 @@ public class UserConfig {
     }
 }
 
-public class GelatoStremioProviderFactory(
-    IHttpClientFactory http,
-    ILoggerFactory log) {
-    public GelatoStremioProvider Create(Guid userId) {
+public class GelatoStremioProviderFactory(IHttpClientFactory http, ILoggerFactory log)
+{
+    public GelatoStremioProvider Create(Guid userId)
+    {
         var cfg = GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId);
         return new GelatoStremioProvider(
             cfg.GetBaseUrl(),
@@ -109,7 +113,8 @@ public class GelatoStremioProviderFactory(
         );
     }
 
-    public GelatoStremioProvider Create(PluginConfiguration cfg) {
+    public GelatoStremioProvider Create(PluginConfiguration cfg)
+    {
         return new GelatoStremioProvider(
             cfg.GetBaseUrl(),
             http,
@@ -117,11 +122,14 @@ public class GelatoStremioProviderFactory(
         );
     }
 }
-public class CatalogConfig {
+
+public class CatalogConfig
+{
     public string Id { get; set; } = "";
     public string Type { get; set; } = "movie";
     public string Name { get; set; } = "";
     public bool Enabled { get; set; } = false;
+
     /// <summary>0 means "use global CatalogMaxItems".</summary>
     public int MaxItems { get; set; } = 0;
     public bool CreateCollection { get; set; } = false;

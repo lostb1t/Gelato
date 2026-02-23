@@ -9,31 +9,32 @@ namespace Gelato.ScheduledTasks;
 public sealed class PurgeGelatoStreamsTask(
     ILibraryManager libraryManager,
     ILogger<PurgeGelatoStreamsTask> log,
-    GelatoManager manager)
-    : IScheduledTask {
+    GelatoManager manager
+) : IScheduledTask
+{
     public string Name => "Purge streams";
     public string Key => "PurgeGelatoStreamsTask";
     public string Description => "Removes all stremio streams";
     public string Category => "Gelato Maintenance";
 
-    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() {
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
+    {
         return
         [
             new TaskTriggerInfo
             {
                 Type = TaskTriggerInfoType.IntervalTrigger,
                 IntervalTicks = TimeSpan.FromDays(7).Ticks,
-            }
+            },
         ];
     }
 
-    public Task ExecuteAsync(
-        IProgress<double> progress,
-        CancellationToken cancellationToken
-    ) {
+    public Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+    {
         log.LogInformation("purging streams");
 
-        var query = new InternalItemsQuery {
+        var query = new InternalItemsQuery
+        {
             IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
             Recursive = true,
             HasAnyProviderId = new Dictionary<string, string>
@@ -41,7 +42,7 @@ public sealed class PurgeGelatoStreamsTask(
                 { "Stremio", string.Empty },
                 { "stremio", string.Empty },
             },
-            IsDeadPerson = true
+            IsDeadPerson = true,
         };
 
         var streams = libraryManager
@@ -54,16 +55,20 @@ public sealed class PurgeGelatoStreamsTask(
 
         var done = 0;
 
-        foreach (var item in streams) {
+        foreach (var item in streams)
+        {
             cancellationToken.ThrowIfCancellationRequested();
 
-            try {
+            try
+            {
                 libraryManager.DeleteItem(
                     item,
                     new DeleteOptions { DeleteFileLocation = true },
-                    true);
+                    true
+                );
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
             }
 

@@ -40,35 +40,44 @@ namespace Gelato.Services
             string[] disabledSubtitleFetchers,
             string[] subtitleFetcherOrder,
             bool isAutomated,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken
+        )
         {
             var downloadedLanguages = new ConcurrentBag<string>();
 
             var parallelOptions = new ParallelOptions
             {
                 MaxDegreeOfParallelism = 6,
-                CancellationToken = cancellationToken
+                CancellationToken = cancellationToken,
             };
 
-            await Parallel.ForEachAsync(languages, parallelOptions, async (lang, ct) =>
-            {
-                var downloaded = await DownloadSubtitles(
-                    video,
-                    mediaStreams,
-                    skipIfEmbeddedSubtitlesPresent,
-                    skipIfAudioTrackMatches,
-                    requirePerfectMatch,
-                    lang,
-                    disabledSubtitleFetchers,
-                    subtitleFetcherOrder,
-                    isAutomated,
-                    ct).ConfigureAwait(false);
+            await Parallel
+                .ForEachAsync(
+                    languages,
+                    parallelOptions,
+                    async (lang, ct) =>
+                    {
+                        var downloaded = await DownloadSubtitles(
+                                video,
+                                mediaStreams,
+                                skipIfEmbeddedSubtitlesPresent,
+                                skipIfAudioTrackMatches,
+                                requirePerfectMatch,
+                                lang,
+                                disabledSubtitleFetchers,
+                                subtitleFetcherOrder,
+                                isAutomated,
+                                ct
+                            )
+                            .ConfigureAwait(false);
 
-                if (downloaded)
-                {
-                    downloadedLanguages.Add(lang);
-                }
-            }).ConfigureAwait(false);
+                        if (downloaded)
+                        {
+                            downloadedLanguages.Add(lang);
+                        }
+                    }
+                )
+                .ConfigureAwait(false);
 
             return downloadedLanguages.ToList();
         }
@@ -83,7 +92,8 @@ namespace Gelato.Services
             string[] disabledSubtitleFetchers,
             string[] subtitleFetcherOrder,
             bool isAutomated,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken
+        )
         {
             if (video.VideoType != VideoType.VideoFile)
             {
@@ -122,7 +132,8 @@ namespace Gelato.Services
                 subtitleFetcherOrder,
                 mediaType,
                 isAutomated,
-                cancellationToken);
+                cancellationToken
+            );
         }
 
         private async Task<bool> DownloadSubtitles(
@@ -136,10 +147,17 @@ namespace Gelato.Services
             string[] subtitleFetcherOrder,
             VideoContentType mediaType,
             bool isAutomated,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken
+        )
         {
             // There's already subtitles for this language
-            if (mediaStreams.Any(i => i.Type == MediaStreamType.Subtitle && i.IsTextSubtitleStream && string.Equals(i.Language, language, StringComparison.OrdinalIgnoreCase)))
+            if (
+                mediaStreams.Any(i =>
+                    i.Type == MediaStreamType.Subtitle
+                    && i.IsTextSubtitleStream
+                    && string.Equals(i.Language, language, StringComparison.OrdinalIgnoreCase)
+                )
+            )
             {
                 return false;
             }
@@ -154,15 +172,25 @@ namespace Gelato.Services
             }
 
             // There's already a default audio stream for this language
-            if (skipIfAudioTrackMatches &&
-                defaultAudioStreams.Any(i => string.Equals(i.Language, language, StringComparison.OrdinalIgnoreCase)))
+            if (
+                skipIfAudioTrackMatches
+                && defaultAudioStreams.Any(i =>
+                    string.Equals(i.Language, language, StringComparison.OrdinalIgnoreCase)
+                )
+            )
             {
                 return false;
             }
 
             // There's an internal subtitle stream for this language
-            if (skipIfEmbeddedSubtitlesPresent &&
-                mediaStreams.Any(i => i.Type == MediaStreamType.Subtitle && !i.IsExternal && string.Equals(i.Language, language, StringComparison.OrdinalIgnoreCase)))
+            if (
+                skipIfEmbeddedSubtitlesPresent
+                && mediaStreams.Any(i =>
+                    i.Type == MediaStreamType.Subtitle
+                    && !i.IsExternal
+                    && string.Equals(i.Language, language, StringComparison.OrdinalIgnoreCase)
+                )
+            )
             {
                 return false;
             }
@@ -184,7 +212,7 @@ namespace Gelato.Services
                 IsPerfectMatch = requirePerfectMatch,
                 DisabledSubtitleFetchers = disabledSubtitleFetchers,
                 SubtitleFetcherOrder = subtitleFetcherOrder,
-                IsAutomated = isAutomated
+                IsAutomated = isAutomated,
             };
 
             if (video is Episode episode)
@@ -195,20 +223,22 @@ namespace Gelato.Services
 
             try
             {
-                var searchResults = await _subtitleManager.SearchSubtitles(request, cancellationToken).ConfigureAwait(false);
+                var searchResults = await _subtitleManager
+                    .SearchSubtitles(request, cancellationToken)
+                    .ConfigureAwait(false);
 
                 var result = searchResults.FirstOrDefault();
 
                 if (result is not null)
                 {
-                    await _subtitleManager.DownloadSubtitles(video, result.Id, cancellationToken).ConfigureAwait(false);
+                    await _subtitleManager
+                        .DownloadSubtitles(video, result.Id, cancellationToken)
+                        .ConfigureAwait(false);
 
                     return true;
                 }
             }
-            catch (RateLimitExceededException)
-            {
-            }
+            catch (RateLimitExceededException) { }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error downloading subtitles");

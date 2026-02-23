@@ -14,7 +14,8 @@ namespace Gelato.Controllers;
 
 [ApiController]
 [Route("gelato")]
-public sealed class GelatoApiController : ControllerBase {
+public sealed class GelatoApiController : ControllerBase
+{
     private readonly ILogger<GelatoApiController> _log;
     private readonly GelatoManager _gelatoManager;
     private readonly string _downloadPath;
@@ -23,7 +24,8 @@ public sealed class GelatoApiController : ControllerBase {
         ILogger<GelatoApiController> log,
         IApplicationPaths appPaths,
         GelatoManager gelatoManager
-    ) {
+    )
+    {
         _log = log;
         _gelatoManager = gelatoManager;
         _downloadPath = Path.Combine(appPaths.CachePath, "gelato-torrents");
@@ -35,10 +37,12 @@ public sealed class GelatoApiController : ControllerBase {
     public async Task<ActionResult<StremioMeta>> GelatoMeta(
         [FromRoute, Required] StremioMediaType stremioMetaType,
         [FromRoute, Required] string id
-    ) {
+    )
+    {
         var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
         var meta = await cfg.Stremio.GetMetaAsync(id, stremioMetaType);
-        if (meta is null) {
+        if (meta is null)
+        {
             return NotFound();
         }
         return meta;
@@ -50,7 +54,8 @@ public sealed class GelatoApiController : ControllerBase {
     [HttpGet("subtitles/{itemId:guid}")]
     public ActionResult<IEnumerable<StremioSubtitle>> GetSubtitles(
         [FromRoute, Required] Guid itemId
-    ) {
+    )
+    {
         var subs = _gelatoManager.GetStremioSubtitlesCache(itemId);
         return Ok(subs ?? new List<StremioSubtitle>());
     }
@@ -61,7 +66,8 @@ public sealed class GelatoApiController : ControllerBase {
         [FromQuery] int? idx,
         [FromQuery] string? filename,
         [FromQuery] string? trackers
-    ) {
+    )
+    {
         var remoteIp = HttpContext.Connection.RemoteIpAddress;
         if (
             remoteIp == null
@@ -77,7 +83,8 @@ public sealed class GelatoApiController : ControllerBase {
 
         var ct = HttpContext.RequestAborted;
 
-        var settings = new EngineSettingsBuilder {
+        var settings = new EngineSettingsBuilder
+        {
             MaximumConnections = 40,
             MaximumDownloadRate = GelatoPlugin.Instance!.Configuration.P2PDLSpeed,
             MaximumUploadRate = GelatoPlugin.Instance.Configuration.P2PULSpeed,
@@ -94,7 +101,8 @@ public sealed class GelatoApiController : ControllerBase {
         var manager = await engine.AddStreamingAsync(magnet, _downloadPath);
         await manager.StartAsync();
 
-        if (!manager.HasMetadata) {
+        if (!manager.HasMetadata)
+        {
             while (!manager.HasMetadata && !ct.IsCancellationRequested)
                 await Task.Delay(100, ct);
 
@@ -120,7 +128,8 @@ public sealed class GelatoApiController : ControllerBase {
 
         var timerCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var timer = new Timer(
-            _ => {
+            _ =>
+            {
                 _log.LogDebug(
                     "file: {File}, progress: {Progress:0.00}%, dl: {DL}/s, ul: {UL}/s, peers: {Peers}, seeds: {Seeds}, leechers: {Leechs}, bytes: {Bytes}",
                     selected.Path,
@@ -142,29 +151,42 @@ public sealed class GelatoApiController : ControllerBase {
         var stream = await manager.StreamProvider.CreateStreamAsync(selected, ct);
 
         // Register cleanup for both normal completion and cancellation
-        ct.Register(() => {
+        ct.Register(() =>
+        {
             _log.LogInformation("Client disconnected. Cleaning up resources...");
-            try {
+            try
+            {
                 timerCts.Cancel();
-            } catch {
+            }
+            catch
+            {
                 // ignored
             }
 
-            try {
+            try
+            {
                 timer.Dispose();
-            } catch {
+            }
+            catch
+            {
                 // ignored
             }
 
-            try {
+            try
+            {
                 manager.StopAsync().GetAwaiter().GetResult();
-            } catch {
+            }
+            catch
+            {
                 // ignored
             }
 
-            try {
+            try
+            {
                 engine.Dispose();
-            } catch {
+            }
+            catch
+            {
                 // ignored
             }
         });
@@ -173,10 +195,12 @@ public sealed class GelatoApiController : ControllerBase {
         return File(stream, GuessContentType(selected.Path), enableRangeProcessing: true);
     }
 
-    private static ITorrentManagerFile PickHeuristic(TorrentManager manager) {
+    private static ITorrentManagerFile PickHeuristic(TorrentManager manager)
+    {
         return manager.Files.OrderByDescending(LikelyVideo).ThenByDescending(f => f.Length).First();
 
-        static bool LikelyVideo(ITorrentManagerFile f) {
+        static bool LikelyVideo(ITorrentManagerFile f)
+        {
             var name = Path.GetFileName(f.Path);
             var ext = Path.GetExtension(name).ToLowerInvariant();
             if (name.Contains("sample", StringComparison.OrdinalIgnoreCase))
@@ -184,31 +208,32 @@ public sealed class GelatoApiController : ControllerBase {
             if (
                 ext
                 is ".srt"
-                or ".ass"
-                or ".ssa"
-                or ".sub"
-                or ".idx"
-                or ".nfo"
-                or ".txt"
-                or ".jpg"
-                or ".jpeg"
-                or ".png"
-                or ".gif"
+                    or ".ass"
+                    or ".ssa"
+                    or ".sub"
+                    or ".idx"
+                    or ".nfo"
+                    or ".txt"
+                    or ".jpg"
+                    or ".jpeg"
+                    or ".png"
+                    or ".gif"
             )
                 return false;
             return ext
                 is ".mkv"
-                or ".mp4"
-                or ".m4v"
-                or ".avi"
-                or ".mov"
-                or ".wmv"
-                or ".ts"
-                or ".m2ts";
+                    or ".mp4"
+                    or ".m4v"
+                    or ".avi"
+                    or ".mov"
+                    or ".wmv"
+                    or ".ts"
+                    or ".m2ts";
         }
     }
 
-    private static InfoHashes? TryParseInfoHashes(string s) {
+    private static InfoHashes? TryParseInfoHashes(string s)
+    {
         s = s.Trim();
 
         if (Regex.IsMatch(s, "^[A-Fa-f0-9]{40}$"))
@@ -233,17 +258,19 @@ public sealed class GelatoApiController : ControllerBase {
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string[] DefaultTrackers() =>
-    [
-        "udp://tracker.opentrackr.org:1337/announce",
+        [
+            "udp://tracker.opentrackr.org:1337/announce",
             "udp://open.stealth.si:80/announce",
             "udp://tracker.torrent.eu.org:451/announce",
             "udp://explodie.org:6969/announce",
-            "udp://tracker.openbittorrent.com:6969/announce"
-    ];
+            "udp://tracker.openbittorrent.com:6969/announce",
+        ];
 
-    private static string GuessContentType(string path) {
+    private static string GuessContentType(string path)
+    {
         var ext = Path.GetExtension(path).ToLowerInvariant();
-        return ext switch {
+        return ext switch
+        {
             ".mp4" => "video/mp4",
             ".mkv" => "video/x-matroska",
             ".webm" => "video/webm",

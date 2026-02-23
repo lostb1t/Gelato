@@ -10,8 +10,9 @@ namespace Gelato.ScheduledTasks;
 public sealed class PurgeGelatoSyncTask(
     ILibraryManager libraryManager,
     ILogger<PurgeGelatoSyncTask> log,
-    GelatoManager manager)
-    : IScheduledTask {
+    GelatoManager manager
+) : IScheduledTask
+{
     public string Name => "WARNING: purge all gelato items";
     public string Key => "PurgeGelatoSyncTask";
     public string Description => "Removes all stremio items (local items are kept)";
@@ -19,43 +20,51 @@ public sealed class PurgeGelatoSyncTask(
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 
-    public Task ExecuteAsync(IProgress<double> progress, CancellationToken ct) {
+    public Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
+    {
         var stats = new ConcurrentDictionary<BaseItemKind, int>();
 
         var items = libraryManager
-            .GetItemList(new InternalItemsQuery {
-                IncludeItemTypes =
-                [
-                    BaseItemKind.Movie,
-                    BaseItemKind.Series,
-                    BaseItemKind.BoxSet
-                ],
-                Recursive = true,
-                HasAnyProviderId = new Dictionary<string, string>
+            .GetItemList(
+                new InternalItemsQuery
                 {
-                    { "Stremio", string.Empty },
-                    { "stremio", string.Empty },
-                },
-                GroupByPresentationUniqueKey = false,
-                GroupBySeriesPresentationUniqueKey = false,
-                CollapseBoxSetItems = false,
-                IsDeadPerson = true,
-            })
+                    IncludeItemTypes =
+                    [
+                        BaseItemKind.Movie,
+                        BaseItemKind.Series,
+                        BaseItemKind.BoxSet,
+                    ],
+                    Recursive = true,
+                    HasAnyProviderId = new Dictionary<string, string>
+                    {
+                        { "Stremio", string.Empty },
+                        { "stremio", string.Empty },
+                    },
+                    GroupByPresentationUniqueKey = false,
+                    GroupBySeriesPresentationUniqueKey = false,
+                    CollapseBoxSetItems = false,
+                    IsDeadPerson = true,
+                }
+            )
             .Where(item => item.IsGelato())
             .ToList();
 
         var totalItems = items.Count;
         var processedItems = 0;
 
-        foreach (var item in items) {
+        foreach (var item in items)
+        {
             var kind = item.GetBaseItemKind();
-            try {
+            try
+            {
                 libraryManager.DeleteItem(
                     item,
                     new DeleteOptions { DeleteFileLocation = true },
-                    true);
+                    true
+                );
             }
-            catch (Exception ex) {
+            catch (Exception ex)
+            {
                 log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
             }
 

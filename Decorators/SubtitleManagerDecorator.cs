@@ -31,46 +31,52 @@ namespace Gelato.Decorators
             string language,
             bool? isPerfectMatch,
             bool isAutomated,
-            CancellationToken cancellationToken)
-            => _inner.SearchSubtitles(video, language, isPerfectMatch, isAutomated, cancellationToken);
+            CancellationToken cancellationToken
+        ) =>
+            _inner.SearchSubtitles(video, language, isPerfectMatch, isAutomated, cancellationToken);
 
         public Task<RemoteSubtitleInfo[]> SearchSubtitles(
             SubtitleSearchRequest request,
-            CancellationToken cancellationToken) {
+            CancellationToken cancellationToken
+        )
+        {
             // nasty hack to prevent some plugins chocking on remote files
-           // request.MediaPath = request.MediaPath + ".strm";
+            // request.MediaPath = request.MediaPath + ".strm";
             return _inner.SearchSubtitles(request, cancellationToken);
-          }
+        }
 
         public Task DownloadSubtitles(
             Video video,
             string subtitleId,
-            CancellationToken cancellationToken)
-            => _inner.DownloadSubtitles(video, subtitleId, cancellationToken);
+            CancellationToken cancellationToken
+        ) => _inner.DownloadSubtitles(video, subtitleId, cancellationToken);
 
         public Task DownloadSubtitles(
             Video video,
             LibraryOptions libraryOptions,
             string subtitleId,
-            CancellationToken cancellationToken)
-          
+            CancellationToken cancellationToken
+        )
         {
-          if (video.IsGelato()) {
-            libraryOptions.SaveSubtitlesWithMedia = false;
-          }
-          return _inner.DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken);
+            if (video.IsGelato())
+            {
+                libraryOptions.SaveSubtitlesWithMedia = false;
+            }
+            return _inner.DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken);
         }
 
-        public Task UploadSubtitle(Video video, SubtitleResponse response)
-            => _inner.UploadSubtitle(video, response);
+        public Task UploadSubtitle(Video video, SubtitleResponse response) =>
+            _inner.UploadSubtitle(video, response);
 
-        public Task<SubtitleResponse> GetRemoteSubtitles(string id, CancellationToken cancellationToken)
-            => _inner.GetRemoteSubtitles(id, cancellationToken);
+        public Task<SubtitleResponse> GetRemoteSubtitles(
+            string id,
+            CancellationToken cancellationToken
+        ) => _inner.GetRemoteSubtitles(id, cancellationToken);
 
-        public Task DeleteSubtitles(BaseItem item, int index)
-            => _inner.DeleteSubtitles(item, index);
+        public Task DeleteSubtitles(BaseItem item, int index) =>
+            _inner.DeleteSubtitles(item, index);
 
-        public SubtitleProviderInfo[] GetSupportedProviders(BaseItem item)
-            => _inner.GetSupportedProviders(item);
+        public SubtitleProviderInfo[] GetSupportedProviders(BaseItem item) =>
+            _inner.GetSupportedProviders(item);
     }
 }

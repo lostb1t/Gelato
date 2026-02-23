@@ -1,5 +1,5 @@
-using Microsoft.Data.Sqlite;
 using MediaBrowser.Common.Configuration;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Services;
@@ -8,13 +8,15 @@ namespace Gelato.Services;
 /// SQLite-backed cache service migrated from Palco.
 /// Maintains the same DB location/name for compatibility.
 /// </summary>
-public class PalcoCacheService : IDisposable {
+public class PalcoCacheService : IDisposable
+{
     private readonly string _dbPath;
     private readonly ILogger<PalcoCacheService> _logger;
     private SqliteConnection? _connection;
     private readonly Lock _lock = new();
 
-    public PalcoCacheService(IApplicationPaths appPaths, ILogger<PalcoCacheService> logger) {
+    public PalcoCacheService(IApplicationPaths appPaths, ILogger<PalcoCacheService> logger)
+    {
         _logger = logger;
         // Target existing Palco data folder to preserve legacy data
         var pluginDataPath = Path.Combine(appPaths.DataPath, "Palco");
@@ -23,13 +25,15 @@ public class PalcoCacheService : IDisposable {
         Initialize();
     }
 
-    private void Initialize() {
+    private void Initialize()
+    {
         _connection = new SqliteConnection($"Data Source={_dbPath}");
         _connection.Open();
 
         // Ensure table exists
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = @"
+        cmd.CommandText =
+            @"
             CREATE TABLE IF NOT EXISTS cache (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
@@ -43,17 +47,22 @@ public class PalcoCacheService : IDisposable {
         _logger.LogInformation("[Gelato] Palco Cache initialized at {Path}", _dbPath);
     }
 
-    public string? Get(string key, string ns = "") {
-        lock (_lock) {
-            if (_connection == null) return null;
+    public string? Get(string key, string ns = "")
+    {
+        lock (_lock)
+        {
+            if (_connection == null)
+                return null;
 
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT value, expires_at FROM cache WHERE key = @key AND namespace = @ns";
+            cmd.CommandText =
+                "SELECT value, expires_at FROM cache WHERE key = @key AND namespace = @ns";
             cmd.Parameters.AddWithValue("@key", key);
             cmd.Parameters.AddWithValue("@ns", ns);
 
             using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return null; // Not found
+            if (!reader.Read())
+                return null; // Not found
 
             var expiresAt = reader.IsDBNull(1) ? (long?)null : reader.GetInt64(1);
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -69,31 +78,41 @@ public class PalcoCacheService : IDisposable {
         }
     }
 
-    public void Set(string key, string value, int ttlSeconds = 0, string ns = "") {
-        lock (_lock) {
-            if (_connection == null) return;
+    public void Set(string key, string value, int ttlSeconds = 0, string ns = "")
+    {
+        lock (_lock)
+        {
+            if (_connection == null)
+                return;
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
             long? expiresAt = ttlSeconds > 0 ? now + ttlSeconds : null;
 
             // Upsert with new expiry
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = @"
+            cmd.CommandText =
+                @"
                 INSERT OR REPLACE INTO cache (key, value, created_at, expires_at, namespace)
                 VALUES (@key, @value, @created, @expires, @ns)
             ";
             cmd.Parameters.AddWithValue("@key", key);
             cmd.Parameters.AddWithValue("@value", value);
             cmd.Parameters.AddWithValue("@created", now);
-            cmd.Parameters.AddWithValue("@expires", expiresAt.HasValue ? expiresAt.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue(
+                "@expires",
+                expiresAt.HasValue ? expiresAt.Value : DBNull.Value
+            );
             cmd.Parameters.AddWithValue("@ns", ns);
             cmd.ExecuteNonQuery();
         }
     }
 
-    public bool Delete(string key, string ns = "") {
-        lock (_lock) {
-            if (_connection == null) return false;
+    public bool Delete(string key, string ns = "")
+    {
+        lock (_lock)
+        {
+            if (_connection == null)
+                return false;
 
             // Remove specific key in namespace
             using var cmd = _connection.CreateCommand();
@@ -104,18 +123,24 @@ public class PalcoCacheService : IDisposable {
         }
     }
 
-    public Dictionary<string, string> GetBulk(IEnumerable<string> keys, string ns = "") {
+    public Dictionary<string, string> GetBulk(IEnumerable<string> keys, string ns = "")
+    {
         var result = new Dictionary<string, string>();
-        foreach (var key in keys) {
+        foreach (var key in keys)
+        {
             var value = Get(key, ns);
-            if (value != null) result[key] = value;
+            if (value != null)
+                result[key] = value;
         }
         return result;
     }
 
-    public (int total, int expired, long size) GetStats() {
-        lock (_lock) {
-            if (_connection == null) return (0, 0, 0);
+    public (int total, int expired, long size) GetStats()
+    {
+        lock (_lock)
+        {
+            if (_connection == null)
+                return (0, 0, 0);
 
             var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
@@ -124,7 +149,8 @@ public class PalcoCacheService : IDisposable {
             var total = Convert.ToInt32(cmd1.ExecuteScalar());
 
             using var cmd2 = _connection.CreateCommand();
-            cmd2.CommandText = "SELECT COUNT(*) FROM cache WHERE expires_at IS NOT NULL AND expires_at < @now";
+            cmd2.CommandText =
+                "SELECT COUNT(*) FROM cache WHERE expires_at IS NOT NULL AND expires_at < @now";
             cmd2.Parameters.AddWithValue("@now", now);
             var expired = Convert.ToInt32(cmd2.ExecuteScalar());
 
@@ -133,7 +159,8 @@ public class PalcoCacheService : IDisposable {
         }
     }
 
-    public void Dispose() {
+    public void Dispose()
+    {
         _connection?.Close();
         _connection?.Dispose();
     }

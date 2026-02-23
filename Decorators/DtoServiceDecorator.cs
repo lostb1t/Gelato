@@ -7,7 +7,8 @@ using MediaBrowser.Model.Entities;
 
 namespace Gelato.Decorators;
 
-public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService {
+public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService
+{
     public double? GetPrimaryImageAspectRatio(BaseItem item) =>
         inner.GetPrimaryImageAspectRatio(item);
 
@@ -16,7 +17,8 @@ public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService {
         DtoOptions options,
         User? user = null,
         BaseItem? owner = null
-    ) {
+    )
+    {
         var dto = inner.GetBaseItemDto(item, options, user, owner);
         Patch(dto, false);
         return dto;
@@ -27,11 +29,13 @@ public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService {
         DtoOptions options,
         User? user = null,
         BaseItem? owner = null
-    ) {
+    )
+    {
         // im going to hell for this
         var item = items.FirstOrDefault();
 
-        if (item != null && item.GetBaseItemKind() == BaseItemKind.BoxSet) {
+        if (item != null && item.GetBaseItemKind() == BaseItemKind.BoxSet)
+        {
             options.EnableUserData = false;
         }
 
@@ -48,23 +52,23 @@ public sealed class DtoServiceDecorator(IDtoService inner) : IDtoService {
         DtoOptions options,
         List<BaseItem>? taggedItems,
         User? user = null
-    ) {
+    )
+    {
         var dto = inner.GetItemByNameDto(item, options, taggedItems, user);
         Patch(dto, false);
         return dto;
     }
 
-    private void Patch(
-        BaseItemDto dto,
-        bool isList
-    )
+    private void Patch(BaseItemDto dto, bool isList)
     {
         // mark if placeholder
-        if (isList
+        if (
+            isList
             || dto.MediaSources?.Length != 1
             || dto.Path is null
-            || !dto.MediaSources[0]
-                .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)) return;
+            || !dto.MediaSources[0].Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
+        )
+            return;
         dto.LocationType = LocationType.Virtual;
         dto.Path = null;
         dto.CanDownload = false;

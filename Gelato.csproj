@@ -23,7 +23,9 @@
   <Target Name="CleanupJellyfinDlls" AfterTargets="Build">
     <ItemGroup>
       <AllDlls Include="$(OutDir)*.dll" />
-      <FilesToKeep Include="&#xA;        $(OutDir)Gelato.dll;&#xA;        $(OutDir)JellyfinLoaderStub*.dll;  &#xA;        $(OutDir)0Harmony.dll;             &#xA;        $(OutDir)MonoTorrent*.dll;&#xA;        $(OutDir)Mono.Nat.dll;&#xA;        $(OutDir)ReusableTasks.dll" />
+      <FilesToKeep
+        Include="&#xA;        $(OutDir)Gelato.dll;&#xA;        $(OutDir)JellyfinLoaderStub*.dll;  &#xA;        $(OutDir)0Harmony.dll;             &#xA;        $(OutDir)MonoTorrent*.dll;&#xA;        $(OutDir)Mono.Nat.dll;&#xA;        $(OutDir)ReusableTasks.dll"
+      />
       <FilesToDelete Include="@(AllDlls)" Exclude="@(FilesToKeep)" />
     </ItemGroup>
     <Delete Files="@(FilesToDelete)" />

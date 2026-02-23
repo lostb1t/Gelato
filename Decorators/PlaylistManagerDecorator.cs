@@ -12,19 +12,18 @@ public sealed class PlaylistManagerDecorator(
     IPlaylistManager inner,
     Lazy<GelatoManager> manager,
     ILibraryManager libraryManager,
-    ILogger<PlaylistManagerDecorator> log)
-    : IPlaylistManager {
+    ILogger<PlaylistManagerDecorator> log
+) : IPlaylistManager
+{
     public Playlist GetPlaylistForUser(Guid playlistId, Guid userId) =>
         inner.GetPlaylistForUser(playlistId, userId);
 
     public Task<PlaylistCreationResult> CreatePlaylist(PlaylistCreationRequest request) =>
         inner.CreatePlaylist(request);
 
-    public Task UpdatePlaylist(PlaylistUpdateRequest request) =>
-        inner.UpdatePlaylist(request);
+    public Task UpdatePlaylist(PlaylistUpdateRequest request) => inner.UpdatePlaylist(request);
 
-    public IEnumerable<Playlist> GetPlaylists(Guid userId) =>
-        inner.GetPlaylists(userId);
+    public IEnumerable<Playlist> GetPlaylists(Guid userId) => inner.GetPlaylists(userId);
 
     public Task AddUserToShares(PlaylistUserUpdateRequest request) =>
         inner.AddUserToShares(request);
@@ -32,7 +31,12 @@ public sealed class PlaylistManagerDecorator(
     public Task RemoveUserFromShares(Guid playlistId, Guid userId, PlaylistUserPermissions share) =>
         inner.RemoveUserFromShares(playlistId, userId, share);
 
-    public async Task AddItemToPlaylistAsync(Guid playlistId, IReadOnlyCollection<Guid> itemIds, Guid userId) {
+    public async Task AddItemToPlaylistAsync(
+        Guid playlistId,
+        IReadOnlyCollection<Guid> itemIds,
+        Guid userId
+    )
+    {
         await inner.AddItemToPlaylistAsync(playlistId, itemIds, userId).ConfigureAwait(false);
 
         if (libraryManager.GetItemById(playlistId) is not Playlist playlist)
@@ -49,25 +53,29 @@ public sealed class PlaylistManagerDecorator(
 
         var needsFix = false;
 
-        for (int i = 0; i < playlist.LinkedChildren.Length; i++) {
+        for (int i = 0; i < playlist.LinkedChildren.Length; i++)
+        {
             var linkedChild = playlist.LinkedChildren[i];
 
             if (
                 string.IsNullOrEmpty(linkedChild.LibraryItemId)
                 && !string.IsNullOrEmpty(linkedChild.Path)
-            ) {
+            )
+            {
                 var matchingItem = gelatoItems.FirstOrDefault(item =>
                     item != null && item.Path == linkedChild.Path
                 );
 
-                if (matchingItem != null) {
+                if (matchingItem != null)
+                {
                     log.LogDebug(
                         "Fixing Gelato LinkedChild with path {Path} for item {Id}",
                         linkedChild.Path,
                         matchingItem.Id
                     );
 
-                    playlist.LinkedChildren[i] = new LinkedChild {
+                    playlist.LinkedChildren[i] = new LinkedChild
+                    {
                         LibraryItemId = matchingItem.Id.ToString("N", CultureInfo.InvariantCulture),
                         Type = LinkedChildType.Manual,
                     };
@@ -76,7 +84,8 @@ public sealed class PlaylistManagerDecorator(
             }
         }
 
-        if (needsFix) {
+        if (needsFix)
+        {
             log.LogDebug(
                 "Fixing {Count} Gelato items in playlist {Name}",
                 gelatoItems.Count,
@@ -91,18 +100,18 @@ public sealed class PlaylistManagerDecorator(
     public Task RemoveItemFromPlaylistAsync(string playlistId, IEnumerable<string> entryIds) =>
         inner.RemoveItemFromPlaylistAsync(playlistId, entryIds);
 
-    public Folder GetPlaylistsFolder() =>
-        inner.GetPlaylistsFolder();
+    public Folder GetPlaylistsFolder() => inner.GetPlaylistsFolder();
 
-    public Folder GetPlaylistsFolder(Guid userId) =>
-        inner.GetPlaylistsFolder(userId);
+    public Folder GetPlaylistsFolder(Guid userId) => inner.GetPlaylistsFolder(userId);
 
-    public Task MoveItemAsync(string playlistId, string entryId, int newIndex, Guid callingUserId) =>
-        inner.MoveItemAsync(playlistId, entryId, newIndex, callingUserId);
+    public Task MoveItemAsync(
+        string playlistId,
+        string entryId,
+        int newIndex,
+        Guid callingUserId
+    ) => inner.MoveItemAsync(playlistId, entryId, newIndex, callingUserId);
 
-    public Task RemovePlaylistsAsync(Guid userId) =>
-        inner.RemovePlaylistsAsync(userId);
+    public Task RemovePlaylistsAsync(Guid userId) => inner.RemovePlaylistsAsync(userId);
 
-    public void SavePlaylistFile(Playlist item) =>
-        inner.SavePlaylistFile(item);
+    public void SavePlaylistFile(Playlist item) => inner.SavePlaylistFile(item);
 }

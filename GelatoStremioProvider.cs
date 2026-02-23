@@ -10,21 +10,26 @@ namespace Gelato;
 public class GelatoStremioProvider(
     string baseUrl,
     IHttpClientFactory http,
-    ILogger<GelatoStremioProvider> log) {
+    ILogger<GelatoStremioProvider> log
+)
+{
     private StremioManifest? _manifest;
     private StremioCatalog? _movieSearchCatalog;
     private StremioCatalog? _seriesSearchCatalog;
-    private static readonly JsonSerializerOptions JsonOpts = new() {
+    private static readonly JsonSerializerOptions JsonOpts = new()
+    {
         PropertyNameCaseInsensitive = true,
     };
 
-    private HttpClient NewClient() {
+    private HttpClient NewClient()
+    {
         var c = http.CreateClient(nameof(GelatoStremioProvider));
         c.Timeout = TimeSpan.FromSeconds(30);
         return c;
     }
 
-    private string BuildUrl(string[] segments, IEnumerable<string>? extras = null) {
+    private string BuildUrl(string[] segments, IEnumerable<string>? extras = null)
+    {
         var parts = segments.Select(Uri.EscapeDataString).ToArray();
         var path = string.Join("/", parts);
 
@@ -40,14 +45,17 @@ public class GelatoStremioProvider(
         return url;
     }
 
-    private async Task<T?> GetJsonAsync<T>(string url) {
+    private async Task<T?> GetJsonAsync<T>(string url)
+    {
         log.LogDebug("GetJsonAsync: requesting {Url}", url);
 
-        try {
+        try
+        {
             var c = NewClient();
             var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
 
-            if (!resp.IsSuccessStatusCode) {
+            if (!resp.IsSuccessStatusCode)
+            {
                 log.LogWarning(
                     "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
                     url,
@@ -65,13 +73,15 @@ public class GelatoStremioProvider(
             await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
             return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
         }
-        catch (Exception ex) {
+        catch (Exception ex)
+        {
             log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
             throw;
         }
     }
 
-    public async Task<StremioManifest?> GetManifestAsync(bool force = false) {
+    public async Task<StremioManifest?> GetManifestAsync(bool force = false)
+    {
         if (!force && _manifest is not null)
             return _manifest;
         try
@@ -84,45 +94,51 @@ public class GelatoStremioProvider(
             {
                 _movieSearchCatalog = m
                     .Catalogs.Where(c =>
-                        string.Equals(c.Type, nameof(StremioMediaType.Movie),
-                            StringComparison.CurrentCultureIgnoreCase)
+                        string.Equals(
+                            c.Type,
+                            nameof(StremioMediaType.Movie),
+                            StringComparison.CurrentCultureIgnoreCase
+                        )
                         && c.Extra.Any(e =>
                             string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
                         )
                     )
-                    .OrderBy(c =>
-                        c.Id.Contains("people", StringComparison.OrdinalIgnoreCase)
-                    )
+                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault();
 
                 _seriesSearchCatalog = m
                     .Catalogs.Where(c =>
-                        string.Equals(c.Type, nameof(StremioMediaType.Series),
-                            StringComparison.CurrentCultureIgnoreCase)
+                        string.Equals(
+                            c.Type,
+                            nameof(StremioMediaType.Series),
+                            StringComparison.CurrentCultureIgnoreCase
+                        )
                         && c.Extra.Any(e =>
                             string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
                         )
                     )
-                    .OrderBy(c =>
-                        c.Id.Contains("people", StringComparison.OrdinalIgnoreCase)
-                    )
+                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault();
             }
 
-            if (_movieSearchCatalog == null) {
+            if (_movieSearchCatalog == null)
+            {
                 log.LogWarning("manifest has no search-capable movie catalog");
             }
-            else {
+            else
+            {
                 log.LogInformation(
                     "manifest uses movie search catalog: {Id}",
                     _movieSearchCatalog.Id
                 );
             }
 
-            if (_seriesSearchCatalog == null) {
+            if (_seriesSearchCatalog == null)
+            {
                 log.LogWarning("manifest has no search-capable series catalog");
             }
-            else {
+            else
+            {
                 log.LogInformation(
                     "manifest uses series search catalog: {Id}",
                     _seriesSearchCatalog.Id
@@ -130,64 +146,70 @@ public class GelatoStremioProvider(
             }
             return m;
         }
-        catch (Exception ex) {
+        catch (Exception ex)
+        {
             log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
             return null;
         }
     }
 
-    public async Task<bool> IsReady() {
+    public async Task<bool> IsReady()
+    {
         var m = await GetManifestAsync();
         return m is not null;
     }
 
-    public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType) {
+    public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)
+    {
         var url = BuildUrl(["meta", mediaType.ToString().ToLower(), id]);
         var r = await GetJsonAsync<StremioMetaResponse>(url);
         return r?.Meta;
     }
 
-    public async Task<StremioMeta?> GetMetaAsync(BaseItem item) {
+    public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
+    {
         var id = item.GetProviderId("Imdb");
-        if (id is null) {
+        if (id is null)
+        {
             log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
             id = item.GetProviderId("Tmdb");
-            if (id is null) {
+            if (id is null)
+            {
                 log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
                 return null;
             }
             id = $"tmdb:{id}";
         }
-        var url = BuildUrl(
-            ["meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id]
-        );
+        var url = BuildUrl(["meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id]);
         var r = await GetJsonAsync<StremioMetaResponse>(url);
         return r?.Meta;
     }
 
-    public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri) {
+    public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
+    {
         return await GetStreamsAsync(uri.ExternalId, uri.MediaType);
     }
 
-    private async Task<List<StremioStream>> GetStreamsAsync(
-        string id,
-        StremioMediaType mediaType
-    ) {
+    private async Task<List<StremioStream>> GetStreamsAsync(string id, StremioMediaType mediaType)
+    {
         var url = BuildUrl(["stream", mediaType.ToString().ToLower(), id]);
         var r = await GetJsonAsync<StremioStreamsResponse>(url);
 
         var error = r?.GetError();
-        if (error is not null) {
+        if (error is not null)
+        {
             throw new InvalidOperationException($"Stremio returned an error: {error}");
         }
 
         return r?.Streams ?? [];
     }
 
-    public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName) {
+    public async Task<List<StremioSubtitle>> GetSubtitlesAsync(StremioUri uri, string? fileName)
+    {
         var extras = Array.Empty<string>();
 
-        if (!string.IsNullOrEmpty(fileName)) {
+        if (!string.IsNullOrEmpty(fileName))
+        {
             extras = [$"filename={fileName}"];
         }
 
@@ -204,7 +226,8 @@ public class GelatoStremioProvider(
         string mediaType,
         string? search = null,
         int? skip = null
-    ) {
+    )
+    {
         var extras = new List<string>();
         if (!string.IsNullOrWhiteSpace(search))
             extras.Add($"search={Uri.EscapeDataString(search)}");
@@ -221,18 +244,21 @@ public class GelatoStremioProvider(
         string query,
         StremioMediaType mediaType,
         int? skip = null
-    ) {
+    )
+    {
         var manifest = await GetManifestAsync();
         if (manifest == null)
             return [];
 
-        var catalog = mediaType switch {
+        var catalog = mediaType switch
+        {
             StremioMediaType.Movie => _movieSearchCatalog,
             StremioMediaType.Series => _seriesSearchCatalog,
             _ => null,
         };
 
-        if (catalog == null) {
+        if (catalog == null)
+        {
             log.LogError(
                 "SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.",
                 mediaType
@@ -249,7 +275,8 @@ public class GelatoStremioProvider(
 // ReSharper disable CollectionNeverUpdated.Global
 // ReSharper disable UnusedAutoPropertyAccessor.Global
 
-public class StremioManifest {
+public class StremioManifest
+{
     public string Name { get; set; } = "";
     public string Id { get; set; } = "";
     public string Version { get; set; } = "";
@@ -263,37 +290,41 @@ public class StremioManifest {
     public List<StremioCatalog> AddonCatalogs { get; set; } = new();
 }
 
-public class StremioCatalog {
+public class StremioCatalog
+{
     // we dont cast to enum cause types is not a static set
     public string Type { get; set; } = "";
     public string Id { get; set; } = "";
     public string Name { get; set; } = "";
     public List<StremioExtra> Extra { get; set; } = new();
 
-    public bool IsSearchCapable() {
-        return Extra.Any(e =>
-            string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
-        );
+    public bool IsSearchCapable()
+    {
+        return Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase));
     }
 }
 
-public class StremioExtra {
+public class StremioExtra
+{
     public string Name { get; set; } = "";
     public bool IsRequired { get; set; }
     public List<string> Options { get; set; } = new();
 }
 
-public class StremioResource {
+public class StremioResource
+{
     public string Name { get; set; } = "";
     public List<string> Types { get; set; } = new();
     public List<string> IdPrefixes { get; set; } = new();
 }
 
-public class StremioCatalogResponse {
+public class StremioCatalogResponse
+{
     public List<StremioMeta>? Metas { get; set; }
 }
 
-public struct StremioSubtitle {
+public struct StremioSubtitle
+{
     public string Id { get; set; }
     public string Url { get; set; }
     public string? Lang { get; set; }
@@ -308,15 +339,18 @@ public struct StremioSubtitle {
     public string? Moviehash { get; set; }
 }
 
-public struct StremioSubtitleResponse {
+public struct StremioSubtitleResponse
+{
     public List<StremioSubtitle> Subtitles { get; set; }
 }
 
-public class StremioMetaResponse {
+public class StremioMetaResponse
+{
     public StremioMeta Meta { get; set; } = null!;
 }
 
-public class StremioMeta {
+public class StremioMeta
+{
     public required string Id { get; set; }
 
     [JsonConverter(typeof(JsonStringEnumConverter))]
@@ -351,6 +385,7 @@ public class StremioMeta {
     public int? Year { get; set; }
     public string? Slug { get; set; }
     public List<StremioTrailerStream>? TrailerStreams { get; set; }
+
     // ReSharper disable once InconsistentNaming
     public StremioAppExtras? App_Extras { get; set; }
     public string? Thumbnail { get; set; }
@@ -360,7 +395,8 @@ public class StremioMeta {
     public DateTime? FirstAired { get; set; }
     public Guid? Guid { get; set; }
 
-    public string? TvdbEpisodeId() {
+    public string? TvdbEpisodeId()
+    {
         if (!Uri.TryCreate(Thumbnail, UriKind.Absolute, out var uri))
             return null;
 
@@ -372,36 +408,45 @@ public class StremioMeta {
         return int.TryParse(lastSegment, out _) ? lastSegment : null;
     }
 
-    public string GetName() {
-        if (!string.IsNullOrWhiteSpace(Title)) {
+    public string GetName()
+    {
+        if (!string.IsNullOrWhiteSpace(Title))
+        {
             return Title;
         }
-        if (!string.IsNullOrWhiteSpace(Name)) {
+        if (!string.IsNullOrWhiteSpace(Name))
+        {
             return Name;
         }
         return "";
     }
 
-    public Dictionary<string, string> GetProviderIds() {
+    public Dictionary<string, string> GetProviderIds()
+    {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        if (!string.IsNullOrWhiteSpace(Id)) {
-            if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase)) {
+        if (!string.IsNullOrWhiteSpace(Id))
+        {
+            if (Id.StartsWith("tmdb:", StringComparison.OrdinalIgnoreCase))
+            {
                 dict[nameof(MetadataProvider.Tmdb)] = Id["tmdb:".Length..];
             }
-            else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase)) {
+            else if (Id.StartsWith("tt", StringComparison.OrdinalIgnoreCase))
+            {
                 dict[nameof(MetadataProvider.Imdb)] = Id;
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(ImdbId)) {
+        if (!string.IsNullOrWhiteSpace(ImdbId))
+        {
             dict[nameof(MetadataProvider.Imdb)] = ImdbId;
         }
 
         return dict;
     }
 
-    public int? GetYear() {
+    public int? GetYear()
+    {
         if (Year is not null)
             return Year;
 
@@ -409,7 +454,8 @@ public class StremioMeta {
             return dt.Year;
 
         // "2007-2019", "2020-", or "2015"
-        if (!string.IsNullOrWhiteSpace(ReleaseInfo)) {
+        if (!string.IsNullOrWhiteSpace(ReleaseInfo))
+        {
             var s = ReleaseInfo.Trim();
 
             if (
@@ -434,47 +480,57 @@ public class StremioMeta {
         return null;
     }
 
-    public DateTime? GetPremiereDate() {
+    public DateTime? GetPremiereDate()
+    {
         if (Released is { } dt)
             return dt;
 
         var year = GetYear();
-        if (year is null) {
+        if (year is null)
+        {
             return null;
         }
         return new DateTime(year.Value, 1, 1);
     }
 
-    public bool IsValid() {
+    public bool IsValid()
+    {
         return !Id.Contains("error");
     }
 
-    public bool IsReleased(int bufferDays = 0) {
+    public bool IsReleased(int bufferDays = 0)
+    {
         var now = DateTime.UtcNow;
 
         // Check Released date first (most specific)
-        if (Released.HasValue) {
+        if (Released.HasValue)
+        {
             var homeReleaseDate = Released.Value.AddDays(bufferDays);
             return homeReleaseDate <= now;
         }
 
         // Check FirstAired for TV episodes
-        if (FirstAired.HasValue) {
+        if (FirstAired.HasValue)
+        {
             return FirstAired.Value <= now;
         }
 
-        if (Status is not null) {
-            if (Status == StremioStatus.Upcoming) {
+        if (Status is not null)
+        {
+            if (Status == StremioStatus.Upcoming)
+            {
                 return false;
             }
-            if (Status == StremioStatus.Ended || Status == StremioStatus.Continuing) {
+            if (Status == StremioStatus.Ended || Status == StremioStatus.Continuing)
+            {
                 return true;
             }
         }
 
         // Fall back to year-based check
         var year = GetYear();
-        if (year.HasValue) {
+        if (year.HasValue)
+        {
             // For year-only dates, assume mid-year release + buffer
             var estimatedRelease = new DateTime(year.Value, 6, 1).AddDays(bufferDays);
             return estimatedRelease <= now;
@@ -485,18 +541,21 @@ public class StremioMeta {
     }
 }
 
-public class StremioTrailer {
+public class StremioTrailer
+{
     public string? Source { get; set; }
     public string? Type { get; set; }
 }
 
-public class StremioLink {
+public class StremioLink
+{
     public string? Name { get; set; }
     public string? Category { get; set; }
     public string? Url { get; set; }
 }
 
-public class StremioVideo {
+public class StremioVideo
+{
     public string Id { get; set; } = "";
     public string? Name { get; set; }
     public DateTime? Released { get; set; }
@@ -510,32 +569,38 @@ public class StremioVideo {
     public DateTime? FirstAired { get; set; }
 }
 
-public class StremioTrailerStream {
+public class StremioTrailerStream
+{
     public string? Title { get; set; }
     public string? YtId { get; set; }
 }
 
-public class StremioAppExtras {
+public class StremioAppExtras
+{
     public List<StremioCast>? Cast { get; set; }
     public List<String?>? SeasonPosters { get; set; }
 }
 
-public class StremioCast {
+public class StremioCast
+{
     public string? Name { get; set; }
     public string? Character { get; set; }
     public string? Photo { get; set; }
 }
 
-public class StremioStreamsResponse {
+public class StremioStreamsResponse
+{
     public List<StremioStream> Streams { get; set; } = new();
 
-    public string? GetError() {
+    public string? GetError()
+    {
         var name = Streams.FirstOrDefault()?.GetName();
         return name is not null && name.Contains("error") ? name : null;
     }
 }
 
-public class StremioStream {
+public class StremioStream
+{
     public string Url { get; set; } = "";
     public string? Title { get; set; }
     public string? Name { get; set; }
@@ -548,26 +613,32 @@ public class StremioStream {
     public List<string>? Sources { get; set; }
     public StremioBehaviorHints? BehaviorHints { get; set; }
 
-    public string GetName() {
-        if (!string.IsNullOrWhiteSpace(Title)) {
+    public string GetName()
+    {
+        if (!string.IsNullOrWhiteSpace(Title))
+        {
             return Title;
         }
         return !string.IsNullOrWhiteSpace(Name) ? Name : "";
     }
 
-    public Guid GetGuid() {
+    public Guid GetGuid()
+    {
         string key;
 
-        if (!string.IsNullOrEmpty(InfoHash)) {
+        if (!string.IsNullOrEmpty(InfoHash))
+        {
             key = InfoHash;
         }
         else if (
             !string.IsNullOrEmpty(BehaviorHints?.BingeGroup)
             && !string.IsNullOrEmpty(BehaviorHints?.Filename)
-        ) {
+        )
+        {
             key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename}";
         }
-        else {
+        else
+        {
             key = Url;
         }
         var bytes = System.Text.Encoding.UTF8.GetBytes(key);
@@ -575,7 +646,8 @@ public class StremioStream {
         return new Guid(hash);
     }
 
-    public bool IsValid() {
+    public bool IsValid()
+    {
         if (string.IsNullOrWhiteSpace(Url))
             return false;
 
@@ -585,16 +657,19 @@ public class StremioStream {
         return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
     }
 
-    public bool IsFile() {
+    public bool IsFile()
+    {
         return !string.IsNullOrWhiteSpace(Url);
     }
 
-    public bool IsTorrent() {
+    public bool IsTorrent()
+    {
         return !string.IsNullOrWhiteSpace(InfoHash);
     }
 }
 
-public class StremioBehaviorHints {
+public class StremioBehaviorHints
+{
     public string? BingeGroup { get; set; }
     public string? VideoHash { get; set; }
     public long? VideoSize { get; set; }
@@ -603,12 +678,14 @@ public class StremioBehaviorHints {
     public bool ConfigurationRequired { get; set; }
 }
 
-public class StremioOptions {
+public class StremioOptions
+{
     public string BaseUrl { get; set; } = "https://your-stremio-addon";
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(8);
 }
 
-public enum StremioMediaType {
+public enum StremioMediaType
+{
     Unknown = 0,
     Movie,
     Series,
@@ -621,7 +698,8 @@ public enum StremioMediaType {
     Events,
 }
 
-public enum StremioStatus {
+public enum StremioStatus
+{
     Unknown = 0,
     Upcoming,
     Ended,
@@ -634,20 +712,24 @@ public enum StremioStatus {
 #endregion
 
 public class SafeStringEnumConverter<T> : JsonConverter<T>
-    where T : struct, Enum {
+    where T : struct, Enum
+{
     public override T Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
-    ) {
-        if (reader.TokenType == JsonTokenType.String) {
+    )
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
             var s = reader.GetString();
             if (Enum.TryParse<T>(s, true, out var value))
                 return value;
             if (Enum.TryParse<T>("Unknown", true, out var fallback))
                 return fallback;
         }
-        if (reader.TokenType == JsonTokenType.Number) {
+        if (reader.TokenType == JsonTokenType.Number)
+        {
             if (reader.TryGetInt32(out var i) && Enum.IsDefined(typeof(T), i))
                 return (T)Enum.ToObject(typeof(T), i);
         }
@@ -659,9 +741,12 @@ public class SafeStringEnumConverter<T> : JsonConverter<T>
         writer.WriteStringValue(value.ToString());
 }
 
-public sealed class NullableIntLenientConverter : JsonConverter<int?> {
-    public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) {
-        switch (r.TokenType) {
+public sealed class NullableIntLenientConverter : JsonConverter<int?>
+{
+    public override int? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    {
+        switch (r.TokenType)
+        {
             case JsonTokenType.Number:
                 return r.TryGetInt32(out var i) ? i : null;
             case JsonTokenType.String:
@@ -674,14 +759,17 @@ public sealed class NullableIntLenientConverter : JsonConverter<int?> {
                     NumberStyles.Integer,
                     CultureInfo.InvariantCulture,
                     out var v
-                ) ? v : null;
+                )
+                    ? v
+                    : null;
             case JsonTokenType.Null:
             default:
                 return null;
         }
     }
 
-    public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o) {
+    public override void Write(Utf8JsonWriter w, int? v, JsonSerializerOptions o)
+    {
         if (v.HasValue)
             w.WriteNumberValue(v.Value);
         else

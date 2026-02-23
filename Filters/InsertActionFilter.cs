@@ -9,22 +9,25 @@ namespace Gelato.Filters;
 public class InsertActionFilter(
     GelatoManager manager,
     IUserManager userManager,
-    ILogger<InsertActionFilter> log)
-    : IAsyncActionFilter, IOrderedFilter {
+    ILogger<InsertActionFilter> log
+) : IAsyncActionFilter, IOrderedFilter
+{
     private readonly KeyLock _lock = new();
     public int Order => 1;
 
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
-    ) {
+    )
+    {
         if (
             !ctx.IsInsertableAction()
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
             || userManager.GetUserById(userId) is not { } user
             || manager.GetStremioMeta(guid) is not { } stremioMeta
-        ) {
+        )
+        {
             await next();
             return;
         }
@@ -34,15 +37,18 @@ public class InsertActionFilter(
         var root = isSeries
             ? manager.TryGetSeriesFolder(userId)
             : manager.TryGetMovieFolder(userId);
-        if (root is null) {
+        if (root is null)
+        {
             log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
             await next();
             return;
         }
 
-        if (manager.IntoBaseItem(stremioMeta) is { } item) {
+        if (manager.IntoBaseItem(stremioMeta) is { } item)
+        {
             var existing = manager.FindExistingItem(item, user);
-            if (existing is not null) {
+            if (existing is not null)
+            {
                 log.LogInformation(
                     "Media already exists; redirecting to canonical id {Id}",
                     existing.Id
@@ -59,7 +65,8 @@ public class InsertActionFilter(
             stremioMeta.ImdbId ?? stremioMeta.Id,
             stremioMeta.Type
         );
-        if (meta is null) {
+        if (meta is null)
+        {
             log.LogError(
                 "aio meta not found for {Id} {Type}, maybe try aiometadata as meta addon.",
                 stremioMeta.Id,
@@ -71,7 +78,8 @@ public class InsertActionFilter(
 
         // Insert the item
         var baseItem = await InsertMetaAsync(guid, root, meta, user);
-        if (baseItem is not null) {
+        if (baseItem is not null)
+        {
             ctx.ReplaceGuid(baseItem.Id);
             manager.RemoveStremioMeta(guid);
         }
@@ -84,13 +92,15 @@ public class InsertActionFilter(
         Folder root,
         StremioMeta meta,
         User user
-    ) {
+    )
+    {
         BaseItem? baseItem = null;
         var created = false;
 
         await _lock.RunQueuedAsync(
             guid,
-            async ct => {
+            async ct =>
+            {
                 meta.Guid = guid;
                 (baseItem, created) = await manager.InsertMeta(
                     root,

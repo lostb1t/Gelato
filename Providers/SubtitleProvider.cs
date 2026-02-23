@@ -30,10 +30,7 @@ namespace Gelato.Providers
             (StremioSubtitle Sub, DateTime Expires)
         > _subsCache = new();
 
-        public SubtitleProvider(
-            IHttpClientFactory http,
-            ILogger<SubtitleProvider> log
-        )
+        public SubtitleProvider(IHttpClientFactory http, ILogger<SubtitleProvider> log)
         {
             _http = http;
             _log = log;
@@ -69,7 +66,9 @@ namespace Gelato.Providers
                 var imdb = request.ProviderIds["Imdb"];
                 var stremioUri = new StremioUri(StremioMediaType.Movie, imdb);
 
-                subs = await cfg.Stremio.GetSubtitlesAsync(stremioUri, filename).ConfigureAwait(false);
+                subs = await cfg
+                    .Stremio.GetSubtitlesAsync(stremioUri, filename)
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -86,17 +85,23 @@ namespace Gelato.Providers
 
             var lang = (request.TwoLetterISOLanguageName ?? "").Trim().ToLower();
 
-            var filtered = (string.IsNullOrEmpty(lang)
-                ? subs
-                : subs.Where(s =>
-                    string.Equals(
-                        (s.LangCode ?? "").Trim().ToLower(),
-                        lang,
-                        StringComparison.OrdinalIgnoreCase
+            var filtered = (
+                string.IsNullOrEmpty(lang)
+                    ? subs
+                    : subs.Where(s =>
+                        string.Equals(
+                            (s.LangCode ?? "").Trim().ToLower(),
+                            lang,
+                            StringComparison.OrdinalIgnoreCase
+                        )
                     )
-                )).ToList();
+            ).ToList();
 
-            _log.LogInformation("Found: {Total} subtitles. After lang filter: {Filtered}", subs.Count, filtered.Count);
+            _log.LogInformation(
+                "Found: {Total} subtitles. After lang filter: {Filtered}",
+                subs.Count,
+                filtered.Count
+            );
 
             // Derive release name from media path for title matching.
             // The SearchSubtitles decorator appends ".strm" so strip that first, then strip the real extension.
@@ -105,15 +110,23 @@ namespace Gelato.Providers
                 rawFilename = rawFilename[..^5];
             var releaseName = Path.GetFileNameWithoutExtension(rawFilename);
 
-            _log.LogInformation("Matching subtitles against release name: {ReleaseName}", releaseName);
+            _log.LogInformation(
+                "Matching subtitles against release name: {ReleaseName}",
+                releaseName
+            );
 
             var scored = filtered
                 .Select(s =>
                 {
                     var titleScore = TitleMatchScore(releaseName, s.Title);
                     var trusted = s.FromTrusted == true ? 0.2 : 0.0;
-                    var notAi   = s.AiTranslated == false ? 0.1 : 0.0;
-                    return (Sub: s, TitleScore: titleScore, Bonus: trusted + notAi, Score: titleScore + trusted + notAi);
+                    var notAi = s.AiTranslated == false ? 0.1 : 0.0;
+                    return (
+                        Sub: s,
+                        TitleScore: titleScore,
+                        Bonus: trusted + notAi,
+                        Score: titleScore + trusted + notAi
+                    );
                 })
                 .OrderByDescending(x => x.Score)
                 .ToList();
@@ -121,7 +134,13 @@ namespace Gelato.Providers
             foreach (var (s, titleScore, bonus, score) in scored)
                 _log.LogDebug(
                     "  [{Score:F2}] title={TitleScore:F2} bonus={Bonus:F2} trusted={Trusted} ai={Ai} '{Title}'",
-                    score, titleScore, bonus, s.FromTrusted, s.AiTranslated, s.Title ?? "(no title)");
+                    score,
+                    titleScore,
+                    bonus,
+                    s.FromTrusted,
+                    s.AiTranslated,
+                    s.Title ?? "(no title)"
+                );
 
             var bestIdx = scored.FindIndex(x => x.Score > 0.4);
             if (bestIdx >= 0)
@@ -129,10 +148,17 @@ namespace Gelato.Providers
                 var best = scored[bestIdx];
                 _log.LogInformation(
                     "Best subtitle match: '{Title}' (score={Score:F2} title={TitleScore:F2} bonus={Bonus:F2})",
-                    best.Sub.Title ?? "(no title)", best.Score, best.TitleScore, best.Bonus);
+                    best.Sub.Title ?? "(no title)",
+                    best.Score,
+                    best.TitleScore,
+                    best.Bonus
+                );
             }
             else if (scored.Count > 0)
-                _log.LogInformation("No title match above threshold, using first: '{Title}'", scored[0].Sub.Title ?? "(no title)");
+                _log.LogInformation(
+                    "No title match above threshold, using first: '{Title}'",
+                    scored[0].Sub.Title ?? "(no title)"
+                );
 
             return scored.Select(x => new RemoteSubtitleInfo
             {
@@ -231,9 +257,12 @@ namespace Gelato.Providers
         }
 
         private static HashSet<string> TokenizeReleaseName(string s) =>
-            s.Split(new[] { '.', '-', '_', ' ', '(', ')', '[', ']' }, StringSplitOptions.RemoveEmptyEntries)
-             .Select(t => t.ToLowerInvariant())
-             .ToHashSet();
+            s.Split(
+                    new[] { '.', '-', '_', ' ', '(', ')', '[', ']' },
+                    StringSplitOptions.RemoveEmptyEntries
+                )
+                .Select(t => t.ToLowerInvariant())
+                .ToHashSet();
 
         private static string CacheKey(string id) => $"gelato:subtitle:{id}";
     }

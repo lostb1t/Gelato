@@ -11,39 +11,44 @@ public sealed class DownloadFilter(
     GelatoManager manager,
     IUserManager userManager,
     IMediaSourceManager mediaSourceManager,
-    IHttpClientFactory httpClientFactory)
-    : IAsyncActionFilter {
+    IHttpClientFactory httpClientFactory
+) : IAsyncActionFilter
+{
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
-    ) {
-        if (ctx.GetActionName() != "GetDownload" || !ctx.TryGetRouteGuid(out var guid)) {
+    )
+    {
+        if (ctx.GetActionName() != "GetDownload" || !ctx.TryGetRouteGuid(out var guid))
+        {
             await next();
             return;
         }
 
         var userIdStr = ctx
-            .HttpContext.User.Claims.FirstOrDefault(c =>
-                c.Type is "UserId" or "Jellyfin-UserId"
-            )
+            .HttpContext.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")
             ?.Value;
 
         User? user = null;
-        if (Guid.TryParse(userIdStr, out var userId)) {
+        if (Guid.TryParse(userIdStr, out var userId))
+        {
             user = userManager.GetUserById(userId);
         }
 
-        if (user is not null) {
+        if (user is not null)
+        {
             var mediaSourceIdStr = ctx.HttpContext.Items["MediaSourceId"] as string;
             var hasMediaSourceId = Guid.TryParse(mediaSourceIdStr, out var mediaSourceId);
 
             var item = library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
 
-            if (item != null && manager.IsStremio(item)) {
+            if (item != null && manager.IsStremio(item))
+            {
                 var path = item.Path;
 
                 // some clients do not send mediasource id. the use the itemid in the query
-                if (!hasMediaSourceId || !item.IsStream()) {
+                if (!hasMediaSourceId || !item.IsStream())
+                {
                     path = mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
                 }
 
@@ -65,18 +70,21 @@ public sealed class DownloadFilter(
                     resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
 
                 var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
-                if (string.IsNullOrWhiteSpace(fileName)) {
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
                     var uri = new Uri(path);
                     fileName = Path.GetFileName(uri.AbsolutePath);
                     if (string.IsNullOrWhiteSpace(fileName))
                         fileName = "download";
                 }
 
-                if (resp.Content.Headers.ContentLength is { } len) {
+                if (resp.Content.Headers.ContentLength is { } len)
+                {
                     ctx.HttpContext.Response.ContentLength = len;
                 }
 
-                ctx.Result = new FileStreamResult(stream, contentType) {
+                ctx.Result = new FileStreamResult(stream, contentType)
+                {
                     FileDownloadName = fileName,
                     EnableRangeProcessing = true,
                 };

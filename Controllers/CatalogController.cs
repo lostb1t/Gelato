@@ -1,11 +1,11 @@
 using Gelato.Config;
 using Gelato.ScheduledTasks;
 using Gelato.Services;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Tasks;
 
 namespace Gelato.Controllers;
 
@@ -17,11 +17,12 @@ public class CatalogController(
     CatalogService catalogService,
     CatalogImportService importService,
     ITaskManager taskManager,
-    ILibraryManager libraryManager)
-    : ControllerBase {
-
+    ILibraryManager libraryManager
+) : ControllerBase
+{
     [HttpGet]
-    public async Task<ActionResult<List<CatalogConfig>>> GetCatalogs() {
+    public async Task<ActionResult<List<CatalogConfig>>> GetCatalogs()
+    {
         // Use Global user for now, or HttpContext.User if we want per-user catalogs later
         // But CatalogService currently uses Guid.Empty for global config if passed
         // We'll stick to global administration for now as per plan
@@ -33,8 +34,10 @@ public class CatalogController(
         [FromRoute] string id,
         [FromRoute] string type,
         [FromBody] CatalogConfig config
-    ) {
-        if (config.Id != id || config.Type != type) {
+    )
+    {
+        if (config.Id != id || config.Type != type)
+        {
             return BadRequest("ID/Type mismatch");
         }
 
@@ -43,10 +46,8 @@ public class CatalogController(
     }
 
     [HttpPost("{id}/{type}/import")]
-    public Task<ActionResult> TriggerImport(
-        [FromRoute] string id,
-        [FromRoute] string type
-    ) {
+    public Task<ActionResult> TriggerImport([FromRoute] string id, [FromRoute] string type)
+    {
         logger.LogInformation("Manual import triggered for {Id} {Type}", id, type);
 
         // Run in background? Or await?
@@ -58,26 +59,37 @@ public class CatalogController(
         // But browser timeout is 2 mins usually. Import can take longer.
         // Better to run in background.
 
-        _ = Task.Run(async () => {
-             try {
-                 await importService.ImportCatalogAsync(id, type, CancellationToken.None);
-                 await libraryManager.ValidateMediaLibrary(new Progress<double>(), CancellationToken.None).ConfigureAwait(false);
-             } catch (Exception ex) {
-                 logger.LogError(ex, "Error in manual import for {Id}", id);
-             }
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await importService.ImportCatalogAsync(id, type, CancellationToken.None);
+                await libraryManager
+                    .ValidateMediaLibrary(new Progress<double>(), CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error in manual import for {Id}", id);
+            }
         });
 
         return Task.FromResult<ActionResult>(Accepted());
     }
 
     [HttpPost("import-all")]
-    public ActionResult ImportAll() {
+    public ActionResult ImportAll()
+    {
         logger.LogInformation("Manual import triggered for all enabled catalogs");
 
-        _ = Task.Run(() => {
-            try {
+        _ = Task.Run(() =>
+        {
+            try
+            {
                 taskManager.CancelIfRunningAndQueue<GelatoCatalogItemsSyncTask>();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 logger.LogError(ex, "Error in manual import for all enabled catalogs");
             }
 

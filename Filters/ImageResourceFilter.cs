@@ -10,14 +10,16 @@ namespace Gelato.Filters;
 public sealed class ImageResourceFilter(
     IHttpClientFactory http,
     GelatoManager manager,
-    ILogger<ImageResourceFilter> log)
-    : IAsyncResourceFilter {
+    ILogger<ImageResourceFilter> log
+) : IAsyncResourceFilter
+{
     public async Task OnResourceExecutionAsync(
         ResourceExecutingContext ctx,
         ResourceExecutionDelegate next
-    ) {
-        if (
-            ctx.ActionDescriptor is not ControllerActionDescriptor { ActionName: "GetItemImage" }) {
+    )
+    {
+        if (ctx.ActionDescriptor is not ControllerActionDescriptor { ActionName: "GetItemImage" })
+        {
             await next();
             return;
         }
@@ -27,20 +29,23 @@ public sealed class ImageResourceFilter(
         if (
             !routeValues.TryGetValue("itemId", out var guidString)
             || !Guid.TryParse(guidString?.ToString(), out var guid)
-        ) {
+        )
+        {
             await next();
             return;
         }
 
         var stremioMeta = manager.GetStremioMeta(guid);
-        if (stremioMeta?.Poster is null) {
+        if (stremioMeta?.Poster is null)
+        {
             await next();
             return;
         }
 
         var url = stremioMeta.Poster;
 
-        try {
+        try
+        {
             var client = http.CreateClient();
             using var res = await client.GetAsync(
                 url,
@@ -48,7 +53,8 @@ public sealed class ImageResourceFilter(
                 ctx.HttpContext.RequestAborted
             );
 
-            if (!res.IsSuccessStatusCode) {
+            if (!res.IsSuccessStatusCode)
+            {
                 await next();
                 return;
             }
@@ -64,7 +70,8 @@ public sealed class ImageResourceFilter(
                 ctx.HttpContext.RequestAborted
             );
         }
-        catch (Exception ex) {
+        catch (Exception ex)
+        {
             log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);
             await next();
         }

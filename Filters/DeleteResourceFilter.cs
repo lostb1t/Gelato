@@ -10,8 +10,9 @@ public sealed class DeleteResourceFilter(
     ILibraryManager library,
     GelatoManager manager,
     IUserManager userManager,
-    ILogger<DeleteResourceFilter> log)
-    : IAsyncActionFilter {
+    ILogger<DeleteResourceFilter> log
+) : IAsyncActionFilter
+{
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
@@ -61,7 +62,10 @@ public sealed class DeleteResourceFilter(
         var query = new InternalItemsQuery
         {
             IncludeItemTypes = [item.GetBaseItemKind()],
-            HasAnyProviderId = new Dictionary<string, string> { { "Stremio", item.ProviderIds["Stremio"] } },
+            HasAnyProviderId = new Dictionary<string, string>
+            {
+                { "Stremio", item.ProviderIds["Stremio"] },
+            },
             Recursive = false,
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,
