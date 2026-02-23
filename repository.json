@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.5.0] - 2026-02-23\n\n### 🚀 Features\n\n- Move user configs to own tab\n- Prewarm subtitles\n\n### 🐛 Bug Fixes\n\n- Remove deprecated remote subs flag\n",
+        "checksum": "9f2e1b75ad37d33c8e57b232123ee718",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.5.0/gelato_0.26.5.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-23T17:24:24Z",
+        "version": "0.26.5.0"
+      },
+      {
         "changelog": "## [0.26.4.0] - 2026-02-23\n\n### 🚀 Features\n\n- Implement subtitle provider integration including an gelato subtitle provider (#112)\n",
         "checksum": "05606951ad8c24b83f5a08fc9cfb83cb",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.4.0/gelato_0.26.4.0.zip",
@@ -214,14 +222,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-03T11:34:44Z",
         "version": "0.25.4.0"
-      },
-      {
-        "changelog": "## [0.25.3.10] - 2026-02-01\n\n### 🐛 Bug Fixes\n\n- Mark virtual if no mediasources\n",
-        "checksum": "942976facef092ca9bf004f205e521b3",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.10/gelato_0.25.3.10.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-01T13:01:01Z",
-        "version": "0.25.3.10"
       },
       {
         "changelog": "## [0.25.3.9] - 2026-02-01\n\n### 🐛 Bug Fixes\n\n- Purge task\n",
