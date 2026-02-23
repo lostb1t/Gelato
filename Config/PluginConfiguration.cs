@@ -14,7 +14,6 @@ public class PluginConfiguration : BasePluginConfiguration {
     public int StreamTTL { get; set; } = 3600;
     public int CatalogMaxItems { get; set; } = 100;
     public string Url { get; set; } = "";
-    public bool EnableSubs { get; set; } = false;
     public bool EnableMixed { get; set; } = false;
     public bool FilterUnreleased { get; set; } = false;
     public int FilterUnreleasedBufferDays { get; set; } = 30;
@@ -82,7 +81,6 @@ public class UserConfig {
             // All other fields from base config
             StreamTTL = baseConfig.StreamTTL,
             CatalogMaxItems = baseConfig.CatalogMaxItems,
-            EnableSubs = baseConfig.EnableSubs,
             EnableMixed = baseConfig.EnableMixed,
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
