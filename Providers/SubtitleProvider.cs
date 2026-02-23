@@ -19,7 +19,6 @@ namespace Gelato.Providers
 {
     public sealed class SubtitleProvider : ISubtitleProvider
     {
-        private readonly GelatoManager _manager;
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
 
@@ -32,12 +31,10 @@ namespace Gelato.Providers
         > _subsCache = new();
 
         public SubtitleProvider(
-            GelatoManager manager,
             IHttpClientFactory http,
             ILogger<SubtitleProvider> log
         )
         {
-            _manager = manager;
             _http = http;
             _log = log;
         }

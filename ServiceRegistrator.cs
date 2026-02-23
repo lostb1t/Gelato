@@ -37,7 +37,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
         services.AddSingleton<PalcoCacheService>();
-        services.AddSingleton<SubtitleProvider>();
+        services.AddSingleton<ISubtitleProvider, SubtitleProvider>();
        
         // Register HttpClient for IntroDbClient
         services.AddHttpClient<IntroDbClient>(client =>
@@ -54,6 +54,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
             .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
             .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>();
+        services.AddSingleton(sp => new Lazy<ISubtitleManager>(sp.GetRequiredService<ISubtitleManager>));
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {

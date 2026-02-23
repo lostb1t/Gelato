@@ -23,6 +23,8 @@ using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Configuration;
+using Gelato.Services;
+
 
 namespace Gelato.Decorators;
 
@@ -34,7 +36,7 @@ public sealed class MediaSourceManagerDecorator(
     GelatoItemRepository repo,
     IDirectoryService directoryService,
     IServerConfigurationManager config,
-   // ISubtitleManager subtitleManager,
+    Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
     IMediaSegmentManager mediaSegmentManager)
     : IMediaSourceManager {
@@ -45,14 +47,15 @@ public sealed class MediaSourceManagerDecorator(
     private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
     private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
     private readonly IServerConfigurationManager _config = config ?? throw new ArgumentNullException(nameof(config));
- //  private readonly ISubtitleManager _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+     private readonly Lazy<GelatoManager> _manager = manager;
+    private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
     
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
         User? user = null
     ) {
-        var manager1 = manager.Value;
+        var manager = _manager.Value;
         _log.LogDebug(
             "GetStaticMediaSources {Id}",
             item.Id
@@ -67,7 +70,7 @@ public sealed class MediaSourceManagerDecorator(
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
-            (!cfg.EnableMixed && !manager1.IsGelato(item))
+            (!cfg.EnableMixed && !manager.IsGelato(item))
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
         ) {
             return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -94,7 +97,7 @@ public sealed class MediaSourceManagerDecorator(
                 uri?.ToString()
             );
         }
-        else if (uri is not null && !manager1.HasStreamSync(cacheKey)) {
+        else if (uri is not null && !manager.HasStreamSync(cacheKey)) {
             // Bug in web UI that calls the detail page twice. So that's why there's a lock.
             _lock
                 .RunSingleFlightAsync(
@@ -105,9 +108,9 @@ public sealed class MediaSourceManagerDecorator(
                             item.Id
                         );
                         try {
-                            var count = await manager1.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                            var count = await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
                             if (count > 0) {
-                                manager1.SetStreamSync(cacheKey);
+                                manager.SetStreamSync(cacheKey);
                             }
                         }
                         catch (Exception ex) {
@@ -160,7 +163,7 @@ public sealed class MediaSourceManagerDecorator(
             .GetItemList(query)
             .OfType<Video>()
             .Where(x =>
-                manager1.IsGelato(x) &&
+                manager.IsGelato(x) &&
                 (
                     userId == Guid.Empty ||
                     (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
@@ -255,7 +258,7 @@ public sealed class MediaSourceManagerDecorator(
                 .ConfigureAwait(false);
         }
 
-        var manager1 = manager.Value;
+        var manager = _manager.Value;
         var ctx = _http.HttpContext;
 
         var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -266,7 +269,7 @@ public sealed class MediaSourceManagerDecorator(
             && Guid.TryParse(idStr, out var fromCtx)
                 ? fromCtx
                 : (
-                    manager1.IsPrimaryVersion(item as Video)
+                    manager.IsPrimaryVersion(item as Video)
                     && sources.Count > 0
                     && Guid.TryParse(sources[0].Id, out var fromSource)
                         ? fromSource
@@ -284,7 +287,7 @@ public sealed class MediaSourceManagerDecorator(
             return sources;
 
         var owner = ResolveOwnerFor(selected, item);
-        if (manager1.IsPrimaryVersion(owner as Video) && owner.Id != item.Id) {
+        if (manager.IsPrimaryVersion(owner as Video) && owner.Id != item.Id) {
             sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
             selected = SelectByIdOrFirst(sources, mediaSourceId);
             if (selected is null)
@@ -294,7 +297,6 @@ public sealed class MediaSourceManagerDecorator(
         if (NeedsProbe(selected)) {
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
             
-            // Run segment providers and metadata refresh in parallel
             var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct);
             var metadataTask = owner.RefreshMetadata(
                 new MetadataRefreshOptions(directoryService) {
@@ -305,8 +307,8 @@ public sealed class MediaSourceManagerDecorator(
             );
             var subtitleTask = DownloadSubtitles((Video)owner, ct);
 
-            // Wait for both operations to complete
-            await Task.WhenAll(segmentTask, metadataTask).ConfigureAwait(false);
+            // Wait for operations to complete
+            await Task.WhenAll(segmentTask, metadataTask, subtitleTask).ConfigureAwait(false);
 
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
@@ -509,7 +511,7 @@ public sealed class MediaSourceManagerDecorator(
     public async Task<bool> DownloadSubtitles(Video video, CancellationToken cancellationToken)
         {
             var mediaStreams = video.GetMediaStreams();
-        //    var subtitleOptions = _config.GetConfiguration<SubtitleOptions>("subtitles");
+            var subtitleOptions = _config.GetConfiguration<SubtitleOptions>("subtitles");
             var libraryOptions = _libraryManager.GetLibraryOptions(video);
 
             string[] subtitleDownloadLanguages;
@@ -519,10 +521,10 @@ public sealed class MediaSourceManagerDecorator(
 
             if (libraryOptions.SubtitleDownloadLanguages is null)
             {
-               // subtitleDownloadLanguages = subtitleOptions.DownloadLanguages;
-              //  skipIfEmbeddedSubtitlesPresent = subtitleOptions.SkipIfEmbeddedSubtitlesPresent;
-             //   skipIfAudioTrackMatches = subtitleOptions.SkipIfAudioTrackMatches;
-              //  requirePerfectMatch = subtitleOptions.RequirePerfectMatch;
+                subtitleDownloadLanguages = subtitleOptions.DownloadLanguages;
+                skipIfEmbeddedSubtitlesPresent = subtitleOptions.SkipIfEmbeddedSubtitlesPresent;
+                skipIfAudioTrackMatches = subtitleOptions.SkipIfAudioTrackMatches;
+                requirePerfectMatch = subtitleOptions.RequirePerfectMatch;
             }
             else
             {
@@ -532,31 +534,20 @@ public sealed class MediaSourceManagerDecorator(
                 requirePerfectMatch = libraryOptions.RequirePerfectSubtitleMatch;
             }
             
-           // var searchResults = await _subtitleManager.SearchSubtitles(request, cancellationToken).ConfigureAwait(false);
 
-           //     var result = searchResults.FirstOrDefault();
-
-           //     if (result is not null)
-           //     {
-           //         await _subtitleManager.DownloadSubtitles(video, result.Id, cancellationToken).ConfigureAwait(false);
-
-           //         return true;
-           //     }
-           // }
-
-          //  var downloadedLanguages = await new SubtitleDownloadService(
-          //      _log,
-          //      _subtitleManager).DownloadSubtitles(
-          //          video,
-          //          mediaStreams,
-          //          skipIfEmbeddedSubtitlesPresent,
-          //          skipIfAudioTrackMatches,
-          //          requirePerfectMatch,
-          //          subtitleDownloadLanguages,
-          //          libraryOptions.DisabledSubtitleFetchers,
-          //          libraryOptions.SubtitleFetcherOrder,
-          //          true,
-          //          cancellationToken).ConfigureAwait(false);
+           var downloadedLanguages = await new SubtitleDownloadService(
+              _log,
+                _subtitleManager.Value).DownloadSubtitles(
+                    video,
+                    mediaStreams,
+                    skipIfEmbeddedSubtitlesPresent,
+                    skipIfAudioTrackMatches,
+                    requirePerfectMatch,
+                    subtitleDownloadLanguages,
+                   libraryOptions.DisabledSubtitleFetchers,
+                   libraryOptions.SubtitleFetcherOrder,
+                   true,
+                  cancellationToken).ConfigureAwait(false);
 
             
 
