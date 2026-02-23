@@ -37,7 +37,7 @@ public sealed class MediaSourceManagerDecorator(
     GelatoItemRepository repo,
     IDirectoryService directoryService,
     IServerConfigurationManager config,
-    Lazy<ISubtitleManager> subtitleManager,
+    //Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
     IMediaSegmentManager mediaSegmentManager,
     IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders)
@@ -50,7 +50,7 @@ public sealed class MediaSourceManagerDecorator(
     private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
     private readonly IServerConfigurationManager _config = config ?? throw new ArgumentNullException(nameof(config));
     private readonly Lazy<GelatoManager> _manager = manager;
-    private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+  //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
     private readonly ICustomMetadataProvider<Video>? _probeProvider =
         videoProbeProviders.FirstOrDefault(p => p.Name == "Probe Provider");
     
@@ -303,10 +303,9 @@ public sealed class MediaSourceManagerDecorator(
             
             var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct);
             var metadataTask = ProbeStreamAsync((Video)owner, selected.Path, ct);
-            var subtitleTask = DownloadSubtitles((Video)owner, ct);
+          //  var subtitleTask = DownloadSubtitles((Video)owner, ct);
 
-            // Wait for operations to complete
-            await Task.WhenAll(metadataTask).ConfigureAwait(false);
+            await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
 
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
@@ -508,8 +507,6 @@ public sealed class MediaSourceManagerDecorator(
     
     private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
     {
-      
-
         var tmpStrm = Path.Combine(Path.GetTempPath(), $"gelato-{owner.Id:N}.strm");
         await File.WriteAllTextAsync(tmpStrm, streamUrl, ct).ConfigureAwait(false);
 
@@ -517,6 +514,7 @@ public sealed class MediaSourceManagerDecorator(
         var origShortcut = owner.IsShortcut;
         owner.Path       = tmpStrm;
         owner.IsShortcut = true;
+        owner.DateModified = new FileInfo(tmpStrm).LastWriteTimeUtc;
 
         try
         {
@@ -524,7 +522,7 @@ public sealed class MediaSourceManagerDecorator(
             await owner.RefreshMetadata(
                 new MetadataRefreshOptions(directoryService) {
                     EnableRemoteContentProbe = true,
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh, 
                 },
                 ct
             );
@@ -541,47 +539,5 @@ public sealed class MediaSourceManagerDecorator(
         }
     }
 
-    public async Task<bool> DownloadSubtitles(Video video, CancellationToken cancellationToken)
-        {
-            var mediaStreams = video.GetMediaStreams();
-            var subtitleOptions = _config.GetConfiguration<SubtitleOptions>("subtitles");
-            var libraryOptions = _libraryManager.GetLibraryOptions(video);
-            string[] subtitleDownloadLanguages;
-            bool skipIfEmbeddedSubtitlesPresent;
-            bool skipIfAudioTrackMatches;
-            bool requirePerfectMatch;
-
-            if (libraryOptions.SubtitleDownloadLanguages is null)
-            {
-                subtitleDownloadLanguages = subtitleOptions.DownloadLanguages;
-                skipIfEmbeddedSubtitlesPresent = subtitleOptions.SkipIfEmbeddedSubtitlesPresent;
-                skipIfAudioTrackMatches = subtitleOptions.SkipIfAudioTrackMatches;
-                requirePerfectMatch = subtitleOptions.RequirePerfectMatch;
-            }
-            else
-            {
-                subtitleDownloadLanguages = libraryOptions.SubtitleDownloadLanguages;
-                skipIfEmbeddedSubtitlesPresent = libraryOptions.SkipSubtitlesIfEmbeddedSubtitlesPresent;
-                skipIfAudioTrackMatches = libraryOptions.SkipSubtitlesIfAudioTrackMatches;
-                requirePerfectMatch = libraryOptions.RequirePerfectSubtitleMatch;
-            }
-            
-
-           var downloadedLanguages = await new SubtitleDownloadService(
-              _log,
-                _subtitleManager.Value).DownloadSubtitles(
-                    video,
-                    mediaStreams,
-                    skipIfEmbeddedSubtitlesPresent,
-                    skipIfAudioTrackMatches,
-                    requirePerfectMatch,
-                    subtitleDownloadLanguages,
-                   libraryOptions.DisabledSubtitleFetchers,
-                   libraryOptions.SubtitleFetcherOrder,
-                   true,
-                  cancellationToken).ConfigureAwait(false);
-            
-
-            return true;
-        }
+    
 }
