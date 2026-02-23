@@ -7,7 +7,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using IntroDbPlugin.Services;
+using Gelato.Services;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
@@ -61,7 +61,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     }
 
     /// <inheritdoc />
-    public string Name => "IntroDB";
+    public string Name => "Gelato IntroDB";
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MediaSegmentDto>> GetMediaSegments(

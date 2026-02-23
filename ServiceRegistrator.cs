@@ -3,7 +3,7 @@ using Gelato.Decorators;
 using Gelato.Filters;
 using Gelato.Providers;
 using Gelato.Services;
-using IntroDbPlugin.Services;
+//using IntroDbPlugin.Services;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
@@ -12,7 +12,9 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Subtitles;
 using Microsoft.Extensions.Configuration;
+using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -35,21 +37,24 @@ public class ServiceRegistrator : IPluginServiceRegistrator {
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
         services.AddSingleton<PalcoCacheService>();
-        
+        services.AddSingleton<ISubtitleProvider, SubtitleProvider>();
+       
         // Register HttpClient for IntroDbClient
         services.AddHttpClient<IntroDbClient>(client =>
         {
             client.BaseAddress = new Uri("https://api.introdb.app");
             client.Timeout = TimeSpan.FromSeconds(IntroDbClient.DefaultTimeoutSeconds);
         });
-        
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
+
         services.AddHostedService<GelatoService>();
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
-            .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>();
+            .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
+            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>();
+        services.AddSingleton(sp => new Lazy<ISubtitleManager>(sp.GetRequiredService<ISubtitleManager>));
 
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o => {

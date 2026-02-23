@@ -32,7 +32,7 @@ public sealed class DeleteResourceFilter(
         var item = library.GetItemById<BaseItem>(guid, user);
 
         // Only handle Gelato items that user can delete
-        if (item is null || !manager.IsGelato(item) || !manager.CanDelete(item, user))
+        if (item is null || !item.IsGelato() || !manager.CanDelete(item, user))
         {
             await next();
             return;
@@ -45,9 +45,9 @@ public sealed class DeleteResourceFilter(
 
     private void DeleteItem(BaseItem item)
     {
-        if (item is Video video && manager.IsPrimaryVersion(video))
+        if (item.IsPrimaryVersion())
         {
-            DeleteStreams(video);
+            DeleteStreams(item);
         }
         else
         {
@@ -56,12 +56,12 @@ public sealed class DeleteResourceFilter(
         }
     }
 
-    private void DeleteStreams(Video video)
+    private void DeleteStreams(BaseItem item)
     {
         var query = new InternalItemsQuery
         {
-            IncludeItemTypes = [video.GetBaseItemKind()],
-            HasAnyProviderId = new Dictionary<string, string> { { "Stremio", video.ProviderIds["Stremio"] } },
+            IncludeItemTypes = [item.GetBaseItemKind()],
+            HasAnyProviderId = new Dictionary<string, string> { { "Stremio", item.ProviderIds["Stremio"] } },
             Recursive = false,
             GroupByPresentationUniqueKey = false,
             GroupBySeriesPresentationUniqueKey = false,
@@ -70,7 +70,7 @@ public sealed class DeleteResourceFilter(
             IsDeadPerson = true,
         };
 
-        var sources = library.GetItemList(query).OfType<Video>();
+        var sources = library.GetItemList(query);
         foreach (var alt in sources)
         {
             log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);

@@ -144,7 +144,7 @@ public sealed class GelatoManager(
                 return x switch
                 {
                     null => false,
-                    Video v => !IsStream(v),
+                    Video v => !v.IsStream(),
                     _ => true
                 };
             });
@@ -335,7 +335,7 @@ public sealed class GelatoManager(
             return 0;
         }
 
-        if (IsStream(video)) {
+        if (video.IsStream()) {
             _log.LogWarning("SyncStreams: item is a stream, skipping");
             return 0;
         }
@@ -391,7 +391,7 @@ public sealed class GelatoManager(
         var existing = repo
             .GetItemList(query)
             .OfType<Video>()
-            .Where(IsStream)
+            .Where(v => v.IsStream())
             .ToDictionary(v => v.GelatoData<Guid>("guid"));
 
         var newVideos = new List<Video>();
@@ -466,29 +466,39 @@ public sealed class GelatoManager(
 
         //newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
         repo.SaveItems(newVideos, ct);
+
         var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
         var stale = existing.Values
-            .Where(m =>
-                !newIds.Contains(m.Id) &&
-                (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
-            )
-            .ToList();
+    .Where(m =>
+        !newIds.Contains(m.Id) &&
+        (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
+    )
+    .ToList();
 
-        foreach (var staleItem in stale) {
-            var users = staleItem.GelatoData<List<Guid>>("userIds") ?? [];
+foreach (var _item in stale)
+{
+    var users = _item.GelatoData<List<Guid>>("userIds") ?? [];
+    users.Remove(userId);
+    _item.SetGelatoData("userIds", users);
+}
 
-            if (users.Remove(userId)) {
-                staleItem.SetGelatoData("userIds", users);
-            }
-            if (users.Count == 0) {
+var toDelete = stale.Where(item => item.GelatoData<List<Guid>>("userIds") is { Count: 0 }).ToList();
+var toSave   = stale.Except(toDelete).ToList();
+
+
+try {
+//repo.DeleteItem([.. toDelete.Select(f => f.Id)]);
+} catch {
+         foreach (var staleItem in toDelete) {           
                 libraryManager.DeleteItem(
               staleItem,
               new DeleteOptions { DeleteFileLocation = true },
               true);
-            }
-        }
+            
+          }
+}
 
-        repo.SaveItems(stale, ct);
+repo.SaveItems(toSave, ct);
         newVideos.Add(video);
 
         stopwatch.Stop();
@@ -498,18 +508,6 @@ public sealed class GelatoManager(
         );
 
         return acceptable.Count;
-    }
-
-    public bool IsPrimaryVersion(Video item) {
-        return !HasStreamTag(item) && string.IsNullOrWhiteSpace(item.PrimaryVersionId) && !item.IsVirtualItem;
-    }
-
-    private static bool HasStreamTag(BaseItem item) {
-        return item.Tags is not null && item.Tags.Contains(StreamTag, StringComparer.OrdinalIgnoreCase);
-    }
-
-    public bool IsStream(Video item) {
-        return IsGelato(item) && !IsPrimaryVersion(item);
     }
 
     /// <summary>
@@ -525,12 +523,7 @@ public sealed class GelatoManager(
     }
 
     public bool IsStremio(BaseItem item) {
-        return IsGelato(item);
-    }
-
-    public bool IsGelato(BaseItem item) {
-        var stremioId = item.GetProviderId("Stremio");
-        return !string.IsNullOrWhiteSpace(stremioId);
+        return item.IsGelato();
     }
 
     public async Task<BaseItem?> SyncSeriesTreesAsync(
@@ -678,7 +671,7 @@ public sealed class GelatoManager(
                     }
                 )
                 .OfType<Episode>()
-                .Where(x => !IsStream(x) && x.IndexNumber.HasValue)
+                .Where(x => !x.IsStream() && x.IndexNumber.HasValue)
                 .Select(e => e.IndexNumber!.Value)
                 .ToHashSet();
 

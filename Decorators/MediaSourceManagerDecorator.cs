@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
@@ -10,14 +11,21 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
+using MediaBrowser.Model.Providers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Chapters;
+using MediaBrowser.Model.Configuration;
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Configuration;
+using Gelato.Services;
+
 
 namespace Gelato.Decorators;
 
@@ -28,8 +36,11 @@ public sealed class MediaSourceManagerDecorator(
     IHttpContextAccessor http,
     GelatoItemRepository repo,
     IDirectoryService directoryService,
+    IServerConfigurationManager config,
+    //Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
-    IMediaSegmentManager mediaSegmentManager)
+    IMediaSegmentManager mediaSegmentManager,
+    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders)
     : IMediaSourceManager {
     private readonly IMediaSourceManager _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly ILogger<MediaSourceManagerDecorator> _log = log ?? throw new ArgumentNullException(nameof(log));
@@ -37,12 +48,18 @@ public sealed class MediaSourceManagerDecorator(
     private readonly KeyLock _lock = new();
     private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
     private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
+    private readonly IServerConfigurationManager _config = config ?? throw new ArgumentNullException(nameof(config));
+    private readonly Lazy<GelatoManager> _manager = manager;
+  //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+    private readonly ICustomMetadataProvider<Video>? _probeProvider =
+        videoProbeProviders.FirstOrDefault(p => p.Name == "Probe Provider");
+    
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
         User? user = null
     ) {
-        var manager1 = manager.Value;
+        var manager = _manager.Value;
         _log.LogDebug(
             "GetStaticMediaSources {Id}",
             item.Id
@@ -57,7 +74,7 @@ public sealed class MediaSourceManagerDecorator(
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
-            (!cfg.EnableMixed && !manager1.IsGelato(item))
+            (!cfg.EnableMixed && !item.IsGelato())
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
         ) {
             return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -84,7 +101,7 @@ public sealed class MediaSourceManagerDecorator(
                 uri?.ToString()
             );
         }
-        else if (uri is not null && !manager1.HasStreamSync(cacheKey)) {
+        else if (uri is not null && !manager.HasStreamSync(cacheKey)) {
             // Bug in web UI that calls the detail page twice. So that's why there's a lock.
             _lock
                 .RunSingleFlightAsync(
@@ -95,9 +112,9 @@ public sealed class MediaSourceManagerDecorator(
                             item.Id
                         );
                         try {
-                            var count = await manager1.SyncStreams(item, userId, ct).ConfigureAwait(false);
+                            var count = await manager.SyncStreams(item, userId, ct).ConfigureAwait(false);
                             if (count > 0) {
-                                manager1.SetStreamSync(cacheKey);
+                                manager.SetStreamSync(cacheKey);
                             }
                         }
                         catch (Exception ex) {
@@ -150,7 +167,7 @@ public sealed class MediaSourceManagerDecorator(
             .GetItemList(query)
             .OfType<Video>()
             .Where(x =>
-                manager1.IsGelato(x) &&
+                x.IsGelato() &&
                 (
                     userId == Guid.Empty ||
                     (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
@@ -212,80 +229,9 @@ public sealed class MediaSourceManagerDecorator(
         return _inner.GetMediaStreams(itemId);
     }
 
-    public async Task<List<MediaStream>> GetSubtitleStreams(
-        BaseItem item,
-        MediaSourceInfo source
-    ) {
-        var manager1 = manager.Value;
+    
 
-        var subtitles = manager1.GetStremioSubtitlesCache(item.Id);
-        if (subtitles is null) {
-            var uri = StremioUri.FromBaseItem(item);
-            if (uri is null) {
-                _log.LogError($"unable to build stremio uri for {item.Name}");
-                return new List<MediaStream>(); // Return empty list instead of void
-            }
-
-            Uri u = new Uri(source.Path);
-            string filename = System.IO.Path.GetFileName(u.LocalPath);
-
-            var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-            subtitles = await cfg
-                .Stremio.GetSubtitlesAsync(uri, filename)
-                .ConfigureAwait(false);
-            manager1.SetStremioSubtitlesCache(item.Id, subtitles);
-        }
-
-        var streams = new List<MediaStream>();
-
-        if (subtitles == null || !subtitles.Any()) {
-            _log.LogDebug($"GetSubtitleStreams: no subtitles found");
-            return streams;
-        }
-
-        var index = 0; // Start from 0 since this is a new list
-        var limitedSubtitles = subtitles.GroupBy(s => s.Lang).SelectMany(g => g.Take(2));
-        foreach (var s in limitedSubtitles) {
-            streams.Add(
-                new MediaStream {
-                    Type = MediaStreamType.Subtitle,
-                    Index = index,
-                    Language = s.Lang,
-                    Codec = GuessSubtitleCodec(s.Url),
-                    IsExternal = true,
-                    // subtitle urls usually dont end with an extension. Breaking some clients cause they fucking check the extension instead of thr codec field.
-                    SupportsExternalStream = false,
-                    Path = s.Url,
-                    DeliveryMethod = SubtitleDeliveryMethod.External,
-                }
-            );
-            index++;
-        }
-
-        _log.LogDebug($"GetSubtitleStreams: loaded {streams.Count} subtitles");
-        return streams;
-    }
-
-    public string GuessSubtitleCodec(string? urlOrPath) {
-        if (string.IsNullOrWhiteSpace(urlOrPath))
-            return "subrip";
-
-        var s = urlOrPath.ToLowerInvariant();
-
-        if (s.Contains(".vtt"))
-            return "vtt";
-        if (s.Contains(".srt"))
-            return "srt";
-        if (s.Contains(".ass") || s.Contains(".ssa"))
-            return "ass";
-        if (s.Contains(".subf2m"))
-            return "subrip";
-        if (s.Contains("subs") && s.Contains(".strem.io"))
-            return "srt"; // Stremio proxies are always normalized to .srt
-
-        _log.LogWarning($"unkown subtitle format for {s}, defaulting to srt");
-        return "srt";
-    }
+    
 
     public IReadOnlyList<MediaStream> GetMediaStreams(MediaStreamQuery query) {
         return _inner.GetMediaStreams(query).ToList();
@@ -316,7 +262,7 @@ public sealed class MediaSourceManagerDecorator(
                 .ConfigureAwait(false);
         }
 
-        var manager1 = manager.Value;
+        var manager = _manager.Value;
         var ctx = _http.HttpContext;
 
         var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -327,7 +273,7 @@ public sealed class MediaSourceManagerDecorator(
             && Guid.TryParse(idStr, out var fromCtx)
                 ? fromCtx
                 : (
-                    manager1.IsPrimaryVersion(item as Video)
+                    item.IsPrimaryVersion()
                     && sources.Count > 0
                     && Guid.TryParse(sources[0].Id, out var fromSource)
                         ? fromSource
@@ -345,7 +291,7 @@ public sealed class MediaSourceManagerDecorator(
             return sources;
 
         var owner = ResolveOwnerFor(selected, item);
-        if (manager1.IsPrimaryVersion(owner as Video) && owner.Id != item.Id) {
+        if (owner.IsPrimaryVersion() && owner.Id != item.Id) {
             sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
             selected = SelectByIdOrFirst(sources, mediaSourceId);
             if (selected is null)
@@ -355,18 +301,11 @@ public sealed class MediaSourceManagerDecorator(
         if (NeedsProbe(selected)) {
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
             
-            // Run segment providers and metadata refresh in parallel
             var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct);
-            var metadataTask = owner.RefreshMetadata(
-                new MetadataRefreshOptions(directoryService) {
-                    EnableRemoteContentProbe = true,
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                },
-                ct
-            );
+            var metadataTask = ProbeStreamAsync((Video)owner, selected.Path, ct);
+          //  var subtitleTask = DownloadSubtitles((Video)owner, ct);
 
-            // Wait for both operations to complete
-            await Task.WhenAll(segmentTask, metadataTask).ConfigureAwait(false);
+            await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
 
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
@@ -377,22 +316,6 @@ public sealed class MediaSourceManagerDecorator(
 
             if (selected is null)
                 return refreshed;
-        }
-
-        if (GelatoPlugin.Instance!.Configuration.EnableSubs) {
-            var subtitleStreams = await GetSubtitleStreams(item, selected)
-                .ConfigureAwait(false);
-
-            var streams = selected.MediaStreams?.ToList() ?? new List<MediaStream>();
-
-            var index = streams.LastOrDefault()?.Index ?? -1;
-            foreach (var s in subtitleStreams) {
-                index++;
-                s.Index = index;
-                streams.Add(s);
-            }
-
-            selected.MediaStreams = streams;
         }
 
         if (item.RunTimeTicks is null && selected.RunTimeTicks is not null) {
@@ -581,4 +504,44 @@ public sealed class MediaSourceManagerDecorator(
 
         return info;
     }
+    
+    private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
+    {
+        var gelatoFilename = owner.GelatoData<string>("filename");
+        var strmBaseName = !string.IsNullOrEmpty(gelatoFilename)
+            ? Path.GetFileNameWithoutExtension(gelatoFilename)
+            : $"{owner.Id:N}";
+        var tmpStrm = Path.Combine(Path.GetTempPath(), $"{strmBaseName}.strm");
+        await File.WriteAllTextAsync(tmpStrm, streamUrl, ct).ConfigureAwait(false);
+
+        var origPath     = owner.Path;
+        var origShortcut = owner.IsShortcut;
+        owner.Path       = tmpStrm;
+        owner.IsShortcut = true;
+        owner.DateModified = new FileInfo(tmpStrm).LastWriteTimeUtc;
+
+        try
+        {
+            _log.LogInformation("Probing stream for {Id} via {Url}", owner.Id, streamUrl);
+            await owner.RefreshMetadata(
+                new MetadataRefreshOptions(directoryService) {
+                    EnableRemoteContentProbe = true,
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh, 
+                },
+                ct
+            );
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Stream probe failed for {Id}", owner.Id);
+        }
+        finally
+        {
+            owner.Path       = origPath;
+            owner.IsShortcut = origShortcut;
+            try { File.Delete(tmpStrm); } catch { /* best effort */ }
+        }
+    }
+
+    
 }

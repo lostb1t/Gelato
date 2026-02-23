@@ -41,7 +41,7 @@ public sealed class PurgeGelatoSyncTask(
                 CollapseBoxSetItems = false,
                 IsDeadPerson = true,
             })
-            .Where(manager.IsGelato)
+            .Where(item => item.IsGelato())
             .ToList();
 
         var totalItems = items.Count;
