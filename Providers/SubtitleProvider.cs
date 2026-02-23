@@ -58,11 +58,11 @@ namespace Gelato.Providers
                 && cached is not null
             )
             {
-                _log.LogInformation("Subtitle list cache HIT key={Key}", listKey);
+                _log.LogDebug("Subtitle list cache HIT key={Key}", listKey);
                 return cached;
             }
 
-            _log.LogInformation("Subtitle list cache MISS key={Key}", listKey);
+            _log.LogDebug("Subtitle list cache MISS key={Key}", listKey);
 
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
             var subs = await cfg.Stremio!.GetSubtitlesAsync(id, mediaType).ConfigureAwait(false);
@@ -247,7 +247,7 @@ namespace Gelato.Providers
             {
                 Format = GuessSubtitleCodec(sub.Url),
                 Stream = ms,
-                Language = "en",
+                Language = sub.LangCode ?? sub.Lang,
             };
         }
 
