@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
@@ -38,7 +39,8 @@ public sealed class MediaSourceManagerDecorator(
     IServerConfigurationManager config,
     Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
-    IMediaSegmentManager mediaSegmentManager)
+    IMediaSegmentManager mediaSegmentManager,
+    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders)
     : IMediaSourceManager {
     private readonly IMediaSourceManager _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly ILogger<MediaSourceManagerDecorator> _log = log ?? throw new ArgumentNullException(nameof(log));
@@ -47,8 +49,10 @@ public sealed class MediaSourceManagerDecorator(
     private readonly IMediaSegmentManager _mediaSegmentManager = mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
     private readonly ILibraryManager _libraryManager = libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
     private readonly IServerConfigurationManager _config = config ?? throw new ArgumentNullException(nameof(config));
-     private readonly Lazy<GelatoManager> _manager = manager;
+    private readonly Lazy<GelatoManager> _manager = manager;
     private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+    private readonly ICustomMetadataProvider<Video>? _probeProvider =
+        videoProbeProviders.FirstOrDefault(p => p.Name == "Probe Provider");
     
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
@@ -298,17 +302,11 @@ public sealed class MediaSourceManagerDecorator(
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
             
             var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct);
-            var metadataTask = owner.RefreshMetadata(
-                new MetadataRefreshOptions(directoryService) {
-                    EnableRemoteContentProbe = true,
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                },
-                ct
-            );
+            var metadataTask = ProbeStreamAsync((Video)owner, selected.Path, ct);
             var subtitleTask = DownloadSubtitles((Video)owner, ct);
 
             // Wait for operations to complete
-            await Task.WhenAll(segmentTask, metadataTask, subtitleTask).ConfigureAwait(false);
+            await Task.WhenAll(metadataTask).ConfigureAwait(false);
 
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
@@ -508,6 +506,41 @@ public sealed class MediaSourceManagerDecorator(
         return info;
     }
     
+    private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
+    {
+      
+
+        var tmpStrm = Path.Combine(Path.GetTempPath(), $"gelato-{owner.Id:N}.strm");
+        await File.WriteAllTextAsync(tmpStrm, streamUrl, ct).ConfigureAwait(false);
+
+        var origPath     = owner.Path;
+        var origShortcut = owner.IsShortcut;
+        owner.Path       = tmpStrm;
+        owner.IsShortcut = true;
+
+        try
+        {
+            _log.LogInformation("Probing stream for {Id} via {Url}", owner.Id, streamUrl);
+            await owner.RefreshMetadata(
+                new MetadataRefreshOptions(directoryService) {
+                    EnableRemoteContentProbe = true,
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                },
+                ct
+            );
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Stream probe failed for {Id}", owner.Id);
+        }
+        finally
+        {
+            owner.Path       = origPath;
+            owner.IsShortcut = origShortcut;
+            try { File.Delete(tmpStrm); } catch { /* best effort */ }
+        }
+    }
+
     public async Task<bool> DownloadSubtitles(Video video, CancellationToken cancellationToken)
         {
             var mediaStreams = video.GetMediaStreams();
