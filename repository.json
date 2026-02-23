@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.4.0] - 2026-02-23\n\n### 🚀 Features\n\n- Implement subtitle provider integration including an gelato subtitle provider (#112)\n",
+        "checksum": "05606951ad8c24b83f5a08fc9cfb83cb",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.4.0/gelato_0.26.4.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-23T13:38:49Z",
+        "version": "0.26.4.0"
+      },
+      {
         "changelog": "## [0.26.3.0] - 2026-02-22\n\n### 🚀 Features\n\n- Add support for segment providers and add introdb provider (#110)\n\n### 🚜 Refactor\n\n- Code cleanup and null checks (#109)\n",
         "checksum": "ab3f2d1d3879432df6cce1399a2403b6",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.3.0/gelato_0.26.3.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-01T08:01:15Z",
         "version": "0.25.3.7"
-      },
-      {
-        "changelog": "## [0.25.3.6] - 2026-01-30\n\n### 🚜 Refactor\n\n- Meta imports\n",
-        "checksum": "a5ad41d0586e5cd8d71fa921a4b6b1f9",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.6/gelato_0.25.3.6.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-01-30T17:44:49Z",
-        "version": "0.25.3.6"
       }
     ]
   }
