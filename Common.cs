@@ -393,6 +393,18 @@ public static class ActionContextExtensions {
 }
 
 public static class BaseItemExtensions {
+    public static bool HasStreamTag(this BaseItem item) {
+        return item.Tags is not null && item.Tags.Contains(GelatoManager.StreamTag, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public static bool IsPrimaryVersion(this BaseItem item) {
+        return !item.HasStreamTag() && string.IsNullOrWhiteSpace((item as Video)?.PrimaryVersionId) && !item.IsVirtualItem;
+    }
+
+    public static bool IsStream(this BaseItem item) {
+        return !string.IsNullOrWhiteSpace(item.GetProviderId("Stremio")) && !item.IsPrimaryVersion();
+    }
+
     public static T? GelatoData<T>(this BaseItem item, string key) {
         if (string.IsNullOrEmpty(item.ExternalId))
             return default;

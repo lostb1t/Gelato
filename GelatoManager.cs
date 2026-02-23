@@ -144,7 +144,7 @@ public sealed class GelatoManager(
                 return x switch
                 {
                     null => false,
-                    Video v => !IsStream(v),
+                    Video v => !v.IsStream(),
                     _ => true
                 };
             });
@@ -335,7 +335,7 @@ public sealed class GelatoManager(
             return 0;
         }
 
-        if (IsStream(video)) {
+        if (video.IsStream()) {
             _log.LogWarning("SyncStreams: item is a stream, skipping");
             return 0;
         }
@@ -391,7 +391,7 @@ public sealed class GelatoManager(
         var existing = repo
             .GetItemList(query)
             .OfType<Video>()
-            .Where(IsStream)
+            .Where(v => v.IsStream())
             .ToDictionary(v => v.GelatoData<Guid>("guid"));
 
         var newVideos = new List<Video>();
@@ -498,18 +498,6 @@ public sealed class GelatoManager(
         );
 
         return acceptable.Count;
-    }
-
-    public bool IsPrimaryVersion(Video item) {
-        return !HasStreamTag(item) && string.IsNullOrWhiteSpace(item.PrimaryVersionId) && !item.IsVirtualItem;
-    }
-
-    private static bool HasStreamTag(BaseItem item) {
-        return item.Tags is not null && item.Tags.Contains(StreamTag, StringComparer.OrdinalIgnoreCase);
-    }
-
-    public bool IsStream(Video item) {
-        return IsGelato(item) && !IsPrimaryVersion(item);
     }
 
     /// <summary>
@@ -678,7 +666,7 @@ public sealed class GelatoManager(
                     }
                 )
                 .OfType<Episode>()
-                .Where(x => !IsStream(x) && x.IndexNumber.HasValue)
+                .Where(x => !x.IsStream() && x.IndexNumber.HasValue)
                 .Select(e => e.IndexNumber!.Value)
                 .ToHashSet();
 

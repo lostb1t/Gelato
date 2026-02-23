@@ -269,7 +269,7 @@ public sealed class MediaSourceManagerDecorator(
             && Guid.TryParse(idStr, out var fromCtx)
                 ? fromCtx
                 : (
-                    manager.IsPrimaryVersion(item as Video)
+                    item.IsPrimaryVersion()
                     && sources.Count > 0
                     && Guid.TryParse(sources[0].Id, out var fromSource)
                         ? fromSource
@@ -287,7 +287,7 @@ public sealed class MediaSourceManagerDecorator(
             return sources;
 
         var owner = ResolveOwnerFor(selected, item);
-        if (manager.IsPrimaryVersion(owner as Video) && owner.Id != item.Id) {
+        if (owner.IsPrimaryVersion() && owner.Id != item.Id) {
             sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
             selected = SelectByIdOrFirst(sources, mediaSourceId);
             if (selected is null)

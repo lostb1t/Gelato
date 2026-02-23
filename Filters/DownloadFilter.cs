@@ -43,7 +43,7 @@ public sealed class DownloadFilter(
                 var path = item.Path;
 
                 // some clients do not send mediasource id. the use the itemid in the query
-                if (!hasMediaSourceId || !manager.IsStream(item)) {
+                if (!hasMediaSourceId || !item.IsStream()) {
                     path = mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
                 }
 
