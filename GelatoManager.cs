@@ -838,7 +838,7 @@ public sealed class GelatoManager(
 
         stopwatch.Stop();
 
-        _log.LogInformation(
+        _log.LogDebug(
             "Sync completed for {SeriesName}: {SeasonsInserted} season(s) and {EpisodesInserted} episode(s) in {Dur}",
             series.Name,
             seasonsInserted,
@@ -1016,6 +1016,7 @@ public sealed class GelatoManager(
         item.Overview = meta.Description ?? meta.Overview;
         item.DateModified = DateTime.UtcNow;
         item.DateLastSaved = DateTime.UtcNow;
+        item.DateCreated = DateTime.UtcNow;
 
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary))

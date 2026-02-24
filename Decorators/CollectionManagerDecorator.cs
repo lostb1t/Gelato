@@ -4,6 +4,7 @@ using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Providers;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators;
@@ -12,6 +13,8 @@ public sealed class CollectionManagerDecorator(
     ICollectionManager inner,
     Lazy<GelatoManager> manager,
     ILibraryManager libraryManager,
+    IProviderManager providerManager,
+    IDirectoryService directoryService,
     ILogger<CollectionManagerDecorator> log
 ) : ICollectionManager
 {
@@ -21,11 +24,7 @@ public sealed class CollectionManagerDecorator(
         remove => inner.CollectionCreated -= value;
     }
 
-    public event EventHandler<CollectionModifiedEventArgs>? ItemsAddedToCollection
-    {
-        add => inner.ItemsAddedToCollection += value;
-        remove => inner.ItemsAddedToCollection -= value;
-    }
+    public event EventHandler<CollectionModifiedEventArgs>? ItemsAddedToCollection;
 
     public event EventHandler<CollectionModifiedEventArgs>? ItemsRemovedFromCollection
     {
@@ -38,64 +37,68 @@ public sealed class CollectionManagerDecorator(
 
     public async Task AddToCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds)
     {
-        var guids = itemIds as Guid[] ?? itemIds.ToArray();
-        await inner.AddToCollectionAsync(collectionId, guids).ConfigureAwait(false);
-
         if (libraryManager.GetItemById(collectionId) is not BoxSet collection)
-            return;
+            throw new ArgumentException(
+                "No collection exists with the supplied collectionId " + collectionId
+            );
 
-        var gelatoItems = guids
-            .Select(libraryManager.GetItemById)
-            .Where(item => item is not null && item.IsGelato())
-            .ToList();
+        List<BaseItem>? itemList = null;
+        var linkedChildrenList = collection.GetLinkedChildren();
+        var currentLinkedChildrenIds = linkedChildrenList.Select(i => i.Id).ToList();
 
-        if (gelatoItems.Count == 0)
-            return;
-
-        var needsFix = false;
-
-        for (var i = 0; i < collection.LinkedChildren.Length; i++)
+        foreach (var id in itemIds)
         {
-            var linkedChild = collection.LinkedChildren[i];
+            var item =
+                libraryManager.GetItemById(id)
+                ?? throw new ArgumentException("No item exists with the supplied Id " + id);
 
-            if (
-                string.IsNullOrEmpty(linkedChild.LibraryItemId)
-                && !string.IsNullOrEmpty(linkedChild.Path)
-            )
+            if (!currentLinkedChildrenIds.Contains(id))
             {
-                var matchingItem = gelatoItems.FirstOrDefault(item =>
-                    item?.Path == linkedChild.Path
-                );
-
-                if (matchingItem != null)
-                {
-                    log.LogDebug(
-                        "Fixing Gelato LinkedChild with path {Path} for item {Id}",
-                        linkedChild.Path,
-                        matchingItem.Id
-                    );
-
-                    collection.LinkedChildren[i] = new LinkedChild
-                    {
-                        LibraryItemId = matchingItem.Id.ToString("N", CultureInfo.InvariantCulture),
-                        Type = LinkedChildType.Manual,
-                    };
-                    needsFix = true;
-                }
+                (itemList ??= []).Add(item);
+                linkedChildrenList.Add(item);
             }
         }
 
-        if (needsFix)
+        if (itemList is null)
+            return;
+
+        var originalLen = collection.LinkedChildren.Length;
+        LinkedChild[] newChildren = new LinkedChild[originalLen + itemList.Count];
+        collection.LinkedChildren.CopyTo(newChildren, 0);
+
+        for (var i = 0; i < itemList.Count; i++)
         {
+            var item = itemList[i];
+            newChildren[originalLen + i] = item.IsGelato()
+                ? new LinkedChild
+                {
+                    LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
+                    Type = LinkedChildType.Manual,
+                }
+                : LinkedChild.Create(item);
+
             log.LogDebug(
-                "Fixing {Count} Gelato items in collection {Name}",
-                gelatoItems.Count,
+                "Adding item {Id} (Gelato={IsGelato}) to collection {Name}",
+                item.Id,
+                item.IsGelato(),
                 collection.Name
             );
-            await collection
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                .ConfigureAwait(false);
         }
+
+        collection.LinkedChildren = newChildren;
+        collection.UpdateRatingToItems(linkedChildrenList);
+
+        await collection
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            .ConfigureAwait(false);
+
+        providerManager.QueueRefresh(
+            collection.Id,
+            new MetadataRefreshOptions(directoryService) { ForceSave = true },
+            RefreshPriority.High
+        );
+
+        ItemsAddedToCollection?.Invoke(this, new CollectionModifiedEventArgs(collection, itemList));
     }
 
     public Task RemoveFromCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) =>

@@ -1,7 +1,9 @@
 using System.Globalization;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Playlists;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Playlists;
 using Microsoft.Extensions.Logging;
@@ -12,6 +14,9 @@ public sealed class PlaylistManagerDecorator(
     IPlaylistManager inner,
     Lazy<GelatoManager> manager,
     ILibraryManager libraryManager,
+    IUserManager userManager,
+    IProviderManager providerManager,
+    IDirectoryService directoryService,
     ILogger<PlaylistManagerDecorator> log
 ) : IPlaylistManager
 {
@@ -37,64 +42,58 @@ public sealed class PlaylistManagerDecorator(
         Guid userId
     )
     {
-        await inner.AddItemToPlaylistAsync(playlistId, itemIds, userId).ConfigureAwait(false);
-
         if (libraryManager.GetItemById(playlistId) is not Playlist playlist)
-            return;
+            throw new ArgumentException("No Playlist exists with Id " + playlistId);
 
-        var addedItems = itemIds
-            .Select(libraryManager.GetItemById)
-            .Where(item => item is not null)
-            .ToList();
+        var user = userId == Guid.Empty ? null : userManager.GetUserById(userId);
+        var options = new DtoOptions(false) { EnableImages = true };
 
-        var gelatoItems = addedItems.Where(item => item.IsGelato()).ToList();
-        if (gelatoItems.Count == 0)
-            return;
+        var resolved = itemIds.Select(libraryManager.GetItemById).Where(i => i is not null);
+        var newItems = Playlist
+            .GetPlaylistItems(resolved, user, options)
+            .Where(i => i.SupportsAddingToPlaylist);
 
-        var needsFix = false;
+        var existingIds = playlist.LinkedChildren.Select(c => c.ItemId).ToHashSet();
+        var toAdd = newItems.Where(i => !existingIds.Contains(i.Id)).Distinct().ToList();
 
-        for (int i = 0; i < playlist.LinkedChildren.Length; i++)
-        {
-            var linkedChild = playlist.LinkedChildren[i];
-
-            if (
-                string.IsNullOrEmpty(linkedChild.LibraryItemId)
-                && !string.IsNullOrEmpty(linkedChild.Path)
-            )
-            {
-                var matchingItem = gelatoItems.FirstOrDefault(item =>
-                    item != null && item.Path == linkedChild.Path
-                );
-
-                if (matchingItem != null)
-                {
-                    log.LogDebug(
-                        "Fixing Gelato LinkedChild with path {Path} for item {Id}",
-                        linkedChild.Path,
-                        matchingItem.Id
-                    );
-
-                    playlist.LinkedChildren[i] = new LinkedChild
-                    {
-                        LibraryItemId = matchingItem.Id.ToString("N", CultureInfo.InvariantCulture),
-                        Type = LinkedChildType.Manual,
-                    };
-                    needsFix = true;
-                }
-            }
-        }
-
-        if (needsFix)
-        {
-            log.LogDebug(
-                "Fixing {Count} Gelato items in playlist {Name}",
-                gelatoItems.Count,
+        var numDuplicates = itemIds.Count - toAdd.Count;
+        if (numDuplicates > 0)
+            log.LogWarning(
+                "Ignored adding {DuplicateCount} duplicate items to playlist {PlaylistName}.",
+                numDuplicates,
                 playlist.Name
             );
-            await playlist
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                .ConfigureAwait(false);
-        }
+
+        if (toAdd.Count == 0)
+            return;
+
+        var newChildren = toAdd
+            .Select(item =>
+                item.IsGelato()
+                    ? new LinkedChild
+                    {
+                        LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
+                        Type = LinkedChildType.Manual,
+                    }
+                    : LinkedChild.Create(item)
+            )
+            .ToArray();
+
+        playlist.LinkedChildren = [.. playlist.LinkedChildren, .. newChildren];
+        playlist.DateLastMediaAdded = DateTime.UtcNow;
+
+        await playlist
+            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+            .ConfigureAwait(false);
+
+        if (playlist.IsFile)
+            inner.SavePlaylistFile(playlist);
+
+        providerManager.QueueRefresh(
+            playlist.Id,
+            new MetadataRefreshOptions(directoryService) { ForceSave = true },
+            RefreshPriority.High
+        );
     }
 
     public Task RemoveItemFromPlaylistAsync(string playlistId, IEnumerable<string> entryIds) =>
