@@ -86,6 +86,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     cfg.Stremio = stremio;
                     cfg.MovieFolder = _manager.TryGetMovieFolder(cfg);
                     cfg.SeriesFolder = _manager.TryGetSeriesFolder(cfg);
+                    cfg.AnimeMovieFolder = _manager.TryGetAnimeMovieFolder(cfg);
+                    cfg.AnimeSeriesFolder = _manager.TryGetAnimeSeriesFolder(cfg);
                     return cfg;
                 }
             );

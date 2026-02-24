@@ -33,13 +33,17 @@ public class InsertActionFilter(
         }
 
         // Get root folder
-        var isSeries = stremioMeta.Type == StremioMediaType.Series;
-        var root = isSeries
-            ? manager.TryGetSeriesFolder(userId)
-            : manager.TryGetMovieFolder(userId);
+        var root = stremioMeta.Type switch
+        {
+            StremioMediaType.Series => manager.TryGetSeriesFolder(userId),
+            // Prefer series folder as initial parent; InsertMeta re-routes anime movies to AnimeMovieFolder
+            StremioMediaType.Anime => manager.TryGetAnimeSeriesFolder(userId)
+                ?? manager.TryGetAnimeMovieFolder(userId),
+            _ => manager.TryGetMovieFolder(userId),
+        };
         if (root is null)
         {
-            log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
+            log.LogWarning("No {Type} folder configured", stremioMeta.Type);
             await next();
             return;
         }

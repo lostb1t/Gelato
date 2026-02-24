@@ -114,6 +114,20 @@ public sealed class GelatoManager(
         );
     }
 
+    public Folder? TryGetAnimeMovieFolder(Guid userId)
+    {
+        return TryGetFolder(
+            GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).AnimeMoviePath
+        );
+    }
+
+    public Folder? TryGetAnimeSeriesFolder(Guid userId)
+    {
+        return TryGetFolder(
+            GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).AnimeSeriesPath
+        );
+    }
+
     public Folder? TryGetMovieFolder(PluginConfiguration cfg)
     {
         return TryGetFolder(cfg.MoviePath);
@@ -122,6 +136,16 @@ public sealed class GelatoManager(
     public Folder? TryGetSeriesFolder(PluginConfiguration cfg)
     {
         return TryGetFolder(cfg.SeriesPath);
+    }
+
+    public Folder? TryGetAnimeMovieFolder(PluginConfiguration cfg)
+    {
+        return TryGetFolder(cfg.AnimeMoviePath);
+    }
+
+    public Folder? TryGetAnimeSeriesFolder(PluginConfiguration cfg)
+    {
+        return TryGetFolder(cfg.AnimeSeriesPath);
     }
 
     private Folder? TryGetFolder(string path)
@@ -248,7 +272,10 @@ public sealed class GelatoManager(
             return (null, false);
         }
 
-        if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series))
+        if (
+            mediaType
+            is not (StremioMediaType.Movie or StremioMediaType.Series or StremioMediaType.Anime)
+        )
         {
             _log.LogWarning("type {Type} is not valid after refresh, skipping", mediaType);
             return (null, false);
@@ -279,6 +306,21 @@ public sealed class GelatoManager(
             if (baseItem is null)
             {
                 _log.LogWarning("InsertMeta: failed to create baseItem");
+                return (null, false);
+            }
+
+            await baseItem
+                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        else if (mediaType == StremioMediaType.Anime && meta.Videos is not { Count: > 0 })
+        {
+            // Anime with no episodes — treat as an anime movie
+            var animeMovieParent = cfg.AnimeMovieFolder ?? parent;
+            baseItem = SaveItem(baseItem, animeMovieParent);
+            if (baseItem is null)
+            {
+                _log.LogWarning("InsertMeta: failed to create anime movie baseItem");
                 return (null, false);
             }
 
@@ -606,7 +648,8 @@ public sealed class GelatoManager(
         CancellationToken ct
     )
     {
-        var seriesRootFolder = cfg.SeriesFolder;
+        var seriesRootFolder =
+            seriesMeta.Type == StremioMediaType.Anime ? cfg.AnimeSeriesFolder : cfg.SeriesFolder;
         // Early validation
         if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
         {
@@ -954,6 +997,10 @@ public sealed class GelatoManager(
         {
             case StremioMediaType.Series:
                 item = new Series { };
+                break;
+
+            case StremioMediaType.Anime:
+                item = meta.Videos is { Count: > 0 } ? new Series() : new Movie();
                 break;
 
             case StremioMediaType.Movie:

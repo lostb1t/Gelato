@@ -43,7 +43,10 @@ public sealed class FileSystemDecorator : IFileSystem
         if (cfg is null)
             return false;
 
-        return IsSubPathOf(path, cfg.MoviePath) || IsSubPathOf(path, cfg.SeriesPath);
+        return IsSubPathOf(path, cfg.MoviePath)
+            || IsSubPathOf(path, cfg.SeriesPath)
+            || IsSubPathOf(path, cfg.AnimeMoviePath)
+            || IsSubPathOf(path, cfg.AnimeSeriesPath);
     }
 
     private static bool IsSubPathOf(string path, string basePath)

@@ -10,6 +10,10 @@ public class PluginConfiguration : BasePluginConfiguration
 {
     public string MoviePath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "movies");
     public string SeriesPath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "series");
+    public string AnimeMoviePath { get; set; } =
+        Path.Combine(Path.GetTempPath(), "gelato", "anime-movies");
+    public string AnimeSeriesPath { get; set; } =
+        Path.Combine(Path.GetTempPath(), "gelato", "anime-series");
     public int StreamTTL { get; set; } = 3600;
     public int CatalogMaxItems { get; set; } = 100;
     public string Url { get; set; } = "";
@@ -54,6 +58,14 @@ public class PluginConfiguration : BasePluginConfiguration
     [XmlIgnore]
     public Folder? SeriesFolder;
 
+    [JsonIgnore]
+    [XmlIgnore]
+    public Folder? AnimeMovieFolder;
+
+    [JsonIgnore]
+    [XmlIgnore]
+    public Folder? AnimeSeriesFolder;
+
     public PluginConfiguration GetEffectiveConfig(Guid userId)
     {
         var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
@@ -67,6 +79,8 @@ public class UserConfig
     public string Url { get; set; } = "";
     public string MoviePath { get; set; } = "";
     public string SeriesPath { get; set; } = "";
+    public string AnimeMoviePath { get; set; } = "";
+    public string AnimeSeriesPath { get; set; } = "";
     public bool DisableSearch { get; set; } = false;
 
     /// <summary>
@@ -80,6 +94,8 @@ public class UserConfig
             Url = Url,
             MoviePath = MoviePath,
             SeriesPath = SeriesPath,
+            AnimeMoviePath = AnimeMoviePath,
+            AnimeSeriesPath = AnimeSeriesPath,
             DisableSearch = DisableSearch,
 
             // All other fields from base config

@@ -139,6 +139,14 @@ public class SearchActionFilter(
             );
         }
 
+        if (
+            requestedTypes.Contains(BaseItemKind.Series)
+            && (cfg.AnimeSeriesFolder is not null || cfg.AnimeMovieFolder is not null)
+        )
+        {
+            tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Anime));
+        }
+
         var results = (await Task.WhenAll(tasks)).SelectMany(r => r).ToList();
 
         var filterUnreleased = cfg.FilterUnreleased;

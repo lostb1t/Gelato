@@ -16,6 +16,7 @@ public class GelatoStremioProvider(
     private StremioManifest? _manifest;
     private StremioCatalog? _movieSearchCatalog;
     private StremioCatalog? _seriesSearchCatalog;
+    private StremioCatalog? _animeSearchCatalog;
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -119,6 +120,20 @@ public class GelatoStremioProvider(
                     )
                     .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault();
+
+                _animeSearchCatalog = m
+                    .Catalogs.Where(c =>
+                        string.Equals(
+                            c.Type,
+                            nameof(StremioMediaType.Anime),
+                            StringComparison.CurrentCultureIgnoreCase
+                        )
+                        && c.Extra.Any(e =>
+                            string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
+                        )
+                    )
+                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault();
             }
 
             if (_movieSearchCatalog == null)
@@ -137,6 +152,11 @@ public class GelatoStremioProvider(
             else
             {
                 log.LogDebug("manifest uses series search catalog: {Id}", _seriesSearchCatalog.Id);
+            }
+
+            if (_animeSearchCatalog != null)
+            {
+                log.LogDebug("manifest uses anime search catalog: {Id}", _animeSearchCatalog.Id);
             }
             return m;
         }
@@ -241,6 +261,7 @@ public class GelatoStremioProvider(
         {
             StremioMediaType.Movie => _movieSearchCatalog,
             StremioMediaType.Series => _seriesSearchCatalog,
+            StremioMediaType.Anime => _animeSearchCatalog,
             _ => null,
         };
 

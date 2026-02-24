@@ -216,7 +216,7 @@ public static class EnumMappingExtensions
         return type switch
         {
             StremioMediaType.Movie => BaseItemKind.Movie,
-            StremioMediaType.Series => BaseItemKind.Series,
+            StremioMediaType.Series or StremioMediaType.Anime => BaseItemKind.Series,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(type),
                 type,

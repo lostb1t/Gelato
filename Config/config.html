@@ -55,7 +55,18 @@
               <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
               <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
             </div>
-       
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtAnimeMoviePath">Anime movies path:</label>
+              <input is="emby-input" type="text" id="txtAnimeMoviePath" class="emby-input" />
+              <div class="fieldDescription">Filesystem path for anime movie items. Use this path as library folder.</div>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtAnimeSeriesPath">Anime series path:</label>
+              <input is="emby-input" type="text" id="txtAnimeSeriesPath" class="emby-input" />
+              <div class="fieldDescription">Filesystem path for anime series items. Use this path as library folder.</div>
+            </div>
 
             <h3 class="sectionTitle" style="margin-top: 2em;">Search & Discovery</h3>
 
@@ -188,6 +199,16 @@
                 <input is="emby-input" type="text" id="txtUserSeriesPath" class="emby-input" />
               </div>
 
+              <div class="inputContainer">
+                <label class="inputLabel" for="txtUserAnimeMoviePath">Anime movies path:</label>
+                <input is="emby-input" type="text" id="txtUserAnimeMoviePath" class="emby-input" />
+              </div>
+
+              <div class="inputContainer">
+                <label class="inputLabel" for="txtUserAnimeSeriesPath">Anime series path:</label>
+                <input is="emby-input" type="text" id="txtUserAnimeSeriesPath" class="emby-input" />
+              </div>
+
               <div class="checkboxContainer">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkUserDisableSearch" />
@@ -277,8 +298,12 @@
         const userOverrideContainer = page.querySelector('#userOverrideContainer');
         const userOverridesList = page.querySelector('#userOverridesList');
         const txtUserUrl = page.querySelector('#txtUserUrl');
+        const txtAnimeMoviePath = page.querySelector('#txtAnimeMoviePath');
+        const txtAnimeSeriesPath = page.querySelector('#txtAnimeSeriesPath');
         const txtUserMoviePath = page.querySelector('#txtUserMoviePath');
         const txtUserSeriesPath = page.querySelector('#txtUserSeriesPath');
+        const txtUserAnimeMoviePath = page.querySelector('#txtUserAnimeMoviePath');
+        const txtUserAnimeSeriesPath = page.querySelector('#txtUserAnimeSeriesPath');
         const chkUserDisableSearch = page.querySelector('#chkUserDisableSearch');
 
         let currentConfig = null;
@@ -535,6 +560,8 @@
             if (txtUrl) txtUrl.value = cfg.Url || "";
             if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
             if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
+            if (txtAnimeMoviePath) txtAnimeMoviePath.value = cfg.AnimeMoviePath || "";
+            if (txtAnimeSeriesPath) txtAnimeSeriesPath.value = cfg.AnimeSeriesPath || "";
             if (txtMaxCollectionItems) txtMaxCollectionItems.value = cfg.MaxCollectionItems || 100;
             if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
@@ -563,6 +590,8 @@
             cfg.Url = txtUrl.value.trim();
             cfg.MoviePath = txtMoviePath.value.trim();
             cfg.SeriesPath = txtSeriesPath.value.trim();
+            cfg.AnimeMoviePath = txtAnimeMoviePath.value.trim();
+            cfg.AnimeSeriesPath = txtAnimeSeriesPath.value.trim();
 
             // Max collection items
             cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 100;
@@ -596,6 +625,8 @@
               Url: override.Url,
               MoviePath: override.MoviePath,
               SeriesPath: override.SeriesPath,
+              AnimeMoviePath: override.AnimeMoviePath,
+              AnimeSeriesPath: override.AnimeSeriesPath,
               DisableSearch: override.DisableSearch
             }));
 
@@ -611,6 +642,8 @@
                 Url: userConfig.Url,
                 MoviePath: userConfig.MoviePath,
                 SeriesPath: userConfig.SeriesPath,
+                AnimeMoviePath: userConfig.AnimeMoviePath,
+                AnimeSeriesPath: userConfig.AnimeSeriesPath,
                 DisableSearch: userConfig.DisableSearch
               };
             });
@@ -703,12 +736,16 @@
             txtUserUrl.value = override.Url || '';
             txtUserMoviePath.value = override.MoviePath || '';
             txtUserSeriesPath.value = override.SeriesPath || '';
+            txtUserAnimeMoviePath.value = override.AnimeMoviePath || '';
+            txtUserAnimeSeriesPath.value = override.AnimeSeriesPath || '';
             chkUserDisableSearch.checked = override.DisableSearch || false;
           } else {
             // New
             txtUserUrl.value = currentConfig?.Url || '';
             txtUserMoviePath.value = currentConfig?.MoviePath || '';
             txtUserSeriesPath.value = currentConfig?.SeriesPath || '';
+            txtUserAnimeMoviePath.value = currentConfig?.AnimeMoviePath || '';
+            txtUserAnimeSeriesPath.value = currentConfig?.AnimeSeriesPath || '';
             chkUserDisableSearch.checked = false;
           }
         }
@@ -727,6 +764,8 @@
             Url: txtUserUrl.value.trim(),
             MoviePath: txtUserMoviePath.value.trim(),
             SeriesPath: txtUserSeriesPath.value.trim(),
+            AnimeMoviePath: txtUserAnimeMoviePath.value.trim(),
+            AnimeSeriesPath: txtUserAnimeSeriesPath.value.trim(),
             DisableSearch: chkUserDisableSearch.checked
           };
 

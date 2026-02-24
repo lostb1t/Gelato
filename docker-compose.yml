@@ -1,0 +1,14 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:10.11.6
+    container_name: jellyfin
+    network_mode: host
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - ./bin/Debug/net9.0:/config/plugins/Gelato:ro
+    restart: unless-stopped
+
+volumes:
+  jellyfin-config:
+  jellyfin-cache:

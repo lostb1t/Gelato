@@ -43,6 +43,8 @@ public class CatalogImportService(
         var stremio = cfg.Stremio;
         var seriesFolder = cfg.SeriesFolder;
         var movieFolder = cfg.MovieFolder;
+        var animeMovieFolder = cfg.AnimeMovieFolder;
+        var animeSeriesFolder = cfg.AnimeSeriesFolder;
 
         if (seriesFolder is null)
         {
@@ -105,10 +107,12 @@ public class CatalogImportService(
 
                     // catalog can contain multiple types.
 
-                    var root = baseItemKind switch
+                    var root = mediaType switch
                     {
-                        BaseItemKind.Series => seriesFolder,
-                        BaseItemKind.Movie => movieFolder,
+                        StremioMediaType.Series => seriesFolder,
+                        StremioMediaType.Movie => movieFolder,
+                        // Anime: prefer series folder as initial parent; InsertMeta re-routes anime movies to AnimeMovieFolder
+                        StremioMediaType.Anime => animeSeriesFolder ?? animeMovieFolder,
                         _ => null,
                     };
 
