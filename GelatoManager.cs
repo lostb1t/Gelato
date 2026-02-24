@@ -470,7 +470,7 @@ public sealed class GelatoManager(
                     isEpisode && video is Episode e
                         ? new Episode
                         {
-                            Id = libraryManager.GetNewItemId(path, typeof(Episode)),
+                            //Id = libraryManager.GetNewItemId(path, typeof(Episode)),
                             SeriesId = e.SeriesId,
                             SeriesName = e.SeriesName,
                             SeasonId = e.SeasonId,
@@ -479,7 +479,12 @@ public sealed class GelatoManager(
                             ParentIndexNumber = e.ParentIndexNumber,
                             PremiereDate = e.PremiereDate,
                         }
-                        : new Movie { Id = libraryManager.GetNewItemId(path, typeof(Movie)) };
+                        : new Movie
+                        {
+                            //Id = libraryManager.GetNewItemId(path, typeof(Movie))
+                        };
+                target.Path = path;
+                target.Id = libraryManager.GetNewItemId(target.Path, target.GetType());
             }
 
             target.Name = video.Name;
@@ -713,10 +718,20 @@ public sealed class GelatoManager(
                     series.Name,
                     seasonIndex
                 );
+                var epMeta = seasonGroup.First();
+                epMeta.Type = StremioMediaType.Episode;
+                if (IntoBaseItem(epMeta) is not Episode episode)
+                {
+                    _log.LogWarning(
+                        "Could not load base item as episode for: {EpisodeName}, skipping",
+                        epMeta.GetName()
+                    );
+                    continue;
+                }
 
                 season = new Season
                 {
-                    Id = Guid.NewGuid(),
+                    Id = libraryManager.GetNewItemId(seasonPath, typeof(Season)),
                     Name = $"Season {seasonIndex:D2}",
                     IndexNumber = seasonIndex,
                     SeriesId = series.Id,
@@ -726,7 +741,7 @@ public sealed class GelatoManager(
                     SeriesPresentationUniqueKey = seriesPresentationKey,
                     DateModified = DateTime.UtcNow,
                     DateLastSaved = DateTime.UtcNow,
-                    // important
+                    PremiereDate = episode.PremiereDate,
                     ParentId = series.Id,
                 };
 
@@ -760,7 +775,7 @@ public sealed class GelatoManager(
                 .Where(x => !x.IsStream() && x.IndexNumber.HasValue)
                 .Select(e => e.IndexNumber!.Value)
                 .ToHashSet();
-
+            var episodeList = new List<Episode>();
             foreach (var epMeta in seasonGroup)
             {
                 ct.ThrowIfCancellationRequested();
@@ -814,16 +829,16 @@ public sealed class GelatoManager(
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
 
-                season.AddChild(episode);
-
+                episodeList.Add(episode);
                 episodesInserted++;
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
             }
+            repo.SaveItems(episodeList, CancellationToken.None);
         }
 
         stopwatch.Stop();
 
-        _log.LogDebug(
+        _log.LogInformation(
             "Sync completed for {SeriesName}: {SeasonsInserted} season(s) and {EpisodesInserted} episode(s) in {Dur}",
             series.Name,
             seasonsInserted,
@@ -938,21 +953,15 @@ public sealed class GelatoManager(
         switch (meta.Type)
         {
             case StremioMediaType.Series:
-                item = new Series
-                {
-                    Id = meta.Guid ?? libraryManager.GetNewItemId(id, typeof(Series)),
-                };
+                item = new Series { };
                 break;
 
             case StremioMediaType.Movie:
-                item = new Movie
-                {
-                    Id = meta.Guid ?? libraryManager.GetNewItemId(id, typeof(Movie)),
-                };
+                item = new Movie { };
                 break;
 
             case StremioMediaType.Episode:
-                item = new Episode { Id = libraryManager.GetNewItemId(id, typeof(Episode)) };
+                item = new Episode { };
                 break;
             default:
                 _log.LogWarning("unsupported type {type}", meta.Type);
@@ -1016,6 +1025,8 @@ public sealed class GelatoManager(
                 new() { Type = ImageType.Primary, Path = primary },
             }.ToArray();
         }
+
+        item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
         item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         return item;
     }
