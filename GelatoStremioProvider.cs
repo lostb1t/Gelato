@@ -258,10 +258,10 @@ public class GelatoStremioProvider(
 }
 
 #region Request Models
+
 // ReSharper disable ClassNeverInstantiated.Global
 // ReSharper disable CollectionNeverUpdated.Global
 // ReSharper disable UnusedAutoPropertyAccessor.Global
-
 public class StremioManifest
 {
     public string Name { get; set; } = "";
@@ -696,6 +696,7 @@ public enum StremioStatus
 // ReSharper restore UnusedAutoPropertyAccessor.Global
 // ReSharper restore CollectionNeverUpdated.Global
 // ReSharper restore ClassNeverInstantiated.Global
+
 #endregion
 
 public class SafeStringEnumConverter<T> : JsonConverter<T>

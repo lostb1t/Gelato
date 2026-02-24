@@ -6,3 +6,4 @@ artifacts
 Release
 *.zip
 dist/
+*.sln.DotSettings.user

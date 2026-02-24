@@ -454,12 +454,12 @@ public sealed class GelatoManager(
             var path = s.IsFile()
                 ? s.Url
                 : $"http://127.0.0.1:{httpPort}/gelato/stream?ih={s.InfoHash}"
-                    + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
-                    + (
-                        s.Sources is { Count: > 0 }
-                            ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}"
-                            : ""
-                    );
+                + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
+                + (
+                    s.Sources is { Count: > 0 }
+                        ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}"
+                        : ""
+                );
 
             var id = s.GetGuid();
             var isNew = !existing.TryGetValue(id, out var target);
@@ -616,7 +616,9 @@ public sealed class GelatoManager(
         var stopwatch = Stopwatch.StartNew();
         // Group episodes by season
         var seasonGroups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
-            .Where(e => e.Season.HasValue && (e.Episode.HasValue || e.Number.HasValue)) // Filter out invalid episodes early
+            .Where(e =>
+                e.Season.HasValue
+                && (e.Episode.HasValue || e.Number.HasValue)) // Filter out invalid episodes early
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode ?? e.Number)
             .GroupBy(e => e.Season!.Value)

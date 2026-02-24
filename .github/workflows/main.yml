@@ -1,0 +1,36 @@
+﻿name: Main Build
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: .NET Lint
+        uses: zyactions/dotnet-lint@v1
+        with:
+          workspace: Gelato.sln
+          implicit-restore: true
+  
+  conventional-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Check conventional commits
+        uses: webiny/action-conventional-commits@v1.3.1
+
+  build:
+    uses: jellyfin/jellyfin-meta-plugins/.github/workflows/build.yaml@master
+    with:
+      dotnet-version: "9.0.*"
+      dotnet-target: "net9.0"

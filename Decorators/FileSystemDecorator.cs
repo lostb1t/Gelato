@@ -61,7 +61,7 @@ public sealed class FileSystemDecorator : IFileSystem
 
         return normalizedPath.StartsWith(normalizedBase, StringComparison.OrdinalIgnoreCase)
             || normalizedPath.TrimEnd(Path.DirectorySeparatorChar)
-                == normalizedBase.TrimEnd(Path.DirectorySeparatorChar);
+            == normalizedBase.TrimEnd(Path.DirectorySeparatorChar);
     }
 
     private static readonly BaseItemKind[] GelatoItemKinds = new[]

@@ -208,27 +208,27 @@ public sealed class GelatoApiController : ControllerBase
             if (
                 ext
                 is ".srt"
-                    or ".ass"
-                    or ".ssa"
-                    or ".sub"
-                    or ".idx"
-                    or ".nfo"
-                    or ".txt"
-                    or ".jpg"
-                    or ".jpeg"
-                    or ".png"
-                    or ".gif"
+                or ".ass"
+                or ".ssa"
+                or ".sub"
+                or ".idx"
+                or ".nfo"
+                or ".txt"
+                or ".jpg"
+                or ".jpeg"
+                or ".png"
+                or ".gif"
             )
                 return false;
             return ext
                 is ".mkv"
-                    or ".mp4"
-                    or ".m4v"
-                    or ".avi"
-                    or ".mov"
-                    or ".wmv"
-                    or ".ts"
-                    or ".m2ts";
+                or ".mp4"
+                or ".m4v"
+                or ".avi"
+                or ".mov"
+                or ".wmv"
+                or ".ts"
+                or ".m2ts";
         }
     }
 
@@ -258,13 +258,13 @@ public sealed class GelatoApiController : ControllerBase
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
     private static string[] DefaultTrackers() =>
-        [
-            "udp://tracker.opentrackr.org:1337/announce",
-            "udp://open.stealth.si:80/announce",
-            "udp://tracker.torrent.eu.org:451/announce",
-            "udp://explodie.org:6969/announce",
-            "udp://tracker.openbittorrent.com:6969/announce",
-        ];
+    [
+        "udp://tracker.opentrackr.org:1337/announce",
+        "udp://open.stealth.si:80/announce",
+        "udp://tracker.torrent.eu.org:451/announce",
+        "udp://explodie.org:6969/announce",
+        "udp://tracker.openbittorrent.com:6969/announce",
+    ];
 
     private static string GuessContentType(string path)
     {
