@@ -390,8 +390,8 @@ public sealed class MediaSourceManagerDecorator(
             var target = id.Value;
 
             return list.FirstOrDefault(s =>
-                !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
-            ) ?? list.FirstOrDefault();
+                    !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
+                ) ?? list.FirstOrDefault();
         }
 
         static bool NeedsProbe(MediaSourceInfo s) =>
