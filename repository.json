@@ -8,6 +8,22 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.5.3] - 2026-02-24\n\n### 🐛 Bug Fixes\n\n- Base season premiere date off first episode\n- Dont call inner on AddToCollectionAsync to prevent deadlocks\n",
+        "checksum": "12396e05ad42feb63829e316574ab1fc",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.5.3/gelato_0.26.5.3.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-24T07:21:57Z",
+        "version": "0.26.5.3"
+      },
+      {
+        "changelog": "## [0.26.5.2] - 2026-02-23\n\n### 🐛 Bug Fixes\n\n- Series meta resolve during insertion\n",
+        "checksum": "714a6f9152ccaad235703960078c52b3",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.5.2/gelato_0.26.5.2.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-23T21:11:15Z",
+        "version": "0.26.5.2"
+      },
+      {
         "changelog": "## [0.26.5.1] - 2026-02-23\n\n### 🐛 Bug Fixes\n\n- Remove hardcoded subtitle oang\n",
         "checksum": "262664224c65f361d2fb6981a862f511",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.5.1/gelato_0.26.5.1.zip",
@@ -230,22 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-03T11:34:44Z",
         "version": "0.25.4.0"
-      },
-      {
-        "changelog": "## [0.25.3.9] - 2026-02-01\n\n### 🐛 Bug Fixes\n\n- Purge task\n",
-        "checksum": "ad2bd6420204a2af49b738bbd231fca2",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.9/gelato_0.25.3.9.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-01T09:39:06Z",
-        "version": "0.25.3.9"
-      },
-      {
-        "changelog": "## [0.25.3.8] - 2026-02-01\n\n### 🐛 Bug Fixes\n\n- Purge task\n",
-        "checksum": "c12dd425db06cad9fd396b8a47170f9d",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.3.8/gelato_0.25.3.8.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-01T08:57:55Z",
-        "version": "0.25.3.8"
       }
     ]
   }
