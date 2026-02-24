@@ -264,28 +264,38 @@ public class CatalogImportService(
 
     public async Task SyncAllEnabledAsync(CancellationToken ct, IProgress<double>? progress = null)
     {
-        // Force refresh of catalog list from manifest first
         var catalogs = await catalogService.GetCatalogsAsync(Guid.Empty);
         var enabled = catalogs.Where(c => c.Enabled).ToList();
 
-        var current = 0;
-        var total = enabled.Count;
+        if (enabled.Count == 0)
+        {
+            progress?.Report(100);
+            return;
+        }
+
+        var globalMaxItems = GelatoPlugin.Instance!.GetConfig(Guid.Empty).CatalogMaxItems;
+        var total = enabled.Sum(c => c.MaxItems > 0 ? c.MaxItems : globalMaxItems);
+        var offset = 0;
 
         foreach (var cat in enabled)
         {
             ct.ThrowIfCancellationRequested();
             logger.LogInformation("Processing enabled catalog: {Name}", cat.Name);
 
-            // Create specific progress reporter for this catalog if needed, or just log
-            await ImportCatalogAsync(cat.Id, cat.Type, ct).ConfigureAwait(false);
+            var catMax = cat.MaxItems > 0 ? cat.MaxItems : globalMaxItems;
+            var localOffset = offset;
+            var catProgress = progress is null
+                ? null
+                : (IProgress<double>)
+                    new Progress<double>(p =>
+                        progress.Report((localOffset + p / 100.0 * catMax) / total * 100.0)
+                    );
 
-            current++;
-            progress?.Report((double)current / total * 100);
+            await ImportCatalogAsync(cat.Id, cat.Type, ct, catProgress).ConfigureAwait(false);
+
+            offset += catMax;
         }
 
         progress?.Report(100);
-        // await libraryManager
-        //     .ValidateMediaLibrary(new Progress<double>(), CancellationToken.None)
-        //     .ConfigureAwait(false);
     }
 }
