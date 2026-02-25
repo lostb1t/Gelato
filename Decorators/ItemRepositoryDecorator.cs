@@ -46,7 +46,7 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
 
-        if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
+        if (ctx is not null && !ctx.IsSingleItemList() && filter.IsDeadPerson is null)
         {
             filter.IsDeadPerson = null;
             if (
@@ -78,11 +78,7 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         {
             filter.IsDeadPerson = null;
         }
-        else if (filter.IsMissing == true)
-        {
-            // jf deletes virtual items when theres a valid primary version. So just dont return it
-            filter.ExcludeTags = [GelatoManager.StreamTag];
-        }
+
         return filter;
     }
 

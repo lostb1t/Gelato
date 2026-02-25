@@ -320,7 +320,7 @@ public static class ActionContextExtensions
     public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
         ctx.HttpContext.IsInsertableAction();
 
-    private static bool IsSingleItemList(HttpContext ctx)
+    public static bool IsSingleItemList(this HttpContext ctx)
     {
         var q = ctx.Request.Query;
         if (!q.TryGetValue("ids", out var idsRaw))
@@ -338,6 +338,9 @@ public static class ActionContextExtensions
 
         return ids.Length == 1;
     }
+
+    public static bool IsSingleItemList(this ActionExecutingContext ctx) =>
+        ctx.HttpContext.IsSingleItemList();
 
     public static bool TryGetRouteGuid(this ActionExecutingContext ctx, out Guid value)
     {
