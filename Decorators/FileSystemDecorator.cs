@@ -35,7 +35,6 @@ public sealed class FileSystemDecorator : IFileSystem
         _log = log;
     }
 
-    // ── helpers ──────────────────────────────────────────────────────────
 
     private static bool IsGelatoPath(string path)
     {
@@ -314,7 +313,6 @@ public sealed class FileSystemDecorator : IFileSystem
         return GetChildItemsFromDb(path).Where(i => i.IsFolder).Select(ToMetadata);
     }
 
-    // ── IFileSystem – path listings ─────────────────────────────────────
 
     public IEnumerable<string> GetFilePaths(string path, bool recursive = false)
     {
@@ -366,7 +364,7 @@ public sealed class FileSystemDecorator : IFileSystem
         return items.Select(i => i.Path!);
     }
 
-    // ── IFileSystem – single item lookups ───────────────────────────────
+
 
     public FileSystemMetadata GetFileSystemInfo(string path)
     {
@@ -490,7 +488,6 @@ public sealed class FileSystemDecorator : IFileSystem
         };
     }
 
-    // ── IFileSystem – existence checks ──────────────────────────────────
 
     public bool DirectoryExists(string path)
     {
@@ -527,7 +524,7 @@ public sealed class FileSystemDecorator : IFileSystem
         return items.Count > 0 && !items[0].IsFolder;
     }
 
-    // ── IFileSystem – timestamps ────────────────────────────────────────
+
 
     public DateTime GetCreationTimeUtc(FileSystemMetadata info) => _inner.GetCreationTimeUtc(info);
 
@@ -548,7 +545,6 @@ public sealed class FileSystemDecorator : IFileSystem
         return DateTime.UtcNow;
     }
 
-    // ── IFileSystem – pass‑through methods ──────────────────────────────
 
     public bool IsShortcut(string filename) => _inner.IsShortcut(filename);
 
