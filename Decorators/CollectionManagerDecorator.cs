@@ -52,7 +52,7 @@ public sealed class CollectionManagerDecorator(
                 libraryManager.GetItemById(id)
                 ?? throw new ArgumentException("No item exists with the supplied Id " + id);
 
-            if (!currentLinkedChildrenIds.Contains(id))
+            if (!currentLinkedChildrenIds.Contains(id) && !item.IsStream())
             {
                 (itemList ??= []).Add(item);
                 linkedChildrenList.Add(item);
