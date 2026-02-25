@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.6.0] - 2026-02-25\n\n### 🚀 Features\n\n- Base catalog import progress on the catalog items\n- Add settings item to main menu (#116)\n\n### 🐛 Bug Fixes\n\n- Show correct default in settings (#115)\n- Automatically created collections show duplicates (streams) #118\n\n### 🚜 Refactor\n\n- Filter out streams on everything except single item queries\n\n### ⚙️ Miscellaneous Tasks\n\n- Add pr and main builds (#107)\n- Remove unused service\n",
+        "checksum": "94b3dc1f0109952e5ccddbe9f97dd7c3",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.0/gelato_0.26.6.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-02-25T14:36:13Z",
+        "version": "0.26.6.0"
+      },
+      {
         "changelog": "## [0.26.5.3] - 2026-02-24\n\n### 🐛 Bug Fixes\n\n- Base season premiere date off first episode\n- Dont call inner on AddToCollectionAsync to prevent deadlocks\n",
         "checksum": "12396e05ad42feb63829e316574ab1fc",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.5.3/gelato_0.26.5.3.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-05T11:24:04Z",
         "version": "0.25.4.1"
-      },
-      {
-        "changelog": "## [0.25.4.0] - 2026-02-03\n\n### 🚀 Features\n\n- Ignore people search for movie and shows types\n",
-        "checksum": "3476f70c150c363fb49ad5eb6161d8b1",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.4.0/gelato_0.25.4.0.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-03T11:34:44Z",
-        "version": "0.25.4.0"
       }
     ]
   }
