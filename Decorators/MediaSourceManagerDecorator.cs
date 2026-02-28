@@ -342,8 +342,9 @@ public sealed class MediaSourceManagerDecorator(
         );
 
         // SyncPlay: ensure all group members use the same media source.
-        // When the first member starts playback we cache their selection;
-        // subsequent members reuse it so everyone streams the same version.
+        // SyncPlayGroupFilter maintains a userId→groupId mapping so we
+        // can scope the cache per group (avoids cross-group pollution
+        // when two groups watch the same item simultaneously).
         var isSyncPlay = false;
         string? syncPlayCacheKey = null;
         try { isSyncPlay = _syncPlayManager.IsUserActive(user.Id); }
@@ -351,7 +352,10 @@ public sealed class MediaSourceManagerDecorator(
 
         if (isSyncPlay)
         {
-            syncPlayCacheKey = item.Id.ToString("N");
+            var groupId = SyncPlayGroupTracker.GetGroupForUser(user.Id);
+            var groupPart = groupId?.ToString("N") ?? "unknown";
+            syncPlayCacheKey = $"sp:{groupPart}:{item.Id:N}";
+
             var hadExplicitSource = ctx?.Items.ContainsKey("MediaSourceId") == true;
 
             if (!hadExplicitSource
@@ -360,8 +364,8 @@ public sealed class MediaSourceManagerDecorator(
                 && Guid.TryParse(cached.SourceId, out var cachedId))
             {
                 _log.LogDebug(
-                    "SyncPlay: reusing group source {SourceId} for item {ItemId}",
-                    cachedId, item.Id);
+                    "SyncPlay: reusing group {GroupId} source {SourceId} for item {ItemId}",
+                    groupPart, cachedId, item.Id);
                 mediaSourceId = cachedId;
             }
         }
