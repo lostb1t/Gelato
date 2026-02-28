@@ -360,114 +360,13 @@ public sealed class MediaSourceManagerDecorator(
         );
 
         // SyncPlay: ensure all group members use the same media source.
-        // SyncPlayGroupFilter maintains a userId→groupId mapping so we
-        // can scope the cache per group (avoids cross-group pollution
-        // when two groups watch the same item simultaneously).
-        var isSyncPlay = false;
-        string? syncPlayCacheKey = null;
-        string? prevSyncPlaySourceId = null;
-        var hadExplicitSource = ctx?.Items.ContainsKey("MediaSourceId") == true;
-
-        var itemIdStr = item.Id.ToString("N");
-
-        // user can be null when called from streaming endpoints (HLS, etc.)
-        if (user is not null)
-        {
-            try
-            {
-                isSyncPlay = _syncPlayManager.Value.IsUserActive(user.Id);
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(ex, "SyncPlay: IsUserActive check failed for {UserId}", user.Id);
-            }
-
-            _log.LogDebug(
-                "SyncPlay: user={UserId} isSyncPlay={IsSyncPlay} hadExplicit={HadExplicit} mediaSourceId={MediaSourceId} item={ItemId}",
-                user.Id, isSyncPlay, hadExplicitSource, mediaSourceId, item.Id);
-        }
-
-        if (isSyncPlay)
-        {
-            try
-            {
-                var groupId = SyncPlayGroupTracker.GetGroupForUser(user.Id);
-                var groupPart = groupId?.ToString("N") ?? "unknown";
-                syncPlayCacheKey = $"sp:{groupPart}:{item.Id:N}";
-
-                _log.LogDebug(
-                    "SyncPlay: cacheKey={CacheKey} groupId={GroupId} userId={UserId}",
-                    syncPlayCacheKey, groupId, user.Id);
-
-                // Remember previous cached source to detect version switches later.
-                if (_syncPlaySourceCache.TryGetValue(syncPlayCacheKey, out var prev)
-                    && prev.Expiry > DateTime.UtcNow)
-                {
-                    prevSyncPlaySourceId = prev.SourceId;
-                    _log.LogDebug(
-                        "SyncPlay: found cached source {SourceId} for key {CacheKey}",
-                        prevSyncPlaySourceId, syncPlayCacheKey);
-                }
-
-                // If the cache is empty (group just created/joined), seed
-                // from the group leader's session so joiners get the same
-                // source. Only seed with a specific stream ID — the item's
-                // own ID is the default and caching it would block version
-                // switching.
-                if (prevSyncPlaySourceId is null)
-                {
-                    // Look at ALL group members' sessions, not just this user.
-                    var groupSessions = _sessionManager.Value.Sessions
-                        .Where(s => SyncPlayGroupTracker.GetGroupForUser(s.UserId) == groupId
-                                    && s.NowPlayingItem is not null);
-                    string? seedSourceId = null;
-                    foreach (var gs in groupSessions)
-                    {
-                        var msid = gs.PlayState?.MediaSourceId;
-                        if (!string.IsNullOrEmpty(msid) && msid != itemIdStr)
-                        {
-                            seedSourceId = msid;
-                            break;
-                        }
-                    }
-
-                    if (seedSourceId is not null)
-                    {
-                        prevSyncPlaySourceId = seedSourceId;
-                        _syncPlaySourceCache[syncPlayCacheKey] =
-                            (seedSourceId, DateTime.UtcNow + _syncPlayCacheTtl);
-                        _log.LogDebug(
-                            "SyncPlay: seeded cache from group session, source={SourceId}",
-                            seedSourceId);
-                    }
-                }
-
-                // Only override mediaSourceId when the cache holds a
-                // specific stream ID. The item's own ID is the default
-                // (sources[0]) and would prevent users from switching.
-                if (!hadExplicitSource
-                    && prevSyncPlaySourceId is not null
-                    && prevSyncPlaySourceId != itemIdStr
-                    && Guid.TryParse(prevSyncPlaySourceId, out var cachedId))
-                {
-                    _log.LogDebug(
-                        "SyncPlay: overriding mediaSourceId to cached {SourceId} for item {ItemId}",
-                        cachedId, item.Id);
-                    mediaSourceId = cachedId;
-                }
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(ex, "SyncPlay: cache lookup failed");
-            }
-        }
+        var syncPlayState = ResolveSyncPlaySource(user, item, ctx, mediaSourceId);
+        if (syncPlayState.OverrideSourceId is not null)
+            mediaSourceId = syncPlayState.OverrideSourceId;
 
         var selected = SelectByIdOrFirst(sources, mediaSourceId);
 
         // Guard: never return a gelato:// or stremio:// virtual source.
-        // GetStaticMediaSources overwrites sources[0].Id to the item's own
-        // ID, so a cached SyncPlay sourceId can match the virtual source
-        // when no real streams are in the list yet.
         if (selected is not null && IsVirtualSource(selected))
         {
             _log.LogWarning(
@@ -475,43 +374,14 @@ public sealed class MediaSourceManagerDecorator(
                 selected.Id);
             selected = sources.FirstOrDefault(s => !IsVirtualSource(s))
                        ?? sources.FirstOrDefault();
-            if (syncPlayCacheKey is not null)
-                _syncPlaySourceCache.TryRemove(syncPlayCacheKey, out _);
+            if (syncPlayState.CacheKey is not null)
+                _syncPlaySourceCache.TryRemove(syncPlayState.CacheKey, out _);
         }
 
         if (selected is null)
             return sources;
 
-        // Cache the resolved source so other SyncPlay members pick it up.
-        // If a user explicitly switched version, push the change to other
-        // group members so they don't stay on the old stream.
-        if (isSyncPlay && syncPlayCacheKey is not null && user is not null)
-        {
-            try
-            {
-                // Only cache a specific stream ID — the item's own ID is
-                // the default (sources[0]) and caching it would block
-                // version switching because SyncPlay commands never carry
-                // mediaSourceId.
-                if (selected.Id != itemIdStr)
-                {
-                    _syncPlaySourceCache[syncPlayCacheKey] =
-                        (selected.Id, DateTime.UtcNow + _syncPlayCacheTtl);
-                }
-
-                if (hadExplicitSource
-                    && prevSyncPlaySourceId is not null
-                    && selected.Id != prevSyncPlaySourceId)
-                {
-                    _ = PropagateSourceToGroupAsync(
-                        user.Id, item.Id, selected.Id, ct);
-                }
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(ex, "SyncPlay: cache/propagate failed");
-            }
-        }
+        UpdateSyncPlayCache(syncPlayState, selected, item, user, ct);
 
         var owner = ResolveOwnerFor(selected, item);
         if (owner.IsPrimaryVersion() && owner.Id != item.Id)
@@ -791,9 +661,145 @@ public sealed class MediaSourceManagerDecorator(
     }
 
     /// <summary>
+    /// State bag for SyncPlay source resolution, passed between
+    /// <see cref="ResolveSyncPlaySource"/> and <see cref="UpdateSyncPlayCache"/>.
+    /// </summary>
+    private readonly record struct SyncPlaySourceState(
+        bool IsSyncPlay,
+        string? CacheKey,
+        string? PrevSourceId,
+        Guid? OverrideSourceId,
+        bool HadExplicitSource,
+        string ItemIdStr);
+
+    /// <summary>
+    /// Determines whether the current request is part of a SyncPlay session
+    /// and, if so, resolves the media source the group should be using.
+    /// </summary>
+    private SyncPlaySourceState ResolveSyncPlaySource(
+        User? user, BaseItem item, HttpContext? ctx, Guid? currentMediaSourceId)
+    {
+        var hadExplicit = ctx?.Items.ContainsKey("MediaSourceId") == true;
+        var itemIdStr = item.Id.ToString("N");
+        var empty = new SyncPlaySourceState(false, null, null, null, hadExplicit, itemIdStr);
+
+        if (user is null)
+            return empty;
+
+        bool isSyncPlay;
+        try
+        {
+            isSyncPlay = _syncPlayManager.Value.IsUserActive(user.Id);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "SyncPlay: IsUserActive check failed for {UserId}", user.Id);
+            return empty;
+        }
+
+        if (!isSyncPlay)
+            return empty;
+
+        try
+        {
+            var groupId = SyncPlayGroupTracker.GetGroupForUser(user.Id);
+            var groupPart = groupId?.ToString("N") ?? "unknown";
+            var cacheKey = $"sp:{groupPart}:{item.Id:N}";
+
+            // Check for a previously cached source.
+            string? prevSourceId = null;
+            if (_syncPlaySourceCache.TryGetValue(cacheKey, out var prev)
+                && prev.Expiry > DateTime.UtcNow)
+            {
+                prevSourceId = prev.SourceId;
+            }
+
+            // If the cache is empty (group just created/joined), seed from
+            // the group leader's session so joiners get the same source.
+            // Only seed with a specific stream ID — the item's own ID is
+            // the default and caching it would block version switching.
+            if (prevSourceId is null)
+            {
+                var groupSessions = _sessionManager.Value.Sessions
+                    .Where(s => SyncPlayGroupTracker.GetGroupForUser(s.UserId) == groupId
+                                && s.NowPlayingItem is not null);
+
+                foreach (var gs in groupSessions)
+                {
+                    var msid = gs.PlayState?.MediaSourceId;
+                    if (!string.IsNullOrEmpty(msid) && msid != itemIdStr)
+                    {
+                        prevSourceId = msid;
+                        _syncPlaySourceCache[cacheKey] =
+                            (msid, DateTime.UtcNow + _syncPlayCacheTtl);
+                        _log.LogDebug(
+                            "SyncPlay: seeded cache from group session, source={SourceId}",
+                            msid);
+                        break;
+                    }
+                }
+            }
+
+            // Only override when the cache holds a specific stream ID.
+            Guid? overrideId = null;
+            if (!hadExplicit
+                && prevSourceId is not null
+                && prevSourceId != itemIdStr
+                && Guid.TryParse(prevSourceId, out var cachedId))
+            {
+                _log.LogDebug(
+                    "SyncPlay: overriding mediaSourceId to cached {SourceId} for item {ItemId}",
+                    cachedId, item.Id);
+                overrideId = cachedId;
+            }
+
+            return new SyncPlaySourceState(true, cacheKey, prevSourceId, overrideId, hadExplicit, itemIdStr);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "SyncPlay: source resolution failed");
+            return new SyncPlaySourceState(true, null, null, null, hadExplicit, itemIdStr);
+        }
+    }
+
+    /// <summary>
+    /// Caches the resolved source for the SyncPlay group and propagates
+    /// explicit version switches to other group members.
+    /// </summary>
+    private void UpdateSyncPlayCache(
+        SyncPlaySourceState state, MediaSourceInfo selected, BaseItem item, User? user, CancellationToken ct)
+    {
+        if (!state.IsSyncPlay || state.CacheKey is null || user is null)
+            return;
+
+        try
+        {
+            // Only cache a specific stream ID — the item's own ID is the
+            // default (sources[0]) and caching it would block version
+            // switching because SyncPlay commands never carry mediaSourceId.
+            if (selected.Id != state.ItemIdStr)
+            {
+                _syncPlaySourceCache[state.CacheKey] =
+                    (selected.Id, DateTime.UtcNow + _syncPlayCacheTtl);
+            }
+
+            if (state.HadExplicitSource
+                && state.PrevSourceId is not null
+                && selected.Id != state.PrevSourceId)
+            {
+                _ = PropagateSourceToGroupAsync(
+                    user.Id, item.Id, selected.Id, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "SyncPlay: cache/propagate failed");
+        }
+    }
+
+    /// <summary>
     /// Sends a PlayNow command to every other session in the same SyncPlay
-    /// group, telling them to restart playback with the new media source.
-    /// Fire-and-forget so we don't block the caller's request.
+    /// group, telling them to switch to the new media source.
     /// </summary>
     private async Task PropagateSourceToGroupAsync(
         Guid initiatorUserId,
