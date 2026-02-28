@@ -85,8 +85,19 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     }
                     var stremio = _stremioFactory.Create(cfg);
                     cfg.Stremio = stremio;
-                    cfg.MovieFolder = _manager.TryGetMovieFolder(cfg);
-                    cfg.SeriesFolder = _manager.TryGetSeriesFolder(cfg);
+
+                    cfg.MovieFolder = _manager.TryGetConfigFolder(cfg.MoviePath);
+                    if (cfg.MovieFolder is null)
+                    {
+                        _log.LogError($"Unable to retrieve movie folder for user '{userId}', Gelato will not be able to function properly! Please add the path for defined in Gelato setting to a library, start a library scan and restart Jellyfin.");
+                    }
+
+                    cfg.SeriesFolder = _manager.TryGetConfigFolder(cfg.SeriesPath);
+                    if (cfg.SeriesFolder is null)
+                    {
+                        _log.LogError($"Unable to retrieve series folder for user '{userId}', Gelato will not be able to function properly! Please add the path for defined in Gelato setting to a library, start a library scan and restart Jellyfin.");
+                    }
+
                     return cfg;
                 }
             );
