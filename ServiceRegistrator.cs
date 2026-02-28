@@ -12,7 +12,9 @@ using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +55,13 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             client.Timeout = TimeSpan.FromSeconds(IntroDbClient.DefaultTimeoutSeconds);
         });
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
+
+        services.AddSingleton(sp => new Lazy<ISyncPlayManager>(
+            sp.GetRequiredService<ISyncPlayManager>
+        ));
+        services.AddSingleton(sp => new Lazy<ISessionManager>(
+            sp.GetRequiredService<ISessionManager>
+        ));
 
         services.AddHostedService<GelatoService>();
         services
