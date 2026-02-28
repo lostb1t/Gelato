@@ -230,11 +230,18 @@ public sealed class MediaSourceManagerDecorator(
             };
         }
 
-        // SyncPlay members must see ALL sources regardless of which user
-        // triggered the catalog sync — the addon config is server-wide.
+        // SyncPlay members must see ALL sources so group members can
+        // resolve the same source ID regardless of catalog sync state.
         var isSyncPlayUser = false;
-        try { isSyncPlayUser = userId != Guid.Empty && _syncPlayManager.Value.IsUserActive(userId); }
-        catch { /* ignore — not critical */ }
+        try
+        {
+            isSyncPlayUser = userId != Guid.Empty
+                             && _syncPlayManager.Value.IsUserActive(userId);
+        }
+        catch
+        {
+            // Not critical — fall back to normal per-user filtering.
+        }
 
         var gelatoSources = repo.GetItemList(query)
             .OfType<Video>()
@@ -361,6 +368,8 @@ public sealed class MediaSourceManagerDecorator(
         string? prevSyncPlaySourceId = null;
         var hadExplicitSource = ctx?.Items.ContainsKey("MediaSourceId") == true;
 
+        var itemIdStr = item.Id.ToString("N");
+
         // user can be null when called from streaming endpoints (HLS, etc.)
         if (user is not null)
         {
@@ -373,7 +382,7 @@ public sealed class MediaSourceManagerDecorator(
                 _log.LogWarning(ex, "SyncPlay: IsUserActive check failed for {UserId}", user.Id);
             }
 
-            _log.LogInformation(
+            _log.LogDebug(
                 "SyncPlay: user={UserId} isSyncPlay={IsSyncPlay} hadExplicit={HadExplicit} mediaSourceId={MediaSourceId} item={ItemId}",
                 user.Id, isSyncPlay, hadExplicitSource, mediaSourceId, item.Id);
         }
@@ -385,9 +394,8 @@ public sealed class MediaSourceManagerDecorator(
                 var groupId = SyncPlayGroupTracker.GetGroupForUser(user.Id);
                 var groupPart = groupId?.ToString("N") ?? "unknown";
                 syncPlayCacheKey = $"sp:{groupPart}:{item.Id:N}";
-                var itemIdStr = item.Id.ToString("N");
 
-                _log.LogInformation(
+                _log.LogDebug(
                     "SyncPlay: cacheKey={CacheKey} groupId={GroupId} userId={UserId}",
                     syncPlayCacheKey, groupId, user.Id);
 
@@ -396,7 +404,7 @@ public sealed class MediaSourceManagerDecorator(
                     && prev.Expiry > DateTime.UtcNow)
                 {
                     prevSyncPlaySourceId = prev.SourceId;
-                    _log.LogInformation(
+                    _log.LogDebug(
                         "SyncPlay: found cached source {SourceId} for key {CacheKey}",
                         prevSyncPlaySourceId, syncPlayCacheKey);
                 }
@@ -423,15 +431,14 @@ public sealed class MediaSourceManagerDecorator(
                         }
                     }
 
-                    _log.LogInformation(
-                        "SyncPlay: cache empty, seed from group sessions={SeedSourceId} for user {UserId}",
-                        seedSourceId ?? "(null/default)", user.Id);
-
                     if (seedSourceId is not null)
                     {
                         prevSyncPlaySourceId = seedSourceId;
                         _syncPlaySourceCache[syncPlayCacheKey] =
                             (seedSourceId, DateTime.UtcNow + _syncPlayCacheTtl);
+                        _log.LogDebug(
+                            "SyncPlay: seeded cache from group session, source={SourceId}",
+                            seedSourceId);
                     }
                 }
 
@@ -443,16 +450,10 @@ public sealed class MediaSourceManagerDecorator(
                     && prevSyncPlaySourceId != itemIdStr
                     && Guid.TryParse(prevSyncPlaySourceId, out var cachedId))
                 {
-                    _log.LogInformation(
+                    _log.LogDebug(
                         "SyncPlay: overriding mediaSourceId to cached {SourceId} for item {ItemId}",
                         cachedId, item.Id);
                     mediaSourceId = cachedId;
-                }
-                else
-                {
-                    _log.LogInformation(
-                        "SyncPlay: no override (cached={Cached} itemId={ItemId} hadExplicit={HadExplicit})",
-                        prevSyncPlaySourceId ?? "(null)", itemIdStr, hadExplicitSource);
                 }
             }
             catch (Exception ex)
@@ -488,26 +489,14 @@ public sealed class MediaSourceManagerDecorator(
         {
             try
             {
-                var itemIdStr2 = item.Id.ToString("N");
-
-                // Only cache a *specific* stream ID — the item's own ID
-                // is the default (sources[0]) and caching it would block
+                // Only cache a specific stream ID — the item's own ID is
+                // the default (sources[0]) and caching it would block
                 // version switching because SyncPlay commands never carry
                 // mediaSourceId.
-                if (selected.Id != itemIdStr2)
+                if (selected.Id != itemIdStr)
                 {
                     _syncPlaySourceCache[syncPlayCacheKey] =
                         (selected.Id, DateTime.UtcNow + _syncPlayCacheTtl);
-
-                    _log.LogInformation(
-                        "SyncPlay: cached source {SourceId} for key {CacheKey}",
-                        selected.Id, syncPlayCacheKey);
-                }
-                else
-                {
-                    _log.LogInformation(
-                        "SyncPlay: NOT caching item's own ID {ItemId} for key {CacheKey}",
-                        itemIdStr2, syncPlayCacheKey);
                 }
 
                 if (hadExplicitSource
