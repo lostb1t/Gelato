@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using Gelato.Providers;
@@ -18,6 +19,7 @@ using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
@@ -41,7 +43,8 @@ public sealed class MediaSourceManagerDecorator(
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
-    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders
+    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders,
+    ISyncPlayManager syncPlayManager
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -61,8 +64,12 @@ public sealed class MediaSourceManagerDecorator(
     private readonly Lazy<SubtitleProvider> _subtitleProvider = subtitleProvider;
 
     //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+    private readonly ISyncPlayManager _syncPlayManager = syncPlayManager;
     private readonly ICustomMetadataProvider<Video>? _probeProvider =
         videoProbeProviders.FirstOrDefault(p => p.Name == "Probe Provider");
+
+    private static readonly ConcurrentDictionary<string, (string SourceId, DateTime Expiry)> _syncPlaySourceCache = new();
+    private static readonly TimeSpan _syncPlayCacheTtl = TimeSpan.FromMinutes(10);
 
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
@@ -334,9 +341,41 @@ public sealed class MediaSourceManagerDecorator(
             mediaSourceId
         );
 
+        // SyncPlay: ensure all group members use the same media source.
+        // When the first member starts playback we cache their selection;
+        // subsequent members reuse it so everyone streams the same version.
+        var isSyncPlay = false;
+        string? syncPlayCacheKey = null;
+        try { isSyncPlay = _syncPlayManager.IsUserActive(user.Id); }
+        catch { /* SyncPlay manager unavailable */ }
+
+        if (isSyncPlay)
+        {
+            syncPlayCacheKey = item.Id.ToString("N");
+            var hadExplicitSource = ctx?.Items.ContainsKey("MediaSourceId") == true;
+
+            if (!hadExplicitSource
+                && _syncPlaySourceCache.TryGetValue(syncPlayCacheKey, out var cached)
+                && cached.Expiry > DateTime.UtcNow
+                && Guid.TryParse(cached.SourceId, out var cachedId))
+            {
+                _log.LogDebug(
+                    "SyncPlay: reusing group source {SourceId} for item {ItemId}",
+                    cachedId, item.Id);
+                mediaSourceId = cachedId;
+            }
+        }
+
         var selected = SelectByIdOrFirst(sources, mediaSourceId);
         if (selected is null)
             return sources;
+
+        // Cache the resolved source so other SyncPlay members pick it up
+        if (isSyncPlay && syncPlayCacheKey is not null)
+        {
+            _syncPlaySourceCache[syncPlayCacheKey] =
+                (selected.Id, DateTime.UtcNow + _syncPlayCacheTtl);
+        }
 
         var owner = ResolveOwnerFor(selected, item);
         if (owner.IsPrimaryVersion() && owner.Id != item.Id)
