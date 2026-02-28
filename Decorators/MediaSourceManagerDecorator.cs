@@ -722,7 +722,8 @@ public sealed class MediaSourceManagerDecorator(
             {
                 var groupSessions = _sessionManager.Value.Sessions
                     .Where(s => SyncPlayGroupTracker.GetGroupForUser(s.UserId) == groupId
-                                && s.NowPlayingItem is not null);
+                                && s.NowPlayingItem is not null
+                                && s.NowPlayingItem.Id == item.Id);
 
                 foreach (var gs in groupSessions)
                 {
