@@ -95,8 +95,22 @@ namespace Gelato.Providers
                 {
                     filename = Path.GetFileName(request.MediaPath);
                 }
+                var mediaType =
+                    request.ContentType == VideoContentType.Episode
+                        ? StremioMediaType.Series
+                        : StremioMediaType.Movie;
 
                 var stremioId = request.GetProviderId("Stremio");
+                var imdbId = request.GetProviderId("ImdbId");
+
+                if (imdbId != null)
+                {
+                    stremioId =
+                        request.ContentType == VideoContentType.Episode
+                            ? $"{imdbId}:{request.ParentIndexNumber}:{request.IndexNumber}"
+                            : imdbId;
+                }
+
                 if (string.IsNullOrEmpty(stremioId))
                 {
                     _log.LogDebug(
@@ -105,11 +119,6 @@ namespace Gelato.Providers
                     );
                     return Array.Empty<RemoteSubtitleInfo>();
                 }
-
-                var mediaType =
-                    request.ContentType == VideoContentType.Episode
-                        ? StremioMediaType.Series
-                        : StremioMediaType.Movie;
 
                 subs = await GetSubtitlesAsync(stremioId, mediaType, cancellationToken)
                     .ConfigureAwait(false);
