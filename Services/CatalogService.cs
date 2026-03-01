@@ -34,7 +34,7 @@ public class CatalogService(GelatoStremioProviderFactory stremioFactory)
                     Type = mCatalog.Type,
                     Name = mCatalog.Name,
                     Enabled = false,
-                    MaxItems = 0, // 0 = use global CatalogMaxItems
+                    MaxItems = 0, // max items to be imported from this catalog
                     CreateCollection = false,
                     Url = "",
                 };
