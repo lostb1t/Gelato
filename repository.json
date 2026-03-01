@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.6.3] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Disable imdbRating from catalogs\n",
+        "checksum": "03e10e6cd87ea33aac64dc86a39c9fbc",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.3/gelato_0.26.6.3.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-03-01T17:22:47Z",
+        "version": "0.26.6.3"
+      },
+      {
         "changelog": "## [0.26.6.2] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Introduce new logic to determine if an catalog is importable or not\n",
         "checksum": "e6083a60b701c75d9dba9ecbf5d88332",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.2/gelato_0.26.6.2.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-09T11:07:13Z",
         "version": "0.25.5.2"
-      },
-      {
-        "changelog": "## [0.25.5.1] - 2026-02-07\n\n### 🐛 Bug Fixes\n\n- Disable userdata for boxsets\n",
-        "checksum": "63796c8faac70428a0c9fb7601dc9516",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.5.1/gelato_0.25.5.1.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-07T07:29:10Z",
-        "version": "0.25.5.1"
       }
     ]
   }
