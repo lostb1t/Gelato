@@ -136,7 +136,7 @@ namespace Gelato.Providers
                     ? subs
                     : subs.Where(s =>
                         string.Equals(
-                            (s.LangCode ?? "").Trim().ToLower(),
+                            (s.TwoLetterISOLanguageName() ?? "").Trim().ToLower(),
                             lang,
                             StringComparison.OrdinalIgnoreCase
                         )

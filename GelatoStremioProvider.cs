@@ -324,6 +324,33 @@ public struct StremioSubtitle
     public string? LangCode { get; set; }
     public string? Title { get; set; }
     public string? Moviehash { get; set; }
+
+    public string? TwoLetterISOLanguageName()
+    {
+        var lng = Lang ?? LangCode;
+        if (!string.IsNullOrWhiteSpace(lng))
+        {
+            // If the input is 3 characters, try to convert it to a 2-letter ISO code
+            if (lng.Length == 3)
+            {
+                try
+                {
+                    CultureInfo culture = CultureInfo.GetCultureInfoByIetfLanguageTag(
+                        lng.ToLower()
+                    );
+                    lng = culture.TwoLetterISOLanguageName;
+                }
+                catch (CultureNotFoundException)
+                {
+                    // If the 3-letter code is invalid, return null or handle as needed
+                    return null;
+                }
+            }
+            return lng.ToLower();
+        }
+
+        return null;
+    }
 }
 
 public struct StremioSubtitleResponse
