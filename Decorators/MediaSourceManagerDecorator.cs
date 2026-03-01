@@ -109,13 +109,31 @@ public sealed class MediaSourceManagerDecorator(
 
         var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
         var video = item as Video;
-        var cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
+        var itemCacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
             ? id.ToString()
             : item.Id.ToString();
 
-        if (userId != Guid.Empty)
+        var cacheKey = userId != Guid.Empty
+            ? $"{userId.ToString()}:{itemCacheKey}"
+            : itemCacheKey;
+
+        // SyncPlay users can reuse streams fetched by any group member,
+        // so check a shared (user-agnostic) key first.
+        var isSyncPlayCacheHit = false;
+        if (allowSync && userId != Guid.Empty)
         {
-            cacheKey = $"{userId.ToString()}:{cacheKey}";
+            try
+            {
+                if (_syncPlayManager.Value.IsUserActive(userId)
+                    && manager.HasStreamSync(itemCacheKey))
+                {
+                    isSyncPlayCacheHit = true;
+                }
+            }
+            catch
+            {
+                // Not critical — fall through to normal per-user check.
+            }
         }
 
         if (!allowSync)
@@ -125,6 +143,12 @@ public sealed class MediaSourceManagerDecorator(
                 actionName,
                 uri?.ToString()
             );
+        }
+        else if (isSyncPlayCacheHit)
+        {
+            _log.LogDebug(
+                "GetStaticMediaSources: SyncPlay shared cache hit for {ItemId}, skipping SyncStreams",
+                item.Id);
         }
         else if (uri is not null && !manager.HasStreamSync(cacheKey))
         {
@@ -175,6 +199,7 @@ public sealed class MediaSourceManagerDecorator(
                             if (count > 0)
                             {
                                 manager.SetStreamSync(cacheKey);
+                                manager.SetStreamSync(itemCacheKey);
                             }
                         }
                         catch (Exception ex)
