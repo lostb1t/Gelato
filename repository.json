@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.6.4] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Try to catch non standard subtitle language fields\n\n### 🚜 Refactor\n\n- Use imdbid for subtitles with fallback to stremioid\n",
+        "checksum": "3d07e1af2b8ef27a39f154c6a3184f27",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.4/gelato_0.26.6.4.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-03-01T21:00:59Z",
+        "version": "0.26.6.4"
+      },
+      {
         "changelog": "## [0.26.6.3] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Disable imdbRating from catalogs\n",
         "checksum": "03e10e6cd87ea33aac64dc86a39c9fbc",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.3/gelato_0.26.6.3.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-09T11:56:16Z",
         "version": "0.25.5.3"
-      },
-      {
-        "changelog": "## [0.25.5.2] - 2026-02-09\n\n### 🐛 Bug Fixes\n\n- Better error handling during import\n",
-        "checksum": "6830d099f3ed784693fc4e97a7b942ca",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.5.2/gelato_0.25.5.2.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-09T11:07:13Z",
-        "version": "0.25.5.2"
       }
     ]
   }
