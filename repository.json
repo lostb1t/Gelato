@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.6.2] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Introduce new logic to determine if an catalog is importable or not\n",
+        "checksum": "e6083a60b701c75d9dba9ecbf5d88332",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.2/gelato_0.26.6.2.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-03-01T16:35:12Z",
+        "version": "0.26.6.2"
+      },
+      {
         "changelog": "## [0.26.6.1] - 2026-02-26\n\n### 🐛 Bug Fixes\n\n- Return of the delete and download option\n",
         "checksum": "db6db697c46098d9da1e1ba8062f5d55",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.1/gelato_0.26.6.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-07T07:29:10Z",
         "version": "0.25.5.1"
-      },
-      {
-        "changelog": "## [0.25.5.0] - 2026-02-06\n\n### 🚀 Features\n\n- Show play button even if unaired\n\n### 🐛 Bug Fixes\n\n- User id parsing returning true when empty (#96)\n",
-        "checksum": "3ac8ffa31ed3082ec364b9b96193432d",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.5.0/gelato_0.25.5.0.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-06T11:14:36Z",
-        "version": "0.25.5.0"
       }
     ]
   }
