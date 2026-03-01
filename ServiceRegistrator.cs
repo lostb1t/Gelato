@@ -12,7 +12,9 @@ using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +33,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
+        services.AddSingleton<SyncPlayGroupFilter>();
         services.AddSingleton<GelatoManager>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
@@ -53,6 +56,13 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         });
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
 
+        services.AddSingleton(sp => new Lazy<ISyncPlayManager>(
+            sp.GetRequiredService<ISyncPlayManager>
+        ));
+        services.AddSingleton(sp => new Lazy<ISessionManager>(
+            sp.GetRequiredService<ISessionManager>
+        ));
+
         services.AddHostedService<GelatoService>();
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
@@ -72,6 +82,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
             o.Filters.AddService<DownloadFilter>();
+            o.Filters.AddService<SyncPlayGroupFilter>();
         });
     }
 
