@@ -99,9 +99,7 @@ public class GelatoStremioProvider(
                             nameof(StremioMediaType.Movie),
                             StringComparison.CurrentCultureIgnoreCase
                         )
-                        && c.Extra.Any(e =>
-                            string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
-                        )
+                        && c.IsSearchCapable()
                     )
                     .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault();
@@ -113,9 +111,7 @@ public class GelatoStremioProvider(
                             nameof(StremioMediaType.Series),
                             StringComparison.CurrentCultureIgnoreCase
                         )
-                        && c.Extra.Any(e =>
-                            string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase)
-                        )
+                        && c.IsSearchCapable()
                     )
                     .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault();
