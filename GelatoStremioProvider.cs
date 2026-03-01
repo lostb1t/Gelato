@@ -98,8 +98,7 @@ public class GelatoStremioProvider(
                             c.Type,
                             nameof(StremioMediaType.Movie),
                             StringComparison.CurrentCultureIgnoreCase
-                        )
-                        && c.IsSearchCapable()
+                        ) && c.IsSearchCapable()
                     )
                     .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault();
@@ -110,8 +109,7 @@ public class GelatoStremioProvider(
                             c.Type,
                             nameof(StremioMediaType.Series),
                             StringComparison.CurrentCultureIgnoreCase
-                        )
-                        && c.IsSearchCapable()
+                        ) && c.IsSearchCapable()
                     )
                     .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
                     .FirstOrDefault();
@@ -348,7 +346,9 @@ public class StremioMeta
     public string? Title { get; set; }
     public string? Poster { get; set; }
     public List<string>? Genres { get; set; }
-    public string? ImdbRating { get; set; }
+
+    // sometimes string, sometimes number... disable for now
+    // public string? ImdbRating { get; set; }
     public string? ReleaseInfo { get; set; }
     public string? Description { get; set; }
     public string? Overview { get; set; }
