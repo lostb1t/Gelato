@@ -289,6 +289,12 @@ public class StremioCatalog
     {
         return Extra.Any(e => string.Equals(e.Name, "search", StringComparison.OrdinalIgnoreCase));
     }
+
+    // should not have required extras
+    public bool IsImportable()
+    {
+        return !Extra.Any(e => e.IsRequired == true);
+    }
 }
 
 public class StremioExtra

@@ -35,7 +35,6 @@ public sealed class FileSystemDecorator : IFileSystem
         _log = log;
     }
 
-
     private static bool IsGelatoPath(string path)
     {
         var cfg = GelatoPlugin.Instance?.Configuration;
@@ -313,7 +312,6 @@ public sealed class FileSystemDecorator : IFileSystem
         return GetChildItemsFromDb(path).Where(i => i.IsFolder).Select(ToMetadata);
     }
 
-
     public IEnumerable<string> GetFilePaths(string path, bool recursive = false)
     {
         if (!IsGelatoPath(path))
@@ -363,8 +361,6 @@ public sealed class FileSystemDecorator : IFileSystem
         //_log.LogInformation("Gelato: virtual GetFileSystemEntryPaths for {Path} → {Count} entries", path, items.Count);
         return items.Select(i => i.Path!);
     }
-
-
 
     public FileSystemMetadata GetFileSystemInfo(string path)
     {
@@ -488,7 +484,6 @@ public sealed class FileSystemDecorator : IFileSystem
         };
     }
 
-
     public bool DirectoryExists(string path)
     {
         if (!IsGelatoPath(path))
@@ -524,8 +519,6 @@ public sealed class FileSystemDecorator : IFileSystem
         return items.Count > 0 && !items[0].IsFolder;
     }
 
-
-
     public DateTime GetCreationTimeUtc(FileSystemMetadata info) => _inner.GetCreationTimeUtc(info);
 
     public DateTime GetCreationTimeUtc(string path)
@@ -544,7 +537,6 @@ public sealed class FileSystemDecorator : IFileSystem
             return _inner.GetLastWriteTimeUtc(path);
         return DateTime.UtcNow;
     }
-
 
     public bool IsShortcut(string filename) => _inner.IsShortcut(filename);
 
