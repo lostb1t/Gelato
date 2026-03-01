@@ -102,29 +102,15 @@ public sealed class GelatoManager(
 
     public Folder? TryGetMovieFolder(Guid userId)
     {
-        return TryGetFolder(
-            GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).MoviePath
-        );
+        return TryGetConfigFolder(GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).MoviePath);
     }
 
     public Folder? TryGetSeriesFolder(Guid userId)
     {
-        return TryGetFolder(
-            GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).SeriesPath
-        );
+        return TryGetConfigFolder(GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId).SeriesPath);
     }
 
-    public Folder? TryGetMovieFolder(PluginConfiguration cfg)
-    {
-        return TryGetFolder(cfg.MoviePath);
-    }
-
-    public Folder? TryGetSeriesFolder(PluginConfiguration cfg)
-    {
-        return TryGetFolder(cfg.SeriesPath);
-    }
-
-    private Folder? TryGetFolder(string path)
+    public Folder? TryGetConfigFolder(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
