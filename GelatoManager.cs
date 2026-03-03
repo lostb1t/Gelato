@@ -440,12 +440,35 @@ public sealed class GelatoManager(
             //  IsVirtualItem = true,
         };
 
-        var existing = repo.GetItemList(query)
+        var existingStreamItems = repo.GetItemList(query)
             .OfType<Video>()
             .Where(v => v.IsStream())
-            .ToDictionary(v => v.GelatoData<Guid>("guid"));
+            .ToList();
 
-        var newVideos = new List<Video>();
+        // Match stream rows by persisted Gelato guid, not by volatile playback URL/path.
+        var existingByGuid = new Dictionary<Guid, Video>();
+        foreach (var existingItem in existingStreamItems)
+        {
+            var existingGuid = existingItem.GelatoData<Guid?>("guid");
+            if (existingGuid is null || existingGuid == Guid.Empty)
+            {
+                // Strict guid matching: ignore rows without a persisted guid.
+                continue;
+            }
+
+            if (!existingByGuid.TryAdd(existingGuid.Value, existingItem))
+            {
+                // Guard against bad historical data; don't fail sync on collisions.
+                _log.LogWarning(
+                    "Duplicate stream guid found during sync: {Guid}. Keeping first item id={FirstId}, ignoring item id={SecondId}",
+                    existingGuid.Value,
+                    existingByGuid[existingGuid.Value].Id,
+                    existingItem.Id
+                );
+            }
+        }
+
+        var upsertedStreams = new List<Video>();
 
         for (var i = 0; i < acceptable.Count; i++)
         {
@@ -461,12 +484,12 @@ public sealed class GelatoManager(
                             : ""
                     );
 
-            var id = s.GetGuid();
-            var isNew = !existing.TryGetValue(id, out var target);
+            var streamGuid = s.GetGuid();
+            var isNewStreamItem = !existingByGuid.TryGetValue(streamGuid, out var streamItem);
 
-            if (isNew)
+            if (isNewStreamItem)
             {
-                target =
+                streamItem =
                     isEpisode && video is Episode e
                         ? new Episode
                         {
@@ -483,55 +506,60 @@ public sealed class GelatoManager(
                         {
                             //Id = libraryManager.GetNewItemId(path, typeof(Movie))
                         };
-                target.Path = path;
-                target.Id = libraryManager.GetNewItemId(target.Path, target.GetType());
+                streamItem.Path = path;
+                streamItem.Id = libraryManager.GetNewItemId(
+                    streamItem.Path,
+                    streamItem.GetType()
+                );
             }
 
-            target.Name = video.Name;
-            target.Tags = [StreamTag];
+            streamItem.Name = video.Name;
+            streamItem.Tags = [StreamTag];
 
-            var locked = target.LockedFields?.ToList() ?? [];
+            var locked = streamItem.LockedFields?.ToList() ?? [];
             if (!locked.Contains(MetadataField.Tags))
                 locked.Add(MetadataField.Tags);
-            target.LockedFields = locked.ToArray();
+            streamItem.LockedFields = locked.ToArray();
 
-            target.ProviderIds = providerIds;
-            target.RunTimeTicks = video.RunTimeTicks ?? video.RunTimeTicks;
-            target.LinkedAlternateVersions = [];
-            target.SetPrimaryVersionId(null);
-            target.PremiereDate = video.PremiereDate;
-            target.Path = path;
-            target.IsVirtualItem = false;
-            target.SetParent(parent);
+            streamItem.ProviderIds = providerIds;
+            streamItem.RunTimeTicks = video.RunTimeTicks ?? video.RunTimeTicks;
+            streamItem.LinkedAlternateVersions = [];
+            streamItem.SetPrimaryVersionId(null);
+            streamItem.PremiereDate = video.PremiereDate;
+            streamItem.Path = path;
+            streamItem.IsVirtualItem = false;
+            streamItem.SetParent(parent);
 
-            var users = target.GelatoData<List<Guid>>("userIds") ?? [];
+            var users = streamItem.GelatoData<List<Guid>>("userIds") ?? [];
             if (!users.Contains(userId))
             {
                 users.Add(userId);
-                target.SetGelatoData("userIds", users);
+                streamItem.SetGelatoData("userIds", users);
             }
 
-            target.SetGelatoData("name", s.Name);
-            target.SetGelatoData("description", s.Description);
+            streamItem.SetGelatoData("name", s.Name);
+            streamItem.SetGelatoData("description", s.Description);
             if (!string.IsNullOrEmpty(s.BehaviorHints?.BingeGroup))
             {
-                target.SetGelatoData("bingeGroup", s.BehaviorHints.BingeGroup);
+                streamItem.SetGelatoData("bingeGroup", s.BehaviorHints.BingeGroup);
             }
             if (!string.IsNullOrEmpty(s.BehaviorHints?.Filename))
             {
-                target.SetGelatoData("filename", s.BehaviorHints.Filename);
+                streamItem.SetGelatoData("filename", s.BehaviorHints.Filename);
             }
-            target.SetGelatoData("index", index);
-            target.SetGelatoData("guid", target.Id);
+            streamItem.SetGelatoData("index", index);
+            streamItem.SetGelatoData("guid", streamGuid);
+            // Keep map current so stale detection below uses the final upserted set.
+            existingByGuid[streamGuid] = streamItem;
 
-            newVideos.Add(target);
+            upsertedStreams.Add(streamItem);
         }
 
-        //newVideos = SaveItems(newVideos, (Folder)primary.GetParent()).Cast<Video>().ToList();
-        repo.SaveItems(newVideos, ct);
+        //upsertedStreams = SaveItems(upsertedStreams, (Folder)primary.GetParent()).Cast<Video>().ToList();
+        repo.SaveItems(upsertedStreams, ct);
 
-        var newIds = new HashSet<Guid>(newVideos.Select(x => x.Id));
-        var stale = existing
+        var newIds = new HashSet<Guid>(upsertedStreams.Select(x => x.Id));
+        var stale = existingByGuid
             .Values.Where(m =>
                 !newIds.Contains(m.Id)
                 && (m.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
@@ -567,12 +595,12 @@ public sealed class GelatoManager(
         }
 
         repo.SaveItems(toSave, ct);
-        newVideos.Add(video);
+        upsertedStreams.Add(video);
 
         stopwatch.Stop();
 
         _log.LogInformation(
-            $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={newVideos.Count}"
+            $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={upsertedStreams.Count}"
         );
 
         return acceptable.Count;
