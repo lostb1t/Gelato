@@ -641,8 +641,11 @@ public class StremioStream
     public Guid GetGuid()
     {
         string key;
-
-        if (!string.IsNullOrEmpty(InfoHash))
+        if (!string.IsNullOrEmpty(Url))
+        {
+            key = Url;
+        }
+        else if (!string.IsNullOrEmpty(InfoHash))
         {
             key = InfoHash;
         }
@@ -653,10 +656,7 @@ public class StremioStream
         {
             key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename}";
         }
-        else
-        {
-            key = Url;
-        }
+
         var bytes = System.Text.Encoding.UTF8.GetBytes(key);
         var hash = System.Security.Cryptography.MD5.HashData(bytes);
         return new Guid(hash);
