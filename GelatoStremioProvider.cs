@@ -641,6 +641,9 @@ public class StremioStream
     public Guid GetGuid()
     {
         string key;
+
+        // Prefer URL identity when a direct URL exists, even if InfoHash is present.
+        // Some providers attach the same InfoHash to multiple hosters (e.g. Dropload/SuperVideo).
         if (!string.IsNullOrEmpty(Url))
         {
             key = Url;
