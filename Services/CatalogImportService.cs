@@ -57,8 +57,6 @@ public class CatalogImportService(
         var maxItems = catalogCfg.MaxItems > 0 ? catalogCfg.MaxItems : cfg.CatalogMaxItems;
         long done = 0;
 
-        var opts = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct };
-
         var stopwatch = Stopwatch.StartNew();
         logger.LogInformation(
             "Starting import for catalog {Name} ({Id}) - Limit: {Limit}",
@@ -86,10 +84,6 @@ public class CatalogImportService(
                     break;
                 }
 
-                //  await Parallel.ForEachAsync(
-                //    page,
-                //     opts,
-                //      async (meta, ctInner) =>
                 foreach (var meta in page)
                 {
                     var p = Interlocked.Increment(ref processed);
@@ -99,7 +93,6 @@ public class CatalogImportService(
                         return;
                     }
 
-                    //meta_ids.TryAdd(meta.Id, 0);
                     var mediaType = meta.Type;
                     var baseItemKind = mediaType.ToBaseItem();
 
@@ -146,7 +139,6 @@ public class CatalogImportService(
                     var current = Interlocked.Increment(ref done);
                     progress?.Report(Math.Min(100, current / (double)maxItems * 100.0));
                 }
-                //     );
 
                 skip += page.Count;
             }
