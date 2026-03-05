@@ -74,11 +74,4 @@ public class CatalogService(GelatoStremioProviderFactory stremioFactory)
 
         GelatoPlugin.Instance.SaveConfiguration();
     }
-
-    public CatalogConfig? GetCatalogConfig(string id, string type)
-    {
-        return GelatoPlugin.Instance!.Configuration.Catalogs.FirstOrDefault(c =>
-            c.Id == id && c.Type == type
-        );
-    }
 }
