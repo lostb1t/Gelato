@@ -507,10 +507,7 @@ public sealed class GelatoManager(
                             //Id = libraryManager.GetNewItemId(path, typeof(Movie))
                         };
                 streamItem.Path = path;
-                streamItem.Id = libraryManager.GetNewItemId(
-                    streamItem.Path,
-                    streamItem.GetType()
-                );
+                streamItem.Id = libraryManager.GetNewItemId(streamItem.Path, streamItem.GetType());
             }
 
             streamItem.Name = video.Name;

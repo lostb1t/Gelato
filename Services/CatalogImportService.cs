@@ -54,7 +54,7 @@ public class CatalogImportService(
             logger.LogWarning("No movie root folder found");
         }
 
-        var maxItems = catalogCfg.MaxItems > 0 ? catalogCfg.MaxItems : cfg.CatalogMaxItems;
+        var maxItems = catalogCfg.MaxItems;
         long done = 0;
 
         var stopwatch = Stopwatch.StartNew();
@@ -68,10 +68,10 @@ public class CatalogImportService(
         try
         {
             var skip = 0;
-            var processed = 0;
+            var processedItems = 0;
             var importedIds = new ConcurrentBag<Guid>();
 
-            while (processed < maxItems)
+            while (processedItems < maxItems)
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -86,11 +86,10 @@ public class CatalogImportService(
 
                 foreach (var meta in page)
                 {
-                    var p = Interlocked.Increment(ref processed);
                     ct.ThrowIfCancellationRequested();
-                    if (p > maxItems)
+                    if (processedItems >= maxItems)
                     {
-                        return;
+                        break;
                     }
 
                     var mediaType = meta.Type;
@@ -136,8 +135,8 @@ public class CatalogImportService(
                         }
                     }
 
-                    var current = Interlocked.Increment(ref done);
-                    progress?.Report(Math.Min(100, current / (double)maxItems * 100.0));
+                    processedItems++;
+                    progress?.Report(processedItems * 100.0 / maxItems);
                 }
 
                 skip += page.Count;
@@ -145,11 +144,12 @@ public class CatalogImportService(
 
             if (catalogCfg.CreateCollection)
             {
-                await UpdateCollectionAsync(catalogCfg, importedIds.ToList()).ConfigureAwait(false);
+                await UpdateCollectionAsync(catalogCfg, importedIds.Take(100).ToList())
+                    .ConfigureAwait(false);
                 importedIds.Clear();
             }
 
-            logger.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processed);
+            logger.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processedItems);
         }
         catch (OperationCanceledException ex)
         {
@@ -219,6 +219,11 @@ public class CatalogImportService(
 
     private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids)
     {
+        logger.LogInformation(
+            "Updating collection {Name} with {Count} items",
+            config.Name,
+            ids.Count
+        );
         try
         {
             var collection = await GetOrCreateBoxSetAsync(config).ConfigureAwait(false);
@@ -236,16 +241,9 @@ public class CatalogImportService(
                         .ConfigureAwait(false);
                 }
 
-                var itemsToAdd = ids.ToList();
-
                 await collectionManager
-                    .AddToCollectionAsync(collection.Id, itemsToAdd)
+                    .AddToCollectionAsync(collection.Id, ids)
                     .ConfigureAwait(false);
-                logger.LogInformation(
-                    "Updated collection {Name} with {Count} items",
-                    config.Name,
-                    itemsToAdd.Count
-                );
             }
         }
         catch (Exception ex)
@@ -265,8 +263,7 @@ public class CatalogImportService(
             return;
         }
 
-        var globalMaxItems = GelatoPlugin.Instance!.GetConfig(Guid.Empty).CatalogMaxItems;
-        var total = enabled.Sum(c => c.MaxItems > 0 ? c.MaxItems : globalMaxItems);
+        var total = enabled.Sum(c => c.MaxItems);
         var offset = 0;
 
         foreach (var cat in enabled)
@@ -274,7 +271,7 @@ public class CatalogImportService(
             ct.ThrowIfCancellationRequested();
             logger.LogInformation("Processing enabled catalog: {Name}", cat.Name);
 
-            var catMax = cat.MaxItems > 0 ? cat.MaxItems : globalMaxItems;
+            var catMax = cat.MaxItems;
             var localOffset = offset;
             var catProgress = progress is null
                 ? null
@@ -287,6 +284,9 @@ public class CatalogImportService(
 
             offset += catMax;
         }
+
+        // collections appear empty after inporting this fixes that.. sometimes...
+        libraryManager.QueueLibraryScan();
 
         progress?.Report(100);
     }

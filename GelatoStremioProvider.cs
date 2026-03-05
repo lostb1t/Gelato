@@ -659,6 +659,10 @@ public class StremioStream
         {
             key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename}";
         }
+        else
+        {
+            throw new Exception("Cannot build guid for stream");
+        }
 
         var bytes = System.Text.Encoding.UTF8.GetBytes(key);
         var hash = System.Security.Cryptography.MD5.HashData(bytes);
