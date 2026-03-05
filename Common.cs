@@ -266,6 +266,7 @@ public static class ActionContextExtensions
         "GetSuggestionsLegacy",
         "GetSuggestions",
         "GetItemCounts",
+        "GetSectionContent",
     };
 
     private static readonly HashSet<string> InsertableActionNames = new(

@@ -45,8 +45,14 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         var ctx = _http.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
+        var isSingleItemQuery = filter.ItemIds is { Length: 1 };
 
-        if (ctx is not null && !ctx.IsSingleItemList() && filter.IsDeadPerson is null)
+        if (
+            ctx is not null
+            && ctx.IsApiListing()
+            && !isSingleItemQuery
+            && filter.IsDeadPerson is null
+        )
         {
             filter.IsDeadPerson = null;
             if (
