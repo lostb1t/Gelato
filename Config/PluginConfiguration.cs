@@ -25,6 +25,10 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CreateCollections { get; set; } = false;
     public int MaxCollectionItems { get; set; } = 100;
     public bool DisableSearch { get; set; } = false;
+    public bool SplitCatalogImportsByGenre { get; set; } = true;
+    public string AdultMoviePath { get; set; } = "";
+    public string AdultSeriesPath { get; set; } = "";
+    public bool DisableRemoteImages { get; set; } = false;
 
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
@@ -81,6 +85,10 @@ public class UserConfig
             MoviePath = MoviePath,
             SeriesPath = SeriesPath,
             DisableSearch = DisableSearch,
+            SplitCatalogImportsByGenre = baseConfig.SplitCatalogImportsByGenre,
+            AdultMoviePath = baseConfig.AdultMoviePath,
+            AdultSeriesPath = baseConfig.AdultSeriesPath,
+            DisableRemoteImages = baseConfig.DisableRemoteImages,
 
             // All other fields from base config
             StreamTTL = baseConfig.StreamTTL,

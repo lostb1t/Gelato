@@ -35,10 +35,24 @@ public class SearchActionFilter(
             return;
         }
 
-        // Strip "local:" prefix if present and pass through to default handler
+        // local search is default; keep old local: prefix for compatibility
         if (searchTerm.StartsWith("local:", StringComparison.OrdinalIgnoreCase))
         {
             ctx.ActionArguments["searchTerm"] = searchTerm[6..].Trim();
+            await next();
+            return;
+        }
+
+        // only intercept explicit stremio: searches
+        if (!searchTerm.StartsWith("stremio:", StringComparison.OrdinalIgnoreCase))
+        {
+            await next();
+            return;
+        }
+
+        searchTerm = searchTerm[8..].Trim();
+        if (string.IsNullOrWhiteSpace(searchTerm))
+        {
             await next();
             return;
         }

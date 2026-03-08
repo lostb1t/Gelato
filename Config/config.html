@@ -55,6 +55,34 @@
               <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
               <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
             </div>
+
+            <h3 class="sectionTitle" style="margin-top: 2em;">Import Routing</h3>
+
+            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkSplitCatalogImportsByGenre" />
+                <span>Split catalog imports into genre folders</span>
+              </label>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtAdultMoviePath">Adult movies path (optional):</label>
+              <input is="emby-input" type="text" id="txtAdultMoviePath" class="emby-input" />
+              <div class="fieldDescription">Leave empty to use normal movies path.</div>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="txtAdultSeriesPath">Adult series path (optional):</label>
+              <input is="emby-input" type="text" id="txtAdultSeriesPath" class="emby-input" />
+              <div class="fieldDescription">Leave empty to use normal series path.</div>
+            </div>
+
+            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkDisableRemoteImages" />
+                <span>Disable remote images (temporary)</span>
+              </label>
+            </div>
        
 
             <h3 class="sectionTitle" style="margin-top: 2em;">Search & Discovery</h3>
@@ -119,7 +147,11 @@
                   <!-- Catalogs rendered here -->
                 </div>
 
-                <div style="margin-top: 1.5em; display: flex; justify-content: flex-end;">
+                <div style="margin-top: 1.5em; display: flex; justify-content: flex-end; gap: 0.75em;">
+                  <button type="button" is="emby-button" class="raised emby-button" id="btnImportEverything"
+                    style="background: #c0392b; color: #fff;">
+                    <span>Import Everything (No Filter)</span>
+                  </button>
                   <button type="button" is="emby-button" class="raised emby-button" id="btnImportAll"
                     style="background: #00a4dc; color: #fff;">
                     <span>Import</span>
@@ -254,6 +286,10 @@
         const txtUrl = page.querySelector('#txtUrl');
         const txtMoviePath = page.querySelector('#txtMoviePath');
         const txtSeriesPath = page.querySelector('#txtSeriesPath');
+        const chkSplitCatalogImportsByGenre = page.querySelector('#chkSplitCatalogImportsByGenre');
+        const txtAdultMoviePath = page.querySelector('#txtAdultMoviePath');
+        const txtAdultSeriesPath = page.querySelector('#txtAdultSeriesPath');
+        const chkDisableRemoteImages = page.querySelector('#chkDisableRemoteImages');
 
         const txtStreamTTL = page.querySelector('#txtStreamTTL');
         const chkEnableMixed = page.querySelector('#chkEnableMixed');
@@ -522,6 +558,21 @@
           }
         }
 
+        async function triggerImportEverything() {
+          if (!confirm('Start unfiltered import for all catalogs? This can import a very large amount of items.')) return;
+          Dashboard.showLoadingMsg();
+          try {
+            const url = window.ApiClient.getUrl('gelato/catalogs/import-all-unfiltered');
+            await window.ApiClient.ajax({ type: "POST", url: url });
+            Dashboard.alert("Unfiltered global import started in background.");
+          } catch (e) {
+            console.error(e);
+            Dashboard.alert("Error starting unfiltered global import.");
+          } finally {
+            Dashboard.hideLoadingMsg();
+          }
+        }
+
         async function loadConfig() {
           Dashboard.showLoadingMsg();
           try {
@@ -532,6 +583,10 @@
             if (txtUrl) txtUrl.value = cfg.Url || "";
             if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
             if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
+            if (chkSplitCatalogImportsByGenre) chkSplitCatalogImportsByGenre.checked = cfg.SplitCatalogImportsByGenre ?? true;
+            if (txtAdultMoviePath) txtAdultMoviePath.value = cfg.AdultMoviePath || "";
+            if (txtAdultSeriesPath) txtAdultSeriesPath.value = cfg.AdultSeriesPath || "";
+            if (chkDisableRemoteImages) chkDisableRemoteImages.checked = cfg.DisableRemoteImages || false;
             if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
             if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
@@ -559,6 +614,10 @@
             cfg.Url = txtUrl.value.trim();
             cfg.MoviePath = txtMoviePath.value.trim();
             cfg.SeriesPath = txtSeriesPath.value.trim();
+            cfg.SplitCatalogImportsByGenre = chkSplitCatalogImportsByGenre.checked;
+            cfg.AdultMoviePath = txtAdultMoviePath.value.trim();
+            cfg.AdultSeriesPath = txtAdultSeriesPath.value.trim();
+            cfg.DisableRemoteImages = chkDisableRemoteImages.checked;
 
             
             // Stream TTL
@@ -734,6 +793,7 @@
           txtCatalogSearch.addEventListener('input', renderCatalogs);
           btnRefreshCatalogs.addEventListener('click', loadCatalogs);
           page.querySelector('#btnImportAll').addEventListener('click', triggerImportAll);
+          page.querySelector('#btnImportEverything').addEventListener('click', triggerImportEverything);
           selUserConfig.addEventListener('change', onUserSelected);
 
           // Tab 1 active by default

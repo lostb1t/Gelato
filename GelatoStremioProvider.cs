@@ -14,8 +14,19 @@ public class GelatoStremioProvider(
 )
 {
     private StremioManifest? _manifest;
-    private StremioCatalog? _movieSearchCatalog;
-    private StremioCatalog? _seriesSearchCatalog;
+    private List<StremioCatalog> _movieSearchCatalogs = [];
+    private List<StremioCatalog> _seriesSearchCatalogs = [];
+    private static readonly string[] AdultCatalogKeywords =
+    [
+        "porn",
+        "xxx",
+        "adult",
+        "hentai",
+        "nsfw",
+        "erotic",
+        "sex",
+        "18+",
+    ];
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -80,6 +91,22 @@ public class GelatoStremioProvider(
         }
     }
 
+    private static bool IsProbablyAdultCatalog(StremioCatalog catalog)
+    {
+        var text = $"{catalog.Id} {catalog.Name}";
+        return AdultCatalogKeywords.Any(k =>
+            text.Contains(k, StringComparison.OrdinalIgnoreCase)
+        );
+    }
+
+    private static List<StremioCatalog> RankSearchCatalogs(IEnumerable<StremioCatalog> catalogs)
+    {
+        return catalogs
+            .OrderBy(IsProbablyAdultCatalog)
+            .ThenBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
     public async Task<StremioManifest?> GetManifestAsync(bool force = false)
     {
         if (!force && _manifest is not null)
@@ -92,45 +119,49 @@ public class GelatoStremioProvider(
 
             if (m?.Catalogs != null)
             {
-                _movieSearchCatalog = m
-                    .Catalogs.Where(c =>
+                _movieSearchCatalogs = RankSearchCatalogs(
+                    m.Catalogs.Where(c =>
                         string.Equals(
                             c.Type,
                             nameof(StremioMediaType.Movie),
                             StringComparison.CurrentCultureIgnoreCase
                         ) && c.IsSearchCapable()
                     )
-                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
-                    .FirstOrDefault();
+                );
 
-                _seriesSearchCatalog = m
-                    .Catalogs.Where(c =>
+                _seriesSearchCatalogs = RankSearchCatalogs(
+                    m.Catalogs.Where(c =>
                         string.Equals(
                             c.Type,
                             nameof(StremioMediaType.Series),
                             StringComparison.CurrentCultureIgnoreCase
                         ) && c.IsSearchCapable()
                     )
-                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
-                    .FirstOrDefault();
+                );
             }
 
-            if (_movieSearchCatalog == null)
+            if (_movieSearchCatalogs.Count == 0)
             {
                 log.LogWarning("manifest has no search-capable movie catalog");
             }
             else
             {
-                log.LogDebug("manifest uses movie search catalog: {Id}", _movieSearchCatalog.Id);
+                log.LogDebug(
+                    "manifest movie search catalogs: {Ids}",
+                    string.Join(",", _movieSearchCatalogs.Select(c => c.Id))
+                );
             }
 
-            if (_seriesSearchCatalog == null)
+            if (_seriesSearchCatalogs.Count == 0)
             {
                 log.LogWarning("manifest has no search-capable series catalog");
             }
             else
             {
-                log.LogDebug("manifest uses series search catalog: {Id}", _seriesSearchCatalog.Id);
+                log.LogDebug(
+                    "manifest series search catalogs: {Ids}",
+                    string.Join(",", _seriesSearchCatalogs.Select(c => c.Id))
+                );
             }
             return m;
         }
@@ -231,14 +262,14 @@ public class GelatoStremioProvider(
         if (manifest == null)
             return [];
 
-        var catalog = mediaType switch
+        var catalogs = mediaType switch
         {
-            StremioMediaType.Movie => _movieSearchCatalog,
-            StremioMediaType.Series => _seriesSearchCatalog,
-            _ => null,
+            StremioMediaType.Movie => _movieSearchCatalogs,
+            StremioMediaType.Series => _seriesSearchCatalogs,
+            _ => [],
         };
 
-        if (catalog == null)
+        if (catalogs.Count == 0)
         {
             log.LogError(
                 "SearchAsync: {mediaType} has no search catalog, please enable one in aiostreams.",
@@ -247,7 +278,45 @@ public class GelatoStremioProvider(
             return [];
         }
 
-        return await GetCatalogMetasAsync(catalog.Id, mediaType.ToString(), query, skip);
+        var merged = new List<StremioMeta>();
+
+        foreach (var catalog in catalogs)
+        {
+            try
+            {
+                var metas = await GetCatalogMetasAsync(catalog.Id, mediaType.ToString(), query, skip);
+                merged.AddRange(metas);
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning(
+                    ex,
+                    "SearchAsync: failed querying {MediaType} catalog {CatalogId}",
+                    mediaType,
+                    catalog.Id
+                );
+            }
+        }
+
+        if (merged.Count == 0)
+            return [];
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var deduped = new List<StremioMeta>(merged.Count);
+
+        foreach (var meta in merged)
+        {
+            var key = string.IsNullOrWhiteSpace(meta.Id)
+                ? $"{meta.GetName()}|{meta.GetYear()}|{meta.Type}"
+                : $"{meta.Id}|{meta.Type}";
+
+            if (!seen.Add(key))
+                continue;
+
+            deduped.Add(meta);
+        }
+
+        return deduped;
     }
 }
 

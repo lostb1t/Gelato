@@ -20,11 +20,25 @@ public class CatalogImportService(
     ILibraryManager libraryManager
 )
 {
+    private static readonly string[] AdultKeywords =
+    [
+        "adult",
+        "porn",
+        "xxx",
+        "hentai",
+        "erotic",
+        "nsfw",
+        "18+",
+        "sex",
+    ];
+
     public async Task ImportCatalogAsync(
         string catalogId,
         string type,
         CancellationToken ct,
-        IProgress<double>? progress = null
+        IProgress<double>? progress = null,
+        bool ignoreEnabled = false,
+        bool importAllItems = false
     )
     {
         var catalogCfg = catalogService.GetCatalogConfig(catalogId, type);
@@ -34,7 +48,7 @@ public class CatalogImportService(
             return;
         }
 
-        if (!catalogCfg.Enabled)
+        if (!ignoreEnabled && !catalogCfg.Enabled)
         {
             logger.LogInformation("Catalog {Id} {Type} is disabled, skipping.", catalogId, type);
             return;
@@ -54,15 +68,16 @@ public class CatalogImportService(
             logger.LogWarning("No movie root folder found");
         }
 
-        var maxItems = catalogCfg.MaxItems;
+        var maxItems = importAllItems ? int.MaxValue : catalogCfg.MaxItems;
         long done = 0;
 
         var stopwatch = Stopwatch.StartNew();
         logger.LogInformation(
-            "Starting import for catalog {Name} ({Id}) - Limit: {Limit}",
+            "Starting import for catalog {Name} ({Id}) - Limit: {Limit} - ImportAllItems: {ImportAllItems}",
             catalogCfg.Name,
             catalogId,
-            maxItems
+            maxItems,
+            importAllItems
         );
 
         try
@@ -71,7 +86,7 @@ public class CatalogImportService(
             var processedItems = 0;
             var importedIds = new ConcurrentBag<Guid>();
 
-            while (processedItems < maxItems)
+            while (importAllItems || processedItems < maxItems)
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -87,7 +102,7 @@ public class CatalogImportService(
                 foreach (var meta in page)
                 {
                     ct.ThrowIfCancellationRequested();
-                    if (processedItems >= maxItems)
+                    if (!importAllItems && processedItems >= maxItems)
                     {
                         break;
                     }
@@ -97,12 +112,15 @@ public class CatalogImportService(
 
                     // catalog can contain multiple types.
 
-                    var root = baseItemKind switch
-                    {
-                        BaseItemKind.Series => seriesFolder,
-                        BaseItemKind.Movie => movieFolder,
-                        _ => null,
-                    };
+                    var root = ResolveImportRoot(
+                        cfg,
+                        catalogCfg,
+                        meta,
+                        baseItemKind,
+                        movieFolder,
+                        seriesFolder,
+                        ct
+                    );
 
                     if (root is not null)
                     {
@@ -136,7 +154,8 @@ public class CatalogImportService(
                     }
 
                     processedItems++;
-                    progress?.Report(processedItems * 100.0 / maxItems);
+                    if (!importAllItems && maxItems > 0)
+                        progress?.Report(processedItems * 100.0 / maxItems);
                 }
 
                 skip += page.Count;
@@ -178,6 +197,85 @@ public class CatalogImportService(
             stopwatch.Elapsed.Seconds,
             stopwatch.Elapsed.TotalSeconds
         );
+    }
+
+    private Folder? ResolveImportRoot(
+        PluginConfiguration cfg,
+        CatalogConfig catalogCfg,
+        StremioMeta meta,
+        BaseItemKind kind,
+        Folder? defaultMovieRoot,
+        Folder? defaultSeriesRoot,
+        CancellationToken ct
+    )
+    {
+        var isAdult = IsAdult(meta, catalogCfg);
+
+        var path = kind switch
+        {
+            BaseItemKind.Movie when isAdult && !string.IsNullOrWhiteSpace(cfg.AdultMoviePath) =>
+                cfg.AdultMoviePath,
+            BaseItemKind.Series when isAdult && !string.IsNullOrWhiteSpace(cfg.AdultSeriesPath) =>
+                cfg.AdultSeriesPath,
+            BaseItemKind.Movie => cfg.MoviePath,
+            BaseItemKind.Series => cfg.SeriesPath,
+            _ => string.Empty,
+        };
+
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        var baseRoot = kind switch
+        {
+            BaseItemKind.Movie when path == cfg.MoviePath => defaultMovieRoot,
+            BaseItemKind.Series when path == cfg.SeriesPath => defaultSeriesRoot,
+            _ => manager.TryGetFolderByPath(path),
+        };
+
+        if (baseRoot is null)
+        {
+            logger.LogWarning(
+                "No root folder found for {Kind} path {Path}. Add this path to Jellyfin library and scan once.",
+                kind,
+                path
+            );
+            return null;
+        }
+
+        var bucket = isAdult ? "Adult" : GetPrimaryGenre(meta);
+        if (!cfg.SplitCatalogImportsByGenre)
+            return baseRoot;
+
+        var genrePath = Path.Combine(path, SanitizeSegment(bucket));
+        var genreFolder = manager.GetOrCreateSubFolder(baseRoot, genrePath, bucket, ct);
+        return genreFolder ?? baseRoot;
+    }
+
+    private static string GetPrimaryGenre(StremioMeta meta)
+    {
+        var genres = meta.Genres ?? meta.Genre;
+        if (genres is null || genres.Count == 0)
+            return "Unknown";
+
+        var first = genres.FirstOrDefault(g => !string.IsNullOrWhiteSpace(g));
+        return string.IsNullOrWhiteSpace(first) ? "Unknown" : first.Trim();
+    }
+
+    private static bool IsAdult(StremioMeta meta, CatalogConfig catalogCfg)
+    {
+        var genres = meta.Genres ?? meta.Genre ?? [];
+        var joinedGenres = string.Join(' ', genres);
+        var text = $"{meta.GetName()} {meta.Description} {meta.Overview} {catalogCfg.Name} {catalogCfg.Id} {joinedGenres}";
+
+        return AdultKeywords.Any(k => text.Contains(k, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string SanitizeSegment(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = value.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
+        var s = new string(chars).Trim();
+        return string.IsNullOrWhiteSpace(s) ? "Unknown" : s;
     }
 
     private async Task<BoxSet?> GetOrCreateBoxSetAsync(CatalogConfig config)
@@ -289,5 +387,30 @@ public class CatalogImportService(
         libraryManager.QueueLibraryScan();
 
         progress?.Report(100);
+    }
+
+    public async Task SyncAllUnfilteredAsync(CancellationToken ct)
+    {
+        var catalogs = await catalogService.GetCatalogsAsync(Guid.Empty);
+
+        if (catalogs.Count == 0)
+            return;
+
+        foreach (var cat in catalogs)
+        {
+            ct.ThrowIfCancellationRequested();
+            logger.LogInformation("Processing unfiltered catalog import: {Name}", cat.Name);
+            await ImportCatalogAsync(
+                    cat.Id,
+                    cat.Type,
+                    ct,
+                    progress: null,
+                    ignoreEnabled: true,
+                    importAllItems: true
+                )
+                .ConfigureAwait(false);
+        }
+
+        libraryManager.QueueLibraryScan();
     }
 }

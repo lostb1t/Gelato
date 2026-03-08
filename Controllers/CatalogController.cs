@@ -98,4 +98,24 @@ public class CatalogController(
 
         return Accepted();
     }
+
+    [HttpPost("import-all-unfiltered")]
+    public ActionResult ImportAllUnfiltered()
+    {
+        logger.LogInformation("Manual unfiltered import triggered for all catalogs");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await importService.SyncAllUnfilteredAsync(CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error in manual unfiltered import for all catalogs");
+            }
+        });
+
+        return Accepted();
+    }
 }

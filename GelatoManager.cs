@@ -124,6 +124,38 @@ public sealed class GelatoManager(
         return TryGetFolder(cfg.SeriesPath);
     }
 
+    public Folder? TryGetFolderByPath(string path)
+    {
+        return TryGetFolder(path);
+    }
+
+    public Folder? GetOrCreateSubFolder(Folder parent, string path, string name, CancellationToken ct)
+    {
+        var existing = TryGetFolder(path);
+        if (existing is not null)
+            return existing;
+
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        SeedFolder(path);
+
+        var folder = new Folder
+        {
+            Name = name,
+            Path = path,
+            Id = libraryManager.GetNewItemId(path, typeof(Folder)),
+            DateCreated = DateTime.UtcNow,
+            DateModified = DateTime.UtcNow,
+            DateLastSaved = DateTime.UtcNow,
+            DateLastRefreshed = DateTime.UtcNow,
+        };
+
+        parent.AddChild(folder);
+        repo.SaveItems([folder], ct);
+        return folder;
+    }
+
     private Folder? TryGetFolder(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -771,7 +803,7 @@ public sealed class GelatoManager(
                 };
 
                 var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
-                if (!string.IsNullOrWhiteSpace(primary))
+                if (!cfg.DisableRemoteImages && !string.IsNullOrWhiteSpace(primary))
                 {
                     season.ImageInfos = new List<ItemImageInfo>
                     {
@@ -1043,8 +1075,9 @@ public sealed class GelatoManager(
         item.DateLastSaved = DateTime.UtcNow;
         item.DateCreated = DateTime.UtcNow;
 
+        var disableRemoteImages = GelatoPlugin.Instance?.Configuration.DisableRemoteImages ?? false;
         var primary = meta.Poster ?? meta.Thumbnail;
-        if (!string.IsNullOrWhiteSpace(primary))
+        if (!disableRemoteImages && !string.IsNullOrWhiteSpace(primary))
         {
             item.ImageInfos = new List<ItemImageInfo>
             {
