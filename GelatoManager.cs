@@ -407,6 +407,7 @@ public sealed class GelatoManager(
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         var stremio = cfg.Stremio;
         var streams = await stremio.GetStreamsAsync(uri).ConfigureAwait(false);
+
         var httpPort = GetHttpPort();
 
         // Filter valid streams
@@ -546,6 +547,9 @@ public sealed class GelatoManager(
             }
             streamItem.SetGelatoData("index", index);
             streamItem.SetGelatoData("guid", streamGuid);
+
+            streamItem.SetGelatoData("infoHash", s.InfoHash);
+            streamItem.SetGelatoData("fileIdx", s.FileIdx);
             // Keep map current so stale detection below uses the final upserted set.
             existingByGuid[streamGuid] = streamItem;
 

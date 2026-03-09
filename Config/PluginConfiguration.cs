@@ -25,6 +25,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CreateCollections { get; set; } = false;
     public int MaxCollectionItems { get; set; } = 100;
     public bool DisableSearch { get; set; } = false;
+    public bool EnableMediaInfoDb { get; set; } = false;
 
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
@@ -96,6 +97,7 @@ public class UserConfig
             FFmpegProbeSize = baseConfig.FFmpegProbeSize,
             CreateCollections = baseConfig.CreateCollections,
             MaxCollectionItems = baseConfig.MaxCollectionItems,
+            EnableMediaInfoDb = baseConfig.EnableMediaInfoDb,
             UserConfigs = baseConfig.UserConfigs,
         };
     }

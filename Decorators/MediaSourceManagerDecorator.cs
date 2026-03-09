@@ -41,7 +41,8 @@ public sealed class MediaSourceManagerDecorator(
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
-    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders
+    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders,
+    MediaInfoDbClient mediaInfoDbClient
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -369,6 +370,17 @@ public sealed class MediaSourceManagerDecorator(
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                 .ConfigureAwait(false);
+
+            if (GelatoPlugin.Instance!.Configuration.EnableMediaInfoDb)
+            {
+                var videoOwner = (Video)owner;
+                var infoHash = videoOwner.GelatoData<string>("infoHash");
+                var fileIdx = videoOwner.GelatoData<int?>("fileIdx");
+                var probeStreams = _inner.GetMediaStreams(owner.Id);
+                _ = Task.Run(() =>
+                    mediaInfoDbClient.SubmitAsync(videoOwner, infoHash, fileIdx, probeStreams)
+                );
+            }
 
             var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
             selected = SelectByIdOrFirst(refreshed, mediaSourceId);

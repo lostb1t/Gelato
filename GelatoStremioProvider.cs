@@ -21,6 +21,25 @@ public class GelatoStremioProvider(
         PropertyNameCaseInsensitive = true,
     };
 
+    // Cached parse of {origin}/stremio/{username}/{password} from baseUrl
+    private (string Origin, string? Username, string? Password)? _aioCredentials;
+    private (string Origin, string? Username, string? Password) AioCredentials =>
+        _aioCredentials ??= ParseAioCredentials();
+
+    private (string Origin, string? Username, string? Password) ParseAioCredentials()
+    {
+        var uri = new Uri(baseUrl);
+        var origin = $"{uri.Scheme}://{uri.Authority}";
+        var segments = uri.AbsolutePath.Trim('/').Split('/');
+        // Expected: ["stremio", username, password]
+        if (
+            segments.Length >= 3
+            && segments[0].Equals("stremio", StringComparison.OrdinalIgnoreCase)
+        )
+            return (origin, segments[1], segments[2]);
+        return (origin, null, null);
+    }
+
     private HttpClient NewClient()
     {
         var c = http.CreateClient(nameof(GelatoStremioProvider));
@@ -180,16 +199,66 @@ public class GelatoStremioProvider(
 
     private async Task<List<StremioStream>> GetStreamsAsync(string id, StremioMediaType mediaType)
     {
-        var url = BuildUrl(["stream", mediaType.ToString().ToLower(), id]);
-        var r = await GetJsonAsync<StremioStreamsResponse>(url);
+        var (origin, username, password) = AioCredentials;
+        var type = mediaType == StremioMediaType.Movie ? "movie" : "series";
+        var url = $"{origin}/api/v1/search?type={type}&id={Uri.EscapeDataString(id)}&format=true";
 
-        var error = r?.GetError();
-        if (error is not null)
+        log.LogDebug("GetStreamsAsync (search): requesting {Url}", url);
+
+        try
         {
-            throw new InvalidOperationException($"Stremio returned an error: {error}");
-        }
+            var client = NewClient();
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (username is not null && password is not null)
+            {
+                var encoded = Convert.ToBase64String(
+                    System.Text.Encoding.UTF8.GetBytes($"{username}:{password}")
+                );
+                request.Headers.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", encoded);
+            }
 
-        return r?.Streams ?? [];
+            var resp = await client.SendAsync(request).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode)
+            {
+                log.LogWarning(
+                    "GetStreamsAsync: search request failed {Status} for {Url}",
+                    resp.StatusCode,
+                    url
+                );
+                return [];
+            }
+
+            await using var stream = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
+            var aioResp = await JsonSerializer
+                .DeserializeAsync<AioSearchResponse>(stream, JsonOpts)
+                .ConfigureAwait(false);
+            var results = aioResp?.Data?.Results ?? [];
+
+            return results
+                .Select(r => new StremioStream
+                {
+                    Url = r.Url ?? "",
+                    Name = r.Name,
+                    Description = r.Description,
+                    InfoHash = r.InfoHash,
+                    FileIdx = r.FileIdx,
+                    Sources = r.Sources,
+                    BehaviorHints = new StremioBehaviorHints
+                    {
+                        Filename = r.Filename,
+                        BingeGroup = r.BingeGroup,
+                        VideoHash = r.VideoHash,
+                        VideoSize = r.Size,
+                    },
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "GetStreamsAsync: search failed for {Id}", id);
+            return [];
+        }
     }
 
     public async Task<List<StremioSubtitle>> GetSubtitlesAsync(
@@ -734,6 +803,35 @@ public enum StremioStatus
 // ReSharper restore ClassNeverInstantiated.Global
 
 #endregion
+
+public class AioSearchResponse
+{
+    public bool Success { get; set; }
+    public AioSearchData? Data { get; set; }
+}
+
+public class AioSearchData
+{
+    public List<AioSearchResult> Results { get; set; } = [];
+}
+
+public class AioSearchResult
+{
+    public string? InfoHash { get; set; }
+    public string? Url { get; set; }
+    public int? FileIdx { get; set; }
+    public string? Filename { get; set; }
+    public string? Name { get; set; }
+    public string? Description { get; set; }
+    public string? BingeGroup { get; set; }
+    public List<string>? Sources { get; set; }
+    public string? VideoHash { get; set; }
+    public long? Size { get; set; }
+    public int? Bitrate { get; set; }
+    public string? Type { get; set; }
+    public string? Service { get; set; }
+    public bool? Cached { get; set; }
+}
 
 public class SafeStringEnumConverter<T> : JsonConverter<T>
     where T : struct, Enum

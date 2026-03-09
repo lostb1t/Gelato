@@ -53,6 +53,13 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         });
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
 
+        services.AddHttpClient(nameof(MediaInfoDbClient));
+        services.AddSingleton<MediaInfoDbClient>(sp => new MediaInfoDbClient(
+            sp.GetRequiredService<IHttpClientFactory>(),
+            sp.GetRequiredService<ILogger<MediaInfoDbClient>>(),
+            host.GetSmartApiUrl("localhost")
+        ));
+
         services.AddHostedService<GelatoService>();
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
