@@ -45,31 +45,51 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         var ctx = _http.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
+        var isMovieOrEpisodeQuery =
+            filter.IncludeItemTypes.Length != 0
+            && filter
+                .IncludeItemTypes.Intersect([BaseItemKind.Movie, BaseItemKind.Episode])
+                .Any();
+        var isPremiereFilteredQuery =
+            filter.IncludeItemTypes.Length == 0
+            || filter
+                .IncludeItemTypes.Intersect(
+                    [
+                        BaseItemKind.Movie,
+                        BaseItemKind.Series,
+                        BaseItemKind.Season,
+                        BaseItemKind.Episode,
+                    ]
+                )
+                .Any();
 
-        if (ctx is not null && !ctx.IsSingleItemList() && filter.IsDeadPerson is null)
+        if (ctx is not null)
         {
-            filter.IsDeadPerson = null;
-            if (
-                filter.IncludeItemTypes.Length != 0
-                && !filter
-                    .IncludeItemTypes.Intersect(
-                        [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
-                    )
-                    .Any()
-            )
+            if (filter.ItemIds.Length > 0)
                 return filter;
-            if (filter.ExcludeTags.Length == 0)
+
+            if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person))
+            {
+                filter.IsDeadPerson = null;
+            }
+
+            if (isMovieOrEpisodeQuery && filter.ExcludeTags.Length == 0)
             {
                 filter.ExcludeTags = [GelatoManager.StreamTag];
             }
 
             if (filter.MaxPremiereDate is not null || !filterUnreleased)
                 return filter;
+            if (!isPremiereFilteredQuery)
+                return filter;
 
             // we dont have access to the query so can make a proper statement.
             var days =
-                filter.IncludeItemTypes.Contains(BaseItemKind.Series)
-                || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
+                filter
+                    .IncludeItemTypes.Intersect(
+                        [BaseItemKind.Series, BaseItemKind.Season, BaseItemKind.Episode]
+                    )
+                    .Any()
                     ? 0
                     : bufferDays;
             filter.MaxPremiereDate = DateTime.Today.AddDays(days);
