@@ -50,8 +50,20 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
             && filter
                 .IncludeItemTypes.Intersect([BaseItemKind.Movie, BaseItemKind.Episode])
                 .Any();
+        var isPremiereFilteredQuery =
+            filter.IncludeItemTypes.Length == 0
+            || filter
+                .IncludeItemTypes.Intersect(
+                    [
+                        BaseItemKind.Movie,
+                        BaseItemKind.Series,
+                        BaseItemKind.Season,
+                        BaseItemKind.Episode,
+                    ]
+                )
+                .Any();
 
-        if (ctx is not null && isMovieOrEpisodeQuery)
+        if (ctx is not null)
         {
             if (filter.ItemIds.Length > 0)
                 return filter;
@@ -61,18 +73,23 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
                 filter.IsDeadPerson = null;
             }
 
-            if (filter.ExcludeTags.Length == 0)
+            if (isMovieOrEpisodeQuery && filter.ExcludeTags.Length == 0)
             {
                 filter.ExcludeTags = [GelatoManager.StreamTag];
             }
 
             if (filter.MaxPremiereDate is not null || !filterUnreleased)
                 return filter;
+            if (!isPremiereFilteredQuery)
+                return filter;
 
             // we dont have access to the query so can make a proper statement.
             var days =
-                filter.IncludeItemTypes.Contains(BaseItemKind.Series)
-                || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
+                filter
+                    .IncludeItemTypes.Intersect(
+                        [BaseItemKind.Series, BaseItemKind.Season, BaseItemKind.Episode]
+                    )
+                    .Any()
                     ? 0
                     : bufferDays;
             filter.MaxPremiereDate = DateTime.Today.AddDays(days);
