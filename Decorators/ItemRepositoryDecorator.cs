@@ -45,25 +45,22 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         var ctx = _http.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
-        var isSingleItemQuery = filter.ItemIds is { Length: 1 };
+        var isMovieOrEpisodeQuery =
+            filter.IncludeItemTypes.Length != 0
+            && filter
+                .IncludeItemTypes.Intersect([BaseItemKind.Movie, BaseItemKind.Episode])
+                .Any();
 
-        if (
-            ctx is not null
-            && ctx.IsApiListing()
-            && !isSingleItemQuery
-            && filter.IsDeadPerson is null
-        )
+        if (ctx is not null && isMovieOrEpisodeQuery)
         {
-            filter.IsDeadPerson = null;
-            if (
-                filter.IncludeItemTypes.Length != 0
-                && !filter
-                    .IncludeItemTypes.Intersect(
-                        [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
-                    )
-                    .Any()
-            )
+            if (filter.ItemIds.Length > 0)
                 return filter;
+
+            if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person))
+            {
+                filter.IsDeadPerson = null;
+            }
+
             if (filter.ExcludeTags.Length == 0)
             {
                 filter.ExcludeTags = [GelatoManager.StreamTag];
