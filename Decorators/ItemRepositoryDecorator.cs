@@ -50,6 +50,10 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
             && filter
                 .IncludeItemTypes.Intersect([BaseItemKind.Movie, BaseItemKind.Episode])
                 .Any();
+        var isStreamTagQuery = filter.Tags.Contains(
+            GelatoManager.StreamTag,
+            StringComparer.OrdinalIgnoreCase
+        );
         var isPremiereFilteredQuery =
             filter.IncludeItemTypes.Length == 0
             || filter
@@ -73,7 +77,7 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
                 filter.IsDeadPerson = null;
             }
 
-            if (isMovieOrEpisodeQuery && filter.ExcludeTags.Length == 0)
+            if (isMovieOrEpisodeQuery && !isStreamTagQuery && filter.ExcludeTags.Length == 0)
             {
                 filter.ExcludeTags = [GelatoManager.StreamTag];
             }
