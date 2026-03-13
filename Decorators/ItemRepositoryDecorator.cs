@@ -42,6 +42,10 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     private InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
     {
+        // Internal Gelato/library lookups should never be reshaped by listing filters.
+        if (filter.IsDeadPerson == true || !string.IsNullOrWhiteSpace(filter.Path))
+            return filter;
+
         var ctx = _http.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
