@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.6.7] - 2026-03-13\n\n### 🐛 Bug Fixes\n\n- Preserve internal folder lookups during intercepted item search (#133)\n",
+        "checksum": "9a63f3c98047e81d4dcfeccaba4e402e",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.7/gelato_0.26.6.7.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-03-13T15:50:45Z",
+        "version": "0.26.6.7"
+      },
+      {
         "changelog": "## [0.26.6.6] - 2026-03-12\n\n### 🐛 Bug Fixes\n\n- *(repository)* Skip stream exclusion on gelato stream-tag queries (#132)\n",
         "checksum": "07f4899a72ccc6a4a8ee41d435c5ce7f",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.6/gelato_0.26.6.6.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-13T13:03:05Z",
         "version": "0.25.6.1"
-      },
-      {
-        "changelog": "## [0.25.6.0] - 2026-02-13\n\n### 🚀 Features\n\n- Nudge release\n",
-        "checksum": "",
-        "sourceUrl": "",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-13T12:51:43Z",
-        "version": "0.25.6.0"
       }
     ]
   }
