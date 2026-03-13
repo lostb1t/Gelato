@@ -54,7 +54,7 @@ public class SearchActionFilter(
         ctx.TryGetActionArgument("startIndex", out var start, 0);
         ctx.TryGetActionArgument("limit", out var limit, 25);
 
-        var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg);
+        var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, userId);
 
         log.LogInformation(
             "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
@@ -112,12 +112,19 @@ public class SearchActionFilter(
     private async Task<List<StremioMeta>> SearchMetasAsync(
         string searchTerm,
         HashSet<BaseItemKind> requestedTypes,
-        PluginConfiguration cfg
+        PluginConfiguration cfg,
+        Guid userId
     )
     {
         var tasks = new List<Task<IReadOnlyList<StremioMeta>>>();
+        var movieFolder = cfg.MovieFolder ?? manager.TryGetMovieFolder(userId);
+        var seriesFolder = cfg.SeriesFolder ?? manager.TryGetSeriesFolder(userId);
 
-        if (requestedTypes.Contains(BaseItemKind.Movie) && cfg.MovieFolder is not null)
+        // Keep hot config in sync for subsequent searches in this request window.
+        cfg.MovieFolder = movieFolder;
+        cfg.SeriesFolder = seriesFolder;
+
+        if (requestedTypes.Contains(BaseItemKind.Movie) && movieFolder is not null)
         {
             tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
         }
@@ -128,7 +135,7 @@ public class SearchActionFilter(
             );
         }
 
-        if (requestedTypes.Contains(BaseItemKind.Series) && cfg.SeriesFolder is not null)
+        if (requestedTypes.Contains(BaseItemKind.Series) && seriesFolder is not null)
         {
             tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Series));
         }
