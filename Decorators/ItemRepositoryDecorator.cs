@@ -42,62 +42,34 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     private InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
     {
-        // Internal Gelato/library lookups should never be reshaped by listing filters.
-        if (filter.IsDeadPerson == true || !string.IsNullOrWhiteSpace(filter.Path))
-            return filter;
-
         var ctx = _http.HttpContext;
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
-        var isMovieOrEpisodeQuery =
-            filter.IncludeItemTypes.Length != 0
-            && filter
-                .IncludeItemTypes.Intersect([BaseItemKind.Movie, BaseItemKind.Episode])
-                .Any();
-        var isStreamTagQuery = filter.Tags.Contains(
-            GelatoManager.StreamTag,
-            StringComparer.OrdinalIgnoreCase
-        );
-        var isPremiereFilteredQuery =
-            filter.IncludeItemTypes.Length == 0
-            || filter
-                .IncludeItemTypes.Intersect(
-                    [
-                        BaseItemKind.Movie,
-                        BaseItemKind.Series,
-                        BaseItemKind.Season,
-                        BaseItemKind.Episode,
-                    ]
-                )
-                .Any();
 
-        if (ctx is not null)
+        if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
         {
-            if (filter.ItemIds.Length > 0)
+            filter.IsDeadPerson = null;
+            if (
+                filter.IncludeItemTypes.Length != 0
+                && !filter
+                    .IncludeItemTypes.Intersect(
+                        [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
+                    )
+                    .Any()
+            )
                 return filter;
-
-            if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person))
-            {
-                filter.IsDeadPerson = null;
-            }
-
-            if (isMovieOrEpisodeQuery && !isStreamTagQuery && filter.ExcludeTags.Length == 0)
+            if (filter.ExcludeTags.Length == 0)
             {
                 filter.ExcludeTags = [GelatoManager.StreamTag];
             }
 
             if (filter.MaxPremiereDate is not null || !filterUnreleased)
                 return filter;
-            if (!isPremiereFilteredQuery)
-                return filter;
 
             // we dont have access to the query so can make a proper statement.
             var days =
-                filter
-                    .IncludeItemTypes.Intersect(
-                        [BaseItemKind.Series, BaseItemKind.Season, BaseItemKind.Episode]
-                    )
-                    .Any()
+                filter.IncludeItemTypes.Contains(BaseItemKind.Series)
+                || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
                     ? 0
                     : bufferDays;
             filter.MaxPremiereDate = DateTime.Today.AddDays(days);
@@ -106,7 +78,11 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         {
             filter.IsDeadPerson = null;
         }
-
+        else if (filter.IsMissing == true)
+        {
+            // jf deletes virtual items when theres a valid primary version. So just dont return it
+            filter.ExcludeTags = [GelatoManager.StreamTag];
+        }
         return filter;
     }
 
