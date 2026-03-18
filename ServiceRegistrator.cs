@@ -39,6 +39,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
         services.AddSingleton<PalcoCacheService>();
+        services.AddSingleton<IHostedService, GelatoJavaScriptRegistrationService>();
         services.AddSingleton<SubtitleProvider>();
         services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
         services.AddSingleton(sp => new Lazy<SubtitleProvider>(

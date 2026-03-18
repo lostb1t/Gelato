@@ -14,11 +14,14 @@
     <PackageReference Include="Jellyfin.Controller" Version="10.11.6" />
     <PackageReference Include="Jellyfin.Common" Version="10.11.6" />
     <PackageReference Include="MonoTorrent" Version="3.0.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="System.Reflection.TypeExtensions" Version="4.7.0" />
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.0" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Config\config.html" />
+    <!-- Embed all frontend assets so they are delivered with the plugin -->
+    <EmbeddedResource Include="Frontend\**\*" />
   </ItemGroup>
   <Target Name="CleanupJellyfinDlls" AfterTargets="Build">
     <ItemGroup>
