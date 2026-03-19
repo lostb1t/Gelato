@@ -43,6 +43,12 @@ public class SearchActionFilter(
             return;
         }
 
+        if (cfg.ForceTvClientLocalSearch && IsTvClient(ctx))
+        {
+            await next();
+            return;
+        }
+
         // Handle Stremio search
         var requestedTypes = GetRequestedItemTypes(ctx);
         if (requestedTypes.Count == 0)
@@ -184,5 +190,58 @@ public class SearchActionFilter(
         }
 
         return dtos;
+    }
+
+    // Credit https://github.com/j4ckgrey/Cavea/blob/da0195e349b9cf713d162c0faa98fa4bd9b42d73/Filters/SearchActionFilter.cs#L127
+    private bool IsTvClient(ActionExecutingContext ctx)
+    {
+        // Check User-Agent header to detect TV clients
+        var userAgent = ctx.HttpContext.Request.Headers.UserAgent.ToString().ToLowerInvariant();
+        var embyClient = ctx.HttpContext.Request.Headers["X-Emby-Client"].ToString().ToLowerInvariant();
+
+        log.LogDebug("Checking TV client. User-Agent='{UserAgent}', X-Emby-Client='{Client}'",
+            userAgent, embyClient);
+
+        // Common TV client identifiers
+        var tvClientIdentifiers = new[]
+        {
+                "android tv",  // Must come before other android checks
+                "jellyfin tv",
+                "androidtv",
+                "firetv",
+                "webos",
+                "tizen",
+                "roku",
+                "appletv",
+                "smarttv",
+                "hbbtv",
+                "playstation",
+                "xbox",
+            };
+
+        foreach (var identifier in tvClientIdentifiers)
+        {
+            if (!userAgent.Contains(identifier))
+                continue;
+
+            log.LogDebug("Detected TV client via User-Agent: '{UserAgent}' (matched: '{Identifier}')", userAgent, identifier);
+            return true;
+        }
+
+        // Check X-Emby-Client header (Jellyfin clients send this)
+        if (!string.IsNullOrEmpty(embyClient))
+        {
+            foreach (var identifier in tvClientIdentifiers)
+            {
+                if (!embyClient.Contains(identifier))
+                    continue;
+
+                log.LogDebug("Detected TV client via X-Emby-Client: '{Client}' (matched: '{Identifier}')", embyClient, identifier);
+                return true;
+            }
+        }
+
+        log.LogDebug("Not a TV client");
+        return false;
     }
 }

@@ -84,6 +84,18 @@
                 <span>Internal database search only (No remote requests)</span>
               </label>
             </div>
+              
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkForceTvClientLocalSearch" />
+                <span>Force local search for TV clients</span>
+              </label>
+              <div class="fieldDescription">
+                When enabled, all TV clients will only see local library results. This is useful for
+                restricting external search on shared/public servers.
+                <strong>(Note: This only works on the native Jellyfin Android TV client)</strong>
+              </div>
+            </div>
 
             <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
               <label>
@@ -275,6 +287,7 @@
         const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
         const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
         const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
+        const chkForceTvClientLocalSearch = page.querySelector('#chkForceTvClientLocalSearch');
 
         // Catalogs
         const catalogsList = page.querySelector('#catalogsList');
@@ -553,6 +566,7 @@
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
             if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
+            if (chkForceTvClientLocalSearch) chkForceTvClientLocalSearch.checked = cfg.ForceTvClientLocalSearch || false;
 
             // User Overrides Logic
             await loadUsers();
@@ -586,6 +600,7 @@
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
             cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
+            cfg.ForceTvClientLocalSearch = chkForceTvClientLocalSearch.checked;
 
             // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
             if (allCatalogs.length > 0) {
