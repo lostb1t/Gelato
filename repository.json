@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.7.0] - 2026-03-19\n\n### 🚀 Features\n\n- Add js injector and local-search-toggle (#139)\n- Make js injection false by default\n",
+        "checksum": "ebced9771ada1986b2e4ad4f2aa34774",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.7.0/gelato_0.26.7.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-03-19T12:10:55Z",
+        "version": "0.26.7.0"
+      },
+      {
         "changelog": "## [0.26.6.8] - 2026-03-14\n\n### 🐛 Bug Fixes\n\n- Revert query filter\n",
         "checksum": "6e753f3ce2cdecde3dc6a963078a457a",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.8/gelato_0.26.6.8.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-18T18:16:35Z",
         "version": "0.26.1.0"
-      },
-      {
-        "changelog": "## [0.25.7.0] - 2026-02-14\n\n### 🚀 Features\n\n- Dont cache if no streams\n",
-        "checksum": "5c93fe9a2ad9260bd27b4a46ae47f56d",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.25.7.0/gelato_0.25.7.0.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-14T11:14:51Z",
-        "version": "0.25.7.0"
       }
     ]
   }
