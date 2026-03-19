@@ -247,9 +247,6 @@ namespace Gelato.Services
                             "Failed to unregister scripts from JavaScript Injector plugin. Method returned unexpected value.");
                     }
                 }
-
-                logger.LogInformation(
-                    "No suitable unregister method found on IJavaScriptRegistrationService; cannot automatically unregister resources.");
             }
             catch (Exception ex)
             {
