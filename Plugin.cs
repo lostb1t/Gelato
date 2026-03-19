@@ -35,6 +35,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     public static GelatoPlugin? Instance { get; private set; }
+    // Event fired when the plugin configuration is updated via UpdateConfiguration
+    public static new event Action<PluginConfiguration>? ConfigurationChanged;
 
     public override string Name => "Gelato";
     public override Guid Id => Guid.Parse("94EA4E14-8163-4989-96FE-0A2094BC2D6A");
@@ -63,6 +65,16 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
         _manager.ClearCache();
         UserConfigs.Clear();
+
+        // Notify subscribers that configuration changed
+        try
+        {
+            ConfigurationChanged?.Invoke(cfg);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Error while invoking ConfigurationChanged event");
+        }
     }
 
     public PluginConfiguration GetConfig(Guid userId)

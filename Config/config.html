@@ -55,6 +55,18 @@
               <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
               <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
             </div>
+            
+            <h3 class="sectionTitle" style="margin-top: 2em;">Frontend JavaScript Injection</h3>
+
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkEnableJavaScriptInjection" />
+                <span>Enable frontend customization</span>
+              </label>
+              <div class="fieldDescription">Adds a local search toggle to the searchbar.
+                Requires Jellyfin-JavaScript-Injector plugin to be installed and configured.
+              </div>
+            </div>
        
 
             <h3 class="sectionTitle" style="margin-top: 2em;">Search & Discovery</h3>
@@ -262,6 +274,7 @@
         const txtBufferDays = page.querySelector('#txtBufferDays');
         const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
         const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
+        const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
 
         // Catalogs
         const catalogsList = page.querySelector('#catalogsList');
@@ -539,6 +552,7 @@
             if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays || 30;
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
+            if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
 
             // User Overrides Logic
             await loadUsers();
@@ -571,6 +585,7 @@
 
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
+            cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
 
             // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
             if (allCatalogs.length > 0) {
