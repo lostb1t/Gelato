@@ -25,10 +25,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CreateCollections { get; set; } = false;
     public int MaxCollectionItems { get; set; } = 100;
     public bool DisableSearch { get; set; } = false;
-
-    // Scripts are bundled with the plugin (in Frontend/js). Admin can enable/disable injection.
-    public bool EnableJavaScriptInjection { get; set; } = true;
-
+    public bool EnableJavaScriptInjection { get; set; } = false;
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
