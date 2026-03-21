@@ -304,6 +304,24 @@ public static class ActionContextExtensions
         return actionName != null && BaseItemListActionNames.Contains(actionName);
     }
 
+    public static bool IsHomeScreenSectionListing(this HttpContext ctx)
+    {
+        var action = ctx.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>();
+        if (
+            action is not null
+            && string.Equals(action.ControllerName, "HomeScreen", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(action.ActionName, "GetSectionContent", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            return true;
+        }
+
+        var path = ctx.Request.Path;
+        return path.HasValue
+            && path.Value?.Contains("/HomeScreen/Section/", StringComparison.OrdinalIgnoreCase)
+                == true;
+    }
+
     public static bool IsApiSearchAction(this ActionExecutingContext ctx) =>
         ctx.GetActionName() is { } actionName && SearchActionNames.Contains(actionName);
 

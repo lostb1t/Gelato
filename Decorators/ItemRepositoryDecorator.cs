@@ -15,6 +15,21 @@ namespace Gelato.Decorators;
 public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
     : IItemRepository
 {
+    private static readonly BaseItemKind[] ListScopeMediaKinds =
+    [
+        BaseItemKind.Movie,
+        BaseItemKind.Series,
+        BaseItemKind.Episode,
+    ];
+
+    private static readonly BaseItemKind[] PremiereFilterMediaKinds =
+    [
+        BaseItemKind.Movie,
+        BaseItemKind.Series,
+        BaseItemKind.Season,
+        BaseItemKind.Episode,
+    ];
+
     private readonly IHttpContextAccessor _http =
         http ?? throw new ArgumentNullException(nameof(http));
 
@@ -42,47 +57,65 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     private InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
     {
+        // Internal Gelato/library lookups should never be reshaped by listing filters.
+        // Path-based queries are commonly used to resolve configured root folders.
+        if (filter.IsDeadPerson == true || !string.IsNullOrWhiteSpace(filter.Path))
+            return filter;
+
         var ctx = _http.HttpContext;
+        var isListingIntent =
+            ctx is not null && (ctx.IsApiListing() || ctx.IsHomeScreenSectionListing());
+        if (!isListingIntent)
+            return filter;
+
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
+        var includeTypes = filter.IncludeItemTypes;
+        var hasIncludeTypes = includeTypes.Length != 0;
+        var includesPerson = includeTypes.Contains(BaseItemKind.Person);
+        var isStreamTagQuery = filter.Tags.Contains(
+            GelatoManager.StreamTag,
+            StringComparer.OrdinalIgnoreCase
+        );
+        var isTargetedLookup =
+            filter.ItemIds.Length > 0 || (ctx is not null && ctx.IsSingleItemList());
 
-        if (ctx is not null && ctx.IsApiListing() && filter.IsDeadPerson is null)
-        {
+        // Targeted ItemIds lookups are generally internal existence/permission checks.
+        // Keep those untouched so the caller gets strict results from the underlying query.
+        if (isTargetedLookup)
+            return filter;
+
+        if (!includesPerson)
             filter.IsDeadPerson = null;
-            if (
-                filter.IncludeItemTypes.Length != 0
-                && !filter
-                    .IncludeItemTypes.Intersect(
-                        [BaseItemKind.Movie, BaseItemKind.Series, BaseItemKind.Episode]
-                    )
-                    .Any()
-            )
-                return filter;
-            if (filter.ExcludeTags.Length == 0)
-            {
-                filter.ExcludeTags = [GelatoManager.StreamTag];
-            }
 
-            if (filter.MaxPremiereDate is not null || !filterUnreleased)
-                return filter;
+        // Query-shape based media list detection: empty IncludeItemTypes is broad-list scope,
+        // otherwise only media kinds we manage are considered for stream-row exclusion.
+        var isMediaListQuery =
+            !hasIncludeTypes || includeTypes.Intersect(ListScopeMediaKinds).Any();
+        if (!isMediaListQuery)
+            return filter;
 
-            // we dont have access to the query so can make a proper statement.
-            var days =
-                filter.IncludeItemTypes.Contains(BaseItemKind.Series)
-                || filter.IncludeItemTypes.Contains(BaseItemKind.Episode)
-                    ? 0
-                    : bufferDays;
-            filter.MaxPremiereDate = DateTime.Today.AddDays(days);
-        }
-        else if (!filter.IncludeItemTypes.Contains(BaseItemKind.Person))
-        {
-            filter.IsDeadPerson = null;
-        }
-        else if (filter.IsMissing == true)
-        {
-            // jf deletes virtual items when theres a valid primary version. So just dont return it
+        // Do not override queries that explicitly target stream-tagged rows.
+        if (!isStreamTagQuery && filter.ExcludeTags.Length == 0)
             filter.ExcludeTags = [GelatoManager.StreamTag];
-        }
+
+        if (filter.MaxPremiereDate is not null || !filterUnreleased)
+            return filter;
+
+        var isPremiereFilteredQuery =
+            !hasIncludeTypes || includeTypes.Intersect(PremiereFilterMediaKinds).Any();
+        if (!isPremiereFilteredQuery)
+            return filter;
+
+        // Series/episodes should include currently airing content. Movies can use the buffer.
+        var days =
+            includeTypes.Contains(BaseItemKind.Series)
+            || includeTypes.Contains(BaseItemKind.Season)
+            || includeTypes.Contains(BaseItemKind.Episode)
+                ? 0
+                : bufferDays;
+        filter.MaxPremiereDate = DateTime.Today.AddDays(days);
+
         return filter;
     }
 
