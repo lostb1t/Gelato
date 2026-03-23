@@ -15,8 +15,7 @@ namespace Gelato.Services
     public class GelatoJavaScriptRegistrationService(
         IOptionsMonitor<PluginConfiguration> optionsMonitor,
         ILogger<GelatoJavaScriptRegistrationService> logger
-    )
-        : IHostedService, IDisposable
+    ) : IHostedService, IDisposable
     {
         private readonly Lock _lock = new();
         private bool _registered;
@@ -28,22 +27,25 @@ namespace Gelato.Services
             // Resolve injector service if available
             try
             {
-                var jsInjectorAssembly = AssemblyLoadContext.All
-                    .SelectMany(x => x.Assemblies)
+                var jsInjectorAssembly = AssemblyLoadContext
+                    .All.SelectMany(x => x.Assemblies)
                     .FirstOrDefault(x =>
-                        x.FullName?.Contains("Jellyfin.Plugin.JavaScriptInjector") ?? false);
+                        x.FullName?.Contains("Jellyfin.Plugin.JavaScriptInjector") ?? false
+                    );
 
                 if (jsInjectorAssembly != null)
                 {
                     _pluginInterfaceType = jsInjectorAssembly.GetType(
-                        "Jellyfin.Plugin.JavaScriptInjector.PluginInterface");
+                        "Jellyfin.Plugin.JavaScriptInjector.PluginInterface"
+                    );
                 }
             }
             catch (Exception ex)
             {
                 logger.LogWarning(
                     ex,
-                    "Error resolving IJavaScriptRegistrationService at StartAsync");
+                    "Error resolving IJavaScriptRegistrationService at StartAsync"
+                );
                 _pluginInterfaceType = null;
             }
 
@@ -126,17 +128,20 @@ namespace Gelato.Services
             if (_pluginInterfaceType is null)
             {
                 logger.LogInformation(
-                    "IJavaScriptRegistrationService not available; skipping JS registration.");
+                    "IJavaScriptRegistrationService not available; skipping JS registration."
+                );
                 return;
             }
 
             try
             {
                 var assembly = Assembly.GetExecutingAssembly();
-                var resources = assembly.GetManifestResourceNames()
+                var resources = assembly
+                    .GetManifestResourceNames()
                     .Where(n =>
                         n.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
-                        && n.Contains(".Frontend."))
+                        && n.Contains(".Frontend.")
+                    )
                     .OrderBy(n => n)
                     .ToList();
 
@@ -161,7 +166,8 @@ namespace Gelato.Services
                         {
                             logger.LogWarning(
                                 "Embedded resource {Resource} could not be opened.",
-                                res);
+                                res
+                            );
                             continue;
                         }
 
@@ -181,22 +187,23 @@ namespace Gelato.Services
                         };
 
                         // Register the script
-                        var registerResult = _pluginInterfaceType.GetMethod("RegisterScript")
-                            ?.Invoke(
-                                null,
-                                [scriptRegistration]);
+                        var registerResult = _pluginInterfaceType
+                            .GetMethod("RegisterScript")
+                            ?.Invoke(null, [scriptRegistration]);
 
                         if (registerResult is true)
                         {
                             logger.LogInformation(
                                 "Successfully registered {Resource} with JavaScript Injector plugin.",
-                                res);
+                                res
+                            );
                         }
                         else
                         {
                             logger.LogWarning(
                                 "Failed to register {Resource} with JavaScript Injector plugin. RegisterScript returned false.",
-                                res);
+                                res
+                            );
                         }
                     }
                     catch (Exception ex)
@@ -204,7 +211,8 @@ namespace Gelato.Services
                         logger.LogWarning(
                             ex,
                             "Error registering embedded JS resource {Resource}",
-                            res);
+                            res
+                        );
                     }
                 }
             }
@@ -212,7 +220,8 @@ namespace Gelato.Services
             {
                 logger.LogWarning(
                     ex,
-                    "Exception while attempting to register embedded frontend JS files");
+                    "Exception while attempting to register embedded frontend JS files"
+                );
             }
         }
 
@@ -221,7 +230,8 @@ namespace Gelato.Services
             if (_pluginInterfaceType is null)
             {
                 logger.LogInformation(
-                    "IJavaScriptRegistrationService not available; nothing to unregister.");
+                    "IJavaScriptRegistrationService not available; nothing to unregister."
+                );
                 return;
             }
 
@@ -231,31 +241,34 @@ namespace Gelato.Services
                 {
                     var pluginId = GelatoPlugin.Instance?.Id.ToString() ?? "gelato-plugin";
                     var unregisterResult = _pluginInterfaceType
-                        .GetMethod("UnregisterAllScriptsFromPlugin")?.Invoke(
-                            null,
-                            [pluginId]);
+                        .GetMethod("UnregisterAllScriptsFromPlugin")
+                        ?.Invoke(null, [pluginId]);
 
                     if (unregisterResult is int removedCount)
                     {
                         logger.LogInformation(
                             "Successfully unregistered {Count} script(s) from JavaScript Injector plugin.",
-                            removedCount);
+                            removedCount
+                        );
                     }
                     else
                     {
                         logger.LogWarning(
-                            "Failed to unregister scripts from JavaScript Injector plugin. Method returned unexpected value.");
+                            "Failed to unregister scripts from JavaScript Injector plugin. Method returned unexpected value."
+                        );
                     }
                 }
 
                 logger.LogInformation(
-                    "No suitable unregister method found on IJavaScriptRegistrationService; cannot automatically unregister resources.");
+                    "No suitable unregister method found on IJavaScriptRegistrationService; cannot automatically unregister resources."
+                );
             }
             catch (Exception ex)
             {
                 logger.LogWarning(
                     ex,
-                    "Exception while attempting to unregister embedded frontend JS files");
+                    "Exception while attempting to unregister embedded frontend JS files"
+                );
             }
         }
 

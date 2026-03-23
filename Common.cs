@@ -49,33 +49,33 @@ public sealed class StremioUri
         switch (kind)
         {
             case BaseItemKind.Movie:
-                {
-                    var imdb = item.GetProviderId(MetadataProvider.Imdb);
-                    return string.IsNullOrWhiteSpace(imdb)
-                        ? uri
-                        : new StremioUri(StremioMediaType.Movie, imdb);
-                }
+            {
+                var imdb = item.GetProviderId(MetadataProvider.Imdb);
+                return string.IsNullOrWhiteSpace(imdb)
+                    ? uri
+                    : new StremioUri(StremioMediaType.Movie, imdb);
+            }
             case BaseItemKind.Series:
-                {
-                    var imdb = item.GetProviderId(MetadataProvider.Imdb);
-                    return string.IsNullOrWhiteSpace(imdb)
-                        ? uri
-                        : new StremioUri(StremioMediaType.Series, imdb);
-                }
+            {
+                var imdb = item.GetProviderId(MetadataProvider.Imdb);
+                return string.IsNullOrWhiteSpace(imdb)
+                    ? uri
+                    : new StremioUri(StremioMediaType.Series, imdb);
+            }
             case BaseItemKind.Episode:
-                {
-                    var ep = (Episode)item;
-                    var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
-                    if (
-                        string.IsNullOrWhiteSpace(seriesImdb)
-                        || ep.ParentIndexNumber is null
-                        || ep.IndexNumber is null
-                    )
-                        return uri;
+            {
+                var ep = (Episode)item;
+                var seriesImdb = ep.Series?.GetProviderId(MetadataProvider.Imdb);
+                if (
+                    string.IsNullOrWhiteSpace(seriesImdb)
+                    || ep.ParentIndexNumber is null
+                    || ep.IndexNumber is null
+                )
+                    return uri;
 
-                    var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
-                    return new StremioUri(StremioMediaType.Series, ext);
-                }
+                var ext = $"{seriesImdb}:{ep.ParentIndexNumber}:{ep.IndexNumber}";
+                return new StremioUri(StremioMediaType.Series, ext);
+            }
         }
 
         return null;
@@ -309,8 +309,16 @@ public static class ActionContextExtensions
         var action = ctx.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>();
         if (
             action is not null
-            && string.Equals(action.ControllerName, "HomeScreen", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(action.ActionName, "GetSectionContent", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                action.ControllerName,
+                "HomeScreen",
+                StringComparison.OrdinalIgnoreCase
+            )
+            && string.Equals(
+                action.ActionName,
+                "GetSectionContent",
+                StringComparison.OrdinalIgnoreCase
+            )
         )
         {
             return true;

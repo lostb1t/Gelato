@@ -35,6 +35,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     }
 
     public static GelatoPlugin? Instance { get; private set; }
+
     // Event fired when the plugin configuration is updated via UpdateConfiguration
     public static new event Action<PluginConfiguration>? ConfigurationChanged;
 

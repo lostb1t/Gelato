@@ -210,7 +210,7 @@ namespace Gelato.Providers
             return scored.Select(x => new RemoteSubtitleInfo
             {
                 Id = x.Sub.Id,
-                Name = x.Sub.Title,
+                Name = Uri.UnescapeDataString(x.Sub.Title),
                 ProviderName = Name,
                 Format = GuessSubtitleCodec(x.Sub.Url),
                 ThreeLetterISOLanguageName = request.Language,
