@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediaBrowser.Controller.Entities;
@@ -617,6 +618,35 @@ public class StremioStreamsResponse
 
 public class StremioStream
 {
+    private static readonly Regex UrlRegex = new(
+        @"https?://\S+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
+    private static readonly Regex VolatileTokenRegex = new(
+        @"\b[a-z0-9_-]{24,}\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
+    private static readonly Regex BitrateOrSizeRegex = new(
+        @"\b\d+(?:\.\d+)?\s*(?:mbps|kbps|gib|mib|gb|mb)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
+    private static readonly Regex NonAlphaNumRegex = new(
+        @"[^a-z0-9]+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase
+    );
+    private static readonly HashSet<string> StableQueryKeys =
+    [
+        "ih",
+        "infohash",
+        "idx",
+        "fileidx",
+        "id",
+        "media_id",
+        "type",
+        "season",
+        "episode",
+    ];
+
     public string Url { get; set; } = "";
     public string? Title { get; set; }
     public string? Name { get; set; }
@@ -642,22 +672,20 @@ public class StremioStream
     {
         string key;
 
-        // Prefer URL identity when a direct URL exists, even if InfoHash is present.
-        // Some providers attach the same InfoHash to multiple hosters (e.g. Dropload/SuperVideo).
-        if (!string.IsNullOrEmpty(Url))
+        // Primary: torrent identity.
+        if (!string.IsNullOrWhiteSpace(InfoHash))
         {
-            key = Url;
+            key = $"ih:{InfoHash.Trim().ToLowerInvariant()}";
         }
-        else if (!string.IsNullOrEmpty(InfoHash))
+        // Secondary: provider filename hint.
+        else if (!string.IsNullOrWhiteSpace(BehaviorHints?.Filename))
         {
-            key = InfoHash;
+            key = $"fn:{NormalizeBasic(BehaviorHints.Filename)}";
         }
-        else if (
-            !string.IsNullOrEmpty(BehaviorHints?.BingeGroup)
-            && !string.IsNullOrEmpty(BehaviorHints?.Filename)
-        )
+        else if (!string.IsNullOrWhiteSpace(Url))
         {
-            key = $"{BehaviorHints?.BingeGroup}{BehaviorHints?.Filename}";
+            // Last fallback: canonicalized URL (strip volatile token-like pieces).
+            key = $"url:{CanonicalizeUrlForIdentity(Url)}";
         }
         else
         {
@@ -667,6 +695,115 @@ public class StremioStream
         var bytes = System.Text.Encoding.UTF8.GetBytes(key);
         var hash = System.Security.Cryptography.MD5.HashData(bytes);
         return new Guid(hash);
+    }
+
+    private static string NormalizeMetadataText(string value)
+    {
+        var s = value.ToLowerInvariant();
+        s = UrlRegex.Replace(s, " ");
+        s = BitrateOrSizeRegex.Replace(s, " ");
+        s = VolatileTokenRegex.Replace(s, " ");
+        s = NonAlphaNumRegex.Replace(s, " ");
+        s = string.Join(" ", s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        return s.Trim();
+    }
+
+    private static string NormalizeBasic(string value)
+    {
+        var s = value.Trim().ToLowerInvariant();
+        s = NonAlphaNumRegex.Replace(s, " ");
+        return string.Join(" ", s.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string CanonicalizeUrlForIdentity(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return NormalizeMetadataText(url);
+        }
+
+        var host = uri.Host.Trim().ToLowerInvariant();
+        var segments = uri.AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x =>
+            {
+                try
+                {
+                    return Uri.UnescapeDataString(x);
+                }
+                catch
+                {
+                    return x;
+                }
+            })
+            .Select(x => x.Trim())
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Where(IsLikelyStablePathSegment)
+            .TakeLast(6)
+            .Select(NormalizeMetadataText)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+
+        var queryParts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(uri.Query))
+        {
+            var query = uri.Query.TrimStart('?');
+            foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = pair.Split('=', 2);
+                var key = parts[0].Trim().ToLowerInvariant();
+                if (!StableQueryKeys.Contains(key))
+                {
+                    continue;
+                }
+
+                var val = parts.Length > 1 ? parts[1] : "";
+                try
+                {
+                    val = Uri.UnescapeDataString(val);
+                }
+                catch { }
+
+                val = NormalizeMetadataText(val);
+                if (string.IsNullOrWhiteSpace(val))
+                {
+                    continue;
+                }
+
+                queryParts.Add($"{key}={val}");
+            }
+        }
+
+        var pathPart = segments.Count > 0 ? string.Join("/", segments) : uri.AbsolutePath.ToLowerInvariant();
+        var queryPart = queryParts.Count > 0 ? $"?{string.Join("&", queryParts)}" : string.Empty;
+        return $"{host}|{pathPart}{queryPart}";
+    }
+
+    private static bool IsLikelyStablePathSegment(string segment)
+    {
+        if (segment == "-1")
+        {
+            return true;
+        }
+
+        // keep explicit hash-like ids and filename-like segments
+        if (Regex.IsMatch(segment, @"^[a-fA-F0-9]{40}$"))
+        {
+            return true;
+        }
+
+        if (segment.Contains('.'))
+        {
+            return true;
+        }
+
+        // drop long token-looking opaque segments
+        if (segment.Length >= 24 && Regex.IsMatch(segment, @"^[A-Za-z0-9_-]+$"))
+        {
+            return false;
+        }
+
+        return segment.Length <= 64;
     }
 
     public bool IsValid()
