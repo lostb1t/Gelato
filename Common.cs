@@ -257,6 +257,7 @@ public static class ActionContextExtensions
         "GetResumeItemsLegacy",
         "GetNextUp",
         "GetEpisodes",
+        "GetSeasons",
         "GetSimilarItems",
         "GetLatestMedia",
         "GetLatestMediaLegacy",
