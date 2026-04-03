@@ -238,6 +238,8 @@ public static class ActionContextExtensions
         "ItemID",
     ];
 
+    private static readonly string[] IdsGuidKeys = ["ids", "Ids", "IDs"];
+
     private static readonly HashSet<string> SearchActionNames = new(
         StringComparer.OrdinalIgnoreCase
     )
@@ -428,6 +430,16 @@ public static class ActionContextExtensions
             {
                 rd[key] = value.ToString();
                 ctx.ActionArguments[key] = value;
+            }
+        }
+
+        // Also replace ids query-parameter argument (used by list actions like GetItems)
+        foreach (var key in IdsGuidKeys)
+        {
+            if (ctx.ActionArguments.ContainsKey(key))
+            {
+                ctx.ActionArguments[key] = new[] { value };
+                break;
             }
         }
 
