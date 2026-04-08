@@ -376,6 +376,7 @@ public class StremioMeta
 
     // sometimes string, sometimes number... disable for now
     // public string? ImdbRating { get; set; }
+    [JsonConverter(typeof(NullableStringLenientConverter))]
     public string? ReleaseInfo { get; set; }
     public string? Description { get; set; }
     public string? Overview { get; set; }
@@ -796,6 +797,29 @@ public sealed class NullableIntLenientConverter : JsonConverter<int?>
     {
         if (v.HasValue)
             w.WriteNumberValue(v.Value);
+        else
+            w.WriteNullValue();
+    }
+}
+
+public sealed class NullableStringLenientConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    {
+        return r.TokenType switch
+        {
+            JsonTokenType.String => r.GetString(),
+            JsonTokenType.Number => r.TryGetInt64(out var i)
+                ? i.ToString(CultureInfo.InvariantCulture)
+                : r.GetDouble().ToString(CultureInfo.InvariantCulture),
+            _ => null,
+        };
+    }
+
+    public override void Write(Utf8JsonWriter w, string? v, JsonSerializerOptions o)
+    {
+        if (v is not null)
+            w.WriteStringValue(v);
         else
             w.WriteNullValue();
     }
