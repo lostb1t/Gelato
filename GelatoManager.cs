@@ -30,18 +30,24 @@ public sealed class GelatoManager(
 {
     public const string StreamTag = "gelato-stream";
 
-    public static readonly (string Path, DateTime DateModified) PlaceholderImage =
-        InitPlaceholderImage();
+    public static (string Path, DateTime DateModified) PlaceholderImage => InitPlaceholderImage();
 
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
     private static (string Path, DateTime DateModified) InitPlaceholderImage()
     {
-        var path = Path.Combine(Path.GetTempPath(), "gelato", "placeholder.bin");
+        var path = Path.Combine(Path.GetTempPath(), "gelato", "placeholder.png");
         if (!File.Exists(path))
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(path, new byte[] { 0 });
+            // Minimal valid 1x1 black opaque PNG (69 bytes)
+            File.WriteAllBytes(
+                path,
+                Convert.FromBase64String(
+                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAE"
+                        + "AAH2FzhVAAAAAElFTkSuQmCC"
+                )
+            );
         }
 
         return (path, File.GetLastWriteTimeUtc(path));

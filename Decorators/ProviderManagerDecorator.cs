@@ -14,11 +14,9 @@ public sealed class ProviderManagerDecorator(
     ILogger<ProviderManagerDecorator> log
 ) : IProviderManager
 {
-    private static bool IsGelato(BaseItem item) => item.IsGelato();
-
     /// <summary>
-    /// For gelato items, instead of downloading the image, store the URL in a
-    /// provider ID and point the image entry at the on-disk placeholder.
+    /// Instead of downloading a remote image, store the URL in a provider ID
+    /// and point the image entry at the on-disk placeholder.
     /// This breaks the UpdateImagesAsync → ConvertImageToLocal → SaveImage loop
     /// because the image becomes "local" after the swap.
     /// </summary>
@@ -52,7 +50,7 @@ public sealed class ProviderManagerDecorator(
         );
     }
 
-    // — SaveImage overloads: skip download for gelato items, swap to placeholder —
+    // — SaveImage overloads: skip download for HTTP URLs, swap to placeholder —
 
     public Task SaveImage(
         BaseItem item,
@@ -62,13 +60,34 @@ public sealed class ProviderManagerDecorator(
         CancellationToken cancellationToken
     )
     {
-        if (IsGelato(item))
+        if (
+            url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+        )
         {
-            log.LogDebug("Swapping image to placeholder for gelato item {Id}: {Url}", item.Id, url);
+            log.LogInformation(
+                "SwapToPlaceholder: item={Id} name={Name} type={Type} imageType={ImageType} index={Index} url={Url} isGelato={IsGelato}",
+                item.Id,
+                item.Name,
+                item.GetType().Name,
+                type,
+                imageIndex,
+                url,
+                item.IsGelato()
+            );
             SwapToPlaceholder(item, type, imageIndex, url);
             return Task.CompletedTask;
         }
 
+        log.LogInformation(
+            "SaveImage passthrough: item={Id} name={Name} type={Type} imageType={ImageType} index={Index} url={Url}",
+            item.Id,
+            item.Name,
+            item.GetType().Name,
+            type,
+            imageIndex,
+            url
+        );
         return inner.SaveImage(item, url, type, imageIndex, cancellationToken);
     }
 
@@ -79,7 +98,19 @@ public sealed class ProviderManagerDecorator(
         ImageType type,
         int? imageIndex,
         CancellationToken cancellationToken
-    ) => inner.SaveImage(item, source, mimeType, type, imageIndex, cancellationToken);
+    )
+    {
+        log.LogInformation(
+            "SaveImage(stream): item={Id} name={Name} type={Type} imageType={ImageType} index={Index} mime={Mime}",
+            item.Id,
+            item.Name,
+            item.GetType().Name,
+            type,
+            imageIndex,
+            mimeType
+        );
+        return inner.SaveImage(item, source, mimeType, type, imageIndex, cancellationToken);
+    }
 
     public Task SaveImage(
         BaseItem item,
@@ -89,8 +120,18 @@ public sealed class ProviderManagerDecorator(
         int? imageIndex,
         bool? saveLocallyWithMedia,
         CancellationToken cancellationToken
-    ) =>
-        inner.SaveImage(
+    )
+    {
+        log.LogInformation(
+            "SaveImage(path): item={Id} name={Name} type={Type} imageType={ImageType} index={Index} source={Source}",
+            item.Id,
+            item.Name,
+            item.GetType().Name,
+            type,
+            imageIndex,
+            source
+        );
+        return inner.SaveImage(
             item,
             source,
             mimeType,
@@ -99,6 +140,7 @@ public sealed class ProviderManagerDecorator(
             saveLocallyWithMedia,
             cancellationToken
         );
+    }
 
     // — Pass-through for everything else —
 
@@ -130,13 +172,33 @@ public sealed class ProviderManagerDecorator(
         BaseItem item,
         MetadataRefreshOptions options,
         CancellationToken cancellationToken
-    ) => inner.RefreshFullItem(item, options, cancellationToken);
+    )
+    {
+        log.LogInformation(
+            "RefreshFullItem: item={Id} name={Name} type={Type} replaceImages={Replace}",
+            item.Id,
+            item.Name,
+            item.GetType().Name,
+            options.ReplaceAllImages
+        );
+        return inner.RefreshFullItem(item, options, cancellationToken);
+    }
 
     public Task<ItemUpdateType> RefreshSingleItem(
         BaseItem item,
         MetadataRefreshOptions options,
         CancellationToken cancellationToken
-    ) => inner.RefreshSingleItem(item, options, cancellationToken);
+    )
+    {
+        log.LogInformation(
+            "RefreshSingleItem: item={Id} name={Name} type={Type} replaceImages={Replace}",
+            item.Id,
+            item.Name,
+            item.GetType().Name,
+            options.ReplaceAllImages
+        );
+        return inner.RefreshSingleItem(item, options, cancellationToken);
+    }
 
     public Task SaveImage(Stream source, string mimeType, string path) =>
         inner.SaveImage(source, mimeType, path);
