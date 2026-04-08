@@ -30,7 +30,22 @@ public sealed class GelatoManager(
 {
     public const string StreamTag = "gelato-stream";
 
+    public static readonly (string Path, DateTime DateModified) PlaceholderImage =
+        InitPlaceholderImage();
+
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
+
+    private static (string Path, DateTime DateModified) InitPlaceholderImage()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "gelato", "placeholder.bin");
+        if (!File.Exists(path))
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllBytes(path, new byte[] { 0 });
+        }
+
+        return (path, File.GetLastWriteTimeUtc(path));
+    }
 
     private int GetHttpPort()
     {
@@ -773,9 +788,18 @@ public sealed class GelatoManager(
                 var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
                 if (!string.IsNullOrWhiteSpace(primary))
                 {
+                    season.SetProviderId("GelatoPoster", primary);
                     season.ImageInfos = new List<ItemImageInfo>
                     {
-                        new() { Type = ImageType.Primary, Path = primary },
+                        new()
+                        {
+                            Type = ImageType.Primary,
+                            Path = PlaceholderImage.Path,
+                            Width = 1,
+                            Height = 1,
+                            BlurHash = "L00000fQfQ00",
+                            DateModified = PlaceholderImage.DateModified,
+                        },
                     }.ToArray();
                 }
 
@@ -1043,16 +1067,25 @@ public sealed class GelatoManager(
         item.DateLastSaved = DateTime.UtcNow;
         item.DateCreated = DateTime.UtcNow;
 
+        item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
+
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary))
         {
+            item.SetProviderId("GelatoPoster", primary);
             item.ImageInfos = new List<ItemImageInfo>
             {
-                new() { Type = ImageType.Primary, Path = primary },
+                new()
+                {
+                    Type = ImageType.Primary,
+                    Path = PlaceholderImage.Path,
+                    Width = 1,
+                    Height = 1,
+                    BlurHash = "L00000fQfQ00",
+                    DateModified = PlaceholderImage.DateModified,
+                },
             }.ToArray();
         }
-
-        item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
         item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         return item;
     }

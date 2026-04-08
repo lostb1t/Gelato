@@ -12,6 +12,7 @@ using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Configuration;
@@ -60,7 +61,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
             .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
-            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>();
+            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
+            .DecorateSingle<IProviderManager, ProviderManagerDecorator>();
         services.AddSingleton(sp => new Lazy<ISubtitleManager>(
             sp.GetRequiredService<ISubtitleManager>
         ));

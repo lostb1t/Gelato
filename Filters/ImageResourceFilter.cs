@@ -1,3 +1,5 @@
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -10,6 +12,7 @@ namespace Gelato.Filters;
 public sealed class ImageResourceFilter(
     IHttpClientFactory http,
     GelatoManager manager,
+    ILibraryManager libraryManager,
     ILogger<ImageResourceFilter> log
 ) : IAsyncResourceFilter
 {
@@ -35,14 +38,48 @@ public sealed class ImageResourceFilter(
             return;
         }
 
-        var stremioMeta = manager.GetStremioMeta(guid);
-        if (stremioMeta?.Poster is null)
+        // Try cached meta first (search results)
+        var url = manager.GetStremioMeta(guid)?.Poster;
+
+        // Fall back to persisted provider IDs for library items
+        if (url is null)
+        {
+            var item = libraryManager.GetItemById(guid);
+            if (item is not null && item.IsGelato())
+            {
+                // Try type-specific key first (from ProviderManagerDecorator),
+                // then the primary poster key (from IntoBaseItem)
+                var imageType = routeValues.TryGetValue("imageType", out var imgType)
+                    ? imgType?.ToString()
+                    : null;
+
+                var imageIndex =
+                    routeValues.TryGetValue("imageIndex", out var idxVal)
+                    && int.TryParse(idxVal?.ToString(), out var idx)
+                    && idx > 0
+                        ? idx
+                        : (int?)null;
+
+                if (imageType is not null)
+                {
+                    var key = $"GelatoImage:{imageType}";
+                    if (imageIndex is not null)
+                    {
+                        key += $":{imageIndex}";
+                    }
+
+                    url = item.GetProviderId(key);
+                }
+
+                url ??= item.GetProviderId("GelatoPoster");
+            }
+        }
+
+        if (url is null)
         {
             await next();
             return;
         }
-
-        var url = stremioMeta.Poster;
 
         try
         {
