@@ -6,6 +6,7 @@ using Gelato.Services;
 //using IntroDbPlugin.Services;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Collections;
+using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaSegments;
@@ -62,7 +63,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
             .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
             .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
-            .DecorateSingle<IProviderManager, ProviderManagerDecorator>();
+            .DecorateSingle<IProviderManager, ProviderManagerDecorator>()
+            .DecorateSingle<IImageProcessor, ImageProcessorDecorator>();
         services.AddSingleton(sp => new Lazy<ISubtitleManager>(
             sp.GetRequiredService<ISubtitleManager>
         ));
