@@ -111,7 +111,7 @@ public sealed class ProviderManagerDecorator(
             Path = fakePath,
             Width = 2,
             Height = 3,
-            BlurHash = "000",
+            BlurHash = "L00000fQfQ00fQfQfQfQ~qj[j[fQ",
             DateModified = new FileInfo(fakePath).LastWriteTimeUtc,
         };
     }

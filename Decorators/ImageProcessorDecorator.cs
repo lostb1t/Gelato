@@ -106,19 +106,40 @@ public sealed class ImageProcessorDecorator(
 
     private async Task DownloadToFileAsync(string url, string destPath)
     {
+        const int maxAttempts = 3;
         var client = http.CreateClient();
-        using var response = await client
-            .GetAsync(url, HttpCompletionOption.ResponseHeadersRead)
-            .ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        await using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-        await using var file = new FileStream(
-            destPath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None
-        );
-        await stream.CopyToAsync(file).ConfigureAwait(false);
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                using var response = await client
+                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead)
+                    .ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                await using var stream = await response
+                    .Content.ReadAsStreamAsync()
+                    .ConfigureAwait(false);
+                await using var file = new FileStream(
+                    destPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None
+                );
+                await stream.CopyToAsync(file).ConfigureAwait(false);
+                return;
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                log.LogWarning(
+                    ex,
+                    "ImageProcessor: download attempt {Attempt}/{Max} failed for {Url}, retrying...",
+                    attempt,
+                    maxAttempts,
+                    url
+                );
+                await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt))).ConfigureAwait(false);
+            }
+        }
     }
 
     // — pass-through for everything else —
