@@ -3,6 +3,7 @@ using Gelato.Config;
 using Gelato.Decorators;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -25,7 +26,8 @@ public sealed class GelatoManager(
     IMemoryCache memoryCache,
     IServerConfigurationManager serverConfig,
     ILibraryManager libraryManager,
-    IDirectoryService directoryService
+    IDirectoryService directoryService,
+    IApplicationPaths appPaths
 )
 {
     public const string StreamTag = "gelato-stream";
@@ -773,10 +775,13 @@ public sealed class GelatoManager(
                 var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
                 if (!string.IsNullOrWhiteSpace(primary))
                 {
-                    season.ImageInfos = new List<ItemImageInfo>
-                    {
-                        new() { Type = ImageType.Primary, Path = primary },
-                    }.ToArray();
+                    ProviderManagerDecorator.SetRemoteImage(
+                        appPaths,
+                        season,
+                        ImageType.Primary,
+                        null,
+                        primary
+                    );
                 }
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
@@ -1043,16 +1048,19 @@ public sealed class GelatoManager(
         item.DateLastSaved = DateTime.UtcNow;
         item.DateCreated = DateTime.UtcNow;
 
+        item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
+
         var primary = meta.Poster ?? meta.Thumbnail;
         if (!string.IsNullOrWhiteSpace(primary))
         {
-            item.ImageInfos = new List<ItemImageInfo>
-            {
-                new() { Type = ImageType.Primary, Path = primary },
-            }.ToArray();
+            ProviderManagerDecorator.SetRemoteImage(
+                appPaths,
+                item,
+                ImageType.Primary,
+                null,
+                primary
+            );
         }
-
-        item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
         item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
         return item;
     }

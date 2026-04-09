@@ -69,6 +69,14 @@
             </div>
        
 
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkLazyImages" />
+                <span>Lazy images</span>
+              </label>
+              <div class="fieldDescription">Download images on first access instead of at import time. Recommended.</div>
+            </div>
+
             <h3 class="sectionTitle" style="margin-top: 2em;">Search & Discovery</h3>
 
             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -275,6 +283,7 @@
         const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
         const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
         const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
+        const chkLazyImages = page.querySelector('#chkLazyImages');
 
         // Catalogs
         const catalogsList = page.querySelector('#catalogsList');
@@ -553,6 +562,7 @@
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
             if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
+            if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? true;
 
             // User Overrides Logic
             await loadUsers();
@@ -586,6 +596,7 @@
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
             cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
+            cfg.LazyImages = chkLazyImages.checked;
 
             // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
             if (allCatalogs.length > 0) {

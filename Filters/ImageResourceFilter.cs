@@ -5,7 +5,8 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Filters;
 
 /// <summary>
-///  Replaces image requests from stremio sources
+/// Proxies image requests for search results (non-library gelato items).
+/// Library item images are handled by ImageProcessorDecorator.
 /// </summary>
 public sealed class ImageResourceFilter(
     IHttpClientFactory http,
@@ -18,7 +19,13 @@ public sealed class ImageResourceFilter(
         ResourceExecutionDelegate next
     )
     {
-        if (ctx.ActionDescriptor is not ControllerActionDescriptor { ActionName: "GetItemImage" })
+        if (
+            ctx.ActionDescriptor
+            is not ControllerActionDescriptor
+            {
+                ActionName: "GetItemImage" or "GetItemImageByIndex" or "GetItemImage2"
+            }
+        )
         {
             await next();
             return;
@@ -35,14 +42,19 @@ public sealed class ImageResourceFilter(
             return;
         }
 
-        var stremioMeta = manager.GetStremioMeta(guid);
-        if (stremioMeta?.Poster is null)
+        // Only handle cached search results — library items go through ProcessImage
+        var url = manager.GetStremioMeta(guid)?.Poster;
+        if (url is null)
         {
             await next();
             return;
         }
 
-        var url = stremioMeta.Poster;
+        log.LogInformation(
+            "ImageFilter: proxying search result item={ItemId} url={Url}",
+            guid,
+            url
+        );
 
         try
         {
@@ -55,6 +67,12 @@ public sealed class ImageResourceFilter(
 
             if (!res.IsSuccessStatusCode)
             {
+                log.LogWarning(
+                    "ImageFilter: upstream returned {Status} for item={ItemId} url={Url}",
+                    res.StatusCode,
+                    guid,
+                    url
+                );
                 await next();
                 return;
             }
@@ -72,7 +90,7 @@ public sealed class ImageResourceFilter(
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "Image proxy failed for item {ItemId}", guid);
+            log.LogWarning(ex, "ImageFilter: proxy failed for item={ItemId} url={Url}", guid, url);
             await next();
         }
     }
