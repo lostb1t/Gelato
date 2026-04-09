@@ -39,18 +39,34 @@ public sealed class ProviderManagerDecorator(
                 imageIndex,
                 url
             );
+
+            // Also write a .url sidecar at the item's existing local image path (if any).
+            // If Jellyfin reverts the item's path back to the original metadata path,
+            // ImageProcessorDecorator can still lazy-download from the sidecar.
+            var existing = item.GetImageInfo(type, imageIndex ?? 0);
+            if (existing?.IsLocalFile == true && existing.Path is not null)
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(existing.Path)!);
+                    if (!File.Exists(existing.Path))
+                        File.WriteAllBytes(existing.Path, Array.Empty<byte>());
+                    File.WriteAllText(existing.Path + ".url", url);
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning(
+                        ex,
+                        "SaveImage: could not write sidecar at existing path {Path}",
+                        existing.Path
+                    );
+                }
+            }
+
             SetRemoteImage(appPaths, item, type, imageIndex, url);
             return Task.CompletedTask;
         }
 
-        log.LogInformation(
-            "SaveImage passthrough: item={Id} name={Name} type={ImageType} index={Index} url={Url}",
-            item.Id,
-            item.Name,
-            type,
-            imageIndex,
-            url
-        );
         return base.SaveImage(item, url, type, imageIndex, cancellationToken);
     }
 
