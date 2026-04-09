@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.8.0] - 2026-04-09\n\n### 🚀 Features\n\n- Lazy loading of images (#144)\n",
+        "checksum": "b925b862d6e9d39d63ab12a7b426a9d1",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.8.0/gelato_0.26.8.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-09T19:41:32Z",
+        "version": "0.26.8.0"
+      },
+      {
         "changelog": "## [0.26.7.4] - 2026-04-08\n\n### 🐛 Bug Fixes\n\n- Allow number and string for realeaseinfo\n",
         "checksum": "e8ef7143d62cdd8f84d0f3ffae32fe54",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.7.4/gelato_0.26.7.4.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-19T19:26:20Z",
         "version": "0.26.1.5"
-      },
-      {
-        "changelog": "## [0.26.1.4] - 2026-02-19\n\n### 🐛 Bug Fixes\n\n- Catalog form\n",
-        "checksum": "a9e28aaa59ff6b546b0b86fdcffaa4dd",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.4/gelato_0.26.1.4.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-19T18:55:12Z",
-        "version": "0.26.1.4"
       }
     ]
   }
