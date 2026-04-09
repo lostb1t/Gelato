@@ -38,7 +38,12 @@ public sealed class ImageProcessorDecorator(
     )
     {
         var imagePath = options.Image?.Path;
-        if (imagePath is not null && IsGelatoPath(imagePath) && new FileInfo(imagePath).Length == 0)
+        if (
+            GelatoPlugin.Instance?.Configuration.LazyImages == true
+            && imagePath is not null
+            && IsGelatoPath(imagePath)
+            && new FileInfo(imagePath).Length == 0
+        )
         {
             var urlFile = imagePath + ".url";
             if (File.Exists(urlFile))

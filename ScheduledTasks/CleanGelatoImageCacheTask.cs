@@ -12,22 +12,45 @@ public sealed class CleanGelatoImageCacheTask(
     public string Name => "Clean gelato image cache";
     public string Key => "CleanGelatoImageCacheTask";
     public string Description =>
-        "Deletes Jellyfin's processed image cache so scaled/transcoded versions are regenerated on next request";
+        "Resets downloaded gelato images so they are re-fetched on next access, and clears Jellyfin's processed image cache";
     public string Category => "Gelato Maintenance";
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
 
     public Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
     {
-        var dir = appPaths.ImageCachePath;
-        if (Directory.Exists(dir))
+        // Zero out downloaded source images so ImageProcessorDecorator re-downloads
+        // on next request. The .url sidecars are kept so the URL is still known.
+        var gelatoImagesDir = Path.Combine(appPaths.DataPath, "gelato", "images");
+        if (Directory.Exists(gelatoImagesDir))
         {
-            Directory.Delete(dir, recursive: true);
-            log.LogInformation("CleanGelatoImageCacheTask: deleted {Dir}", dir);
+            foreach (
+                var file in Directory.EnumerateFiles(
+                    gelatoImagesDir,
+                    "*.jpg",
+                    SearchOption.AllDirectories
+                )
+            )
+            {
+                File.WriteAllBytes(file, Array.Empty<byte>());
+            }
+            log.LogInformation(
+                "CleanGelatoImageCacheTask: reset source images in {Dir}",
+                gelatoImagesDir
+            );
         }
-        else
+
+        progress?.Report(50.0);
+
+        // Clear Jellyfin's processed/resized image cache
+        var imageCacheDir = appPaths.ImageCachePath;
+        if (Directory.Exists(imageCacheDir))
         {
-            log.LogInformation("CleanGelatoImageCacheTask: nothing to clean at {Dir}", dir);
+            Directory.Delete(imageCacheDir, recursive: true);
+            log.LogInformation(
+                "CleanGelatoImageCacheTask: deleted image cache {Dir}",
+                imageCacheDir
+            );
         }
 
         progress?.Report(100.0);
