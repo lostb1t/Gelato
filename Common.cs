@@ -547,3 +547,10 @@ public static class BaseItemExtensions
         item.ExternalId = JsonSerializer.Serialize(data);
     }
 }
+
+public static class StringExtensions
+{
+    public static bool IsUrl(this string s) =>
+        s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+        || s.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+}

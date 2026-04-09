@@ -26,12 +26,9 @@ public sealed class ProviderManagerDecorator(
         CancellationToken cancellationToken
     )
     {
-        if (
-            url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-        )
+        if (url.IsUrl())
         {
-            log.LogInformation(
+            log.LogDebug(
                 "SaveImage intercepted: item={Id} name={Name} type={ImageType} index={Index} url={Url}",
                 item.Id,
                 item.Name,

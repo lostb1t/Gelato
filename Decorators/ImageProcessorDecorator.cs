@@ -68,7 +68,7 @@ public sealed class ImageProcessorDecorator(
                         // Persist sidecar at the actual path so future downloads skip the fallback.
                         if (urlFile != imagePath + ".url")
                             File.WriteAllText(imagePath + ".url", url);
-                        log.LogInformation(
+                        log.LogDebug(
                             "ImageProcessor: downloaded image to {Path} from {Url}",
                             imagePath,
                             url
@@ -130,7 +130,7 @@ public sealed class ImageProcessorDecorator(
             }
             catch (Exception ex) when (attempt < maxAttempts)
             {
-                log.LogWarning(
+                log.LogDebug(
                     ex,
                     "ImageProcessor: download attempt {Attempt}/{Max} failed for {Url}, retrying...",
                     attempt,
