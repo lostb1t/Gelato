@@ -33,6 +33,7 @@ public sealed class GelatoManager(
 {
     public const string StreamTag = "gelato-stream";
     public const string VirtualTag = "gelato-virtual";
+    public const string TreeSyncedTag = "gelato-tree-synced";
 
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
@@ -946,7 +947,8 @@ public sealed class GelatoManager(
             .Where(m => m.EndDate is null || m.EndDate >= sentinel)
             .ToList();
 
-        var continuingSeries = libraryManager
+        // Pass 2: continuing gelato series + continuing local series (if ExtendLocalSeriesTrees)
+        var continuingGelatoSeries = libraryManager
             .GetItemList(
                 new InternalItemsQuery
                 {
@@ -957,6 +959,28 @@ public sealed class GelatoManager(
             )
             .OfType<Series>()
             .ToList();
+
+        var continuingLocalSeries = cfg.ExtendLocalSeriesTrees
+            ? libraryManager
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = [BaseItemKind.Series],
+                        SeriesStatuses = [SeriesStatus.Continuing],
+                    }
+                )
+                .OfType<Series>()
+                .Where(s =>
+                    !s.IsGelato()
+                    && (
+                        !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
+                        || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
+                    )
+                )
+                .ToList()
+            : [];
+
+        var continuingSeries = continuingGelatoSeries.Concat(continuingLocalSeries).ToList();
 
         var total = needsEndDate.Count + continuingSeries.Count;
         var i = 0;
@@ -1009,7 +1033,17 @@ public sealed class GelatoManager(
             {
                 var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
                 if (meta is not null)
-                    await SyncSeriesTreesAsync(cfg, meta, cancellationToken).ConfigureAwait(false);
+                {
+                    var isLocal = !series.IsGelato();
+                    await SyncSeriesTreesAsync(
+                            cfg,
+                            meta,
+                            cancellationToken,
+                            existingSeries: isLocal ? series : null,
+                            tagVirtual: isLocal
+                        )
+                        .ConfigureAwait(false);
+                }
             }
             catch (Exception ex)
             {
@@ -1028,13 +1062,13 @@ public sealed class GelatoManager(
         }
 
         _log.LogInformation(
-            "SyncReleaseDates completed. EndDate fixed: {EndDateCount}, series synced: {SeriesCount}.",
+            "SyncReleaseDates completed. EndDate fixed: {EndDateCount}, continuing series synced: {SeriesCount}.",
             needsEndDate.Count,
             continuingSeries.Count
         );
 
-        // Pass 3: virtual tree extension for non-gelato (local) series
-        if (cfg.EnableMixed)
+        // Pass 3: first-time tree sync for non-continuing local series
+        if (cfg.ExtendLocalSeriesTrees)
         {
             await SyncLocalSeriesTreesAsync(cfg, stremio, cancellationToken, progress, i, total)
                 .ConfigureAwait(false);
@@ -1059,15 +1093,17 @@ public sealed class GelatoManager(
             .OfType<Series>()
             .Where(s =>
                 !s.IsGelato()
+                && s.Status != SeriesStatus.Continuing // continuing handled in pass 2
                 && (
                     !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
                     || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
                 )
+                && !(s.Tags?.Contains(TreeSyncedTag, StringComparer.OrdinalIgnoreCase) ?? false)
             )
             .ToList();
 
         _log.LogInformation(
-            "SyncReleaseDates pass 3: {Count} local (non-gelato) series to extend.",
+            "SyncReleaseDates pass 3: {Count} local (non-gelato) series to extend for the first time.",
             localSeries.Count
         );
 
@@ -1081,6 +1117,7 @@ public sealed class GelatoManager(
             {
                 var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
                 if (meta is not null)
+                {
                     await SyncSeriesTreesAsync(
                             cfg,
                             meta,
@@ -1089,6 +1126,11 @@ public sealed class GelatoManager(
                             tagVirtual: true
                         )
                         .ConfigureAwait(false);
+
+                    // Mark as synced so we skip on future runs
+                    series.Tags = [.. (series.Tags ?? []), TreeSyncedTag];
+                    repo.SaveItems([series], ct);
+                }
             }
             catch (Exception ex)
             {
@@ -1151,6 +1193,26 @@ public sealed class GelatoManager(
                     item.Name,
                     item.Id
                 );
+            }
+        }
+
+        // Remove gelato-tree-synced tag from affected series so they get re-synced if re-enabled
+        var affectedSeriesIds = seasons
+            .Select(s => s.SeriesId)
+            .Concat(episodes.OfType<Episode>().Select(e => e.SeriesId))
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+
+        foreach (var seriesId in affectedSeriesIds)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (libraryManager.GetItemById(seriesId) is Series series)
+            {
+                series.Tags = series
+                    .Tags?.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                repo.SaveItems([series], ct);
             }
         }
     }

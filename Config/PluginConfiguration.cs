@@ -14,6 +14,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public int CatalogMaxItems { get; set; } = 100;
     public string Url { get; set; } = "";
     public bool EnableMixed { get; set; } = false;
+    public bool ExtendLocalSeriesTrees { get; set; } = true;
     public bool FilterUnreleased { get; set; } = false;
     public int FilterUnreleasedBufferDays { get; set; } = 0;
     public bool DisableSourceCount { get; set; } = true;
@@ -87,6 +88,7 @@ public class UserConfig
             StreamTTL = baseConfig.StreamTTL,
             CatalogMaxItems = baseConfig.CatalogMaxItems,
             EnableMixed = baseConfig.EnableMixed,
+            ExtendLocalSeriesTrees = baseConfig.ExtendLocalSeriesTrees,
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
             DisableSourceCount = baseConfig.DisableSourceCount,

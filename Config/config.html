@@ -85,9 +85,19 @@
                 <span>Show streams for local items</span>
               </label>
               <div class="fieldDescription">
-                When enabled, Gelato will also provide streams for shows imported by Jellyfin's file scanner.
-                Missing seasons and episodes will be added as virtual items so you can stream them even if they're not on disk.
-                Run the <strong>Sync Release Dates</strong> task after changing this setting — it will create virtual items when enabled, or remove them when disabled.
+                When enabled, Gelato will provide streams for shows imported by Jellyfin's file scanner.
+              </div>
+            </div>
+
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkExtendLocalSeriesTrees" />
+                <span>Extend local series trees with missing episodes</span>
+              </label>
+              <div class="fieldDescription">
+                When enabled, Gelato will inject missing seasons and episodes (as virtual items) into locally scanned shows,
+                so you can stream episodes you don't have on disk. Run the <strong>Sync Release Dates</strong> task after
+                changing this setting — it will create virtual items when enabled, or remove them when disabled.
               </div>
             </div>
 
@@ -282,6 +292,7 @@
 
         const txtStreamTTL = page.querySelector('#txtStreamTTL');
         const chkEnableMixed = page.querySelector('#chkEnableMixed');
+        const chkExtendLocalSeriesTrees = page.querySelector('#chkExtendLocalSeriesTrees');
         const chkDisableSearch = page.querySelector('#chkDisableSearch');
         const chkFilterUnreleased = page.querySelector('#chkFilterUnreleased');
         const txtBufferDays = page.querySelector('#txtBufferDays');
@@ -561,6 +572,7 @@
             if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
             if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
+            if (chkExtendLocalSeriesTrees) chkExtendLocalSeriesTrees.checked = cfg.ExtendLocalSeriesTrees ?? true;
             if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
             if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
             if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 0;
@@ -593,6 +605,7 @@
             // Stream TTL
             cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
             cfg.EnableMixed = chkEnableMixed.checked;
+            cfg.ExtendLocalSeriesTrees = chkExtendLocalSeriesTrees.checked;
 
             cfg.DisableSearch = chkDisableSearch.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked;
