@@ -198,6 +198,19 @@ public sealed class KeyLock
     }
 }
 
+public static class StringExtensions
+{
+    public static string FirstCharToUpperInvariant(this string input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return input;
+        }
+
+        return char.ToUpperInvariant(input[0]) + input[1..];
+    }
+}
+
 public static class EnumMappingExtensions
 {
     public static StremioMediaType ToStremio(this BaseItemKind kind)
