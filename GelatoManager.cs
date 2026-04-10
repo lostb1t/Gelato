@@ -1062,6 +1062,122 @@ public sealed class GelatoManager(
         );
     }
 
+    /// <summary>
+    /// Unified sync: fixes EndDate on all gelato media items and fetches new episodes for
+    /// continuing series and digital release dates for movies from TMDB.
+    /// </summary>
+    public async Task SyncAllMeta(
+        Guid userId,
+        CancellationToken cancellationToken,
+        IProgress<double>? progress = null
+    )
+    {
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+        var stremio = cfg.Stremio;
+        if (stremio is null)
+            return;
+
+        var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var gelatoProviders = new Dictionary<string, string>
+        {
+            { "Stremio", string.Empty },
+            { "stremio", string.Empty },
+        };
+
+        // Fetch all gelato items that need EndDate resolution
+        var allItems = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes =
+                    [
+                        BaseItemKind.Movie,
+                        BaseItemKind.Series,
+                        BaseItemKind.Season,
+                        BaseItemKind.Episode,
+                    ],
+                    HasAnyProviderId = gelatoProviders,
+                }
+            )
+            .Where(m =>
+                m.EndDate is null
+                || m.EndDate >= sentinel
+                || (m is Series s && s.Status == SeriesStatus.Continuing)
+            )
+            .ToList();
+
+        _log.LogInformation(
+            "SyncAllMeta: found {Count} items needing EndDate resolution.",
+            allItems.Count
+        );
+
+        var total = allItems.Count;
+        var i = 0;
+
+        foreach (var item in allItems)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                switch (item)
+                {
+                    case Movie movie:
+                    {
+                        var meta = await stremio.GetMetaAsync(movie).ConfigureAwait(false);
+                        if (meta is null)
+                            break;
+                        await EnrichMetaAsync(meta, cancellationToken).ConfigureAwait(false);
+                        var digital = meta.GetDigitalReleaseDate();
+                        movie.EndDate = digital ?? sentinel;
+                        repo.SaveItems([movie], cancellationToken);
+                        _log.LogDebug(
+                            "SyncAllMeta: movie {Name} EndDate → {Date}",
+                            movie.Name,
+                            movie.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                        );
+                        break;
+                    }
+
+                    case Series series:
+                    {
+                        series.EndDate = series.PremiereDate ?? sentinel;
+                        repo.SaveItems([series], cancellationToken);
+                        // If still airing, sync new episodes too
+                        if (series.Status == SeriesStatus.Continuing)
+                        {
+                            var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+                            if (meta is not null)
+                                await SyncSeriesTreesAsync(cfg, meta, cancellationToken)
+                                    .ConfigureAwait(false);
+                        }
+                        break;
+                    }
+
+                    case Season season:
+                        season.EndDate = season.PremiereDate ?? sentinel;
+                        repo.SaveItems([season], cancellationToken);
+                        break;
+
+                    case Episode episode:
+                        episode.EndDate = episode.PremiereDate ?? sentinel;
+                        repo.SaveItems([episode], cancellationToken);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "SyncAllMeta: failed for {Name} ({Id})", item.Name, item.Id);
+            }
+            finally
+            {
+                if (total > 0)
+                    progress?.Report(100.0 * ++i / total);
+            }
+        }
+
+        _log.LogInformation("SyncAllMeta completed. Processed {Total} items.", total);
+    }
+
     private BaseItem? SaveItem(BaseItem item, Folder parent)
     {
         return SaveItems([item], parent).FirstOrDefault();
