@@ -490,12 +490,6 @@ public static class BaseItemExtensions
         return !string.IsNullOrWhiteSpace(item.GetProviderId("Stremio"));
     }
 
-    public static bool IsVirtualGelato(this BaseItem item)
-    {
-        return item.Tags is not null
-            && item.Tags.Contains(GelatoManager.VirtualTag, StringComparer.OrdinalIgnoreCase);
-    }
-
     public static bool HasStreamTag(this BaseItem item)
     {
         return item.Tags is not null

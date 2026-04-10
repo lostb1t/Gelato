@@ -32,7 +32,6 @@ public sealed class GelatoManager(
 )
 {
     public const string StreamTag = "gelato-stream";
-    public const string VirtualTag = "gelato-virtual";
     public const string TreeSyncedTag = "gelato-tree-synced";
 
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
@@ -635,8 +634,7 @@ public sealed class GelatoManager(
         PluginConfiguration cfg,
         StremioMeta seriesMeta,
         CancellationToken ct,
-        Series? existingSeries = null,
-        bool tagVirtual = false
+        Series? existingSeries = null
     )
     {
         var seriesRootFolder = cfg.SeriesFolder;
@@ -811,8 +809,6 @@ public sealed class GelatoManager(
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
-                if (tagVirtual)
-                    season.Tags = [.. (season.Tags ?? []), VirtualTag];
                 series.AddChild(season);
                 seasonsInserted++;
             }
@@ -885,8 +881,6 @@ public sealed class GelatoManager(
                 episode.ParentId = season.Id;
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
-                if (tagVirtual)
-                    episode.Tags = [.. (episode.Tags ?? []), VirtualTag];
 
                 episodeList.Add(episode);
                 episodesInserted++;
@@ -1039,8 +1033,7 @@ public sealed class GelatoManager(
                             cfg,
                             meta,
                             cancellationToken,
-                            existingSeries: isLocal ? series : null,
-                            tagVirtual: isLocal
+                            existingSeries: isLocal ? series : null
                         )
                         .ConfigureAwait(false);
                 }
@@ -1118,13 +1111,7 @@ public sealed class GelatoManager(
                 var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
                 if (meta is not null)
                 {
-                    await SyncSeriesTreesAsync(
-                            cfg,
-                            meta,
-                            ct,
-                            existingSeries: series,
-                            tagVirtual: true
-                        )
+                    await SyncSeriesTreesAsync(cfg, meta, ct, existingSeries: series)
                         .ConfigureAwait(false);
 
                     // Mark as synced so we skip on future runs
@@ -1151,18 +1138,35 @@ public sealed class GelatoManager(
 
     private void CleanVirtualTreeItems(CancellationToken ct)
     {
-        var virtualItems = libraryManager
+        // Fill-in items for mixed (locally-scanned) series: have Stremio ID + gelato:// path,
+        // but their parent Series does NOT have a Stremio ID (it was scanned by Jellyfin).
+        var candidates = libraryManager
             .GetItemList(
                 new InternalItemsQuery
                 {
-                    Tags = [VirtualTag],
                     IncludeItemTypes = [BaseItemKind.Season, BaseItemKind.Episode],
                 }
             )
             .Where(item =>
-                !string.IsNullOrWhiteSpace(item.Path)
+                item.IsGelato()
+                && !string.IsNullOrWhiteSpace(item.Path)
                 && item.Path.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase)
             )
+            .ToList();
+
+        // Keep only items whose parent Series is locally scanned (no Stremio provider ID)
+        var virtualItems = candidates
+            .Where(item =>
+            {
+                var seriesId =
+                    item is Episode ep ? ep.SeriesId
+                    : item is Season s ? s.SeriesId
+                    : Guid.Empty;
+                if (seriesId == Guid.Empty)
+                    return false;
+                var series = libraryManager.GetItemById(seriesId) as Series;
+                return series is not null && string.IsNullOrEmpty(series.GetProviderId("Stremio"));
+            })
             .ToList();
 
         if (virtualItems.Count == 0)
