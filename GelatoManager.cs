@@ -1086,6 +1086,17 @@ public sealed class GelatoManager(
         item.DateCreated = DateTime.UtcNow;
         item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
         item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+
+        var primaryImage = meta.Poster ?? meta.Thumbnail;
+        if (!string.IsNullOrWhiteSpace(primaryImage))
+            ProviderManagerDecorator.SetRemoteImage(
+                appPaths,
+                item,
+                ImageType.Primary,
+                null,
+                primaryImage
+            );
+
         return item;
     }
 }
