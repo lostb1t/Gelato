@@ -195,6 +195,74 @@ public class GelatoStremioProvider(
         return await GetMetaAsync(id, item.GetBaseItemKind().ToStremio()).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Fetches digital (type 4) release dates from TMDB for the given TMDB movie ID
+    /// Uses the TMDB API key from the Jellyfin TMDB plugin if configured, otherwise falls back
+    /// to the built-in default key.
+    /// </summary>
+    private static string GetTmdbApiKey()
+    {
+        const string defaultKey = "4219e299c89411838049ab0dab19ebd5";
+        try
+        {
+            // Avoid a hard compile-time dependency on MediaBrowser.Providers.
+            // Jellyfin.Providers is loaded at runtime — grab the key via reflection if available.
+            var pluginType = Type.GetType(
+                "MediaBrowser.Providers.Plugins.Tmdb.Plugin, Jellyfin.Providers",
+                throwOnError: false
+            );
+            var instance = pluginType?.GetProperty("Instance")?.GetValue(null);
+            var cfg = instance?.GetType().GetProperty("Configuration")?.GetValue(instance);
+            var key = cfg?.GetType().GetProperty("TmdbApiKey")?.GetValue(cfg) as string;
+            return string.IsNullOrWhiteSpace(key) ? defaultKey : key;
+        }
+        catch
+        {
+            return defaultKey;
+        }
+    }
+
+    /// <summary>
+    /// Fetches TMDB release dates for the given movie meta
+    public async Task EnrichDigitalReleaseDateAsync(
+        StremioMeta meta,
+        CancellationToken cancellationToken
+    )
+    {
+        if (meta.App_Extras?.ReleaseDates is not null)
+            return;
+
+        var tmdbId = meta.GetProviderIds().GetValueOrDefault(nameof(MetadataProvider.Tmdb));
+        if (string.IsNullOrWhiteSpace(tmdbId))
+            return;
+
+        var apiKey = GetTmdbApiKey();
+        var url =
+            $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(tmdbId)}/release_dates?api_key={apiKey}";
+
+        try
+        {
+            using var client = http.CreateClient(nameof(GelatoStremioProvider));
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var response = await client
+                .GetStringAsync(url, cancellationToken)
+                .ConfigureAwait(false);
+            var container = JsonSerializer.Deserialize<TmdbReleaseDatesContainer>(
+                response,
+                JsonOpts
+            );
+            if (container is not null)
+            {
+                meta.App_Extras ??= new StremioAppExtras();
+                meta.App_Extras.ReleaseDates = container;
+            }
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug(ex, "EnrichDigitalReleaseDate: failed for tmdb:{TmdbId}", tmdbId);
+        }
+    }
+
     public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
     {
         return await GetStreamsAsync(uri.ExternalId, uri.MediaType);
@@ -539,6 +607,32 @@ public class StremioMeta
         return new DateTime(year.Value, 1, 1);
     }
 
+    /// <summary>
+    /// Returns the earliest digital (TMDB type 4) release date across all countries, or null if unavailable.
+    /// </summary>
+    public DateTime? GetDigitalReleaseDate()
+    {
+        var results = App_Extras?.ReleaseDates?.Results;
+        if (results is null)
+            return null;
+
+        DateTime? earliest = null;
+        foreach (var country in results)
+        {
+            if (country.ReleaseDates is null)
+                continue;
+            foreach (var rd in country.ReleaseDates)
+            {
+                if (rd.Type == 4 && rd.ReleaseDate.HasValue)
+                {
+                    if (earliest is null || rd.ReleaseDate.Value < earliest.Value)
+                        earliest = rd.ReleaseDate.Value;
+                }
+            }
+        }
+        return earliest;
+    }
+
     public bool IsValid()
     {
         return !Id.Contains("error");
@@ -548,36 +642,37 @@ public class StremioMeta
     {
         var now = DateTime.UtcNow;
 
-        // Check Released date first (most specific)
+        // Movies: prefer digital release date (TMDB type-4) over theatrical
+        if (Type == StremioMediaType.Movie)
+        {
+            var digital = GetDigitalReleaseDate();
+            if (digital.HasValue)
+                return digital.Value.AddDays(bufferDays) <= now;
+        }
+
         if (Released.HasValue)
         {
-            var homeReleaseDate = Released.Value.AddDays(bufferDays);
-            return homeReleaseDate <= now;
+            return Released.Value.AddDays(bufferDays) <= now;
         }
 
         // Check FirstAired for TV episodes
         if (FirstAired.HasValue)
         {
-            return FirstAired.Value <= now;
+            return FirstAired.Value.AddDays(bufferDays) <= now;
         }
 
         if (Status is not null)
         {
             if (Status == StremioStatus.Upcoming)
-            {
                 return false;
-            }
             if (Status == StremioStatus.Ended || Status == StremioStatus.Continuing)
-            {
                 return true;
-            }
         }
 
         // Fall back to year-based check
         var year = GetYear();
         if (year.HasValue)
         {
-            // For year-only dates, assume mid-year release + buffer
             var estimatedRelease = new DateTime(year.Value, 6, 1).AddDays(bufferDays);
             return estimatedRelease <= now;
         }
@@ -628,6 +723,34 @@ public class StremioAppExtras
     public List<StremioCast>? Writers { get; set; }
     public string? Certification { get; set; }
     public List<String?>? SeasonPosters { get; set; }
+
+    [JsonPropertyName("releaseDates")]
+    public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
+}
+
+public class TmdbReleaseDatesContainer
+{
+    public List<TmdbReleaseDateCountry>? Results { get; set; }
+}
+
+public class TmdbReleaseDateCountry
+{
+    [JsonPropertyName("iso_3166_1")]
+    public string? Iso31661 { get; set; }
+
+    [JsonPropertyName("release_dates")]
+    public List<TmdbReleaseDateItem>? ReleaseDates { get; set; }
+}
+
+public class TmdbReleaseDateItem
+{
+    [JsonPropertyName("release_date")]
+    public DateTime? ReleaseDate { get; set; }
+
+    /// <summary>TMDB release type: 1=Premiere, 2=LimitedTheatrical, 3=Theatrical, 4=Digital, 5=Physical, 6=TV</summary>
+    public int Type { get; set; }
+
+    public string? Certification { get; set; }
 }
 
 public class StremioCast

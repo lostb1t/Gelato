@@ -9,7 +9,7 @@ public sealed class CleanGelatoImageCacheTask(
     ILogger<CleanGelatoImageCacheTask> log
 ) : IScheduledTask
 {
-    public string Name => "Clean gelato image cache";
+    public string Name => "Clean image cache";
     public string Key => "CleanGelatoImageCacheTask";
     public string Description =>
         "Resets downloaded gelato images so they are re-fetched on next access, and clears Jellyfin's processed image cache";

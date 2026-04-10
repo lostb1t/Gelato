@@ -558,7 +558,7 @@
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
             if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
             if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
-            if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays || 30;
+            if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 0;
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
             if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
@@ -591,7 +591,7 @@
 
             cfg.DisableSearch = chkDisableSearch.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked;
-            cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) || 30;
+            cfg.FilterUnreleasedBufferDays = txtBufferDays.value !== '' ? parseInt(txtBufferDays.value) : 0;
 
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;

@@ -153,9 +153,7 @@ public class SearchActionFilter(
 
         if (filterUnreleased)
         {
-            results = results
-                .Where(x => x.IsReleased(StremioMediaType.Movie == x.Type ? bufferDays : 0))
-                .ToList();
+            results = results.Where(x => x.IsReleased(bufferDays)).ToList();
         }
 
         return results;

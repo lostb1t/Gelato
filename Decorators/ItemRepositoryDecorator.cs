@@ -107,14 +107,10 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         if (!isPremiereFilteredQuery)
             return filter;
 
-        // Series/episodes should include currently airing content. Movies can use the buffer.
-        var days =
-            includeTypes.Contains(BaseItemKind.Series)
-            || includeTypes.Contains(BaseItemKind.Season)
-            || includeTypes.Contains(BaseItemKind.Episode)
-                ? 0
-                : bufferDays;
-        filter.MaxPremiereDate = DateTime.Today.AddDays(days);
+        // All media types use EndDate (digital for movies, premiere for series/episodes).
+        // sentinel 9999 = no release date known → excluded by MaxEndDate <= today + bufferDays.
+        if (filter.MaxEndDate is null)
+            filter.MaxEndDate = DateTime.Today.AddDays(bufferDays);
 
         return filter;
     }

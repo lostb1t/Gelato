@@ -49,6 +49,8 @@ public sealed class GelatoMovieMetadataProvider(
         if (meta is null || !meta.IsValid())
             return result;
 
+        await manager.EnrichMetaAsync(meta, cancellationToken).ConfigureAwait(false);
+
         if (manager.IntoBaseItem(meta) is not Movie movie)
             return result;
 
