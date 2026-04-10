@@ -150,17 +150,10 @@ public class SearchActionFilter(
 
         var filterUnreleased = cfg.FilterUnreleased;
         var bufferDays = cfg.FilterUnreleasedBufferDays;
-        var useDigital = cfg.FilterUnreleasedDigital;
 
         if (filterUnreleased)
         {
-            results = results
-                .Where(x =>
-                {
-                    var isMovie = StremioMediaType.Movie == x.Type;
-                    return x.IsReleased(isMovie ? bufferDays : 0, isMovie && useDigital);
-                })
-                .ToList();
+            results = results.Where(x => x.IsReleased(bufferDays)).ToList();
         }
 
         return results;

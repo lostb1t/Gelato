@@ -614,14 +614,16 @@ public class StremioMeta
         return !Id.Contains("error");
     }
 
-    public bool IsReleased(int bufferDays = 0, bool useDigital = false)
+    public bool IsReleased(int bufferDays = 0)
     {
         var now = DateTime.UtcNow;
 
-        if (useDigital && Type == StremioMediaType.Movie)
+        // Movies: prefer digital release date (TMDB type-4) over theatrical
+        if (Type == StremioMediaType.Movie)
         {
             var digital = GetDigitalReleaseDate();
-            return digital.HasValue && digital.Value <= now;
+            if (digital.HasValue)
+                return digital.Value.AddDays(bufferDays) <= now;
         }
 
         if (Released.HasValue)
@@ -632,7 +634,7 @@ public class StremioMeta
         // Check FirstAired for TV episodes
         if (FirstAired.HasValue)
         {
-            return FirstAired.Value <= now;
+            return FirstAired.Value.AddDays(bufferDays) <= now;
         }
 
         if (Status is not null)

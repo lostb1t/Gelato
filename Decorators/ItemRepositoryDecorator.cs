@@ -69,7 +69,6 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
             return filter;
 
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
-        var filterUnreleasedDigital = GelatoPlugin.Instance.Configuration.FilterUnreleasedDigital;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
         var includeTypes = filter.IncludeItemTypes;
         var hasIncludeTypes = includeTypes.Length != 0;
@@ -108,26 +107,10 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         if (!isPremiereFilteredQuery)
             return filter;
 
-        var includesMovies = !hasIncludeTypes || includeTypes.Contains(BaseItemKind.Movie);
-        var includesSeriesContent =
-            !hasIncludeTypes
-            || includeTypes.Contains(BaseItemKind.Series)
-            || includeTypes.Contains(BaseItemKind.Season)
-            || includeTypes.Contains(BaseItemKind.Episode);
-
-        if (includesMovies && filterUnreleasedDigital && filter.MaxEndDate is null)
-        {
-            // Movies use EndDate as the digital release date sentinel.
-            // sentinel 9999 = no digital date → excluded by MaxEndDate <= today.
+        // All media types use EndDate (digital for movies, premiere for series/episodes).
+        // sentinel 9999 = no release date known → excluded by MaxEndDate <= today + bufferDays.
+        if (filter.MaxEndDate is null)
             filter.MaxEndDate = DateTime.Today.AddDays(bufferDays);
-        }
-
-        if (includesSeriesContent || (!filterUnreleasedDigital && includesMovies))
-        {
-            // Series/episodes use PremiereDate. Movies fall back here when digital filter is off.
-            var days = includesSeriesContent ? 0 : bufferDays;
-            filter.MaxPremiereDate = DateTime.Today.AddDays(days);
-        }
 
         return filter;
     }

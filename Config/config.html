@@ -100,17 +100,6 @@
               </label>
             </div>
 
-            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleasedDigital" />
-                <span>Use digital release date for movies</span>
-              </label>
-              <div class="fieldDescription">
-                When enabled, the digital release date is used instead of the theatrical premiere date for movies.
-                Movies without a digital release date are treated as unreleased. Requires a reimport to take effect.
-              </div>
-            </div>
-
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
               <input is="emby-input" type="number" id="txtBufferDays" class="emby-input" />
@@ -291,7 +280,6 @@
         const chkDisableSearch = page.querySelector('#chkDisableSearch');
         const chkFilterUnreleased = page.querySelector('#chkFilterUnreleased');
         const txtBufferDays = page.querySelector('#txtBufferDays');
-        const chkFilterUnreleasedDigital = page.querySelector('#chkFilterUnreleasedDigital');
         const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
         const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
         const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
@@ -571,7 +559,6 @@
             if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
             if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
             if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 0;
-            if (chkFilterUnreleasedDigital) chkFilterUnreleasedDigital.checked = cfg.FilterUnreleasedDigital ?? true;
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
             if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
@@ -604,8 +591,7 @@
 
             cfg.DisableSearch = chkDisableSearch.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked;
-            cfg.FilterUnreleasedBufferDays = txtBufferDays.value !== '' ? parseInt(txtBufferDays.value) : 30;
-            cfg.FilterUnreleasedDigital = chkFilterUnreleasedDigital.checked;
+            cfg.FilterUnreleasedBufferDays = txtBufferDays.value !== '' ? parseInt(txtBufferDays.value) : 0;
 
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;

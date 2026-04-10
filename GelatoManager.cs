@@ -953,15 +953,15 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
-    /// For each gelato movie that has no digital release date (sentinel EndDate 9999),
-    /// fetches TMDB digital release dates and updates EndDate in the repository. Only runs when
-    /// <c>FilterUnreleasedDigital</c> is enabled.
+    /// For each gelato movie that has no digital release date (sentinel EndDate 9999 or NULL from
+    /// pre-feature imports), fetches TMDB digital release dates and updates EndDate in the
+    /// repository. Only runs when <c>FilterUnreleased</c> is enabled.
     /// </summary>
     public async Task SyncMovieMeta(Guid userId, CancellationToken cancellationToken)
     {
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
 
-        if (!cfg.FilterUnreleasedDigital)
+        if (!cfg.FilterUnreleased)
             return;
 
         var stremio = cfg.Stremio;
@@ -969,7 +969,11 @@ public sealed class GelatoManager(
             return;
 
         var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var movies = libraryManager
+
+        // Fetch all gelato movies, then filter to those needing EndDate resolution:
+        // - sentinel (9999): imported after feature, no digital date found yet
+        // - NULL: imported before the feature was added
+        var allMovies = libraryManager
             .GetItemList(
                 new InternalItemsQuery
                 {
@@ -979,19 +983,19 @@ public sealed class GelatoManager(
                         { "Stremio", string.Empty },
                         { "stremio", string.Empty },
                     },
-                    MinEndDate = sentinel,
                 }
             )
             .OfType<Movie>()
+            .Where(m => m.EndDate is null || m.EndDate >= sentinel)
             .ToList();
 
         _log.LogInformation(
-            "SyncMovieMeta: found {Count} movies with no digital release date.",
-            movies.Count
+            "SyncMovieMeta: found {Count} movies needing digital release date resolution.",
+            allMovies.Count
         );
 
         var processed = 0;
-        foreach (var movie in movies)
+        foreach (var movie in allMovies)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
@@ -1004,7 +1008,15 @@ public sealed class GelatoManager(
 
                 var digital = meta.GetDigitalReleaseDate();
                 if (digital is null)
+                {
+                    // No digital date found — ensure sentinel is set (fixes NULL from old imports).
+                    if (movie.EndDate is null)
+                    {
+                        movie.EndDate = sentinel;
+                        repo.SaveItems([movie], cancellationToken);
+                    }
                     continue;
+                }
 
                 movie.EndDate = digital;
                 repo.SaveItems([movie], cancellationToken);
@@ -1025,7 +1037,7 @@ public sealed class GelatoManager(
         _log.LogInformation(
             "SyncMovieMeta completed. Updated {Processed}/{Total} movies.",
             processed,
-            movies.Count
+            allMovies.Count
         );
     }
 
@@ -1082,13 +1094,15 @@ public sealed class GelatoManager(
 
         item.PremiereDate = meta.GetPremiereDate();
 
-        var cfg = GelatoPlugin.Instance?.Configuration;
-        if (meta.Type == StremioMediaType.Movie && (cfg?.FilterUnreleasedDigital ?? true))
+        // Always set EndDate so it's never NULL — NULL breaks MaxEndDate filtering (SQL NULL semantics).
+        // Movies: use digital release date (TMDB type-4); sentinel 9999 means no digital date yet.
+        // Series/Season/Episode: use premiere/firstAired date; sentinel 9999 means not yet known.
         {
-            var digital = meta.GetDigitalReleaseDate();
-            // Use a far-future sentinel on EndDate when no digital date is available.
-            // MaxEndDate filter in the library decorator excludes it.
-            item.EndDate = digital ?? new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            item.EndDate =
+                meta.Type == StremioMediaType.Movie
+                    ? meta.GetDigitalReleaseDate() ?? sentinel
+                    : meta.GetPremiereDate() ?? sentinel;
         }
 
         item.ProductionYear = meta.GetYear();
