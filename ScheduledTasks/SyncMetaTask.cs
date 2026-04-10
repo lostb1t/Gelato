@@ -27,7 +27,9 @@ public sealed class SyncMetaTask(GelatoManager manager) : IScheduledTask
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        await manager.SyncAllMeta(Guid.Empty, cancellationToken, progress).ConfigureAwait(false);
+        await manager
+            .SyncReleaseDates(Guid.Empty, cancellationToken, progress)
+            .ConfigureAwait(false);
         progress.Report(100);
     }
 }

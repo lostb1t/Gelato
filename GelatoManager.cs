@@ -882,191 +882,11 @@ public sealed class GelatoManager(
         return series;
     }
 
-    public async Task SyncSeries(
-        Guid userId,
-        CancellationToken cancellationToken,
-        IProgress<double>? progress = null
-    )
-    {
-        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
-        var seriesItems = libraryManager
-            .GetItemList(
-                new InternalItemsQuery
-                {
-                    IncludeItemTypes = [BaseItemKind.Series],
-                    SeriesStatuses = [SeriesStatus.Continuing],
-                    HasAnyProviderId = new Dictionary<string, string>
-                    {
-                        { "Stremio", string.Empty },
-                        { "stremio", string.Empty },
-                    },
-                }
-            )
-            .OfType<Series>()
-            .ToList();
-
-        _log.LogInformation(
-            "found {Count} continuing series under TV libraries.",
-            seriesItems.Count
-        );
-
-        var stremio = cfg.Stremio;
-
-        var processed = 0;
-        var total = seriesItems.Count;
-        foreach (var series in seriesItems)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                _log.LogDebug(
-                    "SyncSeries: syncing series trees for {Name} ({Id})",
-                    series.Name,
-                    series.Id
-                );
-
-                var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
-                if (meta is null)
-                {
-                    _log.LogWarning(
-                        "SyncRunningSeries: skipping {Name} ({Id}) - no metadata found",
-                        series.Name,
-                        series.Id
-                    );
-                    continue;
-                }
-                await SyncSeriesTreesAsync(cfg, meta, cancellationToken);
-                processed++;
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(
-                    ex,
-                    "SyncSeries: failed for {Name} ({Id}). Error: {ErrorMessage}",
-                    series.Name,
-                    series.Id,
-                    ex.Message
-                );
-            }
-            finally
-            {
-                if (total > 0)
-                    progress?.Report(100.0 * processed / total);
-            }
-        }
-
-        _log.LogInformation(
-            "SyncSeries completed. Processed {Processed}/{Total} series.",
-            processed,
-            total
-        );
-    }
-
-    /// <summary>
-    /// For each gelato movie that has no digital release date (sentinel EndDate 9999 or NULL from
-    /// pre-feature imports), fetches TMDB digital release dates and updates EndDate in the
-    /// repository. Only runs when <c>FilterUnreleased</c> is enabled.
-    /// </summary>
-    public async Task SyncMovieMeta(
-        Guid userId,
-        CancellationToken cancellationToken,
-        IProgress<double>? progress = null
-    )
-    {
-        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
-
-        if (!cfg.FilterUnreleased)
-            return;
-
-        var stremio = cfg.Stremio;
-        if (stremio is null)
-            return;
-
-        var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        // Fetch all gelato movies, then filter to those needing EndDate resolution:
-        // - sentinel (9999): imported after feature, no digital date found yet
-        // - NULL: imported before the feature was added
-        var allMovies = libraryManager
-            .GetItemList(
-                new InternalItemsQuery
-                {
-                    IncludeItemTypes = [BaseItemKind.Movie],
-                    HasAnyProviderId = new Dictionary<string, string>
-                    {
-                        { "Stremio", string.Empty },
-                        { "stremio", string.Empty },
-                    },
-                }
-            )
-            .OfType<Movie>()
-            .Where(m => m.EndDate is null || m.EndDate >= sentinel)
-            .ToList();
-
-        _log.LogInformation(
-            "SyncMovieMeta: found {Count} movies needing digital release date resolution.",
-            allMovies.Count
-        );
-
-        var processed = 0;
-        var total = allMovies.Count;
-        var i = 0;
-        foreach (var movie in allMovies)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                var meta = await stremio.GetMetaAsync(movie).ConfigureAwait(false);
-                if (meta is null)
-                    continue;
-
-                await EnrichMetaAsync(meta, cancellationToken).ConfigureAwait(false);
-
-                var digital = meta.GetDigitalReleaseDate();
-                if (digital is null)
-                {
-                    // No digital date found — ensure sentinel is set (fixes NULL from old imports).
-                    if (movie.EndDate is null)
-                    {
-                        movie.EndDate = sentinel;
-                        repo.SaveItems([movie], cancellationToken);
-                    }
-                    continue;
-                }
-
-                movie.EndDate = digital;
-                repo.SaveItems([movie], cancellationToken);
-                processed++;
-
-                _log.LogDebug(
-                    "SyncMovieMeta: updated digital release date for {Name} → {Date}",
-                    movie.Name,
-                    digital.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                );
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex, "SyncMovieMeta: failed for {Name} ({Id})", movie.Name, movie.Id);
-            }
-            finally
-            {
-                if (total > 0)
-                    progress?.Report(100.0 * ++i / total);
-            }
-        }
-
-        _log.LogInformation(
-            "SyncMovieMeta completed. Updated {Processed}/{Total} movies.",
-            processed,
-            allMovies.Count
-        );
-    }
-
     /// <summary>
     /// Unified sync: fixes EndDate on all gelato media items and fetches new episodes for
     /// continuing series and digital release dates for movies from TMDB.
     /// </summary>
-    public async Task SyncAllMeta(
+    public async Task SyncReleaseDates(
         Guid userId,
         CancellationToken cancellationToken,
         IProgress<double>? progress = null
@@ -1084,8 +904,8 @@ public sealed class GelatoManager(
             { "stremio", string.Empty },
         };
 
-        // Fetch all gelato items that need EndDate resolution
-        var allItems = libraryManager
+        // Pass 1: fix EndDate on all items that are missing it or have the sentinel
+        var needsEndDate = libraryManager
             .GetItemList(
                 new InternalItemsQuery
                 {
@@ -1099,22 +919,25 @@ public sealed class GelatoManager(
                     HasAnyProviderId = gelatoProviders,
                 }
             )
-            .Where(m =>
-                m.EndDate is null
-                || m.EndDate >= sentinel
-                || (m is Series s && s.Status == SeriesStatus.Continuing)
-            )
+            .Where(m => m.EndDate is null || m.EndDate >= sentinel)
             .ToList();
 
-        _log.LogInformation(
-            "SyncAllMeta: found {Count} items needing EndDate resolution.",
-            allItems.Count
-        );
+        var continuingSeries = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = [BaseItemKind.Series],
+                    SeriesStatuses = [SeriesStatus.Continuing],
+                    HasAnyProviderId = gelatoProviders,
+                }
+            )
+            .OfType<Series>()
+            .ToList();
 
-        var total = allItems.Count;
+        var total = needsEndDate.Count + continuingSeries.Count;
         var i = 0;
 
-        foreach (var item in allItems)
+        foreach (var item in needsEndDate)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
@@ -1131,7 +954,7 @@ public sealed class GelatoManager(
                         movie.EndDate = digital ?? sentinel;
                         repo.SaveItems([movie], cancellationToken);
                         _log.LogDebug(
-                            "SyncAllMeta: movie {Name} EndDate → {Date}",
+                            "SyncReleaseDates: movie {Name} EndDate → {Date}",
                             movie.Name,
                             movie.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                         );
@@ -1139,19 +962,9 @@ public sealed class GelatoManager(
                     }
 
                     case Series series:
-                    {
                         series.EndDate = series.PremiereDate ?? sentinel;
                         repo.SaveItems([series], cancellationToken);
-                        // If still airing, sync new episodes too
-                        if (series.Status == SeriesStatus.Continuing)
-                        {
-                            var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
-                            if (meta is not null)
-                                await SyncSeriesTreesAsync(cfg, meta, cancellationToken)
-                                    .ConfigureAwait(false);
-                        }
                         break;
-                    }
 
                     case Season season:
                         season.EndDate = season.PremiereDate ?? sentinel;
@@ -1166,7 +979,7 @@ public sealed class GelatoManager(
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "SyncAllMeta: failed for {Name} ({Id})", item.Name, item.Id);
+                _log.LogError(ex, "SyncReleaseDates: failed for {Name} ({Id})", item.Name, item.Id);
             }
             finally
             {
@@ -1175,7 +988,36 @@ public sealed class GelatoManager(
             }
         }
 
-        _log.LogInformation("SyncAllMeta completed. Processed {Total} items.", total);
+        foreach (var series in continuingSeries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+                if (meta is not null)
+                    await SyncSeriesTreesAsync(cfg, meta, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(
+                    ex,
+                    "SyncReleaseDates: tree sync failed for {Name} ({Id})",
+                    series.Name,
+                    series.Id
+                );
+            }
+            finally
+            {
+                if (total > 0)
+                    progress?.Report(100.0 * ++i / total);
+            }
+        }
+
+        _log.LogInformation(
+            "SyncReleaseDates completed. EndDate fixed: {EndDateCount}, series synced: {SeriesCount}.",
+            needsEndDate.Count,
+            continuingSeries.Count
+        );
     }
 
     private BaseItem? SaveItem(BaseItem item, Folder parent)

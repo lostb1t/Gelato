@@ -477,7 +477,11 @@ public class StremioMeta
     public List<StremioMeta>? Videos { get; set; }
     public string? Runtime { get; set; }
     public string? Country { get; set; }
+
+    [JsonConverter(typeof(StringOrArrayConverter))]
     public string? Director { get; set; }
+
+    [JsonConverter(typeof(StringOrArrayConverter))]
     public string? Writer { get; set; }
     public string? LandscapePoster { get; set; }
 
@@ -1008,6 +1012,48 @@ public sealed class NullableFloatLenientConverter : JsonConverter<float?>
     {
         if (v.HasValue)
             w.WriteNumberValue(v.Value);
+        else
+            w.WriteNullValue();
+    }
+}
+
+/// <summary>
+/// Handles fields that can be either a JSON string or an array of strings.
+/// Arrays are joined with ", ". Numbers are coerced to string. Null/other → null.
+/// </summary>
+public sealed class StringOrArrayConverter : JsonConverter<string?>
+{
+    public override string? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    {
+        switch (r.TokenType)
+        {
+            case JsonTokenType.String:
+                return r.GetString();
+            case JsonTokenType.Number:
+                return r.TryGetInt64(out var i)
+                    ? i.ToString(CultureInfo.InvariantCulture)
+                    : r.GetDouble().ToString(CultureInfo.InvariantCulture);
+            case JsonTokenType.StartArray:
+                var parts = new List<string>();
+                while (r.Read() && r.TokenType != JsonTokenType.EndArray)
+                {
+                    if (r.TokenType == JsonTokenType.String)
+                    {
+                        var s = r.GetString();
+                        if (!string.IsNullOrWhiteSpace(s))
+                            parts.Add(s);
+                    }
+                }
+                return parts.Count > 0 ? string.Join(", ", parts) : null;
+            default:
+                return null;
+        }
+    }
+
+    public override void Write(Utf8JsonWriter w, string? v, JsonSerializerOptions o)
+    {
+        if (v is not null)
+            w.WriteStringValue(v);
         else
             w.WriteNullValue();
     }
