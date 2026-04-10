@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.12.2] - 2026-04-10\n\n### 🐛 Bug Fixes\n\n- Season trouble\n",
+        "checksum": "8f5d3cdb168ed26fb609f1ec1a497b80",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.12.2/gelato_0.26.12.2.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-10T16:30:30Z",
+        "version": "0.26.12.2"
+      },
+      {
         "changelog": "## [0.26.12.1] - 2026-04-10\n\n### 🐛 Bug Fixes\n\n- Stremio directors cane be array or string\n",
         "checksum": "be7aeb37f2ce2fa5bb37a4b9458c90f7",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.12.1/gelato_0.26.12.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-20T15:36:18Z",
         "version": "0.26.2.0"
-      },
-      {
-        "changelog": "## [0.26.1.9] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Revert import logic to 0.25\n",
-        "checksum": "636fde18d1341575513a1326d261f8db",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.9/gelato_0.26.1.9.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-20T14:54:12Z",
-        "version": "0.26.1.9"
       }
     ]
   }
