@@ -1,6 +1,9 @@
+using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
@@ -9,6 +12,7 @@ namespace Gelato.Filters;
 public class InsertActionFilter(
     GelatoManager manager,
     IUserManager userManager,
+    ILibraryManager libraryManager,
     ILogger<InsertActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -25,8 +29,21 @@ public class InsertActionFilter(
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
             || userManager.GetUserById(userId) is not { } user
-            || manager.GetStremioMeta(guid) is not { } stremioMeta
         )
+        {
+            await next();
+            return;
+        }
+
+        // Handle local (non-gelato) series: sync or clean tree on demand
+        if (libraryManager.GetItemById(guid) is Series localSeries && !localSeries.IsGelato())
+        {
+            await HandleLocalSeriesAsync(userId, localSeries, ctx.HttpContext.RequestAborted);
+            await next();
+            return;
+        }
+
+        if (manager.GetStremioMeta(guid) is not { } stremioMeta)
         {
             await next();
             return;
@@ -85,6 +102,87 @@ public class InsertActionFilter(
         }
 
         await next();
+    }
+
+    private async Task HandleLocalSeriesAsync(Guid userId, Series series, CancellationToken ct)
+    {
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+
+        if (cfg.ExtendLocalSeriesTrees)
+        {
+            var alreadySynced =
+                series.Tags?.Contains(GelatoManager.TreeSyncedTag, StringComparer.OrdinalIgnoreCase)
+                ?? false;
+            if (alreadySynced)
+                return;
+
+            if (cfg.Stremio is not { } stremio)
+                return;
+
+            log.LogInformation(
+                "InsertActionFilter: syncing local series tree for {Name} ({Id})",
+                series.Name,
+                series.Id
+            );
+
+            var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+            if (meta is null)
+                return;
+
+            await manager
+                .SyncSeriesTreesAsync(cfg, meta, ct, existingSeries: series)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            // Setting disabled — clean any virtual items that may exist for this series
+            var virtualItems = libraryManager
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = [BaseItemKind.Season, BaseItemKind.Episode],
+                        AncestorIds = [series.Id],
+                    }
+                )
+                .Where(item =>
+                    item.IsGelato()
+                    && item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase)
+                        == true
+                )
+                .ToList();
+
+            if (virtualItems.Count == 0)
+                return;
+
+            log.LogInformation(
+                "InsertActionFilter: cleaning {Count} virtual item(s) from local series {Name}",
+                virtualItems.Count,
+                series.Name
+            );
+
+            var episodes = virtualItems.OfType<Episode>().ToList();
+            var seasons = virtualItems.OfType<Season>().ToList();
+            foreach (var item in episodes.Concat<BaseItem>(seasons))
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    libraryManager.DeleteItem(
+                        item,
+                        new DeleteOptions { DeleteFileLocation = false }
+                    );
+                }
+                catch (Exception ex)
+                {
+                    log.LogError(
+                        ex,
+                        "InsertActionFilter: failed to delete {Name} ({Id})",
+                        item.Name,
+                        item.Id
+                    );
+                }
+            }
+        }
     }
 
     public async Task<BaseItem?> InsertMetaAsync(
