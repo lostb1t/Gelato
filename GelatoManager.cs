@@ -953,8 +953,8 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
-    /// For each gelato movie that has no <c>PremiereDate</c>, fetches TMDB digital release
-    /// dates and updates the premiere date in the repository. Only runs when
+    /// For each gelato movie that has no digital release date (sentinel EndDate 9999),
+    /// fetches TMDB digital release dates and updates EndDate in the repository. Only runs when
     /// <c>FilterUnreleasedDigital</c> is enabled.
     /// </summary>
     public async Task SyncMovieMeta(Guid userId, CancellationToken cancellationToken)
@@ -968,6 +968,7 @@ public sealed class GelatoManager(
         if (stremio is null)
             return;
 
+        var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var movies = libraryManager
             .GetItemList(
                 new InternalItemsQuery
@@ -978,14 +979,14 @@ public sealed class GelatoManager(
                         { "Stremio", string.Empty },
                         { "stremio", string.Empty },
                     },
+                    MinEndDate = sentinel,
                 }
             )
             .OfType<Movie>()
-            .Where(m => m.PremiereDate is null)
             .ToList();
 
         _log.LogInformation(
-            "SyncMovieMeta: found {Count} movies with no premiere date.",
+            "SyncMovieMeta: found {Count} movies with no digital release date.",
             movies.Count
         );
 
@@ -1005,12 +1006,12 @@ public sealed class GelatoManager(
                 if (digital is null)
                     continue;
 
-                movie.PremiereDate = digital;
+                movie.EndDate = digital;
                 repo.SaveItems([movie], cancellationToken);
                 processed++;
 
                 _log.LogDebug(
-                    "SyncMovieMeta: updated premiere date for {Name} → {Date}",
+                    "SyncMovieMeta: updated digital release date for {Name} → {Date}",
                     movie.Name,
                     digital.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                 );
@@ -1079,11 +1080,16 @@ public sealed class GelatoManager(
 
         item.Name = meta.GetName();
 
+        item.PremiereDate = meta.GetPremiereDate();
+
         var cfg = GelatoPlugin.Instance?.Configuration;
         if (meta.Type == StremioMediaType.Movie && (cfg?.FilterUnreleasedDigital ?? true))
-            item.PremiereDate = meta.GetDigitalReleaseDate(); // null if no digital date
-        else
-            item.PremiereDate = meta.GetPremiereDate();
+        {
+            var digital = meta.GetDigitalReleaseDate();
+            // Use a far-future sentinel on EndDate when no digital date is available.
+            // MaxEndDate filter in the library decorator excludes it.
+            item.EndDate = digital ?? new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        }
 
         item.ProductionYear = meta.GetYear();
         item.Path = $"gelato://stub/{id}";
