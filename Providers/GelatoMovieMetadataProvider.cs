@@ -97,14 +97,10 @@ public sealed class GelatoMovieMetadataProvider(
 
     private static void MapPeople(StremioMeta meta, MetadataResult<Movie> result)
     {
-        if (meta.App_Extras?.Cast is not { Count: > 0 } cast)
-            return;
-
-        foreach (var member in cast)
+        foreach (var member in meta.App_Extras?.Cast ?? [])
         {
             if (string.IsNullOrWhiteSpace(member.Name))
                 continue;
-
             result.AddPerson(
                 new PersonInfo
                 {
@@ -114,6 +110,60 @@ public sealed class GelatoMovieMetadataProvider(
                     ImageUrl = member.Photo,
                 }
             );
+        }
+
+        var directors = meta.App_Extras?.Directors;
+        if (directors is { Count: > 0 })
+        {
+            foreach (var d in directors)
+            {
+                if (!string.IsNullOrWhiteSpace(d.Name))
+                    result.AddPerson(
+                        new PersonInfo
+                        {
+                            Name = d.Name,
+                            Type = PersonKind.Director,
+                            ImageUrl = d.Photo,
+                        }
+                    );
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(meta.Director))
+        {
+            foreach (
+                var name in meta.Director.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+                result.AddPerson(new PersonInfo { Name = name, Type = PersonKind.Director });
+        }
+
+        var writers = meta.App_Extras?.Writers;
+        if (writers is { Count: > 0 })
+        {
+            foreach (var w in writers)
+            {
+                if (!string.IsNullOrWhiteSpace(w.Name))
+                    result.AddPerson(
+                        new PersonInfo
+                        {
+                            Name = w.Name,
+                            Type = PersonKind.Writer,
+                            ImageUrl = w.Photo,
+                        }
+                    );
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(meta.Writer))
+        {
+            foreach (
+                var name in meta.Writer.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+                result.AddPerson(new PersonInfo { Name = name, Type = PersonKind.Writer });
         }
     }
 

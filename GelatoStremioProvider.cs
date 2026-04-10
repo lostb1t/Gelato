@@ -404,6 +404,13 @@ public class StremioMeta
     public List<StremioMeta>? Videos { get; set; }
     public string? Runtime { get; set; }
     public string? Country { get; set; }
+    public string? Director { get; set; }
+    public string? Writer { get; set; }
+    public string? LandscapePoster { get; set; }
+
+    [JsonConverter(typeof(NullableFloatLenientConverter))]
+    public float? ImdbRating { get; set; }
+
     public StremioBehaviorHints? BehaviorHints { get; set; }
     public List<string>? Genre { get; set; }
 
@@ -612,6 +619,9 @@ public class StremioTrailerStream
 public class StremioAppExtras
 {
     public List<StremioCast>? Cast { get; set; }
+    public List<StremioCast>? Directors { get; set; }
+    public List<StremioCast>? Writers { get; set; }
+    public string? Certification { get; set; }
     public List<String?>? SeasonPosters { get; set; }
 }
 
@@ -837,6 +847,39 @@ public sealed class NullableStringLenientConverter : JsonConverter<string?>
     {
         if (v is not null)
             w.WriteStringValue(v);
+        else
+            w.WriteNullValue();
+    }
+}
+
+public sealed class NullableFloatLenientConverter : JsonConverter<float?>
+{
+    public override float? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    {
+        switch (r.TokenType)
+        {
+            case JsonTokenType.Number:
+                return r.TryGetSingle(out var f) ? f : null;
+            case JsonTokenType.String:
+                var s = r.GetString();
+                return float.TryParse(
+                    s,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var v
+                )
+                    ? v
+                    : null;
+            case JsonTokenType.Null:
+            default:
+                return null;
+        }
+    }
+
+    public override void Write(Utf8JsonWriter w, float? v, JsonSerializerOptions o)
+    {
+        if (v.HasValue)
+            w.WriteNumberValue(v.Value);
         else
             w.WriteNullValue();
     }

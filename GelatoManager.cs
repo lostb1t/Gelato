@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Gelato.Config;
 using Gelato.Decorators;
 using Jellyfin.Data.Enums;
@@ -1045,6 +1046,18 @@ public sealed class GelatoManager(
 
         item.Overview = meta.Description ?? meta.Overview;
 
+        if (meta.ImdbRating.HasValue)
+            item.CommunityRating = meta.ImdbRating;
+
+        if (!string.IsNullOrWhiteSpace(meta.Country))
+            item.ProductionLocations =
+            [
+                CultureInfo.InvariantCulture.TextInfo.ToTitleCase(meta.Country.ToLowerInvariant()),
+            ];
+
+        if (!string.IsNullOrWhiteSpace(meta.App_Extras?.Certification))
+            item.OfficialRating = meta.App_Extras.Certification;
+
         if (meta.Type is StremioMediaType.Movie or StremioMediaType.Series)
         {
             if (!string.IsNullOrWhiteSpace(meta.Runtime))
@@ -1058,6 +1071,8 @@ public sealed class GelatoManager(
         {
             ep.IndexNumber = meta.Episode ?? meta.Number;
             ep.ParentIndexNumber = meta.Season;
+            if (!string.IsNullOrWhiteSpace(meta.Runtime))
+                ep.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
             if (!string.IsNullOrWhiteSpace(meta.Thumbnail))
                 ep.SetProviderId("StremioThumb", meta.Thumbnail);
             var tvdbId = meta.TvdbEpisodeId();

@@ -18,7 +18,7 @@ public sealed class GelatoImageProvider(ILogger<GelatoImageProvider> log)
     public bool Supports(BaseItem item) => item is Movie or Series;
 
     public IEnumerable<ImageType> GetSupportedImages(BaseItem item) =>
-        [ImageType.Primary, ImageType.Backdrop, ImageType.Logo];
+        [ImageType.Primary, ImageType.Backdrop, ImageType.Logo, ImageType.Thumb];
 
     public async Task<IEnumerable<RemoteImageInfo>> GetImages(
         BaseItem item,
@@ -95,6 +95,16 @@ public sealed class GelatoImageProvider(ILogger<GelatoImageProvider> log)
                     ProviderName = "Gelato",
                     Type = ImageType.Logo,
                     Url = meta.Logo,
+                }
+            );
+
+        if (!string.IsNullOrWhiteSpace(meta.LandscapePoster))
+            images.Add(
+                new RemoteImageInfo
+                {
+                    ProviderName = "Gelato",
+                    Type = ImageType.Thumb,
+                    Url = meta.LandscapePoster,
                 }
             );
 
