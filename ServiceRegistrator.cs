@@ -2,6 +2,7 @@ using Gelato.Config;
 using Gelato.Decorators;
 using Gelato.Filters;
 using Gelato.Providers;
+using Gelato.ScheduledTasks;
 using Gelato.Services;
 //using IntroDbPlugin.Services;
 using MediaBrowser.Controller;

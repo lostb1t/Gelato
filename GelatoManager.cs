@@ -882,7 +882,11 @@ public sealed class GelatoManager(
         return series;
     }
 
-    public async Task SyncSeries(Guid userId, CancellationToken cancellationToken)
+    public async Task SyncSeries(
+        Guid userId,
+        CancellationToken cancellationToken,
+        IProgress<double>? progress = null
+    )
     {
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         var seriesItems = libraryManager
@@ -909,6 +913,7 @@ public sealed class GelatoManager(
         var stremio = cfg.Stremio;
 
         var processed = 0;
+        var total = seriesItems.Count;
         foreach (var series in seriesItems)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -943,12 +948,17 @@ public sealed class GelatoManager(
                     ex.Message
                 );
             }
+            finally
+            {
+                if (total > 0)
+                    progress?.Report(100.0 * processed / total);
+            }
         }
 
         _log.LogInformation(
             "SyncSeries completed. Processed {Processed}/{Total} series.",
             processed,
-            seriesItems.Count
+            total
         );
     }
 
@@ -957,7 +967,11 @@ public sealed class GelatoManager(
     /// pre-feature imports), fetches TMDB digital release dates and updates EndDate in the
     /// repository. Only runs when <c>FilterUnreleased</c> is enabled.
     /// </summary>
-    public async Task SyncMovieMeta(Guid userId, CancellationToken cancellationToken)
+    public async Task SyncMovieMeta(
+        Guid userId,
+        CancellationToken cancellationToken,
+        IProgress<double>? progress = null
+    )
     {
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
 
@@ -995,6 +1009,8 @@ public sealed class GelatoManager(
         );
 
         var processed = 0;
+        var total = allMovies.Count;
+        var i = 0;
         foreach (var movie in allMovies)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -1031,6 +1047,11 @@ public sealed class GelatoManager(
             catch (Exception ex)
             {
                 _log.LogError(ex, "SyncMovieMeta: failed for {Name} ({Id})", movie.Name, movie.Id);
+            }
+            finally
+            {
+                if (total > 0)
+                    progress?.Report(100.0 * ++i / total);
             }
         }
 
