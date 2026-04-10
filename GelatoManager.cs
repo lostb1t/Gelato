@@ -904,7 +904,6 @@ public sealed class GelatoManager(
             { "stremio", string.Empty },
         };
 
-        // Pass 1: fix EndDate on all items that are missing it or have the sentinel
         var needsEndDate = libraryManager
             .GetItemList(
                 new InternalItemsQuery
@@ -961,19 +960,9 @@ public sealed class GelatoManager(
                         break;
                     }
 
-                    case Series series:
-                        series.EndDate = series.PremiereDate ?? sentinel;
-                        repo.SaveItems([series], cancellationToken);
-                        break;
-
-                    case Season season:
-                        season.EndDate = season.PremiereDate ?? sentinel;
-                        repo.SaveItems([season], cancellationToken);
-                        break;
-
-                    case Episode episode:
-                        episode.EndDate = episode.PremiereDate ?? sentinel;
-                        repo.SaveItems([episode], cancellationToken);
+                    case BaseItem other when other is not Movie:
+                        other.EndDate = other.PremiereDate ?? sentinel;
+                        repo.SaveItems([other], cancellationToken);
                         break;
                 }
             }
