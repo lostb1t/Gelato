@@ -197,9 +197,33 @@ public class GelatoStremioProvider(
 
     /// <summary>
     /// Fetches digital (type 4) release dates from TMDB for the given TMDB movie ID
-    /// and populates <paramref name="meta"/>'s <c>App_Extras.ReleaseDates</c> in-place.
-    /// Uses Jellyfin's built-in TMDB API key.
+    /// Uses the TMDB API key from the Jellyfin TMDB plugin if configured, otherwise falls back
+    /// to the built-in default key.
     /// </summary>
+    private static string GetTmdbApiKey()
+    {
+        const string defaultKey = "4219e299c89411838049ab0dab19ebd5";
+        try
+        {
+            // Avoid a hard compile-time dependency on MediaBrowser.Providers.
+            // Jellyfin.Providers is loaded at runtime — grab the key via reflection if available.
+            var pluginType = Type.GetType(
+                "MediaBrowser.Providers.Plugins.Tmdb.Plugin, Jellyfin.Providers",
+                throwOnError: false
+            );
+            var instance = pluginType?.GetProperty("Instance")?.GetValue(null);
+            var cfg = instance?.GetType().GetProperty("Configuration")?.GetValue(instance);
+            var key = cfg?.GetType().GetProperty("TmdbApiKey")?.GetValue(cfg) as string;
+            return string.IsNullOrWhiteSpace(key) ? defaultKey : key;
+        }
+        catch
+        {
+            return defaultKey;
+        }
+    }
+
+    /// <summary>
+    /// Fetches TMDB release dates for the given movie meta
     public async Task EnrichDigitalReleaseDateAsync(
         StremioMeta meta,
         CancellationToken cancellationToken
@@ -212,7 +236,7 @@ public class GelatoStremioProvider(
         if (string.IsNullOrWhiteSpace(tmdbId))
             return;
 
-        const string apiKey = "4219e299c89411838049ab0dab19ebd5";
+        var apiKey = GetTmdbApiKey();
         var url =
             $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(tmdbId)}/release_dates?api_key={apiKey}";
 
