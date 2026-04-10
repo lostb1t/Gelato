@@ -46,11 +46,9 @@ public sealed class GelatoEpisodeMetadataProvider(
         StremioMeta? seriesMeta;
         try
         {
-            seriesMeta =
-                stremio.GetCachedMeta(seriesId)
-                ?? await stremio
-                    .GetMetaAsync(seriesId, StremioMediaType.Series)
-                    .ConfigureAwait(false);
+            seriesMeta = await stremio
+                .GetMetaAsync(seriesId, StremioMediaType.Series)
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -64,8 +62,6 @@ public sealed class GelatoEpisodeMetadataProvider(
 
         if (seriesMeta is null || !seriesMeta.IsValid())
             return result;
-
-        stremio.CacheMeta(seriesId, seriesMeta);
 
         var epMeta = seriesMeta.Videos?.FirstOrDefault(v =>
             v.Season == season && (v.Episode ?? v.Number) == episode

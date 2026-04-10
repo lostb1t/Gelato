@@ -38,12 +38,7 @@ public sealed class GelatoMovieMetadataProvider(
         StremioMeta? meta;
         try
         {
-            meta =
-                stremio.GetCachedMeta(id)
-                ?? await stremio.GetMetaAsync(id, StremioMediaType.Movie).ConfigureAwait(false);
-
-            if (meta is not null)
-                stremio.CacheMeta(id, meta);
+            meta = await stremio.GetMetaAsync(id, StremioMediaType.Movie).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

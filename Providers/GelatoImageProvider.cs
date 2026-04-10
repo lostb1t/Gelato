@@ -40,12 +40,7 @@ public sealed class GelatoImageProvider(ILogger<GelatoImageProvider> log)
         StremioMeta? meta;
         try
         {
-            meta =
-                stremio.GetCachedMeta(id)
-                ?? await stremio.GetMetaAsync(id, mediaType).ConfigureAwait(false);
-
-            if (meta is not null)
-                stremio.CacheMeta(id, meta);
+            meta = await stremio.GetMetaAsync(id, mediaType).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

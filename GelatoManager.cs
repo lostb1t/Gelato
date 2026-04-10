@@ -270,14 +270,6 @@ public sealed class GelatoManager(
             return (existing, false);
         }
 
-        // Prime the meta cache so the Gelato providers hit it during the upcoming refresh
-        // instead of making a redundant HTTP call to Stremio.
-        var cacheId = meta.ImdbId ?? meta.Id;
-        if (mediaType == StremioMediaType.Movie)
-            cfg.Stremio?.CacheMeta(cacheId, meta);
-        else
-            cfg.Stremio?.CacheMeta(cacheId, meta);
-
         if (IntoBaseItem(meta) is not { } baseItem)
         {
             _log.LogWarning("failed to convert meta into base item for {Name}", meta.Name);

@@ -27,10 +27,7 @@ public class GelatoStremioProvider(
         (StremioMeta Meta, DateTime Expiry)
     > _metaCache = new(StringComparer.OrdinalIgnoreCase);
 
-    public void CacheMeta(string id, StremioMeta meta) =>
-        _metaCache[id] = (meta, DateTime.UtcNow.Add(MetaCacheTtl));
-
-    public StremioMeta? GetCachedMeta(string id)
+    private StremioMeta? GetCachedMeta(string id)
     {
         if (_metaCache.TryGetValue(id, out var entry) && entry.Expiry > DateTime.UtcNow)
             return entry.Meta;
@@ -164,10 +161,20 @@ public class GelatoStremioProvider(
         return m is not null;
     }
 
-    public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)
+    public async Task<StremioMeta?> GetMetaAsync(
+        string id,
+        StremioMediaType mediaType,
+        TimeSpan? ttl = null
+    )
     {
+        var cached = GetCachedMeta(id);
+        if (cached is not null)
+            return cached;
+
         var url = BuildUrl(["meta", mediaType.ToString().ToLower(), id]);
         var r = await GetJsonAsync<StremioMetaResponse>(url);
+        if (r?.Meta is { } meta)
+            _metaCache[id] = (meta, DateTime.UtcNow.Add(ttl ?? MetaCacheTtl));
         return r?.Meta;
     }
 
@@ -185,9 +192,7 @@ public class GelatoStremioProvider(
             }
             id = $"tmdb:{id}";
         }
-        var url = BuildUrl(["meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id]);
-        var r = await GetJsonAsync<StremioMetaResponse>(url);
-        return r?.Meta;
+        return await GetMetaAsync(id, item.GetBaseItemKind().ToStremio()).ConfigureAwait(false);
     }
 
     public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)

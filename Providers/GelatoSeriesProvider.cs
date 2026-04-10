@@ -142,9 +142,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         StremioMeta? meta;
         try
         {
-            meta =
-                stremio.GetCachedMeta(id)
-                ?? await stremio.GetMetaAsync(id, StremioMediaType.Series).ConfigureAwait(false);
+            meta = await stremio.GetMetaAsync(id, StremioMediaType.Series).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -154,8 +152,6 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
 
         if (meta is null || !meta.IsValid())
             return result;
-
-        stremio.CacheMeta(id, meta);
 
         if (_manager.IntoBaseItem(meta) is not Series series)
             return result;
