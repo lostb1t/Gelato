@@ -772,10 +772,12 @@ public sealed class GelatoManager(
                     DateModified = DateTime.UtcNow,
                     DateLastSaved = DateTime.UtcNow,
                     PremiereDate = episode.PremiereDate,
+                    EndDate =
+                        episode.PremiereDate ?? new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc),
                     ParentId = series.Id,
                 };
 
-                var primary = seriesMeta.App_Extras?.SeasonPosters?[seasonIndex];
+                var primary = seriesMeta.App_Extras?.SeasonPosters?.ElementAtOrDefault(seasonIndex);
                 if (!string.IsNullOrWhiteSpace(primary))
                 {
                     ProviderManagerDecorator.SetRemoteImage(
