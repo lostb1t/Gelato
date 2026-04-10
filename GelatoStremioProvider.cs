@@ -21,6 +21,23 @@ public class GelatoStremioProvider(
         PropertyNameCaseInsensitive = true,
     };
 
+    private static readonly TimeSpan MetaCacheTtl = TimeSpan.FromMinutes(5);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (StremioMeta Meta, DateTime Expiry)
+    > _metaCache = new(StringComparer.OrdinalIgnoreCase);
+
+    public void CacheSeriesMeta(string id, StremioMeta meta) =>
+        _metaCache[id] = (meta, DateTime.UtcNow.Add(MetaCacheTtl));
+
+    public StremioMeta? GetCachedSeriesMeta(string id)
+    {
+        if (_metaCache.TryGetValue(id, out var entry) && entry.Expiry > DateTime.UtcNow)
+            return entry.Meta;
+        _metaCache.TryRemove(id, out _);
+        return null;
+    }
+
     private HttpClient NewClient()
     {
         var c = http.CreateClient(nameof(GelatoStremioProvider));
