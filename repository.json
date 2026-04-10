@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.10.0] - 2026-04-10\n\n### 🚀 Features\n\n- Allow filtering by digital release instead of cinema release (#147)\n",
+        "checksum": "1ee7c46583eee41d432d4a22c0ffd28f",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.10.0/gelato_0.26.10.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-10T12:19:27Z",
+        "version": "0.26.10.0"
+      },
+      {
         "changelog": "## [0.26.9.0] - 2026-04-10\n\n### 🚀 Features\n\n- Gelato meta providers (#146)\n",
         "checksum": "fa8a199ecd41cc43524bec58453e4e5d",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.9.0/gelato_0.26.9.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-20T09:12:08Z",
         "version": "0.26.1.7"
-      },
-      {
-        "changelog": "## [0.26.1.6] - 2026-02-19\n\n### 🐛 Bug Fixes\n\n- Revert item creation to 0.25\n",
-        "checksum": "27caf03f727e85678a4a19a79c295e82",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.6/gelato_0.26.1.6.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-19T19:35:02Z",
-        "version": "0.26.1.6"
       }
     ]
   }
