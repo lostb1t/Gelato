@@ -903,8 +903,8 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
-    /// Unified sync: fixes EndDate on all gelato media items and fetches new episodes for
-    /// continuing series and digital release dates for movies from TMDB.
+    /// Pass 1: fixes EndDate on all gelato media items (movies get TMDB digital release date,
+    /// series/seasons/episodes get PremiereDate as EndDate).
     /// </summary>
     public async Task SyncReleaseDates(
         Guid userId,
@@ -941,42 +941,7 @@ public sealed class GelatoManager(
             .Where(m => m.EndDate is null || m.EndDate >= sentinel)
             .ToList();
 
-        // Pass 2: continuing gelato series + continuing local series (if ExtendLocalSeriesTrees)
-        var continuingGelatoSeries = libraryManager
-            .GetItemList(
-                new InternalItemsQuery
-                {
-                    IncludeItemTypes = [BaseItemKind.Series],
-                    SeriesStatuses = [SeriesStatus.Continuing],
-                    HasAnyProviderId = gelatoProviders,
-                }
-            )
-            .OfType<Series>()
-            .ToList();
-
-        var continuingLocalSeries = cfg.ExtendLocalSeriesTrees
-            ? libraryManager
-                .GetItemList(
-                    new InternalItemsQuery
-                    {
-                        IncludeItemTypes = [BaseItemKind.Series],
-                        SeriesStatuses = [SeriesStatus.Continuing],
-                    }
-                )
-                .OfType<Series>()
-                .Where(s =>
-                    !s.IsGelato()
-                    && (
-                        !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
-                        || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
-                    )
-                )
-                .ToList()
-            : [];
-
-        var continuingSeries = continuingGelatoSeries.Concat(continuingLocalSeries).ToList();
-
-        var total = needsEndDate.Count + continuingSeries.Count;
+        var total = needsEndDate.Count;
         var i = 0;
 
         foreach (var item in needsEndDate)
@@ -1020,6 +985,70 @@ public sealed class GelatoManager(
             }
         }
 
+        _log.LogInformation(
+            "SyncReleaseDates completed. EndDate fixed for {Count} item(s).",
+            needsEndDate.Count
+        );
+    }
+
+    /// <summary>
+    /// Syncs series trees: fetches new episodes for all continuing series (gelato + local),
+    /// and extends local series trees for the first time if ExtendLocalSeriesTrees is enabled.
+    /// </summary>
+    public async Task SyncSeriesTrees(
+        Guid userId,
+        CancellationToken cancellationToken,
+        IProgress<double>? progress = null
+    )
+    {
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+        var stremio = cfg.Stremio;
+        if (stremio is null)
+            return;
+
+        var gelatoProviders = new Dictionary<string, string>
+        {
+            { "Stremio", string.Empty },
+            { "stremio", string.Empty },
+        };
+
+        var continuingGelatoSeries = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = [BaseItemKind.Series],
+                    SeriesStatuses = [SeriesStatus.Continuing],
+                    HasAnyProviderId = gelatoProviders,
+                }
+            )
+            .OfType<Series>()
+            .ToList();
+
+        var continuingLocalSeries = cfg.ExtendLocalSeriesTrees
+            ? libraryManager
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = [BaseItemKind.Series],
+                        SeriesStatuses = [SeriesStatus.Continuing],
+                    }
+                )
+                .OfType<Series>()
+                .Where(s =>
+                    !s.IsGelato()
+                    && (
+                        !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
+                        || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
+                    )
+                )
+                .ToList()
+            : [];
+
+        var continuingSeries = continuingGelatoSeries.Concat(continuingLocalSeries).ToList();
+
+        var total = continuingSeries.Count;
+        var i = 0;
+
         foreach (var series in continuingSeries)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -1042,7 +1071,7 @@ public sealed class GelatoManager(
             {
                 _log.LogError(
                     ex,
-                    "SyncReleaseDates: tree sync failed for {Name} ({Id})",
+                    "SyncSeriesTrees: tree sync failed for {Name} ({Id})",
                     series.Name,
                     series.Id
                 );
@@ -1055,12 +1084,10 @@ public sealed class GelatoManager(
         }
 
         _log.LogInformation(
-            "SyncReleaseDates completed. EndDate fixed: {EndDateCount}, continuing series synced: {SeriesCount}.",
-            needsEndDate.Count,
+            "SyncSeriesTrees: continuing series synced: {SeriesCount}.",
             continuingSeries.Count
         );
 
-        // Pass 3: first-time tree sync for non-continuing local series
         if (cfg.ExtendLocalSeriesTrees)
         {
             await SyncLocalSeriesTreesAsync(cfg, stremio, cancellationToken, progress, i, total)
@@ -1096,7 +1123,7 @@ public sealed class GelatoManager(
             .ToList();
 
         _log.LogInformation(
-            "SyncReleaseDates pass 3: {Count} local (non-gelato) series to extend for the first time.",
+            "SyncSeriesTrees: {Count} local (non-gelato, non-continuing) series to extend for the first time.",
             localSeries.Count
         );
 
@@ -1123,7 +1150,7 @@ public sealed class GelatoManager(
             {
                 _log.LogError(
                     ex,
-                    "SyncReleaseDates: virtual tree sync failed for {Name} ({Id})",
+                    "SyncSeriesTrees: virtual tree sync failed for {Name} ({Id})",
                     series.Name,
                     series.Id
                 );

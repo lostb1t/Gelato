@@ -2,13 +2,13 @@ using MediaBrowser.Model.Tasks;
 
 namespace Gelato.ScheduledTasks;
 
-public sealed class SyncMetaTask(GelatoManager manager) : IScheduledTask
+public sealed class SyncSeriesTreesTask(GelatoManager manager) : IScheduledTask
 {
-    public string Name => "Sync metadata";
-    public string Key => "SyncMeta";
+    public string Name => "Sync series trees";
+    public string Key => "SyncSeriesTrees";
 
     public string Description =>
-        "Fetches missing seasons/episodes for continuing series. For movies, fetches digital release dates from TMDB and updates the release date used for filtering. Run this after enabling 'Filter unreleased items' to fix existing library items.";
+        "Fetches missing seasons and episodes for all continuing series. When 'Extend local series trees' is enabled, also fills in virtual items for locally scanned shows so you can stream episodes you don't have on disk.";
 
     public string Category => "Gelato";
 
@@ -28,7 +28,7 @@ public sealed class SyncMetaTask(GelatoManager manager) : IScheduledTask
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
         await manager
-            .SyncReleaseDates(Guid.Empty, cancellationToken, progress)
+            .SyncSeriesTrees(Guid.Empty, cancellationToken, progress)
             .ConfigureAwait(false);
         progress.Report(100);
     }
