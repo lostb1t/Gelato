@@ -15,7 +15,8 @@ public class PluginConfiguration : BasePluginConfiguration
     public string Url { get; set; } = "";
     public bool EnableMixed { get; set; } = false;
     public bool FilterUnreleased { get; set; } = false;
-    public int FilterUnreleasedBufferDays { get; set; } = 30;
+    public int FilterUnreleasedBufferDays { get; set; } = 0;
+    public bool FilterUnreleasedDigital { get; set; } = true;
     public bool DisableSourceCount { get; set; } = true;
     public bool P2PEnabled { get; set; } = false;
     public int P2PDLSpeed { get; set; } = 0;
@@ -89,6 +90,7 @@ public class UserConfig
             EnableMixed = baseConfig.EnableMixed,
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
+            FilterUnreleasedDigital = baseConfig.FilterUnreleasedDigital,
             DisableSourceCount = baseConfig.DisableSourceCount,
             P2PEnabled = baseConfig.P2PEnabled,
             P2PDLSpeed = baseConfig.P2PDLSpeed,

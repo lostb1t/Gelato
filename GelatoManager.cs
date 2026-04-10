@@ -270,6 +270,8 @@ public sealed class GelatoManager(
             return (existing, false);
         }
 
+        await EnrichMetaAsync(meta, ct).ConfigureAwait(false);
+
         if (IntoBaseItem(meta) is not { } baseItem)
         {
             _log.LogWarning("failed to convert meta into base item for {Name}", meta.Name);
@@ -950,6 +952,82 @@ public sealed class GelatoManager(
         );
     }
 
+    /// <summary>
+    /// For each gelato movie that has no <c>PremiereDate</c>, fetches TMDB digital release
+    /// dates and updates the premiere date in the repository. Only runs when
+    /// <c>FilterUnreleasedDigital</c> is enabled.
+    /// </summary>
+    public async Task SyncMovieMeta(Guid userId, CancellationToken cancellationToken)
+    {
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+
+        if (!cfg.FilterUnreleasedDigital)
+            return;
+
+        var stremio = cfg.Stremio;
+        if (stremio is null)
+            return;
+
+        var movies = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = [BaseItemKind.Movie],
+                    HasAnyProviderId = new Dictionary<string, string>
+                    {
+                        { "Stremio", string.Empty },
+                        { "stremio", string.Empty },
+                    },
+                }
+            )
+            .OfType<Movie>()
+            .Where(m => m.PremiereDate is null)
+            .ToList();
+
+        _log.LogInformation(
+            "SyncMovieMeta: found {Count} movies with no premiere date.",
+            movies.Count
+        );
+
+        var processed = 0;
+        foreach (var movie in movies)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var meta = await stremio.GetMetaAsync(movie).ConfigureAwait(false);
+                if (meta is null)
+                    continue;
+
+                await EnrichMetaAsync(meta, cancellationToken).ConfigureAwait(false);
+
+                var digital = meta.GetDigitalReleaseDate();
+                if (digital is null)
+                    continue;
+
+                movie.PremiereDate = digital;
+                repo.SaveItems([movie], cancellationToken);
+                processed++;
+
+                _log.LogDebug(
+                    "SyncMovieMeta: updated premiere date for {Name} → {Date}",
+                    movie.Name,
+                    digital.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                );
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "SyncMovieMeta: failed for {Name} ({Id})", movie.Name, movie.Id);
+            }
+        }
+
+        _log.LogInformation(
+            "SyncMovieMeta completed. Updated {Processed}/{Total} movies.",
+            processed,
+            movies.Count
+        );
+    }
+
     private BaseItem? SaveItem(BaseItem item, Folder parent)
     {
         return SaveItems([item], parent).FirstOrDefault();
@@ -1000,7 +1078,13 @@ public sealed class GelatoManager(
         }
 
         item.Name = meta.GetName();
-        item.PremiereDate = meta.GetPremiereDate();
+
+        var cfg = GelatoPlugin.Instance?.Configuration;
+        if (meta.Type == StremioMediaType.Movie && (cfg?.FilterUnreleasedDigital ?? true))
+            item.PremiereDate = meta.GetDigitalReleaseDate(); // null if no digital date
+        else
+            item.PremiereDate = meta.GetPremiereDate();
+
         item.ProductionYear = meta.GetYear();
         item.Path = $"gelato://stub/{id}";
 
@@ -1090,5 +1174,24 @@ public sealed class GelatoManager(
             );
 
         return item;
+    }
+
+    /// <summary>
+    /// Enriches <paramref name="meta"/> with digital release dates from TMDB when
+    /// the meta is a movie and <c>App_Extras.ReleaseDates</c> is not yet populated.
+    /// </summary>
+    public async Task EnrichMetaAsync(StremioMeta meta, CancellationToken ct)
+    {
+        if (meta.Type != StremioMediaType.Movie)
+            return;
+
+        if (meta.App_Extras?.ReleaseDates is not null)
+            return;
+
+        var stremio = GelatoPlugin.Instance?.Configuration.Stremio;
+        if (stremio is null)
+            return;
+
+        await stremio.EnrichDigitalReleaseDateAsync(meta, ct).ConfigureAwait(false);
     }
 }
