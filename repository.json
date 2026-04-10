@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.11.0] - 2026-04-10\n\n### 🚀 Features\n\n- Autorun metasync on startup\n",
+        "checksum": "42f21e9c1f70156f3d58af56daf897fe",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.11.0/gelato_0.26.11.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-10T13:25:18Z",
+        "version": "0.26.11.0"
+      },
+      {
         "changelog": "## [0.26.10.0] - 2026-04-10\n\n### 🚀 Features\n\n- Allow filtering by digital release instead of cinema release (#147)\n",
         "checksum": "1ee7c46583eee41d432d4a22c0ffd28f",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.10.0/gelato_0.26.10.0.zip",
@@ -214,14 +222,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-20T15:36:18Z",
         "version": "0.26.2.0"
-      },
-      {
-        "changelog": "## [0.26.1.10] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Use correct stream ids\n",
-        "checksum": "6dd054039e9848993300eeee4c158144",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.10/gelato_0.26.1.10.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-20T14:58:18Z",
-        "version": "0.26.1.10"
       },
       {
         "changelog": "## [0.26.1.9] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Revert import logic to 0.25\n",
