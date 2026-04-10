@@ -84,6 +84,11 @@
                 <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
                 <span>Show streams for local items</span>
               </label>
+              <div class="fieldDescription">
+                When enabled, Gelato will also provide streams for shows imported by Jellyfin's file scanner.
+                Missing seasons and episodes will be added as virtual items so you can stream them even if they're not on disk.
+                Run the <strong>Sync Release Dates</strong> task after changing this setting — it will create virtual items when enabled, or remove them when disabled.
+              </div>
             </div>
 
             <div class="checkboxContainer checkboxContainer-withDescription">

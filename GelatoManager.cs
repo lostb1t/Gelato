@@ -32,6 +32,7 @@ public sealed class GelatoManager(
 )
 {
     public const string StreamTag = "gelato-stream";
+    public const string VirtualTag = "gelato-virtual";
 
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
@@ -630,23 +631,81 @@ public sealed class GelatoManager(
     }
 
     public async Task<BaseItem?> SyncSeriesTreesAsync(
-        // Folder seriesRootFolder,
         PluginConfiguration cfg,
         StremioMeta seriesMeta,
-        CancellationToken ct
+        CancellationToken ct,
+        Series? existingSeries = null,
+        bool tagVirtual = false
     )
     {
         var seriesRootFolder = cfg.SeriesFolder;
-        // Early validation
-        if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
+
+        Series series;
+
+        if (existingSeries is not null)
         {
-            _log.LogWarning("seriesRootFolder null or empty for {SeriesId}", seriesMeta.Id);
-            return null;
+            // Local (non-gelato) series — use as-is, no creation needed
+            series = existingSeries;
         }
+        else
+        {
+            // Gelato series — create or find under the virtual folder
+            if (seriesRootFolder is null || string.IsNullOrWhiteSpace(seriesRootFolder.Path))
+            {
+                _log.LogWarning("seriesRootFolder null or empty for {SeriesId}", seriesMeta.Id);
+                return null;
+            }
+
+            if (IntoBaseItem(seriesMeta) is not Series tmpSeries)
+                return null;
+
+            if (tmpSeries.ProviderIds.Count == 0)
+            {
+                _log.LogWarning(
+                    "No providers found for {SeriesId} {SeriesName}, skipping creation",
+                    seriesMeta.Id,
+                    seriesMeta.Name
+                );
+                return null;
+            }
+
+            if (
+                GetByProviderIds(
+                    tmpSeries.ProviderIds,
+                    tmpSeries.GetBaseItemKind(),
+                    seriesRootFolder
+                )
+                is not Series found
+            )
+            {
+                tmpSeries.Id = tmpSeries.Id == Guid.Empty ? Guid.NewGuid() : tmpSeries.Id;
+
+                var options = new MetadataRefreshOptions(directoryService)
+                {
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ReplaceAllImages = false,
+                    ReplaceAllMetadata = true,
+                    ForceSave = true,
+                };
+
+                tmpSeries.ParentId = seriesRootFolder.Id;
+                await tmpSeries.RefreshMetadata(options, ct).ConfigureAwait(false);
+                seriesRootFolder.AddChild(tmpSeries);
+                await tmpSeries.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+                series = tmpSeries;
+            }
+            else
+            {
+                series = found;
+            }
+        }
+
         var stopwatch = Stopwatch.StartNew();
+
         // Group episodes by season
         var seasonGroups = (seriesMeta.Videos ?? Enumerable.Empty<StremioMeta>())
-            .Where(e => e.Season.HasValue && (e.Episode.HasValue || e.Number.HasValue)) // Filter out invalid episodes early
+            .Where(e => e.Season.HasValue && (e.Episode.HasValue || e.Number.HasValue))
             .OrderBy(e => e.Season)
             .ThenBy(e => e.Episode ?? e.Number)
             .GroupBy(e => e.Season!.Value)
@@ -656,46 +715,6 @@ public sealed class GelatoManager(
         {
             _log.LogWarning("No valid episodes found for {SeriesId}", seriesMeta.Id);
             return null;
-        }
-
-        // Create or get series
-        if (IntoBaseItem(seriesMeta) is not Series tmpSeries)
-        {
-            return null;
-        }
-
-        if (tmpSeries.ProviderIds.Count == 0)
-        {
-            _log.LogWarning(
-                "No providers found for {SeriesId} {SeriesName}, skipping creation",
-                seriesMeta.Id,
-                seriesMeta.Name
-            );
-            return null;
-        }
-
-        if (
-            GetByProviderIds(tmpSeries.ProviderIds, tmpSeries.GetBaseItemKind(), seriesRootFolder)
-            is not Series series
-        )
-        {
-            series = tmpSeries;
-            if (series.Id == Guid.Empty)
-                series.Id = Guid.NewGuid();
-
-            var options = new MetadataRefreshOptions(directoryService)
-            {
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                ReplaceAllImages = false,
-                ReplaceAllMetadata = true,
-                ForceSave = true,
-            };
-
-            series.ParentId = seriesRootFolder.Id;
-            await series.RefreshMetadata(options, ct).ConfigureAwait(false);
-            seriesRootFolder.AddChild(series);
-            await series.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
         }
 
         var existingSeasonsDict = libraryManager
@@ -791,6 +810,8 @@ public sealed class GelatoManager(
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
+                if (tagVirtual)
+                    season.Tags = [.. (season.Tags ?? []), VirtualTag];
                 series.AddChild(season);
                 seasonsInserted++;
             }
@@ -863,6 +884,8 @@ public sealed class GelatoManager(
                 episode.ParentId = season.Id;
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
+                if (tagVirtual)
+                    episode.Tags = [.. (episode.Tags ?? []), VirtualTag];
 
                 episodeList.Add(episode);
                 episodesInserted++;
@@ -1009,6 +1032,127 @@ public sealed class GelatoManager(
             needsEndDate.Count,
             continuingSeries.Count
         );
+
+        // Pass 3: virtual tree extension for non-gelato (local) series
+        if (cfg.EnableMixed)
+        {
+            await SyncLocalSeriesTreesAsync(cfg, stremio, cancellationToken, progress, i, total)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            CleanVirtualTreeItems(cancellationToken);
+        }
+    }
+
+    private async Task SyncLocalSeriesTreesAsync(
+        PluginConfiguration cfg,
+        GelatoStremioProvider stremio,
+        CancellationToken ct,
+        IProgress<double>? progress,
+        int progressOffset,
+        int progressTotal
+    )
+    {
+        var localSeries = libraryManager
+            .GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Series] })
+            .OfType<Series>()
+            .Where(s =>
+                !s.IsGelato()
+                && (
+                    !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
+                    || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
+                )
+            )
+            .ToList();
+
+        _log.LogInformation(
+            "SyncReleaseDates pass 3: {Count} local (non-gelato) series to extend.",
+            localSeries.Count
+        );
+
+        var total = progressTotal + localSeries.Count;
+        var i = progressOffset;
+
+        foreach (var series in localSeries)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+                if (meta is not null)
+                    await SyncSeriesTreesAsync(
+                            cfg,
+                            meta,
+                            ct,
+                            existingSeries: series,
+                            tagVirtual: true
+                        )
+                        .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(
+                    ex,
+                    "SyncReleaseDates: virtual tree sync failed for {Name} ({Id})",
+                    series.Name,
+                    series.Id
+                );
+            }
+            finally
+            {
+                if (total > 0)
+                    progress?.Report(100.0 * ++i / total);
+            }
+        }
+    }
+
+    private void CleanVirtualTreeItems(CancellationToken ct)
+    {
+        var virtualItems = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    Tags = [VirtualTag],
+                    IncludeItemTypes = [BaseItemKind.Season, BaseItemKind.Episode],
+                }
+            )
+            .Where(item =>
+                !string.IsNullOrWhiteSpace(item.Path)
+                && item.Path.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase)
+            )
+            .ToList();
+
+        if (virtualItems.Count == 0)
+            return;
+
+        // Delete episodes before seasons — Jellyfin won't delete a season that still has children
+        var episodes = virtualItems.OfType<Episode>().ToList();
+        var seasons = virtualItems.OfType<Season>().ToList();
+
+        _log.LogInformation(
+            "CleanVirtualTreeItems: removing {EpCount} episodes and {SeasonCount} seasons.",
+            episodes.Count,
+            seasons.Count
+        );
+
+        foreach (var item in episodes.Concat<BaseItem>(seasons))
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                libraryManager.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false });
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(
+                    ex,
+                    "CleanVirtualTreeItems: failed to delete {Name} ({Id})",
+                    item.Name,
+                    item.Id
+                );
+            }
+        }
     }
 
     private BaseItem? SaveItem(BaseItem item, Folder parent)
