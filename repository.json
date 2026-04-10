@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.12.1] - 2026-04-10\n\n### 🐛 Bug Fixes\n\n- Stremio directors cane be array or string\n",
+        "checksum": "be7aeb37f2ce2fa5bb37a4b9458c90f7",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.12.1/gelato_0.26.12.1.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-10T15:39:35Z",
+        "version": "0.26.12.1"
+      },
+      {
         "changelog": "## [0.26.12.0] - 2026-04-10\n\n### 🚀 Features\n\n- Series meta sync\n",
         "checksum": "29bc95fa5de0dcd1f648a329eb82ef3a",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.12.0/gelato_0.26.12.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-20T14:54:12Z",
         "version": "0.26.1.9"
-      },
-      {
-        "changelog": "## [0.26.1.8] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Lock the tage field to prevent it from being modified\n",
-        "checksum": "5724440f78f29b4e64d9a1bb30869a31",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.8/gelato_0.26.1.8.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-20T12:59:53Z",
-        "version": "0.26.1.8"
       }
     ]
   }
