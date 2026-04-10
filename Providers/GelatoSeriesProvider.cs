@@ -143,7 +143,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         try
         {
             meta =
-                stremio.GetCachedSeriesMeta(id)
+                stremio.GetCachedMeta(id)
                 ?? await stremio.GetMetaAsync(id, StremioMediaType.Series).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -155,10 +155,13 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         if (meta is null || !meta.IsValid())
             return result;
 
-        stremio.CacheSeriesMeta(id, meta);
+        stremio.CacheMeta(id, meta);
+
+        if (_manager.IntoBaseItem(meta) is not Series series)
+            return result;
 
         result.HasMetadata = true;
-        result.Item = MapSeries(meta);
+        result.Item = series;
         MapPeople(meta, result);
         return result;
     }
@@ -192,28 +195,6 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
     )
     {
         throw new NotImplementedException();
-    }
-
-    private static Series MapSeries(StremioMeta meta)
-    {
-        var series = new Series
-        {
-            Name = meta.GetName(),
-            Overview = meta.Description ?? meta.Overview,
-            PremiereDate = meta.GetPremiereDate(),
-            ProductionYear = meta.GetYear(),
-        };
-
-        var genres = (meta.Genres ?? meta.Genre) ?? [];
-        series.Genres = genres.Where(g => !string.IsNullOrWhiteSpace(g)).ToArray();
-
-        foreach (var (key, value) in meta.GetProviderIds())
-            series.SetProviderId(key, value);
-
-        if (!string.IsNullOrWhiteSpace(meta.ImdbId ?? meta.Id))
-            series.SetProviderId("Stremio", meta.ImdbId ?? meta.Id);
-
-        return series;
     }
 
     private static void MapPeople(StremioMeta meta, MetadataResult<Series> result)

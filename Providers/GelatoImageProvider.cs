@@ -41,11 +41,11 @@ public sealed class GelatoImageProvider(ILogger<GelatoImageProvider> log)
         try
         {
             meta =
-                (mediaType == StremioMediaType.Series ? stremio.GetCachedSeriesMeta(id) : null)
+                stremio.GetCachedMeta(id)
                 ?? await stremio.GetMetaAsync(id, mediaType).ConfigureAwait(false);
 
-            if (meta is not null && mediaType == StremioMediaType.Series)
-                stremio.CacheSeriesMeta(id, meta);
+            if (meta is not null)
+                stremio.CacheMeta(id, meta);
         }
         catch (Exception ex)
         {

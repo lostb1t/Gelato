@@ -40,7 +40,7 @@ public sealed class GelatoSeasonMetadataProvider(ILogger<GelatoSeasonMetadataPro
         try
         {
             seriesMeta =
-                stremio.GetCachedSeriesMeta(seriesImdbId)
+                stremio.GetCachedMeta(seriesImdbId)
                 ?? await stremio
                     .GetMetaAsync(seriesImdbId, StremioMediaType.Series)
                     .ConfigureAwait(false);
@@ -58,7 +58,7 @@ public sealed class GelatoSeasonMetadataProvider(ILogger<GelatoSeasonMetadataPro
         if (seriesMeta is null || !seriesMeta.IsValid())
             return result;
 
-        stremio.CacheSeriesMeta(seriesImdbId, seriesMeta);
+        stremio.CacheMeta(seriesImdbId, seriesMeta);
 
         result.HasMetadata = true;
         result.Item = MapSeason(seriesMeta, info.Name, seasonNumber);

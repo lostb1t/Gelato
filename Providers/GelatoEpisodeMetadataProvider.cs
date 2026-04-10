@@ -6,9 +6,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Providers;
 
-public sealed class GelatoEpisodeMetadataProvider(ILogger<GelatoEpisodeMetadataProvider> log)
-    : IRemoteMetadataProvider<Episode, EpisodeInfo>,
-        IHasOrder
+public sealed class GelatoEpisodeMetadataProvider(
+    ILogger<GelatoEpisodeMetadataProvider> log,
+    GelatoManager manager
+) : IRemoteMetadataProvider<Episode, EpisodeInfo>, IHasOrder
 {
     public string Name => "Gelato";
     public int Order => 0;
@@ -41,14 +42,12 @@ public sealed class GelatoEpisodeMetadataProvider(ILogger<GelatoEpisodeMetadataP
         if (stremio is null)
             return result;
 
-        // The episode-level Stremio ID for fetching streams is "imdbId:season:episode",
-        // but we fetch it from the parent series meta (same endpoint as series).
         var seriesId = seriesImdbId;
         StremioMeta? seriesMeta;
         try
         {
             seriesMeta =
-                stremio.GetCachedSeriesMeta(seriesId)
+                stremio.GetCachedMeta(seriesId)
                 ?? await stremio
                     .GetMetaAsync(seriesId, StremioMediaType.Series)
                     .ConfigureAwait(false);
@@ -66,9 +65,8 @@ public sealed class GelatoEpisodeMetadataProvider(ILogger<GelatoEpisodeMetadataP
         if (seriesMeta is null || !seriesMeta.IsValid())
             return result;
 
-        stremio.CacheSeriesMeta(seriesId, seriesMeta);
+        stremio.CacheMeta(seriesId, seriesMeta);
 
-        // Find the matching episode in Videos[]
         var epMeta = seriesMeta.Videos?.FirstOrDefault(v =>
             v.Season == season && (v.Episode ?? v.Number) == episode
         );
@@ -84,8 +82,13 @@ public sealed class GelatoEpisodeMetadataProvider(ILogger<GelatoEpisodeMetadataP
             return result;
         }
 
+        epMeta.Type = StremioMediaType.Episode;
+
+        if (manager.IntoBaseItem(epMeta) is not Episode ep)
+            return result;
+
         result.HasMetadata = true;
-        result.Item = MapEpisode(epMeta, season.Value, episode.Value);
+        result.Item = ep;
         return result;
     }
 
@@ -98,25 +101,4 @@ public sealed class GelatoEpisodeMetadataProvider(ILogger<GelatoEpisodeMetadataP
         string url,
         CancellationToken cancellationToken
     ) => throw new NotImplementedException();
-
-    private static Episode MapEpisode(StremioMeta ep, int season, int episode)
-    {
-        var item = new Episode
-        {
-            Name = ep.GetName(),
-            Overview = ep.Description ?? ep.Overview,
-            IndexNumber = episode,
-            ParentIndexNumber = season,
-            PremiereDate = ep.FirstAired ?? ep.Released ?? ep.GetPremiereDate(),
-        };
-
-        if (!string.IsNullOrWhiteSpace(ep.Thumbnail))
-            item.SetProviderId("StremioThumb", ep.Thumbnail);
-
-        var tvdbId = ep.TvdbEpisodeId();
-        if (tvdbId is not null)
-            item.SetProviderId(MetadataProvider.Tvdb, tvdbId);
-
-        return item;
-    }
 }

@@ -27,10 +27,10 @@ public class GelatoStremioProvider(
         (StremioMeta Meta, DateTime Expiry)
     > _metaCache = new(StringComparer.OrdinalIgnoreCase);
 
-    public void CacheSeriesMeta(string id, StremioMeta meta) =>
+    public void CacheMeta(string id, StremioMeta meta) =>
         _metaCache[id] = (meta, DateTime.UtcNow.Add(MetaCacheTtl));
 
-    public StremioMeta? GetCachedSeriesMeta(string id)
+    public StremioMeta? GetCachedMeta(string id)
     {
         if (_metaCache.TryGetValue(id, out var entry) && entry.Expiry > DateTime.UtcNow)
             return entry.Meta;

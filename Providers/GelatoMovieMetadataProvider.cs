@@ -9,9 +9,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Providers;
 
-public sealed class GelatoMovieMetadataProvider(ILogger<GelatoMovieMetadataProvider> log)
-    : IRemoteMetadataProvider<Movie, MovieInfo>,
-        IHasOrder
+public sealed class GelatoMovieMetadataProvider(
+    ILogger<GelatoMovieMetadataProvider> log,
+    GelatoManager manager
+) : IRemoteMetadataProvider<Movie, MovieInfo>, IHasOrder
 {
     public string Name => "Gelato";
     public int Order => 0;
@@ -37,7 +38,12 @@ public sealed class GelatoMovieMetadataProvider(ILogger<GelatoMovieMetadataProvi
         StremioMeta? meta;
         try
         {
-            meta = await stremio.GetMetaAsync(id, StremioMediaType.Movie).ConfigureAwait(false);
+            meta =
+                stremio.GetCachedMeta(id)
+                ?? await stremio.GetMetaAsync(id, StremioMediaType.Movie).ConfigureAwait(false);
+
+            if (meta is not null)
+                stremio.CacheMeta(id, meta);
         }
         catch (Exception ex)
         {
@@ -48,8 +54,11 @@ public sealed class GelatoMovieMetadataProvider(ILogger<GelatoMovieMetadataProvi
         if (meta is null || !meta.IsValid())
             return result;
 
+        if (manager.IntoBaseItem(meta) is not Movie movie)
+            return result;
+
         result.HasMetadata = true;
-        result.Item = MapMovie(meta);
+        result.Item = movie;
         MapPeople(meta, result);
         return result;
     }
@@ -85,31 +94,6 @@ public sealed class GelatoMovieMetadataProvider(ILogger<GelatoMovieMetadataProvi
         string url,
         CancellationToken cancellationToken
     ) => throw new NotImplementedException();
-
-    private static Movie MapMovie(StremioMeta meta)
-    {
-        var movie = new Movie
-        {
-            Name = meta.GetName(),
-            Overview = meta.Description ?? meta.Overview,
-            PremiereDate = meta.GetPremiereDate(),
-            ProductionYear = meta.GetYear(),
-        };
-
-        if (!string.IsNullOrWhiteSpace(meta.Runtime))
-            movie.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
-
-        var genres = (meta.Genres ?? meta.Genre) ?? [];
-        movie.Genres = genres.Where(g => !string.IsNullOrWhiteSpace(g)).ToArray();
-
-        foreach (var (key, value) in meta.GetProviderIds())
-            movie.SetProviderId(key, value);
-
-        if (!string.IsNullOrWhiteSpace(meta.Id))
-            movie.SetProviderId("Stremio", meta.ImdbId ?? meta.Id);
-
-        return movie;
-    }
 
     private static void MapPeople(StremioMeta meta, MetadataResult<Movie> result)
     {
