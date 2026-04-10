@@ -8,7 +8,7 @@ public sealed class SyncMetaTask(GelatoManager manager) : IScheduledTask
     public string Key => "SyncMeta";
 
     public string Description =>
-        "Fetches missing season/episodes for continuing series and refreshes premiere dates for movies without one.";
+        "Fetches missing seasons/episodes for continuing series. For movies, fetches digital release dates from TMDB and updates the release date used for filtering. Run this after enabling 'Filter unreleased items' to fix existing library items.";
 
     public string Category => "Gelato";
 
