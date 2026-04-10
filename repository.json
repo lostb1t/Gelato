@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.12.0] - 2026-04-10\n\n### 🚀 Features\n\n- Series meta sync\n",
+        "checksum": "29bc95fa5de0dcd1f648a329eb82ef3a",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.12.0/gelato_0.26.12.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-10T15:18:48Z",
+        "version": "0.26.12.0"
+      },
+      {
         "changelog": "## [0.26.11.0] - 2026-04-10\n\n### 🚀 Features\n\n- Autorun metasync on startup\n",
         "checksum": "42f21e9c1f70156f3d58af56daf897fe",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.11.0/gelato_0.26.11.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-20T12:59:53Z",
         "version": "0.26.1.8"
-      },
-      {
-        "changelog": "## [0.26.1.7] - 2026-02-20\n\n### 🐛 Bug Fixes\n\n- Validate library after import so collections dont dissapear\n- Catalog import form save not persisting\n",
-        "checksum": "f0323ce96be4e05729af5897a80db323",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.1.7/gelato_0.26.1.7.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-20T09:12:08Z",
-        "version": "0.26.1.7"
       }
     ]
   }
