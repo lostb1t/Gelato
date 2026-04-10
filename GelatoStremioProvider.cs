@@ -21,6 +21,20 @@ public class GelatoStremioProvider(
         PropertyNameCaseInsensitive = true,
     };
 
+    private static readonly TimeSpan MetaCacheTtl = TimeSpan.FromMinutes(5);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (StremioMeta Meta, DateTime Expiry)
+    > _metaCache = new(StringComparer.OrdinalIgnoreCase);
+
+    private StremioMeta? GetCachedMeta(string id)
+    {
+        if (_metaCache.TryGetValue(id, out var entry) && entry.Expiry > DateTime.UtcNow)
+            return entry.Meta;
+        _metaCache.TryRemove(id, out _);
+        return null;
+    }
+
     private HttpClient NewClient()
     {
         var c = http.CreateClient(nameof(GelatoStremioProvider));
@@ -147,10 +161,20 @@ public class GelatoStremioProvider(
         return m is not null;
     }
 
-    public async Task<StremioMeta?> GetMetaAsync(string id, StremioMediaType mediaType)
+    public async Task<StremioMeta?> GetMetaAsync(
+        string id,
+        StremioMediaType mediaType,
+        TimeSpan? ttl = null
+    )
     {
+        var cached = GetCachedMeta(id);
+        if (cached is not null)
+            return cached;
+
         var url = BuildUrl(["meta", mediaType.ToString().ToLower(), id]);
         var r = await GetJsonAsync<StremioMetaResponse>(url);
+        if (r?.Meta is { } meta)
+            _metaCache[id] = (meta, DateTime.UtcNow.Add(ttl ?? MetaCacheTtl));
         return r?.Meta;
     }
 
@@ -168,9 +192,7 @@ public class GelatoStremioProvider(
             }
             id = $"tmdb:{id}";
         }
-        var url = BuildUrl(["meta", item.GetBaseItemKind().ToStremio().ToString().ToLower(), id]);
-        var r = await GetJsonAsync<StremioMetaResponse>(url);
-        return r?.Meta;
+        return await GetMetaAsync(id, item.GetBaseItemKind().ToStremio()).ConfigureAwait(false);
     }
 
     public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
@@ -387,6 +409,13 @@ public class StremioMeta
     public List<StremioMeta>? Videos { get; set; }
     public string? Runtime { get; set; }
     public string? Country { get; set; }
+    public string? Director { get; set; }
+    public string? Writer { get; set; }
+    public string? LandscapePoster { get; set; }
+
+    [JsonConverter(typeof(NullableFloatLenientConverter))]
+    public float? ImdbRating { get; set; }
+
     public StremioBehaviorHints? BehaviorHints { get; set; }
     public List<string>? Genre { get; set; }
 
@@ -595,6 +624,9 @@ public class StremioTrailerStream
 public class StremioAppExtras
 {
     public List<StremioCast>? Cast { get; set; }
+    public List<StremioCast>? Directors { get; set; }
+    public List<StremioCast>? Writers { get; set; }
+    public string? Certification { get; set; }
     public List<String?>? SeasonPosters { get; set; }
 }
 
@@ -820,6 +852,39 @@ public sealed class NullableStringLenientConverter : JsonConverter<string?>
     {
         if (v is not null)
             w.WriteStringValue(v);
+        else
+            w.WriteNullValue();
+    }
+}
+
+public sealed class NullableFloatLenientConverter : JsonConverter<float?>
+{
+    public override float? Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o)
+    {
+        switch (r.TokenType)
+        {
+            case JsonTokenType.Number:
+                return r.TryGetSingle(out var f) ? f : null;
+            case JsonTokenType.String:
+                var s = r.GetString();
+                return float.TryParse(
+                    s,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var v
+                )
+                    ? v
+                    : null;
+            case JsonTokenType.Null:
+            default:
+                return null;
+        }
+    }
+
+    public override void Write(Utf8JsonWriter w, float? v, JsonSerializerOptions o)
+    {
+        if (v.HasValue)
+            w.WriteNumberValue(v.Value);
         else
             w.WriteNullValue();
     }

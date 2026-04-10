@@ -48,6 +48,30 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             sp.GetRequiredService<SubtitleProvider>
         ));
 
+        // Metadata providers
+        services.AddSingleton<GelatoSeriesProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoSeriesProvider>()
+        );
+        services.AddSingleton<GelatoMovieMetadataProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoMovieMetadataProvider>()
+        );
+        services.AddSingleton<GelatoEpisodeMetadataProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoEpisodeMetadataProvider>()
+        );
+        services.AddSingleton<GelatoSeasonMetadataProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoSeasonMetadataProvider>()
+        );
+
+        // Image provider
+        services.AddSingleton<GelatoImageProvider>();
+        services.AddSingleton<IRemoteImageProvider>(sp =>
+            sp.GetRequiredService<GelatoImageProvider>()
+        );
+
         // Register HttpClient for IntroDbClient
         services.AddHttpClient<IntroDbClient>(client =>
         {

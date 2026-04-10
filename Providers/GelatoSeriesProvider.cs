@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
+using Jellyfin.Data.Enums;
 using Jellyfin.Data.Events;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Logging;
 
@@ -33,7 +35,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         _provider.RefreshStarted += OnProviderManagerRefreshStarted;
     }
 
-    public string Name => "Gelato Missing Season/Episode fetcher";
+    public string Name => "Gelato";
 
     public int Order => 0;
 
@@ -119,23 +121,68 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         _log.LogInformation("synced series tree for {Name}", series.Name);
     }
 
-    public Task<MetadataResult<Series>> GetMetadata(
+    public async Task<MetadataResult<Series>> GetMetadata(
         SeriesInfo info,
         CancellationToken cancellationToken
     )
     {
         var result = new MetadataResult<Series> { HasMetadata = false, QueriedById = true };
-        return Task.FromResult(result);
+
+        var id = ResolveId(info.ProviderIds);
+        if (id is null)
+        {
+            _log.LogDebug("GelatoSeriesProvider: no usable ID for {Name}", info.Name);
+            return result;
+        }
+
+        var stremio = GelatoPlugin.Instance?.Configuration.Stremio;
+        if (stremio is null)
+            return result;
+
+        StremioMeta? meta;
+        try
+        {
+            meta = await stremio.GetMetaAsync(id, StremioMediaType.Series).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "GelatoSeriesProvider: failed to fetch meta for {Id}", id);
+            return result;
+        }
+
+        if (meta is null || !meta.IsValid())
+            return result;
+
+        if (_manager.IntoBaseItem(meta) is not Series series)
+            return result;
+
+        result.HasMetadata = true;
+        result.Item = series;
+        MapPeople(meta, result);
+        return result;
     }
 
-    public bool SupportsSearch => false;
-
-    public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(
+    public async Task<IEnumerable<RemoteSearchResult>> GetSearchResults(
         SeriesInfo searchInfo,
         CancellationToken cancellationToken
     )
     {
-        return Task.FromResult<IEnumerable<RemoteSearchResult>>([]);
+        var stremio = GelatoPlugin.Instance?.Configuration.Stremio;
+        if (stremio is null || string.IsNullOrWhiteSpace(searchInfo.Name))
+            return [];
+
+        try
+        {
+            var results = await stremio
+                .SearchAsync(searchInfo.Name, StremioMediaType.Series)
+                .ConfigureAwait(false);
+            return results.Select(ToSearchResult);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "GelatoSeriesProvider: search failed for {Name}", searchInfo.Name);
+            return [];
+        }
     }
 
     public Task<HttpResponseMessage> GetImageResponse(
@@ -144,6 +191,102 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
     )
     {
         throw new NotImplementedException();
+    }
+
+    private static void MapPeople(StremioMeta meta, MetadataResult<Series> result)
+    {
+        foreach (var member in meta.App_Extras?.Cast ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(member.Name))
+                continue;
+            result.AddPerson(
+                new PersonInfo
+                {
+                    Name = member.Name,
+                    Role = member.Character,
+                    Type = PersonKind.Actor,
+                    ImageUrl = member.Photo,
+                }
+            );
+        }
+
+        var directors = meta.App_Extras?.Directors;
+        if (directors is { Count: > 0 })
+        {
+            foreach (var d in directors)
+            {
+                if (!string.IsNullOrWhiteSpace(d.Name))
+                    result.AddPerson(
+                        new PersonInfo
+                        {
+                            Name = d.Name,
+                            Type = PersonKind.Director,
+                            ImageUrl = d.Photo,
+                        }
+                    );
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(meta.Director))
+        {
+            foreach (
+                var name in meta.Director.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+                result.AddPerson(new PersonInfo { Name = name, Type = PersonKind.Director });
+        }
+
+        var writers = meta.App_Extras?.Writers;
+        if (writers is { Count: > 0 })
+        {
+            foreach (var w in writers)
+            {
+                if (!string.IsNullOrWhiteSpace(w.Name))
+                    result.AddPerson(
+                        new PersonInfo
+                        {
+                            Name = w.Name,
+                            Type = PersonKind.Writer,
+                            ImageUrl = w.Photo,
+                        }
+                    );
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(meta.Writer))
+        {
+            foreach (
+                var name in meta.Writer.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+                result.AddPerson(new PersonInfo { Name = name, Type = PersonKind.Writer });
+        }
+    }
+
+    private static RemoteSearchResult ToSearchResult(StremioMeta meta) =>
+        new()
+        {
+            Name = meta.GetName(),
+            ProductionYear = meta.GetYear(),
+            ImageUrl = meta.Poster ?? meta.Thumbnail,
+            ProviderIds = meta.GetProviderIds(),
+        };
+
+    private static string? ResolveId(Dictionary<string, string> providerIds)
+    {
+        if (
+            providerIds.TryGetValue(MetadataProvider.Imdb.ToString(), out var imdb)
+            && !string.IsNullOrWhiteSpace(imdb)
+        )
+            return imdb;
+        if (
+            providerIds.TryGetValue(MetadataProvider.Tmdb.ToString(), out var tmdb)
+            && !string.IsNullOrWhiteSpace(tmdb)
+        )
+            return $"tmdb:{tmdb}";
+        return null;
     }
 
     private bool IsEnabledForLibrary(BaseItem item)

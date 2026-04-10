@@ -50,11 +50,7 @@ public sealed class ImageResourceFilter(
             return;
         }
 
-        log.LogInformation(
-            "ImageFilter: proxying search result item={ItemId} url={Url}",
-            guid,
-            url
-        );
+        log.LogDebug("ImageFilter: proxying search result item={ItemId} url={Url}", guid, url);
 
         try
         {

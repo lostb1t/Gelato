@@ -104,24 +104,27 @@ public class UserConfig
 
 public class GelatoStremioProviderFactory(IHttpClientFactory http, ILoggerFactory log)
 {
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        GelatoStremioProvider
+    > _cache = new(StringComparer.OrdinalIgnoreCase);
+
     public GelatoStremioProvider Create(Guid userId)
     {
         var cfg = GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId);
-        return new GelatoStremioProvider(
-            cfg.GetBaseUrl(),
-            http,
-            log.CreateLogger<GelatoStremioProvider>()
-        );
+        return Create(cfg);
     }
 
     public GelatoStremioProvider Create(PluginConfiguration cfg)
     {
-        return new GelatoStremioProvider(
-            cfg.GetBaseUrl(),
-            http,
-            log.CreateLogger<GelatoStremioProvider>()
+        var baseUrl = cfg.GetBaseUrl();
+        return _cache.GetOrAdd(
+            baseUrl,
+            url => new GelatoStremioProvider(url, http, log.CreateLogger<GelatoStremioProvider>())
         );
     }
+
+    public void ClearCache() => _cache.Clear();
 }
 
 public class CatalogConfig

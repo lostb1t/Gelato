@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Gelato.Config;
 using Gelato.Decorators;
 using Jellyfin.Data.Enums;
@@ -1000,14 +1001,10 @@ public sealed class GelatoManager(
 
         item.Name = meta.GetName();
         item.PremiereDate = meta.GetPremiereDate();
+        item.ProductionYear = meta.GetYear();
         item.Path = $"gelato://stub/{id}";
 
-        if (!string.IsNullOrWhiteSpace(meta.Runtime))
-            item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
-        if (!string.IsNullOrWhiteSpace(meta.Description))
-            item.Overview = meta.Description;
-
-        // NOTICE: do this only for show and movie. cause the parent imdb is used for season abd episodes
+        // Provider IDs — skip for episodes since the parent series IMDB id is used there
         if (meta.Type is not StremioMediaType.Episode && !string.IsNullOrWhiteSpace(id))
         {
             var providerMappings = new (string Prefix, string Provider, bool StripPrefix)[]
@@ -1034,34 +1031,64 @@ public sealed class GelatoManager(
         }
 
         if (!string.IsNullOrWhiteSpace(meta.ImdbId))
-        {
             item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
-        }
 
         var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? id);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
-        item.IsVirtualItem = false;
-        item.ProductionYear = meta.GetYear();
 
         item.Overview = meta.Description ?? meta.Overview;
+
+        if (meta.ImdbRating.HasValue)
+            item.CommunityRating = meta.ImdbRating;
+
+        if (!string.IsNullOrWhiteSpace(meta.Country))
+            item.ProductionLocations =
+            [
+                CultureInfo.InvariantCulture.TextInfo.ToTitleCase(meta.Country.ToLowerInvariant()),
+            ];
+
+        if (!string.IsNullOrWhiteSpace(meta.App_Extras?.Certification))
+            item.OfficialRating = meta.App_Extras.Certification;
+
+        if (meta.Type is StremioMediaType.Movie or StremioMediaType.Series)
+        {
+            if (!string.IsNullOrWhiteSpace(meta.Runtime))
+                item.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
+
+            var genres = (meta.Genres ?? meta.Genre) ?? [];
+            item.Genres = genres.Where(g => !string.IsNullOrWhiteSpace(g)).ToArray();
+        }
+
+        if (item is Episode ep)
+        {
+            ep.IndexNumber = meta.Episode ?? meta.Number;
+            ep.ParentIndexNumber = meta.Season;
+            if (!string.IsNullOrWhiteSpace(meta.Runtime))
+                ep.RunTimeTicks = Utils.ParseToTicks(meta.Runtime);
+            if (!string.IsNullOrWhiteSpace(meta.Thumbnail))
+                ep.SetProviderId("StremioThumb", meta.Thumbnail);
+            var tvdbId = meta.TvdbEpisodeId();
+            if (tvdbId is not null)
+                ep.SetProviderId(MetadataProvider.Tvdb, tvdbId);
+        }
+
+        item.IsVirtualItem = false;
         item.DateModified = DateTime.UtcNow;
         item.DateLastSaved = DateTime.UtcNow;
         item.DateCreated = DateTime.UtcNow;
-
         item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
+        item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
-        var primary = meta.Poster ?? meta.Thumbnail;
-        if (!string.IsNullOrWhiteSpace(primary))
-        {
+        var primaryImage = meta.Poster ?? meta.Thumbnail;
+        if (!string.IsNullOrWhiteSpace(primaryImage))
             ProviderManagerDecorator.SetRemoteImage(
                 appPaths,
                 item,
                 ImageType.Primary,
                 null,
-                primary
+                primaryImage
             );
-        }
-        item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
+
         return item;
     }
 }

@@ -65,6 +65,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         base.UpdateConfiguration(cfg);
 
         _manager.ClearCache();
+        _stremioFactory.ClearCache();
         UserConfigs.Clear();
 
         // Notify subscribers that configuration changed
