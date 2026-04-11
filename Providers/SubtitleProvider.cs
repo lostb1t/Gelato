@@ -8,10 +8,13 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Providers;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +24,7 @@ namespace Gelato.Providers
     {
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
+        private readonly ILibraryManager _library;
 
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
@@ -28,10 +32,15 @@ namespace Gelato.Providers
         // provider instances via its own assembly scanning, separate from the DI container.
         private static readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
 
-        public SubtitleProvider(IHttpClientFactory http, ILogger<SubtitleProvider> log)
+        public SubtitleProvider(
+            IHttpClientFactory http,
+            ILogger<SubtitleProvider> log,
+            ILibraryManager library
+        )
         {
             _http = http;
             _log = log;
+            _library = library;
         }
 
         public string Name => "Gelato Subtitles";
@@ -84,7 +93,19 @@ namespace Gelato.Providers
             string filename = string.Empty;
             try
             {
-                if (
+                // Prefer the filename stored in GelatoData (set from BehaviorHints.Filename during stream
+                // insertion), since the stream URL often doesn't contain a meaningful filename.
+                var streamItem = _library
+                    .GetItemList(new InternalItemsQuery { Path = request.MediaPath })
+                    .FirstOrDefault();
+                var gelatoFilename = streamItem?.GelatoData<string>("filename");
+
+                if (!string.IsNullOrEmpty(gelatoFilename))
+                {
+                    filename = gelatoFilename;
+                    _log.LogDebug("Using GelatoData filename: {Filename}", filename);
+                }
+                else if (
                     Uri.TryCreate(request.MediaPath, UriKind.Absolute, out var uri)
                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
                 )

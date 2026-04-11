@@ -80,8 +80,17 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
         {
             dto.CanDelete = true;
         }
+
         if (IsGelato(dto))
         {
+            // replace placeholder data with first stream if avaiable
+            if (
+                dto.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
+                && dto.MediaSources?.Any() == true
+            )
+            {
+                dto.Path = dto.MediaSources[0].Path;
+            }
             dto.CanDownload = true;
             // mark if placeholder
             if (

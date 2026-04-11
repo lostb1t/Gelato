@@ -45,13 +45,36 @@ namespace Gelato.Decorators
             return _inner.SearchSubtitles(request, cancellationToken);
         }
 
-        public Task DownloadSubtitles(
+        public async Task DownloadSubtitles(
             Video video,
             string subtitleId,
             CancellationToken cancellationToken
-        ) => _inner.DownloadSubtitles(video, subtitleId, cancellationToken);
+        )
+        {
+            var gelatoFilename = video.IsGelato() ? video.GelatoData<string>("filename") : null;
+            if (!string.IsNullOrEmpty(gelatoFilename))
+            {
+                var originalPath = video.Path;
+                video.Path = "/gelato/" + gelatoFilename;
+                try
+                {
+                    await _inner
+                        .DownloadSubtitles(video, subtitleId, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                finally
+                {
+                    video.Path = originalPath;
+                }
+                return;
+            }
 
-        public Task DownloadSubtitles(
+            await _inner
+                .DownloadSubtitles(video, subtitleId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        public async Task DownloadSubtitles(
             Video video,
             LibraryOptions libraryOptions,
             string subtitleId,
@@ -61,8 +84,32 @@ namespace Gelato.Decorators
             if (video.IsGelato())
             {
                 libraryOptions.SaveSubtitlesWithMedia = false;
+
+                // Jellyfin derives the subtitle save filename from video.Path.
+                // For gelato stream items the path is a URL, which produces garbage names.
+                // Use the BehaviorHints.Filename stored in GelatoData if available.
+                var gelatoFilename = video.GelatoData<string>("filename");
+                if (!string.IsNullOrEmpty(gelatoFilename))
+                {
+                    var originalPath = video.Path;
+                    video.Path = "/gelato/" + gelatoFilename;
+                    try
+                    {
+                        await _inner
+                            .DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        video.Path = originalPath;
+                    }
+                    return;
+                }
             }
-            return _inner.DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken);
+
+            await _inner
+                .DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         public Task UploadSubtitle(Video video, SubtitleResponse response) =>
