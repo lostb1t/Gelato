@@ -718,6 +718,7 @@ public class StremioMeta
 
         return null;
     }
+}
 
 public class StremioTrailer
 {
