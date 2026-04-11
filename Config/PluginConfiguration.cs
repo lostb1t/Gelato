@@ -14,7 +14,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public int CatalogMaxItems { get; set; } = 100;
     public string Url { get; set; } = "";
     public bool EnableMixed { get; set; } = false;
-    public bool ExtendLocalSeriesTrees { get; set; } = true;
+    public bool ExtendLocalSeriesTrees { get; set; } = false;
     public bool FilterUnreleased { get; set; } = false;
     public int FilterUnreleasedBufferDays { get; set; } = 0;
     public bool DisableSourceCount { get; set; } = true;
