@@ -586,6 +586,11 @@ public sealed class MediaSourceManagerDecorator(
         "smi",
     };
 
+    // Jellyfin's MediaInfoResolver.GetExternalStreamsAsync bails immediately when !video.IsFileProtocol
+    // (stream items have http:// paths). This means external subtitle files saved to the internal
+    // metadata folder are never discovered during library refresh and never written to the DB.
+    // We work around this by scanning the metadata folder ourselves at playback time and merging
+    // any matching subtitle files into the DB streams on the fly.
     private IReadOnlyList<MediaStream> GetMediaStreamsWithExternalSubs(BaseItem item)
     {
         var streams = _inner.GetMediaStreams(item.Id).ToList();
