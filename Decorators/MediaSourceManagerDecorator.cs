@@ -1,5 +1,8 @@
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using Gelato.Providers;
 using Gelato.Services;
 using Jellyfin.Data;
@@ -505,7 +508,7 @@ public sealed class MediaSourceManagerDecorator(
             Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
             ETag = item.Id.ToString("N", CultureInfo.InvariantCulture),
             Protocol = MediaProtocol.Http,
-            MediaStreams = _inner.GetMediaStreams(item.Id),
+            MediaStreams = GetMediaStreamsWithExternalSubs(item),
             MediaAttachments = _inner.GetMediaAttachments(item.Id),
             Name = richName,
             Path = item.Path,
@@ -568,6 +571,82 @@ public sealed class MediaSourceManagerDecorator(
         info.InferTotalBitrate();
 
         return info;
+    }
+
+    private static readonly HashSet<string> _subtitleExtensions = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "vtt",
+        "srt",
+        "ass",
+        "ssa",
+        "sub",
+        "idx",
+        "smi",
+    };
+
+    private IReadOnlyList<MediaStream> GetMediaStreamsWithExternalSubs(BaseItem item)
+    {
+        var streams = _inner.GetMediaStreams(item.Id).ToList();
+
+        var gelatoFilename = item.GelatoData<string>("filename");
+        if (string.IsNullOrEmpty(gelatoFilename))
+            return streams;
+
+        var metaPath = item.GetInternalMetadataPath();
+        if (!Directory.Exists(metaPath))
+            return streams;
+
+        var baseName = Path.GetFileNameWithoutExtension(gelatoFilename);
+        var existingPaths = new HashSet<string>(
+            streams.Where(s => s.Path != null).Select(s => s.Path!),
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        var nextIndex = streams.Count > 0 ? streams.Max(s => s.Index) + 1 : 0;
+
+        foreach (var file in Directory.EnumerateFiles(metaPath))
+        {
+            var fname = Path.GetFileName(file);
+
+            // Must start with baseName + "."
+            if (!fname.StartsWith(baseName + ".", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var ext = Path.GetExtension(fname).TrimStart('.');
+            if (!_subtitleExtensions.Contains(ext))
+                continue;
+
+            if (existingPaths.Contains(file))
+                continue;
+
+            // Parse language from suffix: {baseName}.{lang}.{ext} or {baseName}.{lang}.{N}.{ext}
+            var suffix = fname.Substring(baseName.Length + 1); // everything after "baseName."
+            var parts = Path.GetFileNameWithoutExtension(suffix).Split('.');
+            var langCode = parts.Length > 0 ? parts[0] : "und";
+
+            streams.Add(
+                new MediaStream
+                {
+                    Type = MediaStreamType.Subtitle,
+                    IsExternal = true,
+                    IsExternalUrl = false,
+                    SupportsExternalStream = true,
+                    Path = file,
+                    Language = langCode,
+                    Codec = ext.ToLowerInvariant(),
+                    Index = nextIndex++,
+                    IsDefault = false,
+                    IsForced = false,
+                    IsHearingImpaired = false,
+                }
+            );
+
+            existingPaths.Add(file);
+        }
+
+        return streams;
     }
 
     private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
