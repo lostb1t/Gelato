@@ -1410,7 +1410,7 @@ public sealed class GelatoManager(
 
         if (item is Series series)
         {
-            series.Status = meta.Status switch
+            series.Status = meta.GetStatus() switch
             {
                 StremioStatus.Continuing => SeriesStatus.Continuing,
                 StremioStatus.Ended => SeriesStatus.Ended,

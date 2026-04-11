@@ -684,7 +684,40 @@ public class StremioMeta
         // If we have no release information, assume it's not released
         return false;
     }
-}
+
+    public StremioStatus? GetStatus()
+    {
+        // Explicit status field takes priority
+        if (Status is not null and not StremioStatus.Unknown)
+            return Status;
+
+        // releaseInfo: "1994-" → continuing, "1994-2004" → ended, "2026" → unreleased
+        if (!string.IsNullOrWhiteSpace(ReleaseInfo))
+        {
+            var trimmed = ReleaseInfo.Trim();
+            if (trimmed.EndsWith('-'))
+                return StremioStatus.Continuing;
+            if (trimmed.Contains('-'))
+                return StremioStatus.Ended;
+            // Single year — fall through to episode check below
+        }
+
+        // Check S1E1: if it exists and hasn't been released yet → Upcoming
+        var s1e1 = Videos?.FirstOrDefault(v => v.Season == 1 && v.Episode == 1);
+        if (s1e1 is not null)
+        {
+            if (s1e1.Released.HasValue && s1e1.Released.Value > DateTime.UtcNow)
+                return StremioStatus.Upcoming;
+            if (s1e1.Released.HasValue)
+                return StremioStatus.Continuing;
+        }
+
+        // Single year in releaseInfo with no other signals → Upcoming
+        if (!string.IsNullOrWhiteSpace(ReleaseInfo) && !ReleaseInfo.Contains('-'))
+            return StremioStatus.Upcoming;
+
+        return null;
+    }
 
 public class StremioTrailer
 {
