@@ -1408,6 +1408,17 @@ public sealed class GelatoManager(
                 ep.SetProviderId(MetadataProvider.Tvdb, tvdbId);
         }
 
+        if (item is Series series)
+        {
+            series.Status = meta.Status switch
+            {
+                StremioStatus.Continuing => SeriesStatus.Continuing,
+                StremioStatus.Ended => SeriesStatus.Ended,
+                StremioStatus.Upcoming => SeriesStatus.Unreleased,
+                _ => null,
+            };
+        }
+
         item.IsVirtualItem = false;
         item.DateModified = DateTime.UtcNow;
         item.DateLastSaved = DateTime.UtcNow;
