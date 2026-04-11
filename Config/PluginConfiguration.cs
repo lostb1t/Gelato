@@ -27,7 +27,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public int MaxCollectionItems { get; set; } = 100;
     public bool DisableSearch { get; set; } = false;
     public bool EnableJavaScriptInjection { get; set; } = false;
-    public bool LazyImages { get; set; } = true;
+    public bool LazyImages { get; set; } = false;
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
