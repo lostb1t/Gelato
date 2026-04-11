@@ -55,7 +55,7 @@ namespace Gelato.Decorators
             if (!string.IsNullOrEmpty(gelatoFilename))
             {
                 var originalPath = video.Path;
-                video.Path = "/gelato/" + gelatoFilename;
+                video.Path = gelatoFilename;
                 try
                 {
                     await _inner
@@ -92,7 +92,7 @@ namespace Gelato.Decorators
                 if (!string.IsNullOrEmpty(gelatoFilename))
                 {
                     var originalPath = video.Path;
-                    video.Path = "/gelato/" + gelatoFilename;
+                    video.Path = gelatoFilename;
                     try
                     {
                         await _inner
