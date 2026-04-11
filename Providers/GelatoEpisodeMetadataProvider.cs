@@ -83,6 +83,7 @@ public sealed class GelatoEpisodeMetadataProvider(
         if (manager.IntoBaseItem(epMeta) is not Episode ep)
             return result;
 
+        ep.ProviderIds.Remove("Stremio");
         result.HasMetadata = true;
         result.Item = ep;
         return result;

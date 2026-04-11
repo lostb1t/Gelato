@@ -1,5 +1,6 @@
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,7 @@ namespace Gelato.Filters;
 public class InsertActionFilter(
     GelatoManager manager,
     IUserManager userManager,
+    ILibraryManager libraryManager,
     ILogger<InsertActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -25,8 +27,21 @@ public class InsertActionFilter(
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
             || userManager.GetUserById(userId) is not { } user
-            || manager.GetStremioMeta(guid) is not { } stremioMeta
         )
+        {
+            await next();
+            return;
+        }
+
+        // Handle local (non-gelato) series: sync or clean tree on demand
+        if (libraryManager.GetItemById(guid) is Series localSeries && !localSeries.IsGelato())
+        {
+            await HandleLocalSeriesAsync(userId, localSeries, ctx.HttpContext.RequestAborted);
+            await next();
+            return;
+        }
+
+        if (manager.GetStremioMeta(guid) is not { } stremioMeta)
         {
             await next();
             return;
@@ -85,6 +100,42 @@ public class InsertActionFilter(
         }
 
         await next();
+    }
+
+    private async Task HandleLocalSeriesAsync(Guid userId, Series series, CancellationToken ct)
+    {
+        var cfg = GelatoPlugin.Instance!.GetConfig(userId);
+
+        if (cfg.ExtendLocalSeriesTrees)
+        {
+            var alreadySynced =
+                series.Tags?.Contains(GelatoManager.TreeSyncedTag, StringComparer.OrdinalIgnoreCase)
+                ?? false;
+            if (alreadySynced)
+                return;
+
+            if (cfg.Stremio is not { } stremio)
+                return;
+
+            log.LogInformation(
+                "InsertActionFilter: syncing local series tree for {Name} ({Id})",
+                series.Name,
+                series.Id
+            );
+
+            var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+            if (meta is null)
+                return;
+
+            await manager
+                .SyncSeriesTreesAsync(cfg, meta, ct, existingSeries: series)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            // Setting disabled — clean any virtual items that may exist for this series
+            manager.CleanVirtualTreeItem(series, ct);
+        }
     }
 
     public async Task<BaseItem?> InsertMetaAsync(

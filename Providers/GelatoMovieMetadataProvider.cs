@@ -54,6 +54,7 @@ public sealed class GelatoMovieMetadataProvider(
         if (manager.IntoBaseItem(meta) is not Movie movie)
             return result;
 
+        movie.ProviderIds.Remove("Stremio");
         result.HasMetadata = true;
         result.Item = movie;
         MapPeople(meta, result);
