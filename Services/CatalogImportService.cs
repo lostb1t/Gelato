@@ -55,7 +55,6 @@ public class CatalogImportService(
         }
 
         var maxItems = catalogCfg.MaxItems;
-        long done = 0;
 
         var stopwatch = Stopwatch.StartNew();
         logger.LogInformation(
@@ -84,60 +83,66 @@ public class CatalogImportService(
                     break;
                 }
 
-                foreach (var meta in page)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    if (processedItems >= maxItems)
-                    {
-                        break;
-                    }
+                var remaining = maxItems - processedItems;
+                var batch = page.Take(remaining).ToList();
 
-                    var mediaType = meta.Type;
-                    var baseItemKind = mediaType.ToBaseItem();
-
-                    // catalog can contain multiple types.
-
-                    var root = baseItemKind switch
-                    {
-                        BaseItemKind.Series => seriesFolder,
-                        BaseItemKind.Movie => movieFolder,
-                        _ => null,
-                    };
-
-                    if (root is not null)
-                    {
-                        try
+                await Parallel
+                    .ForEachAsync(
+                        batch,
+                        new ParallelOptions
                         {
-                            var (item, _) = await manager
-                                .InsertMeta(
-                                    root,
-                                    meta,
-                                    null,
-                                    true,
-                                    true,
-                                    baseItemKind == BaseItemKind.Series,
-                                    ct
-                                )
-                                .ConfigureAwait(false);
-
-                            if (item != null)
-                                importedIds.Add(item.Id);
-                        }
-                        catch (Exception ex)
+                            MaxDegreeOfParallelism = 4,
+                            CancellationToken = ct,
+                        },
+                        async (meta, innerCt) =>
                         {
-                            logger.LogError(
-                                "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
-                                catalogId,
-                                meta.Id,
-                                ex.Message,
-                                ex.StackTrace
-                            );
-                        }
-                    }
+                            var mediaType = meta.Type;
+                            var baseItemKind = mediaType.ToBaseItem();
 
-                    processedItems++;
-                    progress?.Report(processedItems * 100.0 / maxItems);
-                }
+                            // catalog can contain multiple types.
+                            var root = baseItemKind switch
+                            {
+                                BaseItemKind.Series => seriesFolder,
+                                BaseItemKind.Movie => movieFolder,
+                                _ => null,
+                            };
+
+                            if (root is not null)
+                            {
+                                try
+                                {
+                                    var (item, _) = await manager
+                                        .InsertMeta(
+                                            root,
+                                            meta,
+                                            null,
+                                            true,
+                                            true,
+                                            baseItemKind == BaseItemKind.Series,
+                                            innerCt
+                                        )
+                                        .ConfigureAwait(false);
+
+                                    if (item != null)
+                                        importedIds.Add(item.Id);
+                                }
+                                catch (Exception ex)
+                                {
+                                    logger.LogError(
+                                        "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                        catalogId,
+                                        meta.Id,
+                                        ex.Message,
+                                        ex.StackTrace
+                                    );
+                                }
+                            }
+
+                            var done = Interlocked.Increment(ref processedItems);
+                            progress?.Report(done * 100.0 / maxItems);
+                        }
+                    )
+                    .ConfigureAwait(false);
 
                 skip += page.Count;
             }

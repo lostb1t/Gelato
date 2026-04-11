@@ -746,8 +746,27 @@ public sealed class GelatoManager(
             })
             .ToDictionary(g => g.Key, g => g.First());
 
+        // Fetch all existing episodes for this series in one query, grouped by season
+        var existingEpisodesBySeason = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    AncestorIds = [series.Id],
+                    IncludeItemTypes = [BaseItemKind.Episode],
+                    Recursive = true,
+                    IsDeadPerson = true,
+                }
+            )
+            .OfType<Episode>()
+            .Where(x => !x.IsStream() && x.IndexNumber.HasValue && x.ParentIndexNumber.HasValue)
+            .GroupBy(e => e.ParentIndexNumber!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.IndexNumber!.Value).ToHashSet());
+
         var seasonsInserted = 0;
         var episodesInserted = 0;
+
+        var newSeasons = new List<Season>();
+        var allNewEpisodes = new List<Episode>();
 
         var seriesStremioId = series.GetProviderId("Stremio");
         var seriesPresentationKey = series.GetPresentationUniqueKey();
@@ -809,26 +828,14 @@ public sealed class GelatoManager(
 
                 season.SetProviderId("Stremio", $"{seriesStremioId}:{seasonIndex}");
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
-                series.AddChild(season);
+                newSeasons.Add(season);
                 seasonsInserted++;
             }
 
-            // Get existing episodes once per season and create dictionary
-            var existingEpisodeNumbers = libraryManager
-                .GetItemList(
-                    new InternalItemsQuery
-                    {
-                        ParentId = season.Id,
-                        IncludeItemTypes = [BaseItemKind.Episode],
-                        Recursive = true,
-                        IsDeadPerson = true,
-                    }
-                )
-                .OfType<Episode>()
-                .Where(x => !x.IsStream() && x.IndexNumber.HasValue)
-                .Select(e => e.IndexNumber!.Value)
-                .ToHashSet();
-            var episodeList = new List<Episode>();
+            // Look up existing episodes for this season from the pre-fetched dict
+            var existingEpisodeNumbers = existingEpisodesBySeason.TryGetValue(seasonIndex, out var epNums)
+                ? epNums
+                : [];
             foreach (var epMeta in seasonGroup)
             {
                 ct.ThrowIfCancellationRequested();
@@ -882,12 +889,17 @@ public sealed class GelatoManager(
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
 
-                episodeList.Add(episode);
+                allNewEpisodes.Add(episode);
                 episodesInserted++;
                 _log.LogTrace("Created episode {EpisodeName}", epMeta.GetName());
             }
-            repo.SaveItems(episodeList, CancellationToken.None);
         }
+
+        if (newSeasons.Count > 0)
+            repo.SaveItems(newSeasons, ct);
+
+        if (allNewEpisodes.Count > 0)
+            repo.SaveItems(allNewEpisodes, ct);
 
         stopwatch.Stop();
 
@@ -1053,39 +1065,46 @@ public sealed class GelatoManager(
         var total = continuingSeries.Count;
         var i = 0;
 
-        foreach (var series in continuingSeries)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            try
+        await Parallel.ForEachAsync(
+            continuingSeries,
+            new ParallelOptions
             {
-                var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
-                if (meta is not null)
+                MaxDegreeOfParallelism = 4,
+                CancellationToken = cancellationToken,
+            },
+            async (series, ct) =>
+            {
+                try
                 {
-                    var isLocal = !series.IsGelato();
-                    await SyncSeriesTreesAsync(
-                            cfg,
-                            meta,
-                            cancellationToken,
-                            existingSeries: isLocal ? series : null
-                        )
-                        .ConfigureAwait(false);
+                    var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
+                    if (meta is not null)
+                    {
+                        var isLocal = !series.IsGelato();
+                        await SyncSeriesTreesAsync(
+                                cfg,
+                                meta,
+                                ct,
+                                existingSeries: isLocal ? series : null
+                            )
+                            .ConfigureAwait(false);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(
+                        ex,
+                        "SyncSeriesTrees: tree sync failed for {Name} ({Id})",
+                        series.Name,
+                        series.Id
+                    );
+                }
+                finally
+                {
+                    if (total > 0)
+                        progress?.Report(100.0 * Interlocked.Increment(ref i) / total);
                 }
             }
-            catch (Exception ex)
-            {
-                _log.LogError(
-                    ex,
-                    "SyncSeriesTrees: tree sync failed for {Name} ({Id})",
-                    series.Name,
-                    series.Id
-                );
-            }
-            finally
-            {
-                if (total > 0)
-                    progress?.Report(100.0 * ++i / total);
-            }
-        }
+        );
 
         _log.LogInformation(
             "SyncSeriesTrees: continuing series synced: {SeriesCount}.",
