@@ -1163,88 +1163,109 @@ public sealed class GelatoManager(
         }
     }
 
-    private void CleanVirtualTreeItems(CancellationToken ct)
+    public void CleanVirtualTreeItem(Series series, CancellationToken ct)
     {
-        // Fill-in items for mixed (locally-scanned) series: have Stremio ID + gelato:// path,
-        // but their parent Series does NOT have a Stremio ID (it was scanned by Jellyfin).
-        var candidates = libraryManager
+        var allEpisodes = libraryManager
             .GetItemList(
                 new InternalItemsQuery
                 {
-                    IncludeItemTypes = [BaseItemKind.Season, BaseItemKind.Episode],
+                    IncludeItemTypes = [BaseItemKind.Episode],
+                    AncestorIds = [series.Id],
                 }
             )
-            .Where(item =>
-                item.IsGelato()
-                && !string.IsNullOrWhiteSpace(item.Path)
-                && item.Path.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase)
-            )
+            .OfType<Episode>()
             .ToList();
 
-        // Keep only items whose parent Series is locally scanned (no Stremio provider ID)
-        var virtualItems = candidates
-            .Where(item =>
-            {
-                var seriesId =
-                    item is Episode ep ? ep.SeriesId
-                    : item is Season s ? s.SeriesId
-                    : Guid.Empty;
-                if (seriesId == Guid.Empty)
-                    return false;
-                var series = libraryManager.GetItemById(seriesId) as Series;
-                return series is not null && string.IsNullOrEmpty(series.GetProviderId("Stremio"));
-            })
-            .ToList();
+        var virtualEpisodes = allEpisodes.Where(ep => ep.IsGelato()).ToList();
 
-        if (virtualItems.Count == 0)
+        if (virtualEpisodes.Count == 0)
             return;
 
-        // Delete episodes before seasons — Jellyfin won't delete a season that still has children
-        var episodes = virtualItems.OfType<Episode>().ToList();
-        var seasons = virtualItems.OfType<Season>().ToList();
+        var virtualEpIds = virtualEpisodes.Select(e => e.Id).ToHashSet();
+        var seasonsWithRemainingEpisodes = allEpisodes
+            .Where(ep => !virtualEpIds.Contains(ep.Id))
+            .Select(ep => ep.SeasonId)
+            .ToHashSet();
 
-        _log.LogInformation(
-            "CleanVirtualTreeItems: removing {EpCount} episodes and {SeasonCount} seasons.",
-            episodes.Count,
-            seasons.Count
+        _log.LogDebug(
+            "CleanVirtualTreeItem: removing {EpCount} virtual episodes from {SeriesName}.",
+            virtualEpisodes.Count,
+            series.Name
         );
 
-        foreach (var item in episodes.Concat<BaseItem>(seasons))
+        foreach (var ep in virtualEpisodes)
         {
             ct.ThrowIfCancellationRequested();
             try
             {
-                libraryManager.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false });
+                libraryManager.DeleteItem(ep, new DeleteOptions { DeleteFileLocation = false });
             }
             catch (Exception ex)
             {
                 _log.LogError(
                     ex,
-                    "CleanVirtualTreeItems: failed to delete {Name} ({Id})",
-                    item.Name,
-                    item.Id
+                    "CleanVirtualTreeItem: failed to delete episode {Name} ({Id})",
+                    ep.Name,
+                    ep.Id
                 );
             }
         }
 
-        // Remove gelato-tree-synced tag from affected series so they get re-synced if re-enabled
-        var affectedSeriesIds = seasons
-            .Select(s => s.SeriesId)
-            .Concat(episodes.OfType<Episode>().Select(e => e.SeriesId))
-            .Where(id => id != Guid.Empty)
-            .Distinct()
+        var allSeasons = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = [BaseItemKind.Season],
+                    ParentId = series.Id,
+                }
+            )
+            .OfType<Season>()
             .ToList();
 
-        foreach (var seriesId in affectedSeriesIds)
+        foreach (var season in allSeasons)
         {
             ct.ThrowIfCancellationRequested();
-            if (libraryManager.GetItemById(seriesId) is Series series)
+            if (seasonsWithRemainingEpisodes.Contains(season.Id))
+                continue;
+
+            try
             {
-                series.Tags = series
-                    .Tags?.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
-                repo.SaveItems([series], ct);
+                libraryManager.DeleteItem(season, new DeleteOptions { DeleteFileLocation = false });
+                _log.LogDebug(
+                    "CleanVirtualTreeItem: deleted empty season {Name} ({Id})",
+                    season.Name,
+                    season.Id
+                );
             }
+            catch (Exception ex)
+            {
+                _log.LogError(
+                    ex,
+                    "CleanVirtualTreeItem: failed to delete season {Name} ({Id})",
+                    season.Name,
+                    season.Id
+                );
+            }
+        }
+
+        series.Tags = series
+            .Tags?.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        repo.SaveItems([series], ct);
+    }
+
+    private void CleanVirtualTreeItems(CancellationToken ct)
+    {
+        var localSeries = libraryManager
+            .GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Series] })
+            .OfType<Series>()
+            .Where(s => string.IsNullOrEmpty(s.GetProviderId("Stremio")))
+            .ToList();
+
+        foreach (var series in localSeries)
+        {
+            ct.ThrowIfCancellationRequested();
+            CleanVirtualTreeItem(series, ct);
         }
     }
 

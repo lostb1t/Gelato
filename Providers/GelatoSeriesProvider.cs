@@ -156,6 +156,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         if (_manager.IntoBaseItem(meta) is not Series series)
             return result;
 
+        series.ProviderIds.Remove("Stremio");
         result.HasMetadata = true;
         result.Item = series;
         MapPeople(meta, result);

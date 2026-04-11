@@ -1,9 +1,7 @@
-using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
@@ -136,52 +134,7 @@ public class InsertActionFilter(
         else
         {
             // Setting disabled — clean any virtual items that may exist for this series
-            var virtualItems = libraryManager
-                .GetItemList(
-                    new InternalItemsQuery
-                    {
-                        IncludeItemTypes = [BaseItemKind.Season, BaseItemKind.Episode],
-                        AncestorIds = [series.Id],
-                    }
-                )
-                .Where(item =>
-                    item.IsGelato()
-                    && item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase)
-                        == true
-                )
-                .ToList();
-
-            if (virtualItems.Count == 0)
-                return;
-
-            log.LogInformation(
-                "InsertActionFilter: cleaning {Count} virtual item(s) from local series {Name}",
-                virtualItems.Count,
-                series.Name
-            );
-
-            var episodes = virtualItems.OfType<Episode>().ToList();
-            var seasons = virtualItems.OfType<Season>().ToList();
-            foreach (var item in episodes.Concat<BaseItem>(seasons))
-            {
-                ct.ThrowIfCancellationRequested();
-                try
-                {
-                    libraryManager.DeleteItem(
-                        item,
-                        new DeleteOptions { DeleteFileLocation = false }
-                    );
-                }
-                catch (Exception ex)
-                {
-                    log.LogError(
-                        ex,
-                        "InsertActionFilter: failed to delete {Name} ({Id})",
-                        item.Name,
-                        item.Id
-                    );
-                }
-            }
+            manager.CleanVirtualTreeItem(series, ct);
         }
     }
 
