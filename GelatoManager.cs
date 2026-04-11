@@ -943,6 +943,7 @@ public sealed class GelatoManager(
 
         var total = needsEndDate.Count;
         var i = 0;
+        var toSave = new List<BaseItem>();
 
         foreach (var item in needsEndDate)
         {
@@ -959,7 +960,7 @@ public sealed class GelatoManager(
                         await EnrichMetaAsync(meta, cancellationToken).ConfigureAwait(false);
                         var digital = meta.GetDigitalReleaseDate();
                         movie.EndDate = digital ?? sentinel;
-                        repo.SaveItems([movie], cancellationToken);
+                        toSave.Add(movie);
                         _log.LogDebug(
                             "SyncReleaseDates: movie {Name} EndDate → {Date}",
                             movie.Name,
@@ -970,7 +971,7 @@ public sealed class GelatoManager(
 
                     case BaseItem other when other is not Movie:
                         other.EndDate = other.PremiereDate ?? sentinel;
-                        repo.SaveItems([other], cancellationToken);
+                        toSave.Add(other);
                         break;
                 }
             }
@@ -984,6 +985,9 @@ public sealed class GelatoManager(
                     progress?.Report(100.0 * ++i / total);
             }
         }
+
+        if (toSave.Count > 0)
+            repo.SaveItems(toSave, cancellationToken);
 
         _log.LogInformation(
             "SyncReleaseDates completed. EndDate fixed for {Count} item(s).",

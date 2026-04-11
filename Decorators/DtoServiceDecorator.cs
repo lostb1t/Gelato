@@ -85,7 +85,7 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
         {
             // replace placeholder data with first stream if avaiable
             if (
-                dto.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
+                dto.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) == true
                 && dto.MediaSources?.Any() == true
             )
             {
