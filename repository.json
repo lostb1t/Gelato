@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.13.2] - 2026-04-11\n\n### 🐛 Bug Fixes\n\n- Show all external subs (#150)\n",
+        "checksum": "1f0309e0bcee19d375a58c4c6a028614",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.2/gelato_0.26.13.2.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-11T13:46:24Z",
+        "version": "0.26.13.2"
+      },
+      {
         "changelog": "## [0.26.13.1] - 2026-04-11\n\n### 🐛 Bug Fixes\n\n- Disable local tree sync by default\n",
         "checksum": "ca3d9f8087a2512d2cb03291a8795c60",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.1/gelato_0.26.13.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-02-22T10:50:11Z",
         "version": "0.26.3.0"
-      },
-      {
-        "changelog": "## [0.26.2.2] - 2026-02-21\n\n### 🐛 Bug Fixes\n\n- Add item counts to stream filter\n- Added missing closing tag (#108)\n",
-        "checksum": "ba0eb9d1fcb6041d6c3069ddde145f6c",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.2.2/gelato_0.26.2.2.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-21T06:51:55Z",
-        "version": "0.26.2.2"
       }
     ]
   }
