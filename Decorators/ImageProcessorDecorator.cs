@@ -101,7 +101,7 @@ public sealed class ImageProcessorDecorator(
                         imagePath
                     );
                 }
-  
+
             }
         }
 

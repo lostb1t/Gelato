@@ -975,26 +975,26 @@ public sealed class GelatoManager(
                             switch (item)
                             {
                                 case Movie movie:
-                                {
-                                    var meta = await stremio
-                                        .GetMetaAsync(movie)
-                                        .ConfigureAwait(false);
-                                    if (meta is null)
+                                    {
+                                        var meta = await stremio
+                                            .GetMetaAsync(movie)
+                                            .ConfigureAwait(false);
+                                        if (meta is null)
+                                            break;
+                                        await EnrichMetaAsync(meta, ct).ConfigureAwait(false);
+                                        var digital = meta.GetDigitalReleaseDate();
+                                        movie.EndDate = digital ?? sentinel;
+                                        chunkResults.Add(movie);
+                                        _log.LogDebug(
+                                            "SyncReleaseDates: movie {Name} EndDate → {Date}",
+                                            movie.Name,
+                                            movie.EndDate?.ToString(
+                                                "yyyy-MM-dd",
+                                                CultureInfo.InvariantCulture
+                                            )
+                                        );
                                         break;
-                                    await EnrichMetaAsync(meta, ct).ConfigureAwait(false);
-                                    var digital = meta.GetDigitalReleaseDate();
-                                    movie.EndDate = digital ?? sentinel;
-                                    chunkResults.Add(movie);
-                                    _log.LogDebug(
-                                        "SyncReleaseDates: movie {Name} EndDate → {Date}",
-                                        movie.Name,
-                                        movie.EndDate?.ToString(
-                                            "yyyy-MM-dd",
-                                            CultureInfo.InvariantCulture
-                                        )
-                                    );
-                                    break;
-                                }
+                                    }
 
                                 case BaseItem other when other is Series or Season or Episode:
                                     other.EndDate = other.PremiereDate ?? sentinel;
