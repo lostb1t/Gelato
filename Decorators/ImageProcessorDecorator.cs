@@ -2,6 +2,7 @@ using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
@@ -12,7 +13,8 @@ namespace Gelato.Decorators;
 public sealed class ImageProcessorDecorator(
     IImageProcessor inner,
     IApplicationPaths appPaths,
-    IHttpClientFactory http,
+    Lazy<ProviderManagerDecorator> providerManager,
+    Lazy<ILibraryManager> libraryManager,
     ILogger<ImageProcessorDecorator> log
 ) : IImageProcessor
 {
@@ -52,7 +54,7 @@ public sealed class ImageProcessorDecorator(
     )
     {
         var imagePath = options.Image?.Path;
-        if (GelatoPlugin.Instance?.Configuration.LazyImages == true && imagePath is not null)
+        if (imagePath is not null && options.Item is not null)
         {
             var fi = new FileInfo(imagePath);
             if (!fi.Exists || fi.Length == 0)
@@ -63,14 +65,27 @@ public sealed class ImageProcessorDecorator(
                     var url = (await File.ReadAllTextAsync(urlFile).ConfigureAwait(false)).Trim();
                     try
                     {
-                        Directory.CreateDirectory(Path.GetDirectoryName(imagePath)!);
-                        await DownloadToFileAsync(url, imagePath).ConfigureAwait(false);
-                        // Persist sidecar at the actual path so future downloads skip the fallback.
-                        if (urlFile != imagePath + ".url")
-                            File.WriteAllText(imagePath + ".url", url);
+                        await providerManager.Value
+                            .SaveImageDirect(
+                                options.Item,
+                                url,
+                                options.Image!.Type,
+                                options.ImageIndex,
+                                CancellationToken.None
+                            )
+                            .ConfigureAwait(false);
+                        // Re-read the image info — Jellyfin may have saved to a different path.
+                        var fresh = options.Item.GetImageInfo(options.Image.Type, options.ImageIndex);
+                        if (fresh is not null)
+                            options.Image = fresh;
+                        // Persist the updated path to the DB so future loads use the real file.
+                        await libraryManager.Value
+                            .UpdateImagesAsync(options.Item)
+                            .ConfigureAwait(false);
                         log.LogDebug(
-                            "ImageProcessor: downloaded image to {Path} from {Url}",
-                            imagePath,
+                            "ImageProcessor: resolved image for {Id} type={Type} from {Url}",
+                            options.Item.Id,
+                            options.Image.Type,
                             url
                         );
                     }
@@ -79,6 +94,14 @@ public sealed class ImageProcessorDecorator(
                         log.LogWarning(ex, "ImageProcessor: download failed for {Url}", url);
                     }
                 }
+                else
+                {
+                    log.LogWarning(
+                        "ImageProcessor: no .url sidecar for {Path} — skipping (metadata refresh needed)",
+                        imagePath
+                    );
+                }
+  
             }
         }
 
@@ -102,44 +125,6 @@ public sealed class ImageProcessorDecorator(
         var fallback =
             Path.Combine(GelatoImagesDir, options.Item.Id.ToString("N"), fileName) + ".url";
         return File.Exists(fallback) ? fallback : null;
-    }
-
-    private async Task DownloadToFileAsync(string url, string destPath)
-    {
-        const int maxAttempts = 3;
-        var client = http.CreateClient();
-        for (var attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                using var response = await client
-                    .GetAsync(url, HttpCompletionOption.ResponseHeadersRead)
-                    .ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-                await using var stream = await response
-                    .Content.ReadAsStreamAsync()
-                    .ConfigureAwait(false);
-                await using var file = new FileStream(
-                    destPath,
-                    FileMode.Create,
-                    FileAccess.Write,
-                    FileShare.None
-                );
-                await stream.CopyToAsync(file).ConfigureAwait(false);
-                return;
-            }
-            catch (Exception ex) when (attempt < maxAttempts)
-            {
-                log.LogDebug(
-                    ex,
-                    "ImageProcessor: download attempt {Attempt}/{Max} failed for {Url}, retrying...",
-                    attempt,
-                    maxAttempts,
-                    url
-                );
-                await Task.Delay(TimeSpan.FromSeconds(Math.Pow(2, attempt))).ConfigureAwait(false);
-            }
-        }
     }
 
     // — pass-through for everything else —
