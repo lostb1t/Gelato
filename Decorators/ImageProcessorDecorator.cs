@@ -2,6 +2,7 @@ using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
@@ -13,6 +14,7 @@ public sealed class ImageProcessorDecorator(
     IImageProcessor inner,
     IApplicationPaths appPaths,
     Lazy<ProviderManagerDecorator> providerManager,
+    Lazy<ILibraryManager> libraryManager,
     ILogger<ImageProcessorDecorator> log
 ) : IImageProcessor
 {
@@ -68,14 +70,18 @@ public sealed class ImageProcessorDecorator(
                                 options.Item,
                                 url,
                                 options.Image!.Type,
-                                options.ImageIndex > 0 ? options.ImageIndex : null,
+                                options.ImageIndex,
                                 CancellationToken.None
                             )
                             .ConfigureAwait(false);
-                        // Re-read the image info in case Jellyfin saved to a different path.
+                        // Re-read the image info — Jellyfin may have saved to a different path.
                         var fresh = options.Item.GetImageInfo(options.Image.Type, options.ImageIndex);
                         if (fresh is not null)
                             options.Image = fresh;
+                        // Persist the updated path to the DB so future loads use the real file.
+                        await libraryManager.Value
+                            .UpdateImagesAsync(options.Item)
+                            .ConfigureAwait(false);
                         log.LogDebug(
                             "ImageProcessor: resolved image for {Id} type={Type} from {Url}",
                             options.Item.Id,
@@ -88,6 +94,14 @@ public sealed class ImageProcessorDecorator(
                         log.LogWarning(ex, "ImageProcessor: download failed for {Url}", url);
                     }
                 }
+                else
+                {
+                    log.LogWarning(
+                        "ImageProcessor: no .url sidecar for {Path} — skipping (metadata refresh needed)",
+                        imagePath
+                    );
+                }
+  
             }
         }
 

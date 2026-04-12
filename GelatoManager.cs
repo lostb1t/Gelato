@@ -930,11 +930,6 @@ public sealed class GelatoManager(
             return;
 
         var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var gelatoProviders = new Dictionary<string, string>
-        {
-            { "Stremio", string.Empty },
-            { "stremio", string.Empty },
-        };
 
         var needsEndDate = libraryManager
             .GetItemList(
@@ -946,8 +941,7 @@ public sealed class GelatoManager(
                         BaseItemKind.Series,
                         BaseItemKind.Season,
                         BaseItemKind.Episode,
-                    ],
-                    HasAnyProviderId = gelatoProviders,
+                    ]
                 }
             )
             .Where(m => m.EndDate is null || m.EndDate >= sentinel)

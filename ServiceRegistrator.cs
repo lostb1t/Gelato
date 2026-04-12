@@ -94,6 +94,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         // without introducing a circular dependency at construction time.
         services.AddSingleton(sp => new Lazy<ProviderManagerDecorator>(
             () => (ProviderManagerDecorator)sp.GetRequiredService<IProviderManager>()));
+        services.AddSingleton(sp => new Lazy<ILibraryManager>(
+            sp.GetRequiredService<ILibraryManager>));
         services.AddSingleton(sp => new Lazy<ISubtitleManager>(
             sp.GetRequiredService<ISubtitleManager>
         ));
