@@ -930,6 +930,8 @@ public sealed class GelatoManager(
             return;
 
         var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        const int chunkSize = 400;
+        const int maxDegreeOfParallelism = 4;
 
         var needsEndDate = libraryManager
             .GetItemList(
@@ -948,56 +950,88 @@ public sealed class GelatoManager(
             .ToList();
 
         var total = needsEndDate.Count;
-        var i = 0;
-        var toSave = new List<BaseItem>();
+        var processed = 0;
+        var totalSaved = 0;
 
-        foreach (var item in needsEndDate)
+        for (var chunkStart = 0; chunkStart < total; chunkStart += chunkSize)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            try
-            {
-                switch (item)
-                {
-                    case Movie movie:
-                    {
-                        var meta = await stremio.GetMetaAsync(movie).ConfigureAwait(false);
-                        if (meta is null)
-                            break;
-                        await EnrichMetaAsync(meta, cancellationToken).ConfigureAwait(false);
-                        var digital = meta.GetDigitalReleaseDate();
-                        movie.EndDate = digital ?? sentinel;
-                        toSave.Add(movie);
-                        _log.LogDebug(
-                            "SyncReleaseDates: movie {Name} EndDate → {Date}",
-                            movie.Name,
-                            movie.EndDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-                        );
-                        break;
-                    }
 
-                    case BaseItem other when other is not Movie:
-                        other.EndDate = other.PremiereDate ?? sentinel;
-                        toSave.Add(other);
-                        break;
-                }
-            }
-            catch (Exception ex)
+            var chunk = needsEndDate.Skip(chunkStart).Take(chunkSize).ToList();
+            var chunkResults = new System.Collections.Concurrent.ConcurrentBag<BaseItem>();
+
+            await Parallel
+                .ForEachAsync(
+                    chunk,
+                    new ParallelOptions
+                    {
+                        MaxDegreeOfParallelism = maxDegreeOfParallelism,
+                        CancellationToken = cancellationToken,
+                    },
+                    async (item, ct) =>
+                    {
+                        try
+                        {
+                            switch (item)
+                            {
+                                case Movie movie:
+                                {
+                                    var meta = await stremio
+                                        .GetMetaAsync(movie)
+                                        .ConfigureAwait(false);
+                                    if (meta is null)
+                                        break;
+                                    await EnrichMetaAsync(meta, ct).ConfigureAwait(false);
+                                    var digital = meta.GetDigitalReleaseDate();
+                                    movie.EndDate = digital ?? sentinel;
+                                    chunkResults.Add(movie);
+                                    _log.LogDebug(
+                                        "SyncReleaseDates: movie {Name} EndDate → {Date}",
+                                        movie.Name,
+                                        movie.EndDate?.ToString(
+                                            "yyyy-MM-dd",
+                                            CultureInfo.InvariantCulture
+                                        )
+                                    );
+                                    break;
+                                }
+
+                                case BaseItem other when other is not Movie:
+                                    other.EndDate = other.PremiereDate ?? sentinel;
+                                    chunkResults.Add(other);
+                                    break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.LogError(
+                                ex,
+                                "SyncReleaseDates: failed for {Name} ({Id})",
+                                item.Name,
+                                item.Id
+                            );
+                        }
+                        finally
+                        {
+                            var current = Interlocked.Increment(ref processed);
+                            if (total > 0)
+                                progress?.Report(100.0 * current / total);
+                        }
+                    }
+                )
+                .ConfigureAwait(false);
+
+            if (!chunkResults.IsEmpty)
             {
-                _log.LogError(ex, "SyncReleaseDates: failed for {Name} ({Id})", item.Name, item.Id);
-            }
-            finally
-            {
-                if (total > 0)
-                    progress?.Report(100.0 * ++i / total);
+                var toSave = chunkResults.ToList();
+                repo.SaveItems(toSave, cancellationToken);
+                totalSaved += toSave.Count;
             }
         }
 
-        if (toSave.Count > 0)
-            repo.SaveItems(toSave, cancellationToken);
-
         _log.LogInformation(
             "SyncReleaseDates completed. EndDate fixed for {Count} item(s).",
-            needsEndDate.Count
+            totalSaved
         );
     }
 
