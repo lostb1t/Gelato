@@ -996,7 +996,7 @@ public sealed class GelatoManager(
                                     break;
                                 }
 
-                                case BaseItem other when other is not Movie:
+                                case BaseItem other when other is Series or Season or Episode:
                                     other.EndDate = other.PremiereDate ?? sentinel;
                                     chunkResults.Add(other);
                                     break;
