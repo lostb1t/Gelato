@@ -68,7 +68,8 @@ public class CatalogImportService(
         {
             var skip = 0;
             var processedItems = 0;
-            var importedIds = new ConcurrentBag<Guid>();
+            // keyed on stremio meta.Id to deduplicate within the import run
+            var importedIds = new ConcurrentDictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
             while (processedItems < maxItems)
             {
@@ -96,6 +97,12 @@ public class CatalogImportService(
                         },
                         async (meta, innerCt) =>
                         {
+                            if (!importedIds.TryAdd(meta.Id, Guid.Empty))
+                            {
+                                Interlocked.Increment(ref processedItems);
+                                return;
+                            }
+
                             var mediaType = meta.Type;
                             var baseItemKind = mediaType.ToBaseItem();
 
@@ -124,7 +131,7 @@ public class CatalogImportService(
                                         .ConfigureAwait(false);
 
                                     if (item != null)
-                                        importedIds.Add(item.Id);
+                                        importedIds[meta.Id] = item.Id;
                                 }
                                 catch (Exception ex)
                                 {
@@ -149,9 +156,11 @@ public class CatalogImportService(
 
             if (catalogCfg.CreateCollection)
             {
-                await UpdateCollectionAsync(catalogCfg, importedIds.Take(100).ToList())
+                await UpdateCollectionAsync(
+                        catalogCfg,
+                        importedIds.Values.Where(id => id != Guid.Empty).Take(100).ToList()
+                    )
                     .ConfigureAwait(false);
-                importedIds.Clear();
             }
 
             logger.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processedItems);

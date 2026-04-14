@@ -141,7 +141,7 @@ public sealed class GelatoManager(
             .FirstOrDefault();
     }
 
-    private BaseItem? Exist(StremioMeta meta, User user)
+    private BaseItem? Exist(StremioMeta meta, User? user = null)
     {
         var item = IntoBaseItem(meta);
         if (item?.ProviderIds is { Count: > 0 })
@@ -150,7 +150,7 @@ public sealed class GelatoManager(
         return null;
     }
 
-    public BaseItem? FindExistingItem(BaseItem item, User user)
+    public BaseItem? FindExistingItem(BaseItem item, User? user = null)
     {
         var query = new InternalItemsQuery
         {
@@ -212,8 +212,8 @@ public sealed class GelatoManager(
             )
         )
         {
-            // do a prechexk as loading metadata is expensive
-            existing = user is null ? null : Exist(meta, user);
+            // do a precheck as loading metadata is expensive
+            existing = Exist(meta, user);
 
             if (existing is not null)
             {
@@ -258,7 +258,7 @@ public sealed class GelatoManager(
             return (null, false);
         }
 
-        existing = user is null ? null : Exist(meta, user);
+        existing = Exist(meta, user);
 
         if (existing is not null)
         {
