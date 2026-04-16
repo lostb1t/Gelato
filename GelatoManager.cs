@@ -930,6 +930,7 @@ public sealed class GelatoManager(
             return;
 
         var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var now = DateTime.UtcNow;
         const int chunkSize = 400;
         const int maxDegreeOfParallelism = 4;
 
@@ -946,7 +947,7 @@ public sealed class GelatoManager(
                     ]
                 }
             )
-            .Where(m => m.EndDate is null || m.EndDate >= sentinel)
+            .Where(m => m.EndDate is null || m.EndDate >= sentinel || m.EndDate > now)
             .ToList();
 
         var total = needsEndDate.Count;
