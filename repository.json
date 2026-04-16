@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.14.0] - 2026-04-16\n\n### 🚀 Features\n\n- Also update future digital release dates\n",
+        "checksum": "83da7f68c590c1332a89da6c45556246",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.0/gelato_0.26.14.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-16T06:57:20Z",
+        "version": "0.26.14.0"
+      },
+      {
         "changelog": "## [0.26.13.9] - 2026-04-14\n\n### 🐛 Bug Fixes\n\n- Duplicates on import\n\n### ⚙️ Miscellaneous Tasks\n\n- Linting\n",
         "checksum": "b15071bf67f07713f22680d0fcd9e965",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.9/gelato_0.26.13.9.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-03-01T16:35:12Z",
         "version": "0.26.6.2"
-      },
-      {
-        "changelog": "## [0.26.6.1] - 2026-02-26\n\n### 🐛 Bug Fixes\n\n- Return of the delete and download option\n",
-        "checksum": "db6db697c46098d9da1e1ba8062f5d55",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.1/gelato_0.26.6.1.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-02-26T16:41:21Z",
-        "version": "0.26.6.1"
       }
     ]
   }
