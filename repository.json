@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.14.1] - 2026-04-21\n\n### 🐛 Bug Fixes\n\n- Dont filter by digital release date for items ikder then a year\n",
+        "checksum": "26aa2467fb106dc93369065a4ecfea78",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.1/gelato_0.26.14.1.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-21T18:43:14Z",
+        "version": "0.26.14.1"
+      },
+      {
         "changelog": "## [0.26.14.0] - 2026-04-16\n\n### 🚀 Features\n\n- Also update future digital release dates\n",
         "checksum": "83da7f68c590c1332a89da6c45556246",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.0/gelato_0.26.14.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-03-01T17:22:47Z",
         "version": "0.26.6.3"
-      },
-      {
-        "changelog": "## [0.26.6.2] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Introduce new logic to determine if an catalog is importable or not\n",
-        "checksum": "e6083a60b701c75d9dba9ecbf5d88332",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.2/gelato_0.26.6.2.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-03-01T16:35:12Z",
-        "version": "0.26.6.2"
       }
     ]
   }
