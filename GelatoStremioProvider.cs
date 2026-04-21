@@ -646,12 +646,15 @@ public class StremioMeta
     {
         var now = DateTime.UtcNow;
 
-        // Movies: prefer digital release date (TMDB type-4) over theatrical
         if (Type == StremioMediaType.Movie)
         {
             var digital = GetDigitalReleaseDate();
             if (digital.HasValue)
                 return digital.Value.AddDays(bufferDays) <= now;
+
+            // Old media without a digital release date — if premiered > 1 year ago, treat as released.
+            if (Released.HasValue && Released.Value < now.AddYears(-1))
+                return true;
         }
 
         if (Released.HasValue)
