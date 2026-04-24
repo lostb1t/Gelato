@@ -8,7 +8,15 @@
     "owner": "lstb1t",
     "versions": [
       {
-        "changelog": "## [0.26.14.1] - 2026-04-21\n\n### 🐛 Bug Fixes\n\n- Dont filter by digital release date for items ikder then a year\n",
+        "changelog": "## [0.26.14.2] - 2026-04-24\n\n### 🐛 Bug Fixes\n\n- Wrong release date year condition\n",
+        "checksum": "c9e8b914596f45200024a91b598c0055",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.2/gelato_0.26.14.2.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-24T05:42:30Z",
+        "version": "0.26.14.2"
+      },
+      {
+        "changelog": "## [0.26.14.1] - 2026-04-21\r\n\r\n### 🐛 Bug Fixes\r\n\r\n- Dont filter by digital release date for items older then a year\r\n",
         "checksum": "26aa2467fb106dc93369065a4ecfea78",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.1/gelato_0.26.14.1.zip",
         "targetAbi": "10.11.6.0",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-03-01T21:00:59Z",
         "version": "0.26.6.4"
-      },
-      {
-        "changelog": "## [0.26.6.3] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Disable imdbRating from catalogs\n",
-        "checksum": "03e10e6cd87ea33aac64dc86a39c9fbc",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.3/gelato_0.26.6.3.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-03-01T17:22:47Z",
-        "version": "0.26.6.3"
       }
     ]
   }
