@@ -680,7 +680,7 @@ public class StremioMeta
         var year = GetYear();
         if (year.HasValue)
         {
-            var estimatedRelease = new DateTime(year.Value, 6, 1).AddDays(bufferDays);
+            var estimatedRelease = new DateTime(year.Value, 1, 1).AddDays(bufferDays);
             return estimatedRelease <= now;
         }
 
