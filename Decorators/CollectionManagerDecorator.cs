@@ -74,6 +74,11 @@ public sealed class CollectionManagerDecorator(
                 {
                     LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
                     Type = LinkedChildType.Manual,
+                    // set Path so CleanCollectionsAndPlaylists keeps the entry (it strips items that fail File.Exists)
+                    Path = !string.IsNullOrEmpty(item.Path)
+                        && !item.Path.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase)
+                        ? item.Path
+                        : null,
                 }
                 : LinkedChild.Create(item);
 

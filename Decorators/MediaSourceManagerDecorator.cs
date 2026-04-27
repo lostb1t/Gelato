@@ -254,9 +254,14 @@ public sealed class MediaSourceManagerDecorator(
 
         sources.AddRange(gelatoSources);
 
-        if (sources.Count > 1)
+        if (video.IsGelato())
         {
-            // remove primary from list when there are streams
+            // primary source is either a gelato:// stub or a .strm shortcut, neither is playable
+            sources = gelatoSources;
+        }
+        else if (sources.Count > 1)
+        {
+
             sources = sources
                 .Where(k =>
                     !(k.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) ?? false)
