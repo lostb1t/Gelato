@@ -564,6 +564,7 @@ public sealed class MediaSourceManagerDecorator(
         if (ctx.GetActionName() == "GetPostedPlaybackInfo")
         {
             info.IsRemote = false;
+            info.Path = "/stub";
             info.Protocol = MediaProtocol.File;
         }
 
