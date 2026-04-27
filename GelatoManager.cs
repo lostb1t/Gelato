@@ -42,6 +42,30 @@ public sealed class GelatoManager(
         return networkConfig.InternalHttpPort;
     }
 
+    private static readonly HashSet<char> _invalidPathChars = new(Path.GetInvalidFileNameChars());
+
+    private static string SanitizePathSegment(string name) =>
+        new string(name.Select(c => _invalidPathChars.Contains(c) ? '_' : c).ToArray()).Trim(' ', '.');
+
+    private void TryEmitStrm(BaseItem item, string strmPath, string stremioType, string id)
+    {
+        try
+        {
+            if (!File.Exists(strmPath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(strmPath)!);
+                File.WriteAllText(strmPath, $"http://127.0.0.1:{GetHttpPort()}/gelato/meta/{stremioType}/{id}");
+            }
+            item.Path = strmPath;
+            _log.LogDebug("Emitted .strm for {Id} at {StrmPath}", id, strmPath);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Failed to emit .strm for {Id}, falling back to gelato:// path", id);
+            item.Path = $"gelato://stub/{id}";
+        }
+    }
+
     public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
     {
         memoryCache.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
@@ -136,7 +160,7 @@ public sealed class GelatoManager(
         }
 
         SeedFolder(path);
-        return repo.GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
+        return repo.GetItemList(new InternalItemsQuery { Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
     }
@@ -217,13 +241,25 @@ public sealed class GelatoManager(
 
             if (existing is not null)
             {
-                _log.LogDebug(
-                    "found existing {Kind}: {Id} for {Name}",
-                    existing.GetBaseItemKind(),
-                    existing.Id,
-                    existing.Name
-                );
-                return (existing, false);
+                if (cfg.EmitStrmFiles && existing.Path.StartsWith("gelato://stub/", StringComparison.OrdinalIgnoreCase))
+                {
+                    _log.LogInformation(
+                        "InsertMeta: migrating {Kind} {Id} ({Name}) from gelato:// to .strm, deleting old record",
+                        existing.GetBaseItemKind(), existing.Id, existing.Name
+                    );
+                    libraryManager.DeleteItem(existing, new DeleteOptions { DeleteFileLocation = false }, true);
+                    existing = null;
+                }
+                else
+                {
+                    _log.LogDebug(
+                        "found existing {Kind}: {Id} for {Name}",
+                        existing.GetBaseItemKind(),
+                        existing.Id,
+                        existing.Name
+                    );
+                    return (existing, false);
+                }
             }
 
             var lookupId = meta.ImdbId ?? meta.Id;
@@ -262,13 +298,24 @@ public sealed class GelatoManager(
 
         if (existing is not null)
         {
-            _log.LogDebug(
-                "found existing {Kind}: {Id} for {Name}",
-                existing.GetBaseItemKind(),
-                existing.Id,
-                existing.Name
-            );
-            return (existing, false);
+            if (cfg.EmitStrmFiles && existing.Path.StartsWith("gelato://stub/", StringComparison.OrdinalIgnoreCase))
+            {
+                _log.LogInformation(
+                    "InsertMeta: migrating {Kind} {Id} ({Name}) from gelato:// to .strm, deleting old record",
+                    existing.GetBaseItemKind(), existing.Id, existing.Name
+                );
+                libraryManager.DeleteItem(existing, new DeleteOptions { DeleteFileLocation = false }, true);
+            }
+            else
+            {
+                _log.LogDebug(
+                    "found existing {Kind}: {Id} for {Name}",
+                    existing.GetBaseItemKind(),
+                    existing.Id,
+                    existing.Name
+                );
+                return (existing, false);
+            }
         }
 
         await EnrichMetaAsync(meta, ct).ConfigureAwait(false);
@@ -776,7 +823,12 @@ public sealed class GelatoManager(
             ct.ThrowIfCancellationRequested();
 
             var seasonIndex = seasonGroup.Key;
-            var seasonPath = $"{series.Path}:{seasonIndex}";
+            var useStrmForSeason = cfg.EmitStrmFiles
+                && !string.IsNullOrWhiteSpace(series.Path)
+                && !series.Path.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase);
+            var seasonPath = useStrmForSeason
+                ? Path.Combine(series.Path, $"Season {seasonIndex:D2}")
+                : $"{series.Path}:{seasonIndex}";
 
             if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
             {
@@ -888,6 +940,17 @@ public sealed class GelatoManager(
                 episode.ParentId = season.Id;
                 episode.SeriesPresentationUniqueKey = season.SeriesPresentationUniqueKey;
                 episode.PresentationUniqueKey = episode.GetPresentationUniqueKey();
+
+                if (useStrmForSeason)
+                {
+                    var safeEpName = SanitizePathSegment(
+                        $"{episode.Name} S{seasonIndex:D2}E{index.Value:D2}"
+                    );
+                    var strmPath = Path.Combine(seasonPath, safeEpName + ".strm");
+                    TryEmitStrm(episode, strmPath, "series", epMeta.Id ?? "");
+                    episode.Id = libraryManager.GetNewItemId(episode.Path, episode.GetType());
+                    episode.PresentationUniqueKey = episode.CreatePresentationUniqueKey();
+                }
 
                 allNewEpisodes.Add(episode);
                 episodesInserted++;
@@ -1402,7 +1465,42 @@ public sealed class GelatoManager(
         }
 
         item.ProductionYear = meta.GetYear();
-        item.Path = $"gelato://stub/{id}";
+
+        var cfg = GelatoPlugin.Instance?.Configuration;
+        if (cfg?.EmitStrmFiles == true && meta.Type != StremioMediaType.Episode)
+        {
+            var safeName = SanitizePathSegment(
+                $"{item.Name} ({item.ProductionYear}) [imdbid-{id}]"
+            );
+            if (meta.Type == StremioMediaType.Movie)
+            {
+                var strmPath = Path.Combine(cfg.MoviePath, safeName, safeName + ".strm");
+                TryEmitStrm(item, strmPath, "movie", id);
+            }
+            else if (meta.Type == StremioMediaType.Series)
+            {
+                // series path is a directory; episodes are written in SyncSeriesTreesAsync
+                var seriesDir = Path.Combine(cfg.SeriesPath, safeName);
+                try
+                {
+                    Directory.CreateDirectory(seriesDir);
+                    item.Path = seriesDir;
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(ex, "Failed to create series dir for {Id}, falling back to gelato:// path", id);
+                    item.Path = $"gelato://stub/{id}";
+                }
+            }
+            else
+            {
+                item.Path = $"gelato://stub/{id}";
+            }
+        }
+        else
+        {
+            item.Path = $"gelato://stub/{id}";
+        }
 
         // Provider IDs — skip for episodes since the parent series IMDB id is used there
         if (meta.Type is not StremioMediaType.Episode && !string.IsNullOrWhiteSpace(id))

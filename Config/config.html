@@ -77,6 +77,14 @@
               <div class="fieldDescription">Download images on first access instead of at import time. Recommended.</div>
             </div>
 
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkEmitStrmFiles" />
+                <span>Emit .strm files</span>
+              </label>
+              <div class="fieldDescription">Write .strm files for stub items so they have real filesystem paths. Enables BoxSet persistence across restarts. Requires catalog reimport after enabling.</div>
+            </div>
+
 
             <div class="checkboxContainer checkboxContainer-withDescription">
               <label>
@@ -299,6 +307,7 @@
         const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
         const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
         const chkLazyImages = page.querySelector('#chkLazyImages');
+        const chkEmitStrmFiles = page.querySelector('#chkEmitStrmFiles');
 
         // Catalogs
         const catalogsList = page.querySelector('#catalogsList');
@@ -579,6 +588,7 @@
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
             if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
             if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? true;
+            if (chkEmitStrmFiles) chkEmitStrmFiles.checked = cfg.EmitStrmFiles || false;
 
             // User Overrides Logic
             await loadUsers();
@@ -614,6 +624,7 @@
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
             cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
             cfg.LazyImages = chkLazyImages.checked;
+            cfg.EmitStrmFiles = chkEmitStrmFiles.checked;
 
             // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
             if (allCatalogs.length > 0) {
