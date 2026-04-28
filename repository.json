@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.14.3] - 2026-04-27\n\n### 🐛 Bug Fixes\n\n- Replace path with stub on playbackinfo to prevent leaking\n",
+        "checksum": "02b4488880685e82e817341776791360",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.3/gelato_0.26.14.3.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-04-27T19:52:46Z",
+        "version": "0.26.14.3"
+      },
+      {
         "changelog": "## [0.26.14.2] - 2026-04-24\n\n### 🐛 Bug Fixes\n\n- Wrong release date year condition\n",
         "checksum": "c9e8b914596f45200024a91b598c0055",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.2/gelato_0.26.14.2.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-03-05T14:50:55Z",
         "version": "0.26.6.5"
-      },
-      {
-        "changelog": "## [0.26.6.4] - 2026-03-01\n\n### 🐛 Bug Fixes\n\n- Try to catch non standard subtitle language fields\n\n### 🚜 Refactor\n\n- Use imdbid for subtitles with fallback to stremioid\n",
-        "checksum": "3d07e1af2b8ef27a39f154c6a3184f27",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.4/gelato_0.26.6.4.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-03-01T21:00:59Z",
-        "version": "0.26.6.4"
       }
     ]
   }
