@@ -57,10 +57,17 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     private InternalItemsQuery ApplyFilters(InternalItemsQuery filter)
     {
+        var includeTypes = filter.IncludeItemTypes;
+        var includesPerson = includeTypes.Contains(BaseItemKind.Person);
         // Internal Gelato/library lookups should never be reshaped by listing filters.
         // Path-based queries are commonly used to resolve configured root folders.
-        if (filter.IsDeadPerson == true || !string.IsNullOrWhiteSpace(filter.Path))
+        if (filter.IsDeadPerson == true || !string.IsNullOrWhiteSpace(filter.Path)) {
+            if (!includesPerson)
+            {
+                filter.IsDeadPerson = null;
+            }
             return filter;
+        }
 
         var ctx = _http.HttpContext;
         var isListingIntent =
@@ -70,9 +77,7 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
         var filterUnreleased = GelatoPlugin.Instance!.Configuration.FilterUnreleased;
         var bufferDays = GelatoPlugin.Instance.Configuration.FilterUnreleasedBufferDays;
-        var includeTypes = filter.IncludeItemTypes;
         var hasIncludeTypes = includeTypes.Length != 0;
-        var includesPerson = includeTypes.Contains(BaseItemKind.Person);
         var isStreamTagQuery = filter.Tags.Contains(
             GelatoManager.StreamTag,
             StringComparer.OrdinalIgnoreCase
