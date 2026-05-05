@@ -61,7 +61,8 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         var includesPerson = includeTypes.Contains(BaseItemKind.Person);
         // Internal Gelato/library lookups should never be reshaped by listing filters.
         // Path-based queries are commonly used to resolve configured root folders.
-        if (filter.IsDeadPerson == true || !string.IsNullOrWhiteSpace(filter.Path)) {
+        if (filter.IsDeadPerson == true || !string.IsNullOrWhiteSpace(filter.Path))
+        {
             if (!includesPerson)
             {
                 filter.IsDeadPerson = null;

@@ -4,13 +4,15 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
-public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> manager)
+public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> manager, IHttpContextAccessor http)
     : IDtoService
 {
     private readonly Lazy<GelatoManager> _manager = manager;
+    private readonly IHttpContextAccessor _http = http;
 
     public double? GetPrimaryImageAspectRatio(BaseItem item) =>
         inner.GetPrimaryImageAspectRatio(item);
@@ -23,7 +25,7 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
     )
     {
         var dto = inner.GetBaseItemDto(item, options, user, owner);
-        Patch(dto, item, false, user);
+        Patch(dto, item, _http.HttpContext?.IsApiListing() == true, user);
         return dto;
     }
 
@@ -58,7 +60,7 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
     )
     {
         var dto = inner.GetItemByNameDto(item, options, taggedItems, user);
-        Patch(dto, item, false, user);
+        Patch(dto, item, _http.HttpContext?.IsApiListing() == true, user);
         return dto;
     }
 
@@ -101,6 +103,7 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
                     .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
             )
                 return;
+
             dto.LocationType = LocationType.Virtual;
             dto.Path = null;
             dto.CanDownload = false;
