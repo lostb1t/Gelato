@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.14.5] - 2026-05-05\n\n### 🐛 Bug Fixes\n\n- Do not mark items as virtual in listings\n\n### 🚜 Refactor\n\n- Use bulk deleye to speed up purge\n",
+        "checksum": "117f2a4b5daa5bf8e9cfda1653ad012d",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.5/gelato_0.26.14.5.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-05-05T10:10:39Z",
+        "version": "0.26.14.5"
+      },
+      {
         "changelog": "## [0.26.14.4] - 2026-04-28\n\n### 🐛 Bug Fixes\n\n- Clear dead person filter\n",
         "checksum": "2a69da81349997adbd9e56de6f014555",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.4/gelato_0.26.14.4.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-03-13T15:50:45Z",
         "version": "0.26.6.7"
-      },
-      {
-        "changelog": "## [0.26.6.6] - 2026-03-12\n\n### 🐛 Bug Fixes\n\n- *(repository)* Skip stream exclusion on gelato stream-tag queries (#132)\n",
-        "checksum": "07f4899a72ccc6a4a8ee41d435c5ce7f",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.6.6/gelato_0.26.6.6.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-03-12T19:22:52Z",
-        "version": "0.26.6.6"
       }
     ]
   }
