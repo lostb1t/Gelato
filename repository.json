@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.15.0] - 2026-05-13\n\n### 🚀 Features\n\n- Hide path on pkaybackinfo to prevent leaking\n",
+        "checksum": "cbdded8b326530c0b2b846c1a7eee17a",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.15.0/gelato_0.26.15.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-05-13T21:04:55Z",
+        "version": "0.26.15.0"
+      },
+      {
         "changelog": "## [0.26.14.8] - 2026-05-13\n\n### 🐛 Bug Fixes\n\n- Better error checks for streams\n",
         "checksum": "24b9db25c01d9e460c1846ccc2550e3f",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.8/gelato_0.26.14.8.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-01T22:18:12Z",
         "version": "0.26.7.2"
-      },
-      {
-        "changelog": "## [0.26.7.1] - 2026-03-23\n\n### 🐛 Bug Fixes\n\n- Clean up listing filter intent and preserve internal lookups (#138)\n- Clean url encoded subtitle  ames\n",
-        "checksum": "fda7097285a9d8414a3b276b5a94b50b",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.7.1/gelato_0.26.7.1.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-03-23T09:15:24Z",
-        "version": "0.26.7.1"
       }
     ]
   }
