@@ -273,12 +273,6 @@ public class GelatoStremioProvider(
         var url = BuildUrl(["stream", mediaType.ToString().ToLower(), id]);
         var r = await GetJsonAsync<StremioStreamsResponse>(url);
 
-        var error = r?.GetError();
-        if (error is not null)
-        {
-            throw new InvalidOperationException($"Stremio returned an error: {error}");
-        }
-
         return r?.Streams ?? [];
     }
 
@@ -805,11 +799,6 @@ public class StremioStreamsResponse
 {
     public List<StremioStream> Streams { get; set; } = new();
 
-    public string? GetError()
-    {
-        var name = Streams.FirstOrDefault()?.GetName();
-        return name is not null && name.Contains("error") ? name : null;
-    }
 }
 
 public class StremioStream

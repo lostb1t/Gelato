@@ -1,4 +1,5 @@
 using Jellyfin.Data.Enums;
+using MediaBrowser.Model.MediaInfo;
 using Jellyfin.Database.Implementations.Entities; // User
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -85,14 +86,13 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
 
         if (IsGelato(dto))
         {
-            // replace placeholder data with first stream if avaiable
-            if (
-                dto.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) == true
-                && dto.MediaSources?.Any() == true
-            )
+            if (dto.Path is not null && dto.Path.IsUrl())
             {
-                dto.Path = dto.MediaSources[0].Path;
+                // dto.Path = "/stub";
+
+
             }
+
             dto.CanDownload = true;
             // mark if placeholder
             if (
@@ -102,7 +102,18 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
                 || !dto.MediaSources[0]
                     .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
             )
+            {
+                if (dto.MediaSources != null)
+                {
+                    foreach (var source in dto.MediaSources)
+                    {
+                        //source.Path = "/stub";
+                        //source.IsRemote = false;
+                        // source.Protocol = MediaProtocol.File;
+                    }
+                }
                 return;
+            }
 
             dto.LocationType = LocationType.Virtual;
             dto.Path = null;

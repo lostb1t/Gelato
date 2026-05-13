@@ -234,7 +234,7 @@ public sealed class MediaSourceManagerDecorator(
             .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
             .Select(s =>
             {
-                var k = GetVersionInfo(s, MediaSourceType.Grouping, ctx, user);
+                var k = GetVersionInfo(s, MediaSourceType.Grouping, user);
 
                 if (user is not null)
                 {
@@ -270,7 +270,7 @@ public sealed class MediaSourceManagerDecorator(
         // failsafe. mediasources cannot be null
         if (sources.Count == 0)
         {
-            sources.Add(GetVersionInfo(item, MediaSourceType.Default, ctx, user));
+            sources.Add(GetVersionInfo(item, MediaSourceType.Default, user));
         }
 
         if (sources.Count > 0)
@@ -387,6 +387,12 @@ public sealed class MediaSourceManagerDecorator(
                 .ConfigureAwait(false);
         }
 
+        // Stub path after probing is done so the real URL is never sent to clients.
+        // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
+        // selected.Path = "/stub";
+        // selected.IsRemote = false;
+        // selected.Protocol = MediaProtocol.File;
+
         return [selected];
 
         static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
@@ -490,7 +496,6 @@ public sealed class MediaSourceManagerDecorator(
     private MediaSourceInfo GetVersionInfo(
         BaseItem item,
         MediaSourceType type,
-        HttpContext ctx,
         User? user = null
     )
     {
@@ -523,14 +528,6 @@ public sealed class MediaSourceManagerDecorator(
             //HasSegments = MediaSegmentManager.HasSegments(item.Id)
         };
 
-        // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
-        if (!string.IsNullOrEmpty(bingeGroup))
-        {
-            info.RequiredHttpHeaders = new Dictionary<string, string>
-            {
-                { "X-Gelato-BingeGroup", bingeGroup },
-            };
-        }
 
         if (user is not null)
         {
@@ -557,14 +554,6 @@ public sealed class MediaSourceManagerDecorator(
                 info.IsRemote = true;
                 info.Path = video.ShortcutPath;
             }
-        }
-
-        // massive cheat. clients will direct play remote files directly. But we always want to proxy it.
-        // just fake a real file. we cant stub the path tho as it brakes  probe.
-        if (ctx.GetActionName() == "GetPostedPlaybackInfo")
-        {
-            info.IsRemote = false;
-            info.Protocol = MediaProtocol.File;
         }
 
         info.Bitrate = item.TotalBitrate;
