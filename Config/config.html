@@ -248,6 +248,7 @@
     <script type="text/javascript">
       (function () {
         const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A";
+        const guidRegex = /^[0-9a-f]{32}$/i;
         // Unique ID for this IIFE instance to prevent collisions if multiple loaded
         const pageId = "gelatoConfigurationPage";
         const page = document.querySelector('#' + pageId);
@@ -318,6 +319,20 @@
         let currentConfig = null;
         let users = [];
 
+        function userConfigsArrayToObject(arr) {
+          const obj = {};
+          (arr || []).forEach(uc => {
+            if (uc.UserId && guidRegex.test(uc.UserId)) {
+              obj[uc.UserId] = {
+                Url: uc.Url,
+                MoviePath: uc.MoviePath,
+                SeriesPath: uc.SeriesPath,
+                DisableSearch: uc.DisableSearch,
+              };
+            }
+          });
+          return obj;
+        }
         async function loadCatalogs() {
           try {
             // Show loading spinner in list
@@ -563,8 +578,8 @@
           Dashboard.showLoadingMsg();
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
+            cfg.UserConfigs = userConfigsArrayToObject(cfg.UserConfigs);
             currentConfig = cfg;
-
             // Populate fields
             if (txtUrl) txtUrl.value = cfg.Url || "";
             if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
@@ -641,16 +656,7 @@
             // Update local currentConfig to match
             currentConfig = cfg;
             // Re-hydrate the object form of UserConfigs for local editing
-            const savedUserConfigsArray = cfg.UserConfigs || [];
-            cfg.UserConfigs = {};
-            savedUserConfigsArray.forEach(userConfig => {
-              cfg.UserConfigs[userConfig.UserId] = {
-                Url: userConfig.Url,
-                MoviePath: userConfig.MoviePath,
-                SeriesPath: userConfig.SeriesPath,
-                DisableSearch: userConfig.DisableSearch
-              };
-            });
+            currentConfig.UserConfigs = userConfigsArrayToObject(cfg.UserConfigs);
 
             Dashboard.processPluginConfigurationUpdateResult();
           } catch (e) {
@@ -662,7 +668,7 @@
 
         async function loadUsers() {
           try {
-            users = await window.ApiClient.getUsers();
+            users = (await window.ApiClient.getUsers()).filter(u => guidRegex.test(u.Id));
             selUserConfig.innerHTML = '<option value="">-- Select user --</option>';
             users.forEach(u => {
               const opt = document.createElement('option');
@@ -691,7 +697,9 @@
 
             const infoDiv = document.createElement('div');
             infoDiv.style.flex = '1';
-            infoDiv.innerHTML = `<strong>${userName}</strong>`;
+            const strong = document.createElement('strong');
+            strong.textContent = userName;
+            infoDiv.appendChild(strong);
             container.appendChild(infoDiv);
 
             const editBtn = document.createElement('button');
