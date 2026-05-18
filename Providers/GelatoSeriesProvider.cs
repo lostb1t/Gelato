@@ -96,8 +96,19 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         // Update cache before syncing
         _syncCache[series.Id] = now;
 
+        var isLocal = !series.IsGelato();
+
+        if (isLocal && !cfg.ExtendLocalSeriesTrees)
+            return;
+
+        // Guard against race condition: RefreshStarted fires inside RefreshMetadata (GelatoManager.cs:692)
+        // before AddChild/UpdateToRepositoryAsync persist the stub (lines 693-694). If Stremio metadata
+        // is cached the handler can complete and create a duplicate before the original is saved.
+        if (_libraryManager.GetItemById(series.Id) is null)
+            return;
+
         var seriesFolder = cfg.SeriesFolder;
-        if (seriesFolder is null)
+        if (!isLocal && seriesFolder is null)
         {
             _log.LogWarning("No series folder found");
             return;
@@ -112,7 +123,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
                 return;
             }
 
-            await _manager.SyncSeriesTreesAsync(cfg, meta, CancellationToken.None);
+            await _manager.SyncSeriesTreesAsync(cfg, meta, CancellationToken.None, existingSeries: isLocal ? series : null);
         }
         catch (Exception ex)
         {
