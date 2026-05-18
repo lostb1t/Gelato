@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.15.1] - 2026-05-18\n\n### 🐛 Bug Fixes\n\n- Prevent duplicate series from OnProviderManagerRefreshStarted\n",
+        "checksum": "94579ce8ad1bee89baff70a7f0fe8a47",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.15.1/gelato_0.26.15.1.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-05-18T07:34:53Z",
+        "version": "0.26.15.1"
+      },
+      {
         "changelog": "## [0.26.15.0] - 2026-05-13\n\n### 🚀 Features\n\n- Hide path on pkaybackinfo to prevent leaking\n",
         "checksum": "cbdded8b326530c0b2b846c1a7eee17a",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.15.0/gelato_0.26.15.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-03T19:53:50Z",
         "version": "0.26.7.3"
-      },
-      {
-        "changelog": "## [0.26.7.2] - 2026-04-01\n\n### 🐛 Bug Fixes\n\n- Handle null subtitle titles in search results (#141)\n- Add seasons to gelato filter\n",
-        "checksum": "338bcd12080881985cc4e1e89d01d609",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.7.2/gelato_0.26.7.2.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-01T22:18:12Z",
-        "version": "0.26.7.2"
       }
     ]
   }
