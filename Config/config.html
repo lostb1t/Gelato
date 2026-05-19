@@ -74,7 +74,7 @@
                 <input is="emby-checkbox" type="checkbox" id="chkLazyImages" />
                 <span>Lazy images</span>
               </label>
-              <div class="fieldDescription">Download images on first access instead of at import time. Recommended.</div>
+              <div class="fieldDescription">Download images on first access instead of at import time saving a lot of storage.</div>
             </div>
 
 
@@ -593,7 +593,7 @@
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
             if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
-            if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? true;
+            if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? false;
 
             // User Overrides Logic
             await loadUsers();
