@@ -88,9 +88,7 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
         {
             if (dto.Path is not null && dto.Path.IsUrl())
             {
-                // dto.Path = "/stub";
-
-
+                dto.Path = "/stub";
             }
 
             dto.CanDownload = true;
@@ -107,9 +105,13 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
                 {
                     foreach (var source in dto.MediaSources)
                     {
-                        //source.Path = "/stub";
-                        //source.IsRemote = false;
-                        // source.Protocol = MediaProtocol.File;
+                        source.SupportsDirectPlay = false;
+                        if (source.Path is not null && source.Path.IsUrl())
+                        {
+                            source.Path = "/stub";
+                            source.IsRemote = false;
+                            source.Protocol = MediaProtocol.File;
+                        }
                     }
                 }
                 return;

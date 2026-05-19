@@ -388,12 +388,14 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         // Stub path after probing is done so the real URL is never sent to clients.
-        // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
-        if (ctx.GetActionName() == "GetPostedPlaybackInfo")
+        // Force File protocol so clients proxy through Jellyfin instead of direct-playing
+        // internal addon URLs like http://caddy:8088/...
+        if (ctx.GetActionName() is "GetPlaybackInfo" or "GetPostedPlaybackInfo")
         {
             selected.Path = "/stub";
             selected.IsRemote = false;
             selected.Protocol = MediaProtocol.File;
+            selected.SupportsDirectPlay = false;
         }
 
         return [selected];
@@ -525,7 +527,9 @@ public sealed class MediaSourceManagerDecorator(
             Size = item.Size,
             Type = type,
             SupportsDirectStream = true,
-            SupportsDirectPlay = true,
+            // Never direct-play Gelato HTTP URLs from clients. They may be internal Docker
+            // URLs (for example http://caddy:8088/...) and must be proxied by Jellyfin.
+            SupportsDirectPlay = false,
             // just always say yes
             HasSegments = true,
             //HasSegments = MediaSegmentManager.HasSegments(item.Id)
