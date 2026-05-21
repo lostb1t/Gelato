@@ -8,16 +8,19 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Providers;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators
 {
     public sealed class SubtitleManagerDecorator : ISubtitleManager
     {
         private readonly ISubtitleManager _inner;
+        private readonly ILogger<SubtitleManagerDecorator> _log;
 
-        public SubtitleManagerDecorator(ISubtitleManager inner)
+        public SubtitleManagerDecorator(ISubtitleManager inner, ILogger<SubtitleManagerDecorator> log)
         {
             _inner = inner;
+            _log = log;
         }
 
         public event EventHandler<SubtitleDownloadFailureEventArgs> SubtitleDownloadFailure
@@ -83,6 +86,11 @@ namespace Gelato.Decorators
         {
             if (video.IsGelato())
             {
+                if (libraryOptions.SaveSubtitlesWithMedia)
+                    _log.LogWarning(
+                        "SaveSubtitlesWithMedia is enabled but subtitles cannot be saved alongside Gelato stream items. Disable it in the library settings to suppress this warning."
+                    );
+
                 libraryOptions.SaveSubtitlesWithMedia = false;
 
                 // Jellyfin derives the subtitle save filename from video.Path.
