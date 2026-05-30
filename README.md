@@ -1,3 +1,7 @@
+[!NOTE]
+Looking for the next evolution of Gelato?
+Check out [Remux](https://github.com/lostb1t/remux) — a new Rust-based media server designed as a full replacement for Jellyfin rather than a plugin. It supports local libraries, remote sources, Stremio addons, and works with existing Jellyfin clients.
+
 <div align="center">
    <img width="125" src="logo.png" alt="Logo">
 </div>
