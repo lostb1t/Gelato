@@ -173,6 +173,12 @@ public class SearchActionFilter(
             if (baseItem is null)
                 continue;
 
+            if (manager.FindExistingItem(baseItem) is { } existing)
+            {
+                dtos.Add(dtoService.GetBaseItemDto(existing, options));
+                continue;
+            }
+
             var dto = dtoService.GetBaseItemDto(baseItem, options);
             var stremioUri = StremioUri.FromBaseItem(baseItem);
             dto.Id = stremioUri.ToGuid();
