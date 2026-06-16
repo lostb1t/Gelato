@@ -61,3 +61,10 @@ For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - Stream cache can be cleared by restarting the server
+
+### ❤️ Support the Project
+
+- ⭐ **[Star the repository](https://github.com/lostb1t/Gelato)** on GitHub.
+- 🤝 **Contribute**: Report issues, suggest features, or submit pull requests.
+- ☕ **Donate**:
+  - **[Ko-fi](https://ko-fi.com/lostb1t)**
