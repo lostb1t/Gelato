@@ -187,6 +187,7 @@ public sealed class MediaSourceManagerDecorator(
         // we dont use jellyfins alternate versions crap. So we have to load it ourselves
 
         InternalItemsQuery query;
+        var associationId = item.GetProviderId("Stremio");
 
         if (item.GetBaseItemKind() == BaseItemKind.Episode)
         {
@@ -206,12 +207,20 @@ public sealed class MediaSourceManagerDecorator(
         }
         else
         {
+            var associationUri = StremioUri.FromBaseItem(item);
+            if (associationUri is null)
+            {
+                _log.LogDebug("No Stremio URI found for movie {ItemId}", item.Id);
+                return sources;
+            }
+
+            associationId = associationUri.ExternalId;
             query = new InternalItemsQuery
             {
                 IncludeItemTypes = [item.GetBaseItemKind()],
                 HasAnyProviderId = new Dictionary<string, string>
                 {
-                    { "Stremio", item.GetProviderId("Stremio") },
+                    { "Stremio", associationUri.ExternalId },
                 },
                 Recursive = false,
                 GroupByPresentationUniqueKey = false,
@@ -249,7 +258,7 @@ public sealed class MediaSourceManagerDecorator(
             "Found {s} streams. UserId={Action} GelatoId={Uri}",
             gelatoSources.Count,
             userId,
-            item.GetProviderId("Stremio")
+            associationId
         );
 
         sources.AddRange(gelatoSources);

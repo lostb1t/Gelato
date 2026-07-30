@@ -407,8 +407,12 @@ public sealed class GelatoManager(
             return 0;
         }
 
-        var providerIds = video.ProviderIds;
-        providerIds.TryAdd("Stremio", uri.ExternalId);
+        var streamProviderIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (providerId, value) in video.ProviderIds)
+        {
+            streamProviderIds[providerId] = value;
+        }
+        streamProviderIds["Stremio"] = uri.ExternalId;
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         var stremio = cfg.Stremio;
@@ -440,7 +444,7 @@ public sealed class GelatoManager(
         var query = new InternalItemsQuery
         {
             IncludeItemTypes = [isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie],
-            HasAnyProviderId = providerIds,
+            HasAnyProviderId = streamProviderIds,
             Recursive = true,
             IsDeadPerson = true,
             //  IsVirtualItem = true,
@@ -524,7 +528,7 @@ public sealed class GelatoManager(
                 locked.Add(MetadataField.Tags);
             streamItem.LockedFields = locked.ToArray();
 
-            streamItem.ProviderIds = providerIds;
+            streamItem.ProviderIds = streamProviderIds;
             streamItem.RunTimeTicks = video.RunTimeTicks ?? video.RunTimeTicks;
             streamItem.LinkedAlternateVersions = [];
             streamItem.SetPrimaryVersionId(null);
