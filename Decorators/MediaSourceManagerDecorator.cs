@@ -88,7 +88,7 @@ public sealed class MediaSourceManagerDecorator(
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
-            (!cfg.EnableMixed && !item.IsGelato())
+            (!cfg.EnableMixed && !IsGelatoPlaybackItem(item))
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
         )
         {
@@ -187,6 +187,7 @@ public sealed class MediaSourceManagerDecorator(
         // we dont use jellyfins alternate versions crap. So we have to load it ourselves
 
         InternalItemsQuery query;
+        var associationId = item.GetProviderId("Stremio");
 
         if (item.GetBaseItemKind() == BaseItemKind.Episode)
         {
@@ -206,12 +207,20 @@ public sealed class MediaSourceManagerDecorator(
         }
         else
         {
+            var associationUri = StremioUri.FromBaseItem(item);
+            if (associationUri is null)
+            {
+                _log.LogDebug("No Stremio URI found for movie {ItemId}", item.Id);
+                return sources;
+            }
+
+            associationId = associationUri.ExternalId;
             query = new InternalItemsQuery
             {
                 IncludeItemTypes = [item.GetBaseItemKind()],
                 HasAnyProviderId = new Dictionary<string, string>
                 {
-                    { "Stremio", item.GetProviderId("Stremio") },
+                    { "Stremio", associationUri.ExternalId },
                 },
                 Recursive = false,
                 GroupByPresentationUniqueKey = false,
@@ -249,7 +258,7 @@ public sealed class MediaSourceManagerDecorator(
             "Found {s} streams. UserId={Action} GelatoId={Uri}",
             gelatoSources.Count,
             userId,
-            item.GetProviderId("Stremio")
+            associationId
         );
 
         sources.AddRange(gelatoSources);
@@ -346,6 +355,13 @@ public sealed class MediaSourceManagerDecorator(
             return sources;
 
         var owner = ResolveOwnerFor(selected, item);
+        if (!IsGelatoPlaybackItem(owner))
+        {
+            return await _inner
+                .GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct)
+                .ConfigureAwait(false);
+        }
+
         if (owner.IsPrimaryVersion() && owner.Id != item.Id)
         {
             sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
@@ -417,6 +433,10 @@ public sealed class MediaSourceManagerDecorator(
         BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
             Guid.TryParse(s.ETag, out var g) ? libraryManager.GetItemById(g) ?? fallback : fallback;
     }
+
+    private static bool IsGelatoPlaybackItem(BaseItem item) =>
+        item.HasStreamTag()
+        || (item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false);
 
     public Task<MediaSourceInfo> GetMediaSource(
         BaseItem item,
