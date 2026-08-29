@@ -684,14 +684,43 @@ public sealed class MediaSourceManagerDecorator(
         try
         {
             _log.LogInformation("Probing stream for {Id} via {Url}", owner.Id, streamUrl);
-            await owner.RefreshMetadata(
-                new MetadataRefreshOptions(directoryService)
-                {
-                    EnableRemoteContentProbe = true,
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                },
-                ct
-            );
+
+            var options = new MetadataRefreshOptions(directoryService)
+            {
+                EnableRemoteContentProbe = true,
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            };
+
+            if (_probeProvider is not null)
+            {
+                // Call the ffprobe provider directly instead of going through
+                // RefreshMetadata.
+                //
+                // RefreshMetadata runs the whole metadata pipeline, and with
+                // FullRefresh that includes ExecuteRemoteProviders - so every
+                // stream probe also re-queried OMDb/TMDb for the item. On a
+                // library browsed through Gelato that is a remote metadata
+                // lookup per probe, and it is where the recurring
+                // "Error in The Open Movie Database" JsonException spam comes
+                // from: OMDb returns malformed JSON for some season payloads
+                // and the probe drags that call along every time.
+                //
+                // The probe provider on its own does exactly what is wanted
+                // here - read the container's streams - and nothing else. The
+                // caller already persists the result with
+                // UpdateToRepositoryAsync and runs segment providers itself, so
+                // no other part of the pipeline is needed.
+                //
+                // This field was already injected upstream and never used.
+                await _probeProvider.FetchAsync(owner, options, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                // No probe provider resolved - fall back to the old path rather
+                // than silently skipping the probe.
+                _log.LogDebug("No probe provider available, falling back to RefreshMetadata");
+                await owner.RefreshMetadata(options, ct).ConfigureAwait(false);
+            }
         }
         catch (Exception ex)
         {
