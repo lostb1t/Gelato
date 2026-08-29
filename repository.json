@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.16.0] - 2026-08-29\n\n### 🚀 Features\n\n- Log warning if SaveSubtitlesWithMedia is enabled\n\n### 🐛 Bug Fixes\n\n- Keep physical local playback outside Gelato probes (#190)\n- Keep search results when a meta has a blank imdb_id (#196)\n- Probe a stream without running the whole metadata pipeline (#198)\n",
+        "checksum": "677882dbcd70a7646a8e6c728130ab19",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.16.0/gelato_0.26.16.0.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-08-29T06:21:40Z",
+        "version": "0.26.16.0"
+      },
+      {
         "changelog": "## [0.26.15.1] - 2026-05-18\n\n### 🐛 Bug Fixes\n\n- Prevent duplicate series from OnProviderManagerRefreshStarted\n",
         "checksum": "94579ce8ad1bee89baff70a7f0fe8a47",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.15.1/gelato_0.26.15.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-08T15:31:06Z",
         "version": "0.26.7.4"
-      },
-      {
-        "changelog": "## [0.26.7.3] - 2026-04-03\n\n### 🐛 Bug Fixes\n\n- Insert redirect for queries with ids argument\n",
-        "checksum": "5b75c1496346a0980438b0fdc0741931",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.7.3/gelato_0.26.7.3.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-03T19:53:50Z",
-        "version": "0.26.7.3"
       }
     ]
   }
