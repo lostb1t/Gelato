@@ -238,6 +238,8 @@ public static class ActionContextExtensions
         "ItemID",
     ];
 
+    private static readonly string[] UserGuidKeys = ["userId", "UserId", "UserID"];
+
     private static readonly string[] IdsGuidKeys = ["ids", "Ids", "IDs"];
 
     private static readonly HashSet<string> SearchActionNames = new(
@@ -277,13 +279,17 @@ public static class ActionContextExtensions
     )
     {
         "GetItems",
+        "GetItemById",
         "GetItem",
         "GetItemLegacy",
         "GetItemsByUserIdLegacy",
         "GetPlaybackInfo",
+        "GetPlaybackMediaSources",
         "GetPostedPlaybackInfo",
         "GetVideoStream",
+        "GetVideoStreamByContainer",
         "GetDownload",
+        "GetSubtitle",
         "GetSubtitleWithTicks",
     };
 
@@ -347,8 +353,18 @@ public static class ActionContextExtensions
             );
     }
 
-    public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
-        ctx.HttpContext.IsInsertableAction();
+    public static bool IsInsertableAction(this ActionExecutingContext ctx)
+    {
+        var actionName = ctx.GetActionName();
+        if (actionName is null)
+            return ctx.HttpContext.IsInsertableAction();
+
+        return InsertableActionNames.Contains(actionName)
+            && (
+                !InsertableListActionNames.Contains(actionName)
+                || InsertableListActionNames.Contains(actionName) && ctx.IsSingleItemList()
+            );
+    }
 
     public static bool IsSingleItemList(this HttpContext ctx)
     {
@@ -448,7 +464,30 @@ public static class ActionContextExtensions
 
     public static bool TryGetUserId(this ActionExecutingContext ctx, out Guid userId)
     {
-        return ctx.HttpContext.TryGetUserId(out userId);
+        if (ctx.HttpContext.TryGetUserId(out userId))
+            return true;
+
+        foreach (var key in UserGuidKeys)
+        {
+            if (
+                ctx.ActionArguments.TryGetValue(key, out var arg)
+                && TryParseGuidValue(arg, out userId)
+            )
+            {
+                return true;
+            }
+
+            if (
+                ctx.RouteData.Values.TryGetValue(key, out var route)
+                && TryParseGuidValue(route, out userId)
+            )
+            {
+                return true;
+            }
+        }
+
+        userId = Guid.Empty;
+        return false;
     }
 
     public static bool TryGetUserId(this HttpContext ctx, out Guid userId)
@@ -463,6 +502,22 @@ public static class ActionContextExtensions
             return false;
 
         return userId != Guid.Empty;
+    }
+
+    private static bool TryParseGuidValue(object? raw, out Guid guid)
+    {
+        switch (raw)
+        {
+            case Guid g when g != Guid.Empty:
+                guid = g;
+                return true;
+            case string s when Guid.TryParse(s, out var parsed) && parsed != Guid.Empty:
+                guid = parsed;
+                return true;
+            default:
+                guid = Guid.Empty;
+                return false;
+        }
     }
 
     public static bool TryGetActionArgument<T>(
