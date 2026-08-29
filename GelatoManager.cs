@@ -1437,7 +1437,26 @@ public sealed class GelatoManager(
         if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
 
-        var stremioUri = new StremioUri(meta.Type, meta.ImdbId ?? id);
+        // Fall back to the catalog id when ImdbId is absent OR blank. Addons
+        // commonly emit "imdb_id": "" rather than omitting the field, and `??`
+        // does not treat an empty string as missing - so a meta carrying a
+        // perfectly good id (e.g. "tmdb:456173") reached StremioUri with "".
+        var externalId = !string.IsNullOrWhiteSpace(meta.ImdbId) ? meta.ImdbId : id;
+
+        // Every caller of IntoBaseItem already skips a null return, so honour
+        // that contract instead of throwing: an exception here aborts the whole
+        // request and takes every other result with it.
+        if (string.IsNullOrWhiteSpace(externalId))
+        {
+            _log.LogWarning(
+                "Skipping meta with no usable external id: {Name} ({Type})",
+                meta.GetName(),
+                meta.Type
+            );
+            return null;
+        }
+
+        var stremioUri = new StremioUri(meta.Type, externalId);
         item.SetProviderId("Stremio", stremioUri.ExternalId);
 
         item.Overview = meta.Description ?? meta.Overview;
