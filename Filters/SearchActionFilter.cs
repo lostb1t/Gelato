@@ -1,7 +1,8 @@
 using Gelato.Config;
 using Jellyfin.Data.Enums;
-using MediaBrowser.Controller.Dto;
+using MediaBrowser.Common;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -10,8 +11,8 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Filters;
 
 public class SearchActionFilter(
-    IDtoService dtoService,
     GelatoManager manager,
+    IApplicationHost appHost,
     ILogger<SearchActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -55,21 +56,11 @@ public class SearchActionFilter(
         ctx.TryGetActionArgument("limit", out var limit, 25);
 
         var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, userId);
-
-        log.LogInformation(
-            "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
-            searchTerm,
-            string.Join(",", requestedTypes),
-            start,
-            limit,
-            metas.Count
-        );
-
-        var dtos = ConvertMetasToDtos(metas);
-        var paged = dtos.Skip(start).Take(limit).ToArray();
+        var pagedMetas = metas.Skip(start).Take(limit).ToList();
+        var paged = ConvertMetasToDtos(pagedMetas).ToArray();
 
         ctx.Result = new OkObjectResult(
-            new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = dtos.Count }
+            new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = metas.Count }
         );
     }
 
@@ -161,26 +152,67 @@ public class SearchActionFilter(
 
     private List<BaseItemDto> ConvertMetasToDtos(List<StremioMeta> metas)
     {
-        // theres a reason i initally disabled all fields but forgot....
-        // infuse breaks if we do a small subset. Not sure which field it needs. Prolly mediasources
-        var options = new DtoOptions { EnableImages = true, EnableUserData = false };
-
         var dtos = new List<BaseItemDto>(metas.Count);
 
         foreach (var meta in metas)
         {
-            var baseItem = manager.IntoBaseItem(meta);
-            if (baseItem is null)
+            var dto = ConvertMetaToSearchDto(meta, appHost.SystemId);
+            if (dto is null)
                 continue;
 
-            var dto = dtoService.GetBaseItemDto(baseItem, options);
-            var stremioUri = StremioUri.FromBaseItem(baseItem);
-            dto.Id = stremioUri.ToGuid();
             dtos.Add(dto);
-
             manager.SaveStremioMeta(dto.Id, meta);
         }
 
         return dtos;
+    }
+
+    private static BaseItemDto? ConvertMetaToSearchDto(StremioMeta meta, string serverId)
+    {
+        var itemKind = meta.Type switch
+        {
+            StremioMediaType.Movie => BaseItemKind.Movie,
+            StremioMediaType.Series => BaseItemKind.Series,
+            _ => (BaseItemKind?)null,
+        };
+
+        if (itemKind is null)
+            return null;
+
+        var externalId = meta.ImdbId ?? meta.Id;
+        if (string.IsNullOrWhiteSpace(externalId))
+            return null;
+
+        var providerIds = meta.GetProviderIds();
+        providerIds["Stremio"] = externalId;
+
+        var stremioUri = new StremioUri(meta.Type, externalId);
+        var primaryImage = meta.Poster ?? meta.Thumbnail;
+        var name = meta.GetName();
+
+        return new BaseItemDto
+        {
+            ServerId = serverId,
+            Id = stremioUri.ToGuid(),
+            Name = name,
+            SortName = name,
+            Type = itemKind.Value,
+            MediaType = MediaType.Video,
+            VideoType = VideoType.VideoFile,
+            LocationType = LocationType.Remote,
+            Path = $"gelato://stub/{meta.Id}",
+            CanDownload = true,
+            IsFolder = meta.Type == StremioMediaType.Series,
+            Overview = meta.Description ?? meta.Overview,
+            PremiereDate = meta.GetPremiereDate(),
+            ProductionYear = meta.GetYear(),
+            RunTimeTicks = Utils.ParseToTicks(meta.Runtime),
+            ProviderIds = providerIds,
+            Genres = (meta.Genres ?? meta.Genre)?.ToArray(),
+            ImageTags = string.IsNullOrWhiteSpace(primaryImage)
+                ? null
+                : new Dictionary<ImageType, string> { [ImageType.Primary] = "stremio" },
+            BackdropImageTags = string.IsNullOrWhiteSpace(meta.Background) ? null : ["stremio"],
+        };
     }
 }
