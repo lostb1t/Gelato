@@ -34,6 +34,8 @@ public sealed class GelatoManager(
     public const string StreamTag = "gelato-stream";
     public const string TreeSyncedTag = "gelato-tree-synced";
 
+    private static readonly TimeSpan InsertRefreshTimeout = TimeSpan.FromSeconds(8);
+
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
     private int GetHttpPort()
@@ -320,7 +322,27 @@ public sealed class GelatoManager(
             }
             else
             {
-                _ = provider.RefreshFullItem(baseItem, options, ct);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(InsertRefreshTimeout);
+
+                try
+                {
+                    await provider
+                        .RefreshFullItem(baseItem, options, timeout.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(
+                        ex,
+                        "InsertMeta: full refresh failed for {Name}",
+                        baseItem.Name
+                    );
+                }
             }
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
