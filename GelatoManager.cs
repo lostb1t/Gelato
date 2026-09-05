@@ -252,9 +252,9 @@ public sealed class GelatoManager(
             }
 
             var lookupId = meta.ImdbId ?? meta.Id;
-            meta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+            var fetchedMeta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
-            if (meta is null)
+            if (fetchedMeta is null)
             {
                 _log.LogWarning(
                     "InsertMeta: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",
@@ -263,6 +263,10 @@ public sealed class GelatoManager(
                 );
                 return (null, false);
             }
+
+            // Propagate the synthetic GUID so IntoBaseItem retains the identity mapping
+            fetchedMeta.Guid = meta.Guid;
+            meta = fetchedMeta;
 
             mediaType = meta.Type;
         }
