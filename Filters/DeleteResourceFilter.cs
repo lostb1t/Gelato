@@ -54,6 +54,7 @@ public sealed class DeleteResourceFilter(
         {
             log.LogInformation("Deleting {Name}", item.Name);
             library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
+            manager.InvalidateStreamSync(item.Id);
         }
     }
 
@@ -79,6 +80,9 @@ public sealed class DeleteResourceFilter(
         {
             log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
             library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = true }, true);
+            manager.InvalidateStreamSync(alt.Id);
         }
+
+        manager.InvalidateStreamSync(item.Id);
     }
 }

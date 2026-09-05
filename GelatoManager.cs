@@ -16,6 +16,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 
 namespace Gelato;
 
@@ -33,6 +34,8 @@ public sealed class GelatoManager(
 {
     public const string StreamTag = "gelato-stream";
     public const string TreeSyncedTag = "gelato-tree-synced";
+
+    private static readonly TimeSpan InsertRefreshTimeout = TimeSpan.FromSeconds(8);
 
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
@@ -52,18 +55,40 @@ public sealed class GelatoManager(
         return memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
     }
 
-    public void SetStreamSync(string guid)
+    private CancellationTokenSource GetItemCts(Guid itemId)
     {
+        return memoryCache.GetOrCreate($"streamsync-token:{itemId}", entry =>
+        {
+            entry.SetSlidingExpiration(TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL));
+            entry.RegisterPostEvictionCallback((k, v, reason, state) => ((CancellationTokenSource)v)?.Dispose());
+            return new CancellationTokenSource();
+        })!;
+    }
+
+    public void SetStreamSync(Guid itemId, string cacheKey)
+    {
+        var cts = GetItemCts(itemId);
         memoryCache.Set(
-            $"streamsync:{guid}",
-            guid,
-            TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
+            $"streamsync:{cacheKey}",
+            cacheKey,
+            new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL))
+                .AddExpirationToken(new CancellationChangeToken(cts.Token))
         );
     }
 
-    public bool HasStreamSync(string guid)
+    public bool HasStreamSync(string cacheKey)
     {
-        return memoryCache.TryGetValue($"streamsync:{guid}", out _);
+        return memoryCache.TryGetValue($"streamsync:{cacheKey}", out _);
+    }
+
+    public void InvalidateStreamSync(Guid itemId)
+    {
+        if (memoryCache.TryGetValue($"streamsync-token:{itemId}", out CancellationTokenSource? cts))
+        {
+            cts?.Cancel();
+            memoryCache.Remove($"streamsync-token:{itemId}");
+        }
     }
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
@@ -227,9 +252,9 @@ public sealed class GelatoManager(
             }
 
             var lookupId = meta.ImdbId ?? meta.Id;
-            meta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+            var fetchedMeta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
 
-            if (meta is null)
+            if (fetchedMeta is null)
             {
                 _log.LogWarning(
                     "InsertMeta: no aio meta found for {Id} {Type}, maybe try aiometadata as meta addon.",
@@ -238,6 +263,10 @@ public sealed class GelatoManager(
                 );
                 return (null, false);
             }
+
+            // Propagate the synthetic GUID so IntoBaseItem retains the identity mapping
+            fetchedMeta.Guid = meta.Guid;
+            meta = fetchedMeta;
 
             mediaType = meta.Type;
         }
@@ -320,7 +349,27 @@ public sealed class GelatoManager(
             }
             else
             {
-                _ = provider.RefreshFullItem(baseItem, options, ct);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(InsertRefreshTimeout);
+
+                try
+                {
+                    await provider
+                        .RefreshFullItem(baseItem, options, timeout.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    provider.QueueRefresh(baseItem.Id, options, RefreshPriority.High);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogWarning(
+                        ex,
+                        "InsertMeta: full refresh failed for {Name}",
+                        baseItem.Name
+                    );
+                }
             }
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
@@ -1348,7 +1397,6 @@ public sealed class GelatoManager(
             item.DateLastRefreshed = now;
             item.DateLastSaved = now;
 
-            item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
             parent.AddChild(item);
@@ -1510,7 +1558,10 @@ public sealed class GelatoManager(
         item.DateModified = DateTime.UtcNow;
         item.DateLastSaved = DateTime.UtcNow;
         item.DateCreated = DateTime.UtcNow;
-        item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
+
+        item.Id = meta.Guid is { } forcedGuid && forcedGuid != Guid.Empty
+            ? forcedGuid
+            : libraryManager.GetNewItemId(item.Path, item.GetType());
         item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
         var primaryImage = meta.Poster ?? meta.Thumbnail;
