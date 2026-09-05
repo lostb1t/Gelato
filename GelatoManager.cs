@@ -16,6 +16,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Primitives;
 
 namespace Gelato;
 
@@ -54,18 +55,40 @@ public sealed class GelatoManager(
         return memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
     }
 
-    public void SetStreamSync(string guid)
+    private CancellationTokenSource GetItemCts(Guid itemId)
     {
+        return memoryCache.GetOrCreate($"streamsync-token:{itemId}", entry =>
+        {
+            entry.SetSlidingExpiration(TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL));
+            entry.RegisterPostEvictionCallback((k, v, reason, state) => ((CancellationTokenSource)v)?.Dispose());
+            return new CancellationTokenSource();
+        })!;
+    }
+
+    public void SetStreamSync(Guid itemId, string cacheKey)
+    {
+        var cts = GetItemCts(itemId);
         memoryCache.Set(
-            $"streamsync:{guid}",
-            guid,
-            TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
+            $"streamsync:{cacheKey}",
+            cacheKey,
+            new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL))
+                .AddExpirationToken(new CancellationChangeToken(cts.Token))
         );
     }
 
-    public bool HasStreamSync(string guid)
+    public bool HasStreamSync(string cacheKey)
     {
-        return memoryCache.TryGetValue($"streamsync:{guid}", out _);
+        return memoryCache.TryGetValue($"streamsync:{cacheKey}", out _);
+    }
+
+    public void InvalidateStreamSync(Guid itemId)
+    {
+        if (memoryCache.TryGetValue($"streamsync-token:{itemId}", out CancellationTokenSource? cts))
+        {
+            cts?.Cancel();
+            memoryCache.Remove($"streamsync-token:{itemId}");
+        }
     }
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
