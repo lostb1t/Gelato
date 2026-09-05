@@ -1370,7 +1370,6 @@ public sealed class GelatoManager(
             item.DateLastRefreshed = now;
             item.DateLastSaved = now;
 
-            item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
             item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
             parent.AddChild(item);
@@ -1532,7 +1531,10 @@ public sealed class GelatoManager(
         item.DateModified = DateTime.UtcNow;
         item.DateLastSaved = DateTime.UtcNow;
         item.DateCreated = DateTime.UtcNow;
-        item.Id = libraryManager.GetNewItemId(item.Path, item.GetType());
+
+        item.Id = meta.Guid is { } forcedGuid && forcedGuid != Guid.Empty
+            ? forcedGuid
+            : libraryManager.GetNewItemId(item.Path, item.GetType());
         item.PresentationUniqueKey = item.CreatePresentationUniqueKey();
 
         var primaryImage = meta.Poster ?? meta.Thumbnail;
