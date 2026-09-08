@@ -17,6 +17,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
+using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
@@ -38,13 +39,11 @@ public sealed class MediaSourceManagerDecorator(
     ILogger<MediaSourceManagerDecorator> log,
     IHttpContextAccessor http,
     GelatoItemRepository repo,
-    IDirectoryService directoryService,
-    IServerConfigurationManager config,
     //Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
-    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders
+    IMediaEncoder mediaEncoder
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -58,14 +57,10 @@ public sealed class MediaSourceManagerDecorator(
         mediaSegmentManager ?? throw new ArgumentNullException(nameof(mediaSegmentManager));
     private readonly ILibraryManager _libraryManager =
         libraryManager ?? throw new ArgumentNullException(nameof(libraryManager));
-    private readonly IServerConfigurationManager _config =
-        config ?? throw new ArgumentNullException(nameof(config));
     private readonly Lazy<GelatoManager> _manager = manager;
     private readonly Lazy<SubtitleProvider> _subtitleProvider = subtitleProvider;
-
-    //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
-    private readonly ICustomMetadataProvider<Video>? _probeProvider =
-        videoProbeProviders.FirstOrDefault(p => p.Name == "Probe Provider");
+    private readonly IMediaEncoder _mediaEncoder =
+        mediaEncoder ?? throw new ArgumentNullException(nameof(mediaEncoder));
 
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
@@ -263,18 +258,16 @@ public sealed class MediaSourceManagerDecorator(
 
         sources.AddRange(gelatoSources);
 
-        if (sources.Count > 1)
-        {
-            // remove primary from list when there are streams
-            sources = sources
-                .Where(k =>
-                    !(k.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) ?? false)
-                )
-                .Where(k =>
-                    !(k.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) ?? false)
-                )
-                .ToList();
-        }
+        // Always drop the canonical "gelato://stub"/"stremio://" placeholder. It is the
+        // "generic" entry with the same name as the movie and is not a real playable stream.
+        sources = sources
+            .Where(k =>
+                !(k.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) ?? false)
+            )
+            .Where(k =>
+                !(k.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) ?? false)
+            )
+            .ToList();
 
         // failsafe. mediasources cannot be null
         if (sources.Count == 0)
@@ -282,11 +275,10 @@ public sealed class MediaSourceManagerDecorator(
             sources.Add(GetVersionInfo(item, MediaSourceType.Default, user));
         }
 
-        // Jellyfin 12's web player reads MediaSources[0] from the item detail response
-        // directly (it does not POST /PlaybackInfo). If the first source is an unprobed
-        // or dead stream (Container=null, 0 media streams), the player has no URL to
-        // play and reports "Unable to find a valid media source". Probe the candidate
-        // streams until one yields a real video stream and put that one first.
+        // Jellyfin 12's web player reads MediaSources[0] from the item detail response,
+        // so it must already have a real video stream. Probe the candidate streams here,
+        // but start with the healthy streamvix source so we don't spend seconds probing
+        // dead Mixdrop links.
         EnsureFirstPlayableSource(sources, item);
 
         if (sources.Count > 0)
@@ -305,53 +297,55 @@ public sealed class MediaSourceManagerDecorator(
             )
             .ToList();
 
-        // Prefer a source that was already probed successfully on a previous request.
-        var playable = candidates.FirstOrDefault(s =>
-            s.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) == true
+        // Generic preference: try HLS manifest URLs first. They are direct playlists and
+        // generally the most reliable remote streams, regardless of the provider name.
+        var preferred = candidates.FirstOrDefault(s =>
+            s.Path?.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) == true
+            || s.Path?.Contains(".m3u8?", StringComparison.OrdinalIgnoreCase) == true
         );
-        if (playable is not null)
+        var ordered = preferred is null
+            ? candidates
+            : new[] { preferred }.Concat(candidates.Where(c => !ReferenceEquals(c, preferred)));
+
+        foreach (var candidate in ordered.Take(4))
         {
-            sources.Remove(playable);
-            sources.Insert(0, playable);
-            return;
-        }
+            var mediaInfo = ProbeSourceAsync(candidate, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
 
-        // Otherwise probe candidates in order and move the first working one to the
-        // front. Probe results are persisted, so this cost is paid once per stream.
-        foreach (var candidate in candidates.Take(4))
-        {
-            var owner = Guid.TryParse(candidate.ETag, out var ownerId)
-                ? _libraryManager.GetItemById(ownerId)
-                : null;
-
-            if (owner is not Video v)
-                continue;
-
-            try
+            if (mediaInfo?.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) == true)
             {
-                ProbeStreamAsync(v, candidate.Path, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-                v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-            }
-            catch (Exception ex)
-            {
-                _log.LogDebug(ex, "Static stream probe failed for {Id}", v.Id);
-            }
-
-            var streams = GetMediaStreamsWithExternalSubs(v);
-            if (streams.Any(ms => ms.Type == MediaStreamType.Video))
-            {
-                candidate.MediaStreams = streams.ToList();
-                candidate.Container = v.Container;
-                candidate.RunTimeTicks = v.RunTimeTicks ?? candidate.RunTimeTicks;
-                candidate.Size = v.Size ?? candidate.Size;
+                candidate.MediaStreams = mediaInfo.MediaStreams.ToList();
+                candidate.Container = mediaInfo.Container;
+                candidate.RunTimeTicks = mediaInfo.RunTimeTicks ?? candidate.RunTimeTicks;
+                candidate.Size = mediaInfo.Size ?? candidate.Size;
                 sources.Remove(candidate);
                 sources.Insert(0, candidate);
                 return;
             }
+        }
+    }
+
+    private async Task<MediaInfo?> ProbeSourceAsync(MediaSourceInfo source, CancellationToken ct)
+    {
+        try
+        {
+            return await _mediaEncoder
+                .GetMediaInfo(
+                    new MediaInfoRequest
+                    {
+                        MediaSource = source,
+                        ExtractChapters = false,
+                        MediaType = DlnaProfileType.Video,
+                    },
+                    ct
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Stream probe failed for {Path}", source.Path);
+            return null;
         }
     }
 
@@ -482,37 +476,14 @@ public sealed class MediaSourceManagerDecorator(
 
                 if (NeedsProbe(current))
                 {
-                    if (owner is Video v)
+                    var mediaInfo = await ProbeSourceAsync(current, ct).ConfigureAwait(false);
+                    if (mediaInfo?.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) == true)
                     {
-                        var libraryOptions = _libraryManager.GetLibraryOptions(owner);
-
-                        var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(
-                            owner,
-                            libraryOptions,
-                            false,
-                            ct
-                        );
-                        var metadataTask = ProbeStreamAsync(v, current.Path, ct);
-                        await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
-
-                        await owner
-                            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                            .ConfigureAwait(false);
+                        current.MediaStreams = mediaInfo.MediaStreams.ToList();
+                        current.Container = mediaInfo.Container;
+                        current.RunTimeTicks = mediaInfo.RunTimeTicks ?? current.RunTimeTicks;
+                        current.Size = mediaInfo.Size ?? current.Size;
                     }
-
-                    var refreshed = GetStaticMediaSources(
-                        rootItem,
-                        rootEnablePathSubstitution,
-                        rootUser
-                    );
-                    current =
-                        refreshed.FirstOrDefault(s =>
-                            !string.IsNullOrEmpty(s.ETag)
-                            && s.ETag.Equals(
-                                owner.Id.ToString("N", CultureInfo.InvariantCulture),
-                                StringComparison.OrdinalIgnoreCase
-                            )
-                        ) ?? SelectByIdOrFirst(refreshed, owner.Id) ?? current;
                 }
 
                 if (current.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) == true)
@@ -548,20 +519,39 @@ public sealed class MediaSourceManagerDecorator(
         item.HasStreamTag()
         || (item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false);
 
-    public Task<MediaSourceInfo> GetMediaSource(
+    public async Task<MediaSourceInfo> GetMediaSource(
         BaseItem item,
         string mediaSourceId,
         string? liveStreamId,
         bool enablePathSubstitution,
         CancellationToken cancellationToken
-    ) =>
-        _inner.GetMediaSource(
-            item,
-            mediaSourceId,
-            liveStreamId,
-            enablePathSubstitution,
-            cancellationToken
-        );
+    )
+    {
+        var source = await _inner
+            .GetMediaSource(
+                item,
+                mediaSourceId,
+                liveStreamId,
+                enablePathSubstitution,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        if (
+            source is null
+            && item.GetBaseItemKind() is (BaseItemKind.Movie or BaseItemKind.Episode)
+        )
+        {
+            var sources = GetStaticMediaSources(item, enablePathSubstitution, user: null);
+            source = sources.FirstOrDefault(s =>
+                    string.Equals(s.Id, mediaSourceId, StringComparison.OrdinalIgnoreCase)
+                ) ?? sources.FirstOrDefault(s =>
+                    string.Equals(s.ETag, mediaSourceId, StringComparison.OrdinalIgnoreCase)
+                );
+        }
+
+        return source;
+    }
 
     public async Task<LiveStreamResponse> OpenLiveStream(
         LiveStreamRequest request,
@@ -651,7 +641,9 @@ public sealed class MediaSourceManagerDecorator(
             Name = richName,
             Path = item.Path,
             RunTimeTicks = item.RunTimeTicks,
-            Container = item.Container,
+            Container = !string.IsNullOrWhiteSpace(item.Container)
+                ? item.Container
+                : "hls",
             Size = item.Size,
             Type = type,
             SupportsDirectStream = true,
@@ -690,7 +682,9 @@ public sealed class MediaSourceManagerDecorator(
             if (video.IsShortcut)
             {
                 info.IsRemote = true;
-                info.Path = video.ShortcutPath;
+                info.Path = string.IsNullOrWhiteSpace(video.ShortcutPath)
+                    ? video.Path
+                    : video.ShortcutPath;
             }
         }
 
@@ -781,77 +775,4 @@ public sealed class MediaSourceManagerDecorator(
         return streams;
     }
 
-    private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
-    {
-        var gelatoFilename = owner.GelatoData<string>("filename");
-        var strmBaseName = !string.IsNullOrEmpty(gelatoFilename)
-            ? Path.GetFileNameWithoutExtension(gelatoFilename)
-            : $"{owner.Id:N}";
-        var tmpStrm = Path.Combine(Path.GetTempPath(), $"{strmBaseName}.strm");
-        await File.WriteAllTextAsync(tmpStrm, streamUrl, ct).ConfigureAwait(false);
-
-        var origPath = owner.Path;
-        var origShortcut = owner.IsShortcut;
-        owner.Path = tmpStrm;
-        owner.IsShortcut = true;
-        owner.DateModified = new FileInfo(tmpStrm).LastWriteTimeUtc;
-
-        try
-        {
-            _log.LogInformation("Probing stream for {Id} via {Url}", owner.Id, streamUrl);
-
-            var options = new MetadataRefreshOptions(directoryService)
-            {
-                EnableRemoteContentProbe = true,
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-            };
-
-            if (_probeProvider is not null)
-            {
-                // Call the ffprobe provider directly instead of going through
-                // RefreshMetadata.
-                //
-                // RefreshMetadata runs the whole metadata pipeline, and with
-                // FullRefresh that includes ExecuteRemoteProviders - so every
-                // stream probe also re-queried OMDb/TMDb for the item. On a
-                // library browsed through Gelato that is a remote metadata
-                // lookup per probe, and it is where the recurring
-                // "Error in The Open Movie Database" JsonException spam comes
-                // from: OMDb returns malformed JSON for some season payloads
-                // and the probe drags that call along every time.
-                //
-                // The probe provider on its own does exactly what is wanted
-                // here - read the container's streams - and nothing else. The
-                // caller already persists the result with
-                // UpdateToRepositoryAsync and runs segment providers itself, so
-                // no other part of the pipeline is needed.
-                //
-                // This field was already injected upstream and never used.
-                await _probeProvider.FetchAsync(owner, options, ct).ConfigureAwait(false);
-            }
-            else
-            {
-                // No probe provider resolved - fall back to the old path rather
-                // than silently skipping the probe.
-                _log.LogDebug("No probe provider available, falling back to RefreshMetadata");
-                await owner.RefreshMetadata(options, ct).ConfigureAwait(false);
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.LogError(ex, "Stream probe failed for {Id}", owner.Id);
-        }
-        finally
-        {
-            owner.Path = origPath;
-            owner.IsShortcut = origShortcut;
-            try
-            {
-                File.Delete(tmpStrm);
-            }
-            catch
-            { /* best effort */
-            }
-        }
-    }
 }
