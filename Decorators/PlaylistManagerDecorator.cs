@@ -1,4 +1,3 @@
-using System.Globalization;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -39,6 +38,7 @@ public sealed class PlaylistManagerDecorator(
     public async Task AddItemToPlaylistAsync(
         Guid playlistId,
         IReadOnlyCollection<Guid> itemIds,
+        int? position,
         Guid userId
     )
     {
@@ -72,14 +72,19 @@ public sealed class PlaylistManagerDecorator(
                 item.IsGelato()
                     ? new LinkedChild
                     {
-                        LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
+                        ItemId = item.Id,
                         Type = LinkedChildType.Manual,
                     }
                     : LinkedChild.Create(item)
             )
             .ToArray();
 
-        playlist.LinkedChildren = [.. playlist.LinkedChildren, .. newChildren];
+        var insertIndex = position.HasValue
+            ? Math.Clamp(position.Value, 0, playlist.LinkedChildren.Length)
+            : playlist.LinkedChildren.Length;
+        var linkedChildren = playlist.LinkedChildren.ToList();
+        linkedChildren.InsertRange(insertIndex, newChildren);
+        playlist.LinkedChildren = linkedChildren.ToArray();
         playlist.DateLastMediaAdded = DateTime.UtcNow;
 
         await playlist

@@ -101,7 +101,7 @@ public sealed class MediaSourceManagerDecorator(
 
         var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
         var video = item as Video;
-        var cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
+        var cacheKey = video?.PrimaryVersionId is Guid id && id != Guid.Empty
             ? id.ToString()
             : item.Id.ToString();
 
@@ -282,12 +282,77 @@ public sealed class MediaSourceManagerDecorator(
             sources.Add(GetVersionInfo(item, MediaSourceType.Default, user));
         }
 
+        // Jellyfin 12's web player reads MediaSources[0] from the item detail response
+        // directly (it does not POST /PlaybackInfo). If the first source is an unprobed
+        // or dead stream (Container=null, 0 media streams), the player has no URL to
+        // play and reports "Unable to find a valid media source". Probe the candidate
+        // streams until one yields a real video stream and put that one first.
+        EnsureFirstPlayableSource(sources, item);
+
         if (sources.Count > 0)
             sources[0].Type = MediaSourceType.Default;
 
         sources[0].Id = item.Id.ToString("N");
 
         return sources;
+    }
+
+    private void EnsureFirstPlayableSource(List<MediaSourceInfo> sources, BaseItem item)
+    {
+        var candidates = sources
+            .Where(s =>
+                s.Path?.StartsWith("http", StringComparison.OrdinalIgnoreCase) ?? false
+            )
+            .ToList();
+
+        // Prefer a source that was already probed successfully on a previous request.
+        var playable = candidates.FirstOrDefault(s =>
+            s.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) == true
+        );
+        if (playable is not null)
+        {
+            sources.Remove(playable);
+            sources.Insert(0, playable);
+            return;
+        }
+
+        // Otherwise probe candidates in order and move the first working one to the
+        // front. Probe results are persisted, so this cost is paid once per stream.
+        foreach (var candidate in candidates.Take(4))
+        {
+            var owner = Guid.TryParse(candidate.ETag, out var ownerId)
+                ? _libraryManager.GetItemById(ownerId)
+                : null;
+
+            if (owner is not Video v)
+                continue;
+
+            try
+            {
+                ProbeStreamAsync(v, candidate.Path, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+                v.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex)
+            {
+                _log.LogDebug(ex, "Static stream probe failed for {Id}", v.Id);
+            }
+
+            var streams = GetMediaStreamsWithExternalSubs(v);
+            if (streams.Any(ms => ms.Type == MediaStreamType.Video))
+            {
+                candidate.MediaStreams = streams.ToList();
+                candidate.Container = v.Container;
+                candidate.RunTimeTicks = v.RunTimeTicks ?? candidate.RunTimeTicks;
+                candidate.Size = v.Size ?? candidate.Size;
+                sources.Remove(candidate);
+                sources.Insert(0, candidate);
+                return;
+            }
+        }
     }
 
     public void AddParts(IEnumerable<IMediaSourceProvider> providers)
@@ -354,51 +419,22 @@ public sealed class MediaSourceManagerDecorator(
         if (selected is null)
             return sources;
 
-        var owner = ResolveOwnerFor(selected, item);
-        if (!IsGelatoPlaybackItem(owner))
+        // On Jellyfin 12 the repository's default ordering of the Gelato stream items
+        // changed, so the "first" source can be a dead stream. Playback would fail on
+        // that chosen source with no automatic fallback to one of the still-working
+        // sources (e.g. a dead debrid link vs. a healthy provider). Probe the sources
+        // in order and pick the first that actually has a video stream.
+        var chosen = await PickWorkingSourceAsync(
+                sources, item, user, enablePathSubstitution, ct
+            )
+            .ConfigureAwait(false);
+
+        if (chosen is null)
+            chosen = selected;
+
+        if (item.RunTimeTicks is null && chosen.RunTimeTicks is not null)
         {
-            return await _inner
-                .GetPlaybackMediaSources(item, user, allowMediaProbe, enablePathSubstitution, ct)
-                .ConfigureAwait(false);
-        }
-
-        if (owner.IsPrimaryVersion() && owner.Id != item.Id)
-        {
-            sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
-            selected = SelectByIdOrFirst(sources, mediaSourceId);
-            if (selected is null)
-                return sources;
-        }
-
-        if (NeedsProbe(selected))
-        {
-            var libraryOptions = _libraryManager.GetLibraryOptions(owner);
-
-            var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(
-                owner,
-                libraryOptions,
-                false,
-                ct
-            );
-            var metadataTask = ProbeStreamAsync((Video)owner, selected.Path, ct);
-            //  var subtitleTask = DownloadSubtitles((Video)owner, ct);
-
-            await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
-
-            await owner
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                .ConfigureAwait(false);
-
-            var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
-            selected = SelectByIdOrFirst(refreshed, mediaSourceId);
-
-            if (selected is null)
-                return refreshed;
-        }
-
-        if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
-        {
-            item.RunTimeTicks = selected.RunTimeTicks;
+            item.RunTimeTicks = chosen.RunTimeTicks;
             await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                 .ConfigureAwait(false);
         }
@@ -407,12 +443,86 @@ public sealed class MediaSourceManagerDecorator(
         // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
         if (ctx.GetActionName() == "GetPostedPlaybackInfo")
         {
-            selected.Path = "/stub";
-            selected.IsRemote = false;
-            selected.Protocol = MediaProtocol.File;
+            chosen.Path = "/stub";
+            chosen.IsRemote = false;
+            chosen.Protocol = MediaProtocol.File;
         }
 
-        return [selected];
+        return [chosen];
+
+        async Task<MediaSourceInfo?> PickWorkingSourceAsync(
+            IReadOnlyList<MediaSourceInfo> candidates,
+            BaseItem rootItem,
+            User rootUser,
+            bool rootEnablePathSubstitution,
+            CancellationToken ct
+        )
+        {
+            // Pass 1: prefer a source that already carries a real video stream (already
+            // probed on a previous request) so we don't repeatedly probe dead streams.
+            foreach (var source in candidates)
+            {
+                if (
+                    source.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) == true
+                )
+                {
+                    return source;
+                }
+            }
+
+            // Pass 2: probe the remaining sources in order and pick the first that yields
+            // a video stream.
+            foreach (var source in candidates)
+            {
+                var owner = ResolveOwnerFor(source, rootItem);
+                if (!IsGelatoPlaybackItem(owner))
+                    continue;
+
+                var current = source;
+
+                if (NeedsProbe(current))
+                {
+                    if (owner is Video v)
+                    {
+                        var libraryOptions = _libraryManager.GetLibraryOptions(owner);
+
+                        var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(
+                            owner,
+                            libraryOptions,
+                            false,
+                            ct
+                        );
+                        var metadataTask = ProbeStreamAsync(v, current.Path, ct);
+                        await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
+
+                        await owner
+                            .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+                            .ConfigureAwait(false);
+                    }
+
+                    var refreshed = GetStaticMediaSources(
+                        rootItem,
+                        rootEnablePathSubstitution,
+                        rootUser
+                    );
+                    current =
+                        refreshed.FirstOrDefault(s =>
+                            !string.IsNullOrEmpty(s.ETag)
+                            && s.ETag.Equals(
+                                owner.Id.ToString("N", CultureInfo.InvariantCulture),
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                        ) ?? SelectByIdOrFirst(refreshed, owner.Id) ?? current;
+                }
+
+                if (current.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) == true)
+                {
+                    return current;
+                }
+            }
+
+            return null;
+        }
 
         static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
         {
@@ -545,7 +655,12 @@ public sealed class MediaSourceManagerDecorator(
             Size = item.Size,
             Type = type,
             SupportsDirectStream = true,
-            SupportsDirectPlay = true,
+            // Gelato streams are proxied through Jellyfin: the source Path is stubbed to
+            // "/stub" (File protocol) so clients never hit the remote URL directly. That
+            // makes DirectPlay impossible and absurd to advertise. On Jellyfin 12 the web
+            // player honors SupportsDirectPlay=true and tries to direct-play the stub,
+            // failing before it ever requests the (functioning) remux. Force proxying.
+            SupportsDirectPlay = false,
             // just always say yes
             HasSegments = true,
             //HasSegments = MediaSegmentManager.HasSegments(item.Id)

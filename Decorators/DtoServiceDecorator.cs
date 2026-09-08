@@ -34,7 +34,8 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
         IReadOnlyList<BaseItem> items,
         DtoOptions options,
         User? user = null,
-        BaseItem? owner = null
+        BaseItem? owner = null,
+        bool skipVisibilityCheck = false
     )
     {
         // im going to hell for this
@@ -45,7 +46,7 @@ public sealed class DtoServiceDecorator(IDtoService inner, Lazy<GelatoManager> m
             options.EnableUserData = false;
         }
 
-        var list = inner.GetBaseItemDtos(items, options, user, owner);
+        var list = inner.GetBaseItemDtos(items, options, user, owner, skipVisibilityCheck);
         foreach (var itemDto in list)
         {
             Patch(itemDto, item, true, user);

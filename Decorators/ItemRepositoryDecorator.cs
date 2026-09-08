@@ -7,12 +7,17 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
-public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
+public sealed class GelatoItemRepository(
+    IItemRepository inner,
+    IItemPersistenceService itemPersistenceService,
+    IHttpContextAccessor http
+)
     : IItemRepository
 {
     private static readonly BaseItemKind[] ListScopeMediaKinds =
@@ -33,12 +38,10 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
     private readonly IHttpContextAccessor _http =
         http ?? throw new ArgumentNullException(nameof(http));
 
-    public void DeleteItem(params IReadOnlyList<Guid> ids) => inner.DeleteItem(ids);
-
+    // Write path moved to IItemPersistenceService in Jellyfin 12.
+    // Kept as a concrete helper: GelatoManager calls repo.SaveItems directly.
     public void SaveItems(IReadOnlyList<BaseItem> items, CancellationToken cancellationToken) =>
-        inner.SaveItems(items, cancellationToken);
-
-    public void SaveImages(BaseItem item) => inner.SaveImages(item);
+        itemPersistenceService.SaveItems(items, cancellationToken);
 
     public BaseItem RetrieveItem(Guid id) => inner.RetrieveItem(id);
 
@@ -126,17 +129,6 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         CollectionType collectionType
     ) => inner.GetLatestItemList(filter, collectionType);
 
-    public IReadOnlyList<string> GetNextUpSeriesKeys(
-        InternalItemsQuery filter,
-        DateTime dateCutoff
-    ) => inner.GetNextUpSeriesKeys(filter, dateCutoff);
-
-    public void UpdateInheritedValues() => inner.UpdateInheritedValues();
-
-    public int GetCount(InternalItemsQuery filter) => inner.GetCount(filter);
-
-    public ItemCounts GetItemCounts(InternalItemsQuery filter) => inner.GetItemCounts(filter);
-
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetGenres(
         InternalItemsQuery filter
     ) => inner.GetGenres(filter);
@@ -169,15 +161,16 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     public IReadOnlyList<string> GetAllArtistNames() => inner.GetAllArtistNames();
 
+    public IReadOnlyList<string> GetMediaStreamLanguages(
+        InternalItemsQuery filter,
+        MediaStreamType mediaStreamType
+    ) => inner.GetMediaStreamLanguages(filter, mediaStreamType);
+
+    public QueryFiltersLegacy GetQueryFiltersLegacy(InternalItemsQuery filter) =>
+        inner.GetQueryFiltersLegacy(ApplyFilters(filter));
+
     public Task<bool> ItemExistsAsync(Guid id) => inner.ItemExistsAsync(id);
 
     public bool GetIsPlayed(User user, Guid id, bool recursive) =>
         inner.GetIsPlayed(user, id, recursive);
-
-    public IReadOnlyDictionary<string, MusicArtist[]> FindArtists(
-        IReadOnlyList<string> artistNames
-    ) => inner.FindArtists(artistNames);
-
-    public Task ReattachUserDataAsync(BaseItem item, CancellationToken cancellationToken) =>
-        inner.ReattachUserDataAsync(item, cancellationToken);
 }
