@@ -499,7 +499,7 @@ public static class BaseItemExtensions
     public static bool IsPrimaryVersion(this BaseItem item)
     {
         return !item.HasStreamTag()
-            && string.IsNullOrWhiteSpace((item as Video)?.PrimaryVersionId)
+            && (item as Video)?.PrimaryVersionId is null
             && !item.IsVirtualItem;
     }
 

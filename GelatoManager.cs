@@ -11,6 +11,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
@@ -23,6 +24,7 @@ public sealed class GelatoManager(
     ILoggerFactory loggerFactory,
     IProviderManager provider,
     GelatoItemRepository repo,
+    IItemPersistenceService persistence,
     IFileSystem fileSystem,
     IMemoryCache memoryCache,
     IServerConfigurationManager serverConfig,
@@ -634,7 +636,7 @@ public sealed class GelatoManager(
         }
 
         //upsertedStreams = SaveItems(upsertedStreams, (Folder)primary.GetParent()).Cast<Video>().ToList();
-        repo.SaveItems(upsertedStreams, ct);
+        persistence.SaveItems(upsertedStreams, ct);
 
         var newIds = new HashSet<Guid>(upsertedStreams.Select(x => x.Id));
         var stale = existingByGuid
@@ -658,7 +660,7 @@ public sealed class GelatoManager(
 
         try
         {
-            //repo.DeleteItem([.. toDelete.Select(f => f.Id)]);
+            //persistence.DeleteItem([.. toDelete.Select(f => f.Id)]);
         }
         catch
         {
@@ -672,7 +674,7 @@ public sealed class GelatoManager(
             }
         }
 
-        repo.SaveItems(toSave, ct);
+        persistence.SaveItems(toSave, ct);
         upsertedStreams.Add(video);
 
         stopwatch.Stop();
@@ -971,10 +973,10 @@ public sealed class GelatoManager(
         }
 
         if (newSeasons.Count > 0)
-            repo.SaveItems(newSeasons, ct);
+            persistence.SaveItems(newSeasons, ct);
 
         if (allNewEpisodes.Count > 0)
-            repo.SaveItems(allNewEpisodes, ct);
+            persistence.SaveItems(allNewEpisodes, ct);
 
         stopwatch.Stop();
 
@@ -1108,7 +1110,7 @@ public sealed class GelatoManager(
             if (!chunkResults.IsEmpty)
             {
                 var toSave = chunkResults.ToList();
-                repo.SaveItems(toSave, cancellationToken);
+                persistence.SaveItems(toSave, cancellationToken);
                 totalSaved += toSave.Count;
             }
         }
@@ -1278,7 +1280,7 @@ public sealed class GelatoManager(
 
                     // Mark as synced so we skip on future runs
                     series.Tags = [.. (series.Tags ?? []), TreeSyncedTag];
-                    repo.SaveItems([series], ct);
+                    persistence.SaveItems([series], ct);
                 }
             }
             catch (Exception ex)
@@ -1386,7 +1388,7 @@ public sealed class GelatoManager(
         series.Tags = series
             .Tags?.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        repo.SaveItems([series], ct);
+        persistence.SaveItems([series], ct);
     }
 
     private void CleanVirtualTreeItems(CancellationToken ct)
@@ -1425,7 +1427,7 @@ public sealed class GelatoManager(
             parent.AddChild(item);
         }
 
-        repo.SaveItems(baseItems, CancellationToken.None);
+        persistence.SaveItems(baseItems, CancellationToken.None);
         return baseItems;
     }
 
