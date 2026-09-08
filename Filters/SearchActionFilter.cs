@@ -28,7 +28,10 @@ public class SearchActionFilter(
             cfg.DisableSearch
             || !ctx.IsApiSearchAction()
             || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
-            || !await cfg.Stremio.IsReady()
+            // GetConfig falls back to a bare configuration when the Gelato url is unset,
+            // which leaves Stremio null — let the request through untouched.
+            || cfg.Stremio is not { } stremio
+            || !await stremio.IsReady()
         )
         {
             await next();
