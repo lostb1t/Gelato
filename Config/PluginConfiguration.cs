@@ -61,7 +61,51 @@ public class PluginConfiguration : BasePluginConfiguration
         var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
         return userConfig is null ? this : userConfig.ApplyOverrides(this);
     }
+
+    /// <summary>
+    /// Every folder Gelato seeds a stub file into: the base movie and series paths plus each
+    /// per-user override. A path configured more than once is returned once.
+    /// </summary>
+    public IReadOnlyList<GelatoLibraryPath> GetLibraryPaths()
+    {
+        var seen = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal
+        );
+        var paths = new List<GelatoLibraryPath>();
+
+        void Add(string label, string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            string key;
+            try
+            {
+                key = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            }
+            catch (Exception)
+            {
+                key = path;
+            }
+
+            if (seen.Add(key))
+                paths.Add(new GelatoLibraryPath(label, path));
+        }
+
+        Add("Movies", MoviePath);
+        Add("Series", SeriesPath);
+        foreach (var user in UserConfigs)
+        {
+            Add("Movies (user override)", user.MoviePath);
+            Add("Series (user override)", user.SeriesPath);
+        }
+
+        return paths;
+    }
 }
+
+/// <summary>A folder Gelato uses as a library location.</summary>
+public sealed record GelatoLibraryPath(string Label, string Path);
 
 public class UserConfig
 {

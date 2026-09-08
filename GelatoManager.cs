@@ -34,6 +34,16 @@ public sealed class GelatoManager(
     public const string StreamTag = "gelato-stream";
     public const string TreeSyncedTag = "gelato-tree-synced";
 
+    /// <summary>Name of the file Gelato seeds into its library folders.</summary>
+    public const string SeedFileName = "stub.txt";
+
+    /// <summary>
+    /// Content of the seed file. Unchanged since the file was introduced, so a stub written by
+    /// any earlier Gelato build is recognised as ours.
+    /// </summary>
+    public const string SeedFileContent =
+        "This is a seed file created by Gelato so that library scans are triggered. Do not remove.";
+
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
     private int GetHttpPort()
@@ -94,14 +104,75 @@ public sealed class GelatoManager(
     private static void SeedFolder(string path)
     {
         Directory.CreateDirectory(path);
-        var seed = Path.Combine(path, "stub.txt");
+        var seed = Path.Combine(path, SeedFileName);
         if (!File.Exists(seed))
         {
-            File.WriteAllText(
-                seed,
-                "This is a seed file created by Gelato so that library scans are triggered. Do not remove."
+            File.WriteAllText(seed, SeedFileContent);
+        }
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="filePath"/> is a seed file Gelato wrote: same name and
+    /// same content. A "stub.txt" holding anything else belongs to someone else.
+    /// </summary>
+    public static bool IsSeedFile(string filePath)
+    {
+        if (
+            !string.Equals(
+                Path.GetFileName(filePath),
+                SeedFileName,
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            return false;
+        }
+
+        try
+        {
+            var info = new FileInfo(filePath);
+            // Never read a large file just because it shares the name.
+            if (!info.Exists || info.Length > 1024)
+                return false;
+
+            return string.Equals(
+                File.ReadAllText(filePath).Trim(),
+                SeedFileContent,
+                StringComparison.Ordinal
             );
         }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Deletes the seed file from <paramref name="folder"/> if it is the one Gelato wrote and
+    /// leaves any other "stub.txt" alone. Returns true when the folder holds no seed file
+    /// afterwards.
+    /// </summary>
+    public static bool RemoveSeedFile(string folder, ILogger log)
+    {
+        var seed = Path.Combine(folder, SeedFileName);
+        if (!File.Exists(seed))
+            return true;
+
+        if (!IsSeedFile(seed))
+        {
+            log.LogWarning(
+                "Gelato: {Seed} is not the seed file Gelato wrote, leaving it in place; a Jellyfin 12 upgrade may prune Gelato items.",
+                seed
+            );
+            return false;
+        }
+
+        File.Delete(seed);
+        log.LogInformation(
+            "Gelato: removed seed file {Seed} so a Jellyfin 12 upgrade cannot prune the library.",
+            seed
+        );
+        return true;
     }
 
     public Folder? TryGetMovieFolder(Guid userId)

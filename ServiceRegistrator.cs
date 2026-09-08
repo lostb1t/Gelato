@@ -129,7 +129,48 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             return Task.CompletedTask;
         }
 
-        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        /// <summary>
+        /// Leaves the seeded Gelato library folders empty on shutdown so an upgrade to
+        /// Jellyfin 12 cannot destroy the library.
+        /// </summary>
+        /// <remarks>
+        /// Jellyfin 12's MigrateLinkedChildren migration deletes every non-folder item whose
+        /// path does not sit under a library location. Gelato's items are addressed by
+        /// gelato:// and https:// URLs, so all of them qualify and are removed on the first
+        /// Jellyfin 12 start. That cleanup is skipped entirely when any library location is
+        /// missing or empty, and the only file Gelato puts in its folders is the seed stub —
+        /// so removing it here disarms the migration. GelatoManager.SeedFolder recreates the
+        /// stub on the next start, so a normal restart is unaffected.
+        ///
+        /// Every seeded folder is covered, per-user overrides included, and only a stub with
+        /// Gelato's own content is removed: a "stub.txt" someone else put in a shared folder is
+        /// not ours to delete.
+        /// </remarks>
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            var cfg = GelatoPlugin.Instance?.Configuration;
+            if (cfg is null)
+                return Task.CompletedTask;
+
+            foreach (var folder in cfg.GetLibraryPaths())
+            {
+                try
+                {
+                    GelatoManager.RemoveSeedFile(folder.Path, log);
+                }
+                catch (Exception ex)
+                {
+                    // Never block shutdown over this.
+                    log.LogWarning(
+                        ex,
+                        "Gelato: could not remove the seed file in {Path}; a Jellyfin 12 upgrade may prune Gelato items.",
+                        folder.Path
+                    );
+                }
+            }
+
+            return Task.CompletedTask;
+        }
     }
 }
 
