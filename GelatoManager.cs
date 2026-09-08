@@ -201,6 +201,11 @@ public sealed class GelatoManager(
         return TryGetFolder(cfg.SeriesPath);
     }
 
+    // GetConfig asks for the root folders on every request, so the lookup is memoized.
+    // The window is deliberately short: libraries can be added, moved or removed at any
+    // time, and the answer must not be pinned for the lifetime of the process.
+    private static readonly TimeSpan FolderCacheTtl = TimeSpan.FromSeconds(10);
+
     private Folder? TryGetFolder(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -208,10 +213,21 @@ public sealed class GelatoManager(
             return null;
         }
 
+        var key = $"rootfolder:{path}";
+        if (memoryCache.TryGetValue(key, out Folder? cached))
+        {
+            return cached;
+        }
+
         SeedFolder(path);
-        return repo.GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
+        var folder = repo.GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
+
+        // Misses are cached too, so a configured-but-not-yet-added library does not cost
+        // a directory probe and a query on every request while it is being set up.
+        memoryCache.Set(key, folder, FolderCacheTtl);
+        return folder;
     }
 
     private BaseItem? Exist(StremioMeta meta, User? user = null)
