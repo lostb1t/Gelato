@@ -18,6 +18,15 @@
             </div>
           </div>
 
+          <!-- Jellyfin 12 upgrade readiness -->
+          <div id="upgradeReadiness" class="verticalSection" style="display: none; margin-bottom: 1.5em;">
+            <div id="upgradeReadinessBox"
+              style="padding: 1em 1.25em; border-radius: 4px; border-left: 4px solid #00a4dc; background: rgba(0,0,0,0.25);">
+              <div id="upgradeReadinessTitle" style="font-weight: bold; margin-bottom: 0.4em;"></div>
+              <div id="upgradeReadinessBody" class="fieldDescription" style="margin: 0;"></div>
+            </div>
+          </div>
+
           <!-- Tabs Navigation -->
           <div class="verticalSection">
             <div class="padded-top padded-bottom"
@@ -333,6 +342,60 @@
           });
           return obj;
         }
+        async function loadUpgradeReadiness() {
+          const wrap = document.getElementById('upgradeReadiness');
+          const box = document.getElementById('upgradeReadinessBox');
+          const title = document.getElementById('upgradeReadinessTitle');
+          const body = document.getElementById('upgradeReadinessBody');
+          try {
+            const r = await window.ApiClient.getJSON(window.ApiClient.getUrl('gelato/upgrade-readiness'));
+            const folders = r.Folders || [];
+            // Nothing to show once the server is already on Jellyfin 12.
+            if (r.Applies === false || !folders.length) { wrap.style.display = 'none'; return; }
+
+            body.textContent = '';
+            if (r.Ready) {
+              box.style.borderLeftColor = '#52b54b';
+              title.textContent = 'Ready for the Jellyfin 12 upgrade';
+              body.textContent = 'Gelato empties its library folders on shutdown, which stops the Jellyfin 12 '
+                + 'migration from deleting your Gelato items. Shut the server down normally before upgrading.';
+            } else {
+              box.style.borderLeftColor = '#cc3333';
+              title.textContent = 'NOT ready for the Jellyfin 12 upgrade — your Gelato library would be deleted';
+
+              // Built as DOM nodes, never innerHTML: the blocker names are filenames read off
+              // disk and are not safe to interpolate into markup.
+              body.appendChild(document.createTextNode(
+                'Jellyfin 12 removes every item whose path is not a real file inside a library folder, and all '
+                + 'Gelato items are URLs. Gelato can only prevent this when one of its library folders is empty, '
+                + 'and these are not:'));
+
+              const list = document.createElement('ul');
+              list.style.margin = '0.5em 0 0.5em 1.2em';
+              folders.filter(f => !f.WillBeEmpty).forEach(f => {
+                const li = document.createElement('li');
+                const code = document.createElement('code');
+                code.textContent = f.Path;
+                li.appendChild(code);
+                li.appendChild(document.createTextNode(
+                  f.Error
+                    ? ' could not be read: ' + f.Error
+                    : ' still contains ' + (f.Blockers || []).join(', ')
+                      + (f.HasMoreBlockers ? ' and more' : '')));
+                list.appendChild(li);
+              });
+              body.appendChild(list);
+
+              body.appendChild(document.createTextNode(
+                'Move that content elsewhere, or back up before upgrading.'));
+            }
+            wrap.style.display = 'block';
+          } catch (err) {
+            console.error('Gelato: upgrade readiness check failed', err);
+            wrap.style.display = 'none';
+          }
+        }
+
         async function loadCatalogs() {
           try {
             // Show loading spinner in list
@@ -792,6 +855,7 @@
           if (startTab) startTab.click();
 
           loadConfig();
+          loadUpgradeReadiness();
         }
 
         page.addEventListener("pageshow", init);

@@ -4,6 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Text.RegularExpressions;
 using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -18,16 +19,19 @@ public sealed class GelatoApiController : ControllerBase
 {
     private readonly ILogger<GelatoApiController> _log;
     private readonly GelatoManager _gelatoManager;
+    private readonly IServerApplicationHost _appHost;
     private readonly string _downloadPath;
 
     public GelatoApiController(
         ILogger<GelatoApiController> log,
         IApplicationPaths appPaths,
-        GelatoManager gelatoManager
+        GelatoManager gelatoManager,
+        IServerApplicationHost appHost
     )
     {
         _log = log;
         _gelatoManager = gelatoManager;
+        _appHost = appHost;
         _downloadPath = Path.Combine(appPaths.CachePath, "gelato-torrents");
         Directory.CreateDirectory(_downloadPath);
     }
@@ -50,6 +54,93 @@ public sealed class GelatoApiController : ControllerBase
 
     // [HttpGet("catalogs")]
     // Moved to CatalogController
+
+    /// <summary>
+    /// Reports whether this install can survive an upgrade to Jellyfin 12.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin 12's MigrateLinkedChildren migration deletes every non-folder item whose path
+    /// is not under a library location. Gelato addresses its items by gelato:// and https://
+    /// URLs, so all of them qualify. The migration skips that cleanup when any library location
+    /// is missing or empty, and Gelato empties its own folders on shutdown to trigger that — but
+    /// only the seed stub is removed, so anything else in the folder (a NAS "@eaDir", a
+    /// "Thumbs.db", or real media sharing the folder) keeps it non-empty and the library is
+    /// destroyed on the first Jellyfin 12 start.
+    /// </remarks>
+    private const int BlockerSampleSize = 5;
+
+    /// <summary>The Jellyfin major version whose first start prunes URL-backed items.</summary>
+    private const int JellyfinMajorThatPrunes = 12;
+
+    [HttpGet("upgrade-readiness")]
+    [Authorize(Policy = "RequiresElevation")]
+    public ActionResult<UpgradeReadiness> GetUpgradeReadiness()
+    {
+        // Once the server is on Jellyfin 12 the migration has already run, so there is nothing to
+        // be ready for. The same code ships in the Jellyfin 12 build, where the banner would
+        // otherwise keep announcing readiness for an upgrade that has already happened.
+        if (_appHost.ApplicationVersion.Major >= JellyfinMajorThatPrunes)
+        {
+            return new UpgradeReadiness { Applies = false, Ready = true };
+        }
+
+        var cfg = GelatoPlugin.Instance!.Configuration;
+        var folders = new List<UpgradeReadinessFolder>();
+
+        foreach (var library in cfg.GetLibraryPaths())
+        {
+            var path = library.Path;
+            var folder = new UpgradeReadinessFolder { Label = library.Label, Path = path };
+
+            try
+            {
+                if (!Directory.Exists(path))
+                {
+                    // A missing folder already counts as inaccessible to the migration.
+                    folder.WillBeEmpty = true;
+                }
+                else
+                {
+                    // Only ever look at a handful of entries: this folder may be shared with a
+                    // real media library holding thousands of files, and naming them all would
+                    // be useless in the UI and slow to enumerate over a network mount.
+                    // Only the stub Gelato wrote is removed on shutdown; a "stub.txt" with other
+                    // content stays behind and blocks like any other file.
+                    var sample = Directory
+                        .EnumerateFileSystemEntries(path)
+                        .Where(entry => !GelatoManager.IsSeedFile(entry))
+                        .Select(entry => Path.GetFileName(entry))
+                        .Where(name => !string.IsNullOrEmpty(name))
+                        .Take(BlockerSampleSize + 1)
+                        .ToList();
+
+                    folder.WillBeEmpty = sample.Count == 0;
+                    folder.HasMoreBlockers = sample.Count > BlockerSampleSize;
+                    folder.Blockers = sample
+                        .Take(BlockerSampleSize)
+                        .Order(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Detail stays in the log; the response carries no exception text.
+                _log.LogWarning(ex, "Could not inspect {Path} for upgrade readiness", path);
+                folder.Error = "could not be read, check the Jellyfin log";
+            }
+
+            folders.Add(folder);
+        }
+
+        // One empty library location is enough: the migration's guard is global.
+        return new UpgradeReadiness
+        {
+            Applies = true,
+            Ready = folders.Exists(f => f.WillBeEmpty),
+            Folders = folders,
+        };
+    }
+
 
     [HttpGet("subtitles/{itemId:guid}")]
     public ActionResult<IEnumerable<StremioSubtitle>> GetSubtitles(
@@ -282,4 +373,31 @@ public sealed class GelatoApiController : ControllerBase
             _ => "application/octet-stream",
         };
     }
+}
+
+public sealed class UpgradeReadiness
+{
+    /// <summary>Gets or sets a value indicating whether the check applies at all; false once the server is on Jellyfin 12.</summary>
+    public bool Applies { get; set; }
+
+    public bool Ready { get; set; }
+
+    public IReadOnlyList<UpgradeReadinessFolder> Folders { get; set; } = [];
+}
+
+public sealed class UpgradeReadinessFolder
+{
+    public string Label { get; set; } = string.Empty;
+
+    public string Path { get; set; } = string.Empty;
+
+    public bool WillBeEmpty { get; set; }
+
+    /// <summary>Gets or sets a short sample of blocking entries, never the whole folder.</summary>
+    public IReadOnlyList<string> Blockers { get; set; } = [];
+
+    /// <summary>Gets or sets a value indicating whether more blockers exist than are listed.</summary>
+    public bool HasMoreBlockers { get; set; }
+
+    public string? Error { get; set; }
 }
