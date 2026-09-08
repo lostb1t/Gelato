@@ -77,10 +77,14 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
             StringComparer.OrdinalIgnoreCase
         );
         var isTargetedLookup =
-            filter.ItemIds.Length > 0 || (ctx is not null && ctx.IsSingleItemList());
+            ctx is not null
+            && ((filter.ItemIds.Length > 0 && ctx.HasExplicitItemIds()) || ctx.IsSingleItemList());
 
         // Targeted ItemIds lookups are generally internal existence/permission checks.
         // Keep those untouched so the caller gets strict results from the underlying query.
+        // The ids must have come from the caller: Jellyfin 12 turns a searchTerm into a list of
+        // ItemIds before querying, so treating any populated ItemIds as targeted would let every
+        // search return the hidden stream rows alongside the item they belong to.
         if (isTargetedLookup)
             return filter;
 
