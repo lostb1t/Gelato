@@ -451,6 +451,18 @@ public static class ActionContextExtensions
         if (ctx.HttpContext.TryGetUserId(out userId))
             return true;
 
+        foreach (var key in new[] { "userId", "UserId", "USERID" })
+        {
+            if (
+                ctx.ActionArguments.TryGetValue(key, out var raw)
+                && Guid.TryParse(raw?.ToString(), out userId)
+                && userId != Guid.Empty
+            )
+            {
+                return true;
+            }
+        }
+
         var routeUserId =
             ctx.RouteData.Values["userId"]?.ToString()
             ?? ctx.RouteData.Values["UserId"]?.ToString();

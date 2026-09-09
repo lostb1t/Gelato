@@ -47,6 +47,19 @@ public sealed class ActionContextExtensionsTests
     }
 
     [Fact]
+    public void PlaybackInfoActionArgumentResolvesUserWhenQueryClaimsAreUnavailable()
+    {
+        var context = CreateContext("GetPostedPlaybackInfo", new Dictionary<string, object?>
+        {
+            ["itemId"] = ItemId,
+            ["userId"] = UserId,
+        });
+
+        Assert.True(context.TryGetUserId(out var user));
+        Assert.Equal(UserId, user);
+    }
+
+    [Fact]
     public void NonGelatoGuidPassesThroughWithoutChangingArguments()
     {
         var context = CreateContext("GetItemLegacy", new Dictionary<string, object?>
