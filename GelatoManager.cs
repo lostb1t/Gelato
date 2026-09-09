@@ -30,7 +30,9 @@ public sealed class GelatoManager(
     IServerConfigurationManager serverConfig,
     ILibraryManager libraryManager,
     IDirectoryService directoryService,
-    IApplicationPaths appPaths
+    IApplicationPaths appPaths,
+    IUserManager userManager,
+    IUserDataManager userDataManager
 )
 {
     public const string StreamTag = "gelato-stream";
@@ -370,7 +372,7 @@ public sealed class GelatoManager(
 
         if (mediaType == StremioMediaType.Movie)
         {
-            baseItem = SaveItem(baseItem, parent);
+            baseItem = await SaveItemAsync(baseItem, parent, ct).ConfigureAwait(false);
             if (baseItem is null)
             {
                 _log.LogWarning("InsertMeta: failed to create baseItem");
@@ -785,6 +787,7 @@ public sealed class GelatoManager(
                 await tmpSeries.RefreshMetadata(options, ct).ConfigureAwait(false);
                 seriesRootFolder.AddChild(tmpSeries);
                 await tmpSeries.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+                await ReattachWatchStateAsync([tmpSeries], ct).ConfigureAwait(false);
                 series = tmpSeries;
             }
             else
@@ -989,10 +992,16 @@ public sealed class GelatoManager(
         }
 
         if (newSeasons.Count > 0)
+        {
             persistence.SaveItems(newSeasons, ct);
+            await ReattachWatchStateAsync(newSeasons, ct).ConfigureAwait(false);
+        }
 
         if (allNewEpisodes.Count > 0)
+        {
             persistence.SaveItems(allNewEpisodes, ct);
+            await ReattachWatchStateAsync(allNewEpisodes, ct).ConfigureAwait(false);
+        }
 
         stopwatch.Stop();
 
@@ -1422,12 +1431,80 @@ public sealed class GelatoManager(
         }
     }
 
-    private BaseItem? SaveItem(BaseItem item, Folder parent)
+    /// <summary>
+    /// Reattaches watch state that Jellyfin parked on the detached-user-data placeholder the last
+    /// time these items were removed.
+    /// </summary>
+    /// <remarks>
+    /// Deleting an item does not delete its user data: Jellyfin moves the rows onto a placeholder
+    /// item and stamps a retention date. It reattaches them again from
+    /// <c>MetadataService.SaveItemAsync</c>, but only on an item's very first refresh
+    /// (<c>DateLastRefreshed == DateTime.MinValue</c>). Gelato writes items straight through
+    /// <see cref="IItemPersistenceService"/> with <c>DateLastRefreshed</c> already stamped, so that
+    /// hook never fires for us — which is why a bulk removal (the Jellyfin 12 upgrade migration,
+    /// <c>PurgeGelatoTask</c>) used to leave every resume position, played flag and favourite
+    /// orphaned even after the catalogs were re-imported.
+    ///
+    /// Rows are matched on user data keys — the imdb/tmdb/tvdb ids, falling back to the item id —
+    /// and Gelato item ids are a deterministic hash of path and type, so a re-imported item
+    /// reproduces the exact keys it had before it was removed.
+    /// </remarks>
+    private async Task ReattachWatchStateAsync(IEnumerable<BaseItem> items, CancellationToken ct)
     {
-        return SaveItems([item], parent).FirstOrDefault();
+        var reattached = 0;
+
+        foreach (var item in items)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Stream rows copy the provider ids of the item they hang off, so they resolve to the
+            // same user data keys. Reattaching onto one would move the watch state to a row the
+            // user never sees.
+            if (item.IsStream())
+                continue;
+
+            var before = item.UserData?.Count ?? 0;
+
+            try
+            {
+                await persistence.ReattachUserDataAsync(item, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Jellyfin does not resolve key collisions here, so if the item already holds a row
+                // for one of these keys the update violates the primary key. That row is newer than
+                // anything on the placeholder, so leaving it untouched is the right outcome.
+                _log.LogWarning(
+                    ex,
+                    "Could not reattach watch state for {Name} ({Id})",
+                    item.Name,
+                    item.Id
+                );
+                continue;
+            }
+
+            if ((item.UserData?.Count ?? 0) > before)
+                reattached++;
+        }
+
+        if (reattached > 0)
+            _log.LogDebug("Reattached watch state for {Count} item(s)", reattached);
     }
 
-    private List<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent)
+    private async Task<BaseItem?> SaveItemAsync(BaseItem item, Folder parent, CancellationToken ct)
+    {
+        return (await SaveItemsAsync([item], parent, ct).ConfigureAwait(false)).FirstOrDefault();
+    }
+
+    private async Task<List<BaseItem>> SaveItemsAsync(
+        IEnumerable<BaseItem> items,
+        Folder parent,
+        CancellationToken ct
+    )
     {
         var baseItems = items.ToList();
         foreach (var item in baseItems)
@@ -1444,6 +1521,7 @@ public sealed class GelatoManager(
         }
 
         persistence.SaveItems(baseItems, CancellationToken.None);
+        await ReattachWatchStateAsync(baseItems, ct).ConfigureAwait(false);
         return baseItems;
     }
 
