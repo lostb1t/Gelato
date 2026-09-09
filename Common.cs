@@ -448,7 +448,13 @@ public static class ActionContextExtensions
 
     public static bool TryGetUserId(this ActionExecutingContext ctx, out Guid userId)
     {
-        return ctx.HttpContext.TryGetUserId(out userId);
+        if (ctx.HttpContext.TryGetUserId(out userId))
+            return true;
+
+        var routeUserId =
+            ctx.RouteData.Values["userId"]?.ToString()
+            ?? ctx.RouteData.Values["UserId"]?.ToString();
+        return Guid.TryParse(routeUserId, out userId) && userId != Guid.Empty;
     }
 
     public static bool TryGetUserId(this HttpContext ctx, out Guid userId)
@@ -457,7 +463,9 @@ public static class ActionContextExtensions
 
         var userIdStr =
             ctx.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")?.Value
-            ?? ctx.Request.Query["userId"].FirstOrDefault();
+            ?? ctx.Request.Query["userId"].FirstOrDefault()
+            ?? ctx.Request.RouteValues["userId"]?.ToString()
+            ?? ctx.Request.RouteValues["UserId"]?.ToString();
 
         if (!Guid.TryParse(userIdStr, out userId))
             return false;
