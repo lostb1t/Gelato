@@ -14,7 +14,9 @@ public sealed class PurgeGelatoTask(
 {
     public string Name => "WARNING: purge all gelato items";
     public string Key => "PurgeGelatoTask";
-    public string Description => "Removes all gelato items (local items are kept)";
+    public string Description =>
+        "Removes all gelato items (local items are kept). Play positions, played flags and "
+        + "favourites for those items are cleared as well, so this really is a fresh start.";
     public string Category => "Gelato Maintenance";
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
@@ -78,6 +80,12 @@ public sealed class PurgeGelatoTask(
 
         foreach (var batch in items.Chunk(batchSize))
         {
+            ct.ThrowIfCancellationRequested();
+
+            // A purge is deliberate, so the watch state goes with it. Otherwise Jellyfin parks it
+            // and the next catalog import hands it straight back, which is not what "purge all
+            // gelato items" is asking for.
+            manager.ForgetWatchState(batch, ct);
             libraryManager.DeleteItemsUnsafeFast(batch);
             processed += batch.Length;
             progress?.Report((double)processed / totalItems * 100);

@@ -1432,6 +1432,104 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
+    /// Clears the watch state of items that are about to be purged.
+    /// </summary>
+    /// <remarks>
+    /// Only the purge uses this. Ordinary deletion leaves watch state alone, the way Jellyfin does
+    /// for every item: the rows are parked rather than deleted, and come back if the item does. A
+    /// purge is the one place where that is the wrong answer, because "remove all gelato items" is
+    /// asking for a clean slate and the next catalog import would otherwise hand every play position
+    /// straight back.
+    ///
+    /// The rows are zeroed rather than deleted, which needs no database access: SaveUserData writes
+    /// one row per user data key, so what gets parked on deletion carries nothing.
+    ///
+    /// Cancellation is checked before each item. Items already cleared when the purge is cancelled
+    /// stay cleared and undeleted; running the purge again finishes the job.
+    /// </remarks>
+    public void ForgetWatchState(IEnumerable<BaseItem> items, CancellationToken ct)
+    {
+        var users = userManager.GetUsers().ToList();
+        if (users.Count == 0)
+        {
+            return;
+        }
+
+        var cleared = 0;
+        var itemCount = 0;
+
+        foreach (var item in items)
+        {
+            ct.ThrowIfCancellationRequested();
+            itemCount++;
+
+            foreach (var user in users)
+            {
+                try
+                {
+                    if (userDataManager.GetUserData(user, item) is not { } data || IsBlank(data))
+                    {
+                        continue;
+                    }
+
+                    data.Played = false;
+                    data.PlayCount = 0;
+                    data.PlaybackPositionTicks = 0;
+                    data.IsFavorite = false;
+                    data.LastPlayedDate = null;
+                    data.Likes = null;
+                    data.Rating = null;
+                    data.AudioStreamIndex = null;
+                    data.SubtitleStreamIndex = null;
+
+                    userDataManager.SaveUserData(
+                        user,
+                        item,
+                        data,
+                        UserDataSaveReason.UpdateUserData,
+                        ct
+                    );
+                    cleared++;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Never let this block the deletion the user asked for.
+                    _log.LogWarning(
+                        ex,
+                        "Could not clear watch state for {Name} ({Id})",
+                        item.Name,
+                        item.Id
+                    );
+                }
+            }
+        }
+
+        if (cleared > 0)
+        {
+            // One row per item and user, so this is not an item count.
+            _log.LogInformation(
+                "Cleared {Rows} watch state row(s) for {Items} item(s) across {Users} user(s) being deleted",
+                cleared,
+                itemCount,
+                users.Count
+            );
+        }
+    }
+
+    private static bool IsBlank(UserItemData data) =>
+        !data.Played
+        && data.PlayCount == 0
+        && data.PlaybackPositionTicks == 0
+        && !data.IsFavorite
+        && data.LastPlayedDate is null
+        && data.Likes is null
+        && data.Rating is null;
+
+    /// <summary>
     /// Reattaches watch state that Jellyfin parked on the detached-user-data placeholder the last
     /// time these items were removed.
     /// </summary>

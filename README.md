@@ -59,7 +59,7 @@ For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/
 
 - You need to restart the server after editing the manifest/config in aiostreams.
 - You should have at least one search enabled catalog. I suggest the tmdb addon.
-- if something borked or you want to start over, you can use the purge task under scheduled tasks.
+- If something borked or you want to start over, you can use the purge task under scheduled tasks. It clears watch state along with the items, so it really is a fresh start.
 - Watch state is not lost when items are removed. Jellyfin parks it and Gelato puts it back when the item returns, so a film you delete and later re-add still has your progress on it.
 - If items went missing and took your watch state with them (after a Jellyfin 12 upgrade, say), run the **repair watch state** task under scheduled tasks. It re-imports what is gone and reattaches the watch state. It has no schedule: it cannot tell what you deleted on purpose from what you lost by accident, so it only runs when you start it, and it will bring back things you deleted yourself. Do not run Jellyfin's own "clean up user data" task first, that is what actually deletes parked watch state.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
