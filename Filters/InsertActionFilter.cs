@@ -99,7 +99,12 @@ public class InsertActionFilter(
         if (baseItem is not null)
         {
             ctx.ReplaceGuid(baseItem.Id);
-            manager.RemoveStremioMeta(guid);
+
+            // Moonfin 2.5.1 keeps the synthetic search id in its detail view
+            // model even after the user-scoped detail response contains the
+            // canonical Jellyfin id.  Retain the existing short-lived alias so
+            // the immediate PlaybackInfo request can resolve it through the
+            // existing-item path and redirect to the materialized item.
 
             // Jellyfin's legacy user-scoped detail action can evaluate its
             // user-library lookup before the newly inserted virtual item is

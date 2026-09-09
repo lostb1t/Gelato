@@ -31,6 +31,22 @@ public sealed class ActionContextExtensionsTests
     }
 
     [Fact]
+    public void PlaybackInfoRouteIsInsertableForSyntheticFollowUp()
+    {
+        var context = CreateContext("GetPlaybackInfo", new Dictionary<string, object?>
+        {
+            ["itemId"] = ItemId,
+            ["userId"] = UserId,
+        });
+
+        Assert.True(context.HttpContext.IsInsertableAction());
+        Assert.True(context.TryGetRouteGuid(out var item));
+        Assert.Equal(ItemId, item);
+        Assert.True(context.TryGetUserId(out var user));
+        Assert.Equal(UserId, user);
+    }
+
+    [Fact]
     public void NonGelatoGuidPassesThroughWithoutChangingArguments()
     {
         var context = CreateContext("GetItemLegacy", new Dictionary<string, object?>
