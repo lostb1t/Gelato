@@ -37,7 +37,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 
 2. Make sure you are running Jellyfin 12 and add `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json` to your plugin repositories.
 
-   **Upgrading from Jellyfin 10.11?** Update Gelato to the final 10.11 release first and shut the server down normally at least once before upgrading Jellyfin. The first Jellyfin 12 start deletes every Gelato item unless that release has emptied the Gelato library folders on shutdown, and its settings page shows whether the install is ready.
+   **Upgrading from Jellyfin 10.11?** Update Gelato to the final 10.11 release first and shut the server down normally at least once before upgrading Jellyfin. The first Jellyfin 12 start deletes every Gelato item unless that release has emptied the Gelato library folders on shutdown, and its settings page shows whether the install is ready. If you upgraded without it, Gelato runs the repair watch state task once on the first start and recovers whatever still has watch state (see the FAQ).
 
 3. Install and configure the plugin.
    **Note:** Only **AIOStreams** is supported.
@@ -61,7 +61,7 @@ For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/
 - You should have at least one search enabled catalog. I suggest the tmdb addon.
 - If something borked or you want to start over, you can use the purge task under scheduled tasks. It clears watch state along with the items, so it really is a fresh start.
 - Watch state is not lost when items are removed. Jellyfin parks it and Gelato puts it back when the item returns, so a film you delete and later re-add still has your progress on it.
-- If items went missing and took your watch state with them (after a Jellyfin 12 upgrade, say), run the **repair watch state** task under scheduled tasks. It re-imports what is gone and reattaches the watch state. It has no schedule: it cannot tell what you deleted on purpose from what you lost by accident, so it only runs when you start it, and it will bring back things you deleted yourself. Do not run Jellyfin's own "clean up user data" task first, that is what actually deletes parked watch state.
+- If items went missing and took your watch state with them (after a Jellyfin 12 upgrade, say), run the **repair watch state** task under scheduled tasks. It re-imports what is gone and reattaches the watch state. It has no schedule: it cannot tell what you deleted on purpose from what you lost by accident, so it only runs when you start it, and it will bring back things you deleted yourself. Gelato also runs it once by itself on the first start after this release is installed and after every later Jellyfin major upgrade. Do not run Jellyfin's own "clean up user data" task first, that is what actually deletes parked watch state.
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - Stream cache can be cleared by restarting the server

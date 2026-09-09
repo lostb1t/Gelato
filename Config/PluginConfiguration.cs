@@ -31,6 +31,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
+    /// <summary>
+    /// The Jellyfin version Gelato last started against, so it can tell when the server has been
+    /// upgraded underneath it. Empty until the first start that records one.
+    /// </summary>
+    public string LastSeenServerVersion { get; set; } = "";
+
     public string GetBaseUrl()
     {
         if (string.IsNullOrWhiteSpace(Url))
