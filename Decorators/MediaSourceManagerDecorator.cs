@@ -49,6 +49,12 @@ public sealed class MediaSourceManagerDecorator(
     StreamHealthCache healthCache
 ) : IMediaSourceManager
 {
+    // Moonfin's PlaybackInfo request timeout is 30 seconds. Probe a bounded
+    // window concurrently so a long tail of unavailable RD candidates cannot
+    // consume that entire budget before a usable source is returned.
+    private const int HealthProbeParallelism = 8;
+    private const int MaxHealthProbeCandidates = 64;
+
     private readonly IMediaSourceManager _inner =
         inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly ILogger<MediaSourceManagerDecorator> _log =
@@ -534,7 +540,9 @@ public sealed class MediaSourceManagerDecorator(
                     );
                     return result.IsHealthy;
                 },
-                ct
+                ct,
+                maxParallelism: HealthProbeParallelism,
+                maxCandidates: MaxHealthProbeCandidates
             )
             .ConfigureAwait(false);
 

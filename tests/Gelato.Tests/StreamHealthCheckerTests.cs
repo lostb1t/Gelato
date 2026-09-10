@@ -54,6 +54,53 @@ public sealed class StreamHealthCheckerTests
     }
 
     [Fact]
+    public async Task ProbesAStatusBatchInParallelButPreservesCandidateOrder()
+    {
+        var probes = new List<int>();
+
+        var selected = await StreamFallbackSelector.SelectAsync(
+            new[] { 0, 1, 2 },
+            0,
+            async candidate =>
+            {
+                lock (probes)
+                    probes.Add(candidate);
+                await Task.Delay(candidate == 0 ? 30 : 1);
+                return candidate == 1;
+            },
+            CancellationToken.None,
+            maxParallelism: 3,
+            maxCandidates: 3
+        );
+
+        Assert.Equal(1, selected);
+        Assert.Equal(3, probes.Count);
+    }
+
+    [Fact]
+    public async Task StopsAtThePerRequestProbeBudget()
+    {
+        var probes = new List<int>();
+
+        var selected = await StreamFallbackSelector.SelectAsync(
+            Enumerable.Range(0, 10).ToArray(),
+            0,
+            candidate =>
+            {
+                lock (probes)
+                    probes.Add(candidate);
+                return Task.FromResult(false);
+            },
+            CancellationToken.None,
+            maxParallelism: 2,
+            maxCandidates: 4
+        );
+
+        Assert.Equal(-1, selected);
+        Assert.Equal(new[] { 0, 1, 2, 3 }, probes.OrderBy(x => x));
+    }
+
+    [Fact]
     public void KeepsPreferredHealthySourceForImmediateFollowUp()
     {
         var cache = new StreamHealthCache();
