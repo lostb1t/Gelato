@@ -44,9 +44,17 @@ public sealed class MediaSourceManagerDecorator(
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
-    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders
+    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders,
+    IHttpClientFactory httpClientFactory,
+    StreamHealthCache healthCache
 ) : IMediaSourceManager
 {
+    // Moonfin's PlaybackInfo request timeout is 30 seconds. Probe a bounded
+    // window concurrently so a long tail of unavailable RD candidates cannot
+    // consume that entire budget before a usable source is returned.
+    private const int HealthProbeParallelism = 8;
+    private const int MaxHealthProbeCandidates = 64;
+
     private readonly IMediaSourceManager _inner =
         inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly ILogger<MediaSourceManagerDecorator> _log =
@@ -62,6 +70,10 @@ public sealed class MediaSourceManagerDecorator(
         config ?? throw new ArgumentNullException(nameof(config));
     private readonly Lazy<GelatoManager> _manager = manager;
     private readonly Lazy<SubtitleProvider> _subtitleProvider = subtitleProvider;
+    private readonly IHttpClientFactory _httpClientFactory =
+        httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+    private readonly StreamHealthCache _healthCache =
+        healthCache ?? throw new ArgumentNullException(nameof(healthCache));
 
     //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
     private readonly ICustomMetadataProvider<Video>? _probeProvider =
@@ -354,6 +366,25 @@ public sealed class MediaSourceManagerDecorator(
         if (selected is null)
             return sources;
 
+        var preferCached = !mediaSourceId.HasValue || mediaSourceId == item.Id;
+        selected = await SelectHealthySourceAsync(
+            item.Id,
+            sources,
+            selected,
+            preferCached,
+            ct
+        ).ConfigureAwait(false);
+        if (selected is null)
+        {
+            _log.LogWarning("No healthy Gelato source available for item {ItemId}", item.Id);
+            return Array.Empty<MediaSourceInfo>();
+        }
+        // Keep a fallback selection stable if the later metadata probe rebuilds
+        // the MediaSource list. Otherwise Jellyfin would select the original
+        // failed MediaSourceId again.
+        if (Guid.TryParse(selected.Id, out var healthySourceId))
+            mediaSourceId = healthySourceId;
+
         var owner = ResolveOwnerFor(selected, item);
         if (!IsGelatoPlaybackItem(owner))
         {
@@ -432,6 +463,98 @@ public sealed class MediaSourceManagerDecorator(
 
         BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
             Guid.TryParse(s.ETag, out var g) ? libraryManager.GetItemById(g) ?? fallback : fallback;
+    }
+
+    private async Task<MediaSourceInfo?> SelectHealthySourceAsync(
+        Guid itemId,
+        IReadOnlyList<MediaSourceInfo> sources,
+        MediaSourceInfo selected,
+        bool preferCached,
+        CancellationToken ct
+    )
+    {
+        var start = 0;
+        for (var i = 0; i < sources.Count; i++)
+        {
+            if (ReferenceEquals(sources[i], selected))
+            {
+                start = i;
+                break;
+            }
+        }
+
+        if (preferCached
+            && _healthCache.TryGetPreferred(itemId, DateTimeOffset.UtcNow, out var preferredId))
+        {
+            for (var i = start; i < sources.Count; i++)
+            {
+                if (string.Equals(sources[i].Id, preferredId, StringComparison.Ordinal))
+                {
+                    start = i;
+                    break;
+                }
+            }
+        }
+
+        var client = _httpClientFactory.CreateClient("GelatoPlaybackHealth");
+        var checker = new StreamHealthChecker(client, TimeSpan.FromSeconds(3));
+        var candidateIndices = Enumerable.Range(start, sources.Count - start).ToList();
+        if (preferCached && start != 0)
+            candidateIndices.AddRange(Enumerable.Range(0, start));
+
+        var healthyIndex = await StreamFallbackSelector
+            .SelectAsync(
+                candidateIndices,
+                0,
+                async i =>
+                {
+                    var candidate = sources[i];
+                    if (!Uri.TryCreate(candidate.Path, UriKind.Absolute, out var uri)
+                        || uri.Scheme is not ("http" or "https"))
+                        return i == start;
+
+                    var cacheKey = candidate.Id ?? string.Empty;
+                    var now = DateTimeOffset.UtcNow;
+                    StreamHealthResult result;
+                    var fromCache = false;
+                    if (!string.IsNullOrEmpty(cacheKey)
+                        && _healthCache.TryGet(cacheKey, now, out var cachedResult))
+                    {
+                        result = cachedResult;
+                        fromCache = true;
+                    }
+                    else
+                    {
+                        result = await checker.CheckAsync(candidate.Path, ct).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(cacheKey))
+                            _healthCache.Set(cacheKey, result, now);
+                    }
+                    _log.LogInformation(
+                        "Gelato source health check itemSourceId={SourceId} status={Status} bytes={Bytes} healthy={Healthy} reason={Reason} cached={Cached}",
+                        candidate.Id,
+                        result.StatusCode,
+                        result.BytesRead,
+                        result.IsHealthy,
+                        result.Reason,
+                        fromCache
+                    );
+                    return result.IsHealthy;
+                },
+                ct,
+                maxParallelism: HealthProbeParallelism,
+                maxCandidates: MaxHealthProbeCandidates
+            )
+            .ConfigureAwait(false);
+
+        if (healthyIndex < 0)
+            return null;
+
+        var healthy = sources[candidateIndices[healthyIndex]];
+        if (preferCached && !string.IsNullOrEmpty(healthy.Id))
+        {
+            _healthCache.SetPreferred(itemId, healthy.Id, DateTimeOffset.UtcNow);
+        }
+        return healthy;
     }
 
     private static bool IsGelatoPlaybackItem(BaseItem item) =>
@@ -683,7 +806,10 @@ public sealed class MediaSourceManagerDecorator(
 
         try
         {
-            _log.LogInformation("Probing stream for {Id} via {Url}", owner.Id, streamUrl);
+            var probeHost = Uri.TryCreate(streamUrl, UriKind.Absolute, out var probeUri)
+                ? probeUri.Host
+                : "invalid-url";
+            _log.LogInformation("Probing stream for {Id} via host={Host}", owner.Id, probeHost);
 
             var options = new MetadataRefreshOptions(directoryService)
             {

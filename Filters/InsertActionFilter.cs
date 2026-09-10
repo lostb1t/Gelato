@@ -1,6 +1,8 @@
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Dto;
+using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -11,6 +13,7 @@ public class InsertActionFilter(
     GelatoManager manager,
     IUserManager userManager,
     ILibraryManager libraryManager,
+    IDtoService dtoService,
     ILogger<InsertActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -96,7 +99,26 @@ public class InsertActionFilter(
         if (baseItem is not null)
         {
             ctx.ReplaceGuid(baseItem.Id);
-            manager.RemoveStremioMeta(guid);
+
+            // Moonfin 2.5.1 keeps the synthetic search id in its detail view
+            // model even after the user-scoped detail response contains the
+            // canonical Jellyfin id.  Retain the existing short-lived alias so
+            // the immediate PlaybackInfo request can resolve it through the
+            // existing-item path and redirect to the materialized item.
+
+            // Jellyfin's legacy user-scoped detail action can evaluate its
+            // user-library lookup before the newly inserted virtual item is
+            // visible to that cache. Return the canonical DTO directly for
+            // this detail request; playback actions still continue through
+            // Jellyfin and use the canonical ID.
+            if (ctx.GetActionName() is "GetItem" or "GetItemLegacy")
+            {
+                var dtoOptions = new DtoOptions { EnableImages = true, EnableUserData = true };
+                ctx.Result = new OkObjectResult(
+                    dtoService.GetBaseItemDto(baseItem, dtoOptions, user)
+                );
+                return;
+            }
         }
 
         await next();

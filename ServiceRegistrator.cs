@@ -35,6 +35,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
         services.AddSingleton<GelatoManager>();
+        services.AddSingleton<StreamHealthCache>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
         services.AddSingleton<GelatoStremioProviderFactory>();
@@ -78,6 +79,10 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         {
             client.BaseAddress = new Uri("https://api.introdb.app");
             client.Timeout = TimeSpan.FromSeconds(IntroDbClient.DefaultTimeoutSeconds);
+        });
+        services.AddHttpClient("GelatoPlaybackHealth", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(6);
         });
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
 
