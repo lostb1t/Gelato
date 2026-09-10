@@ -26,8 +26,9 @@ namespace Gelato.Services;
 /// The first start after installing a Gelato that keeps track has no previous version to compare
 /// against, and is treated the same way. Waiting for a change that may already have happened would
 /// miss precisely the people this exists for — the ones who upgraded Jellyfin without ever running
-/// the release that would have left a record. On an install that lost nothing the repair finds no
-/// detached watch state and returns immediately, so running it costs nothing.
+/// the release that would have left a record. On an install that lost nothing the repair finds
+/// nothing to re-import; rows parked earlier for items that are still here are looked at and left
+/// alone, so running it costs a few queries and changes nothing.
 /// </remarks>
 public sealed class UpgradeRepairService(
     IServerApplicationHost appHost,
@@ -109,8 +110,9 @@ public sealed class UpgradeRepairService(
             // change that has been and gone would help nobody: the people who need this most are
             // exactly the ones who never ran the release that would have left a record.
             //
-            // Running it regardless is safe. On an install that lost nothing there is no detached
-            // watch state, and the task returns without touching anything.
+            // Running it regardless is safe. On an install that lost nothing there is nothing to
+            // re-import, and whatever was parked earlier for items still in the library is left
+            // where it is.
             Remember(plugin, current);
 
             if (current.Major >= JellyfinMajorThatDeletesGelatoItems)

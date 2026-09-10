@@ -88,8 +88,8 @@ public sealed partial class RepairWatchStateTask(
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
     {
-        var parkedKeys = await LoadParkedKeysAsync(ct).ConfigureAwait(false);
-        if (parkedKeys.Count == 0)
+        var parked = await LoadParkedKeysAsync(ct).ConfigureAwait(false);
+        if (parked.Keys.Count == 0)
         {
             log.LogDebug("RepairWatchState: no detached watch state, nothing to do");
             progress.Report(100);
@@ -98,26 +98,33 @@ public sealed partial class RepairWatchStateTask(
 
         log.LogInformation(
             "RepairWatchState: {Keys} detached key(s) hold watch state",
-            parkedKeys.Count
+            parked.Keys.Count
         );
 
-        var reattached = await ReattachExistingAsync(parkedKeys, progress, ct).ConfigureAwait(false);
-
-        var movies = await ResurrectMissingMoviesAsync(parkedKeys, progress, ct)
+        var (reattached, alreadyHeld) = await ReattachExistingAsync(parked, progress, ct)
             .ConfigureAwait(false);
-        var series = await ResurrectMissingEpisodesAsync(parkedKeys, progress, ct)
+
+        var movies = await ResurrectMissingMoviesAsync(parked.Keys, progress, ct)
+            .ConfigureAwait(false);
+        var series = await ResurrectMissingEpisodesAsync(parked.Keys, progress, ct)
             .ConfigureAwait(false);
 
         log.LogInformation(
-            "RepairWatchState: reattached {Reattached} existing item(s), re-imported {Movies} movie(s) and the episodes of {Series} series",
+            "RepairWatchState: reattached {Reattached} existing item(s) ({AlreadyHeld} already held their state), re-imported {Movies} movie(s) and the episodes of {Series} series",
             reattached,
+            alreadyHeld,
             movies,
             series
         );
         progress.Report(100);
     }
 
-    private async Task<HashSet<string>> LoadParkedKeysAsync(CancellationToken ct)
+    /// <summary>
+    /// The parked rows worth restoring: every key, and which users hold state under each.
+    /// </summary>
+    private sealed record ParkedState(HashSet<string> Keys, ILookup<string, Guid> UsersByKey);
+
+    private async Task<ParkedState> LoadParkedKeysAsync(CancellationToken ct)
     {
         var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
         await using (db.ConfigureAwait(false))
@@ -135,11 +142,14 @@ public sealed partial class RepairWatchStateTask(
                     || e.Rating != null
                     || e.Likes != null
                 )
-                .Select(e => e.CustomDataKey)
+                .Select(e => new { e.CustomDataKey, e.UserId })
                 .ToListAsync(ct)
                 .ConfigureAwait(false);
 
-            return rows.ToHashSet(StringComparer.Ordinal);
+            return new ParkedState(
+                rows.Select(r => r.CustomDataKey).ToHashSet(StringComparer.Ordinal),
+                rows.ToLookup(r => r.CustomDataKey, r => r.UserId, StringComparer.Ordinal)
+            );
         }
     }
 
@@ -147,8 +157,16 @@ public sealed partial class RepairWatchStateTask(
     /// Phase one: hand parked rows back to items that are already in the library. Covers anyone who
     /// re-imported on a build that did not yet reattach on insert.
     /// </summary>
-    private async Task<int> ReattachExistingAsync(
-        HashSet<string> parkedKeys,
+    /// <remarks>
+    /// Jellyfin's reattach is a single update over every parked row matching the item's keys, so one
+    /// row whose user and key the item already holds fails the whole item with a unique constraint
+    /// violation. That is the normal state of a row parked long ago for an item that was re-added
+    /// and watched again, so it is checked for here instead of being logged as a failure: an item
+    /// that already holds every waiting row is skipped, and one that holds only some of them is
+    /// reported without the exception, since nothing can be reattached for it either way.
+    /// </remarks>
+    private async Task<(int Reattached, int AlreadyHeld)> ReattachExistingAsync(
+        ParkedState parked,
         IProgress<double> progress,
         CancellationToken ct
     )
@@ -181,44 +199,86 @@ public sealed partial class RepairWatchStateTask(
             .ToList();
 
         var reattached = 0;
+        var alreadyHeld = 0;
         var processed = 0;
 
-        foreach (var item in items)
+        var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using (db.ConfigureAwait(false))
         {
-            ct.ThrowIfCancellationRequested();
-
-            // Only touch items that actually have something waiting, so a healthy library costs one
-            // query rather than a transaction per item.
-            if (item.GetUserDataKeys().Any(parkedKeys.Contains))
+            foreach (var item in items)
             {
-                try
-                {
-                    await persistence.ReattachUserDataAsync(item, ct).ConfigureAwait(false);
-                    reattached++;
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    // The item already holds a row for that key and Jellyfin does not resolve the
-                    // collision. What is on the item is newer, so leaving it alone is correct.
-                    log.LogWarning(
-                        ex,
-                        "RepairWatchState: could not reattach {Name} ({Id})",
-                        item.Name,
-                        item.Id
-                    );
-                }
-            }
+                ct.ThrowIfCancellationRequested();
 
-            if (++processed % 50 == 0)
-                progress.Report(processed * ReattachShare / items.Count);
+                // Only touch items that actually have something waiting, so a healthy library costs
+                // one query rather than a transaction per item.
+                var waiting = item
+                    .GetUserDataKeys()
+                    .SelectMany(key => parked.UsersByKey[key].Select(user => (user, key)))
+                    .ToHashSet();
+
+                if (waiting.Count > 0)
+                {
+                    var held = await db
+                        .UserData.AsNoTracking()
+                        .Where(e => e.ItemId == item.Id)
+                        .Select(e => new { e.UserId, e.CustomDataKey })
+                        .ToListAsync(ct)
+                        .ConfigureAwait(false);
+                    var colliding = waiting.Count(w =>
+                        held.Exists(h => h.UserId == w.user && h.CustomDataKey == w.key)
+                    );
+
+                    if (colliding == waiting.Count)
+                    {
+                        // What is on the item is newer than the parked row, so leaving it is right.
+                        log.LogDebug(
+                            "RepairWatchState: {Name} ({Id}) already holds the {Rows} parked row(s), leaving them",
+                            item.Name,
+                            item.Id,
+                            waiting.Count
+                        );
+                        alreadyHeld++;
+                    }
+                    else if (colliding > 0)
+                    {
+                        log.LogWarning(
+                            "RepairWatchState: cannot reattach {Name} ({Id}): {Colliding} of {Rows} parked row(s) collide with rows the item already holds, and Jellyfin reattaches all or nothing",
+                            item.Name,
+                            item.Id,
+                            colliding,
+                            waiting.Count
+                        );
+                    }
+                    else
+                    {
+                        try
+                        {
+                            await persistence.ReattachUserDataAsync(item, ct).ConfigureAwait(false);
+                            reattached++;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            log.LogWarning(
+                                ex,
+                                "RepairWatchState: could not reattach {Name} ({Id})",
+                                item.Name,
+                                item.Id
+                            );
+                        }
+                    }
+                }
+
+                if (++processed % 50 == 0)
+                    progress.Report(processed * ReattachShare / items.Count);
+            }
         }
 
         progress.Report(ReattachShare);
-        return reattached;
+        return (reattached, alreadyHeld);
     }
 
     /// <summary>
