@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.16.1] - 2026-09-11\n\n### 🐛 Bug Fixes\n\n- Protect the library during the Jellyfin 12 upgrade (#204)\n",
+        "checksum": "bc5e9f1b7f3f4ac15f03f2b9904d23aa",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.16.1/gelato_0.26.16.1.zip",
+        "targetAbi": "10.11.6.0",
+        "timestamp": "2026-09-11T06:34:05Z",
+        "version": "0.26.16.1"
+      },
+      {
         "changelog": "## [0.26.16.0] - 2026-08-29\n\n### 🚀 Features\n\n- Log warning if SaveSubtitlesWithMedia is enabled\n\n### 🐛 Bug Fixes\n\n- Keep physical local playback outside Gelato probes (#190)\n- Keep search results when a meta has a blank imdb_id (#196)\n- Probe a stream without running the whole metadata pipeline (#198)\n",
         "checksum": "677882dbcd70a7646a8e6c728130ab19",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.16.0/gelato_0.26.16.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-09T19:41:32Z",
         "version": "0.26.8.0"
-      },
-      {
-        "changelog": "## [0.26.7.4] - 2026-04-08\n\n### 🐛 Bug Fixes\n\n- Allow number and string for realeaseinfo\n",
-        "checksum": "e8ef7143d62cdd8f84d0f3ffae32fe54",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.7.4/gelato_0.26.7.4.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-08T15:31:06Z",
-        "version": "0.26.7.4"
       }
     ]
   }
