@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.17.0] - 2026-09-11\n\n### 🚀 Features\n\n- Jellyfin 12 compatibility (#202)\n",
+        "checksum": "dab0e8b98771d5e1f82884fc1fd9a0cd",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.17.0/gelato_0.26.17.0.zip",
+        "targetAbi": "12.0.0.0",
+        "timestamp": "2026-09-11T09:39:23Z",
+        "version": "0.26.17.0"
+      },
+      {
         "changelog": "## [0.26.16.1] - 2026-09-11\n\n### 🐛 Bug Fixes\n\n- Protect the library during the Jellyfin 12 upgrade (#204)\n",
         "checksum": "bc5e9f1b7f3f4ac15f03f2b9904d23aa",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.16.1/gelato_0.26.16.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-10T09:27:46Z",
         "version": "0.26.9.0"
-      },
-      {
-        "changelog": "## [0.26.8.0] - 2026-04-09\n\n### 🚀 Features\n\n- Lazy loading of images (#144)\n",
-        "checksum": "b925b862d6e9d39d63ab12a7b426a9d1",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.8.0/gelato_0.26.8.0.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-09T19:41:32Z",
-        "version": "0.26.8.0"
       }
     ]
   }
