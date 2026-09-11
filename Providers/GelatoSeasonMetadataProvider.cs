@@ -1,3 +1,4 @@
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
@@ -6,9 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Providers;
 
-public sealed class GelatoSeasonMetadataProvider(ILogger<GelatoSeasonMetadataProvider> log)
-    : IRemoteMetadataProvider<Season, SeasonInfo>,
-        IHasOrder
+public sealed class GelatoSeasonMetadataProvider(
+    ILogger<GelatoSeasonMetadataProvider> log,
+    IHttpClientFactory http
+) : IRemoteMetadataProvider<Season, SeasonInfo>, IHasOrder
 {
     public string Name => "Gelato";
     public int Order => 0;
@@ -69,7 +71,7 @@ public sealed class GelatoSeasonMetadataProvider(ILogger<GelatoSeasonMetadataPro
     public Task<HttpResponseMessage> GetImageResponse(
         string url,
         CancellationToken cancellationToken
-    ) => throw new NotImplementedException();
+    ) => http.CreateClient(NamedClient.Default).GetAsync(url, cancellationToken);
 
     private static Season MapSeason(StremioMeta seriesMeta, string? seasonName, int? seasonNumber)
     {

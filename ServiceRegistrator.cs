@@ -97,6 +97,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             () => (ProviderManagerDecorator)sp.GetRequiredService<IProviderManager>()));
         services.AddSingleton(sp => new Lazy<ILibraryManager>(
             sp.GetRequiredService<ILibraryManager>));
+        services.AddSingleton(sp => new Lazy<IProviderManager>(
+            sp.GetRequiredService<IProviderManager>));
         services.AddSingleton(sp => new Lazy<ISubtitleManager>(
             sp.GetRequiredService<ISubtitleManager>
         ));

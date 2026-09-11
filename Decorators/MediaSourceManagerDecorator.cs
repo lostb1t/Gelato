@@ -44,7 +44,7 @@ public sealed class MediaSourceManagerDecorator(
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
-    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders
+    Lazy<IProviderManager> providerManager
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -64,8 +64,23 @@ public sealed class MediaSourceManagerDecorator(
     private readonly Lazy<SubtitleProvider> _subtitleProvider = subtitleProvider;
 
     //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
-    private readonly ICustomMetadataProvider<Video>? _probeProvider =
-        videoProbeProviders.FirstOrDefault(p => p.Name == "Probe Provider");
+    // Lazy: ProviderManager depends on ISubtitleManager, which depends on
+    // IMediaSourceManager - this decorator.
+    private readonly Lazy<IProviderManager> _providerManager = providerManager;
+
+    // Jellyfin builds its metadata providers by type scanning and hands them to
+    // IProviderManager; none are registered in the container. So the probe
+    // provider has to be looked up there - injecting
+    // IEnumerable<ICustomMetadataProvider<Video>> always resolves to an empty list.
+    private ICustomMetadataProvider<Video>? FindProbeProvider(Video owner) =>
+        _providerManager
+            .Value.GetMetadataProviders<Video>(
+                owner,
+                _libraryManager.GetLibraryOptions(owner),
+                includeDisabled: true
+            )
+            .OfType<ICustomMetadataProvider<Video>>()
+            .FirstOrDefault(p => p.Name == "Probe Provider");
 
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
@@ -689,7 +704,8 @@ public sealed class MediaSourceManagerDecorator(
                 MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
             };
 
-            if (_probeProvider is not null)
+            var probeProvider = FindProbeProvider(owner);
+            if (probeProvider is not null)
             {
                 // Call the ffprobe provider directly instead of going through
                 // RefreshMetadata.
@@ -707,16 +723,20 @@ public sealed class MediaSourceManagerDecorator(
                 // here - read the container's streams - and nothing else. The
                 // caller already persists the result with
                 // UpdateToRepositoryAsync and runs segment providers itself, so
-                // no other part of the pipeline is needed.
-                //
-                // This field was already injected upstream and never used.
-                await _probeProvider.FetchAsync(owner, options, ct).ConfigureAwait(false);
+                // no other part of the pipeline is needed. It also keeps image
+                // fetchers away from the item while its path points at the
+                // temporary .strm file.
+                await probeProvider.FetchAsync(owner, options, ct).ConfigureAwait(false);
             }
             else
             {
                 // No probe provider resolved - fall back to the old path rather
-                // than silently skipping the probe.
-                _log.LogDebug("No probe provider available, falling back to RefreshMetadata");
+                // than silently skipping the probe. Logged at information: this
+                // path used to be taken on every probe without anyone noticing.
+                _log.LogInformation(
+                    "No probe provider available for {Id}, falling back to RefreshMetadata",
+                    owner.Id
+                );
                 await owner.RefreshMetadata(options, ct).ConfigureAwait(false);
             }
         }
