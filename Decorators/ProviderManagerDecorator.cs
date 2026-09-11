@@ -192,6 +192,9 @@ public sealed class ProviderManagerDecorator(
     public IEnumerable<IMetadataProvider<T>> GetMetadataProviders<T>(BaseItem item, LibraryOptions libraryOptions)
         where T : BaseItem => inner.GetMetadataProviders<T>(item, libraryOptions);
 
+    public IEnumerable<IMetadataProvider<T>> GetMetadataProviders<T>(BaseItem item, LibraryOptions libraryOptions, bool includeDisabled)
+        where T : BaseItem => inner.GetMetadataProviders<T>(item, libraryOptions, includeDisabled);
+
     public IEnumerable<IMetadataSaver> GetMetadataSavers(BaseItem item, LibraryOptions libraryOptions) =>
         inner.GetMetadataSavers(item, libraryOptions);
 

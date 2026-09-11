@@ -1,4 +1,3 @@
-using System.Globalization;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
@@ -69,13 +68,9 @@ public sealed class CollectionManagerDecorator(
         for (var i = 0; i < itemList.Count; i++)
         {
             var item = itemList[i];
-            newChildren[originalLen + i] = item.IsGelato()
-                ? new LinkedChild
-                {
-                    LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                    Type = LinkedChildType.Manual,
-                }
-                : LinkedChild.Create(item);
+            // Jellyfin 12's LinkedChild.Create links by ItemId, so Gelato's remote
+            // items no longer need the hand-built LibraryItemId workaround.
+            newChildren[originalLen + i] = LinkedChild.Create(item);
 
             log.LogDebug(
                 "Adding item {Id} (Gelato={IsGelato}) to collection {Name}",
@@ -103,6 +98,9 @@ public sealed class CollectionManagerDecorator(
 
     public Task RemoveFromCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) =>
         inner.RemoveFromCollectionAsync(collectionId, itemIds);
+
+    public IEnumerable<BoxSet> GetCollectionsContainingItem(User user, Guid itemId) =>
+        inner.GetCollectionsContainingItem(user, itemId);
 
     public IEnumerable<BaseItem> CollapseItemsWithinBoxSets(
         IEnumerable<BaseItem> items,

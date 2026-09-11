@@ -178,6 +178,14 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     /// <inheritdoc />
     public ValueTask<bool> Supports(BaseItem item) => ValueTask.FromResult(item is Episode);
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// IntroDB segments come from a remote API and nothing is extracted to disk,
+    /// so there is no per-item data to clean up.
+    /// </remarks>
+    public Task CleanupExtractedData(Guid itemId, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
     private bool TryGetImdbId(Episode episode, out string imdbId)
     {
         if (

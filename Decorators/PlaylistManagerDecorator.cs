@@ -1,4 +1,3 @@
-using System.Globalization;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -39,6 +38,7 @@ public sealed class PlaylistManagerDecorator(
     public async Task AddItemToPlaylistAsync(
         Guid playlistId,
         IReadOnlyCollection<Guid> itemIds,
+        int? position,
         Guid userId
     )
     {
@@ -67,19 +67,11 @@ public sealed class PlaylistManagerDecorator(
         if (toAdd.Count == 0)
             return;
 
-        var newChildren = toAdd
-            .Select(item =>
-                item.IsGelato()
-                    ? new LinkedChild
-                    {
-                        LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                        Type = LinkedChildType.Manual,
-                    }
-                    : LinkedChild.Create(item)
-            )
-            .ToArray();
+        // Jellyfin 12's LinkedChild.Create links by ItemId, so Gelato's remote
+        // items no longer need the hand-built LibraryItemId workaround.
+        var newChildren = toAdd.Select(LinkedChild.Create).ToArray();
 
-        playlist.LinkedChildren = [.. playlist.LinkedChildren, .. newChildren];
+        playlist.LinkedChildren = Insert(playlist.LinkedChildren, newChildren, position);
         playlist.DateLastMediaAdded = DateTime.UtcNow;
 
         await playlist
@@ -94,6 +86,24 @@ public sealed class PlaylistManagerDecorator(
             new MetadataRefreshOptions(directoryService) { ForceSave = true },
             RefreshPriority.High
         );
+    }
+
+    private static LinkedChild[] Insert(
+        LinkedChild[] existing,
+        LinkedChild[] additions,
+        int? position
+    )
+    {
+        if (position is not { } index)
+            return [.. existing, .. additions];
+
+        if (index <= 0)
+            return [.. additions, .. existing];
+
+        if (index >= existing.Length)
+            return [.. existing, .. additions];
+
+        return [.. existing[0..index], .. additions, .. existing[index..existing.Length]];
     }
 
     public Task RemoveItemFromPlaylistAsync(string playlistId, IEnumerable<string> entryIds) =>

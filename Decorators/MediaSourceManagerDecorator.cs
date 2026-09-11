@@ -101,9 +101,7 @@ public sealed class MediaSourceManagerDecorator(
 
         var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
         var video = item as Video;
-        var cacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
-            ? id.ToString()
-            : item.Id.ToString();
+        var cacheKey = (video?.PrimaryVersionId ?? item.Id).ToString();
 
         if (userId != Guid.Empty)
         {
