@@ -1,3 +1,4 @@
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
@@ -8,9 +9,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Gelato.Providers;
 
-public sealed class GelatoImageProvider(ILogger<GelatoImageProvider> log)
-    : IRemoteImageProvider,
-        IHasOrder
+public sealed class GelatoImageProvider(
+    ILogger<GelatoImageProvider> log,
+    IHttpClientFactory http
+) : IRemoteImageProvider, IHasOrder
 {
     public string Name => "Gelato";
     public int Order => 0;
@@ -57,7 +59,7 @@ public sealed class GelatoImageProvider(ILogger<GelatoImageProvider> log)
     public Task<HttpResponseMessage> GetImageResponse(
         string url,
         CancellationToken cancellationToken
-    ) => throw new NotImplementedException();
+    ) => http.CreateClient(NamedClient.Default).GetAsync(url, cancellationToken);
 
     private static IEnumerable<RemoteImageInfo> BuildImages(StremioMeta meta)
     {

@@ -1,5 +1,6 @@
 using Gelato.Config;
 using Jellyfin.Data.Enums;
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Providers;
@@ -11,7 +12,8 @@ namespace Gelato.Providers;
 
 public sealed class GelatoMovieMetadataProvider(
     ILogger<GelatoMovieMetadataProvider> log,
-    GelatoManager manager
+    GelatoManager manager,
+    IHttpClientFactory http
 ) : IRemoteMetadataProvider<Movie, MovieInfo>, IHasOrder
 {
     public string Name => "Gelato";
@@ -91,7 +93,7 @@ public sealed class GelatoMovieMetadataProvider(
     public Task<HttpResponseMessage> GetImageResponse(
         string url,
         CancellationToken cancellationToken
-    ) => throw new NotImplementedException();
+    ) => http.CreateClient(NamedClient.Default).GetAsync(url, cancellationToken);
 
     private static void MapPeople(StremioMeta meta, MetadataResult<Movie> result)
     {

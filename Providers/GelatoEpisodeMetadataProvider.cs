@@ -1,3 +1,4 @@
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
@@ -8,7 +9,8 @@ namespace Gelato.Providers;
 
 public sealed class GelatoEpisodeMetadataProvider(
     ILogger<GelatoEpisodeMetadataProvider> log,
-    GelatoManager manager
+    GelatoManager manager,
+    IHttpClientFactory http
 ) : IRemoteMetadataProvider<Episode, EpisodeInfo>, IHasOrder
 {
     public string Name => "Gelato";
@@ -97,5 +99,5 @@ public sealed class GelatoEpisodeMetadataProvider(
     public Task<HttpResponseMessage> GetImageResponse(
         string url,
         CancellationToken cancellationToken
-    ) => throw new NotImplementedException();
+    ) => http.CreateClient(NamedClient.Default).GetAsync(url, cancellationToken);
 }
