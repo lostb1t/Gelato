@@ -4,9 +4,9 @@
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Http;
 
@@ -32,13 +32,6 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     private readonly IHttpContextAccessor _http =
         http ?? throw new ArgumentNullException(nameof(http));
-
-    public void DeleteItem(params IReadOnlyList<Guid> ids) => inner.DeleteItem(ids);
-
-    public void SaveItems(IReadOnlyList<BaseItem> items, CancellationToken cancellationToken) =>
-        inner.SaveItems(items, cancellationToken);
-
-    public void SaveImages(BaseItem item) => inner.SaveImages(item);
 
     public BaseItem RetrieveItem(Guid id) => inner.RetrieveItem(id);
 
@@ -84,10 +77,14 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
             StringComparer.OrdinalIgnoreCase
         );
         var isTargetedLookup =
-            filter.ItemIds.Length > 0 || (ctx is not null && ctx.IsSingleItemList());
+            ctx is not null
+            && ((filter.ItemIds.Length > 0 && ctx.HasExplicitItemIds()) || ctx.IsSingleItemList());
 
         // Targeted ItemIds lookups are generally internal existence/permission checks.
         // Keep those untouched so the caller gets strict results from the underlying query.
+        // The ids must have come from the caller: Jellyfin 12 turns a searchTerm into a list of
+        // ItemIds before querying, so treating any populated ItemIds as targeted would let every
+        // search return the hidden stream rows alongside the item they belong to.
         if (isTargetedLookup)
             return filter;
 
@@ -126,17 +123,6 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         CollectionType collectionType
     ) => inner.GetLatestItemList(filter, collectionType);
 
-    public IReadOnlyList<string> GetNextUpSeriesKeys(
-        InternalItemsQuery filter,
-        DateTime dateCutoff
-    ) => inner.GetNextUpSeriesKeys(filter, dateCutoff);
-
-    public void UpdateInheritedValues() => inner.UpdateInheritedValues();
-
-    public int GetCount(InternalItemsQuery filter) => inner.GetCount(filter);
-
-    public ItemCounts GetItemCounts(InternalItemsQuery filter) => inner.GetItemCounts(filter);
-
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetGenres(
         InternalItemsQuery filter
     ) => inner.GetGenres(filter);
@@ -169,15 +155,16 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     public IReadOnlyList<string> GetAllArtistNames() => inner.GetAllArtistNames();
 
+    public IReadOnlyList<string> GetMediaStreamLanguages(
+        InternalItemsQuery filter,
+        MediaStreamType mediaStreamType
+    ) => inner.GetMediaStreamLanguages(filter, mediaStreamType);
+
+    public QueryFiltersLegacy GetQueryFiltersLegacy(InternalItemsQuery filter) =>
+        inner.GetQueryFiltersLegacy(filter);
+
     public Task<bool> ItemExistsAsync(Guid id) => inner.ItemExistsAsync(id);
 
     public bool GetIsPlayed(User user, Guid id, bool recursive) =>
         inner.GetIsPlayed(user, id, recursive);
-
-    public IReadOnlyDictionary<string, MusicArtist[]> FindArtists(
-        IReadOnlyList<string> artistNames
-    ) => inner.FindArtists(artistNames);
-
-    public Task ReattachUserDataAsync(BaseItem item, CancellationToken cancellationToken) =>
-        inner.ReattachUserDataAsync(item, cancellationToken);
 }

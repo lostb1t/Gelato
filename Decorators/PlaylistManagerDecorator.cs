@@ -1,4 +1,3 @@
-using System.Globalization;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -39,6 +38,7 @@ public sealed class PlaylistManagerDecorator(
     public async Task AddItemToPlaylistAsync(
         Guid playlistId,
         IReadOnlyCollection<Guid> itemIds,
+        int? position,
         Guid userId
     )
     {
@@ -67,19 +67,9 @@ public sealed class PlaylistManagerDecorator(
         if (toAdd.Count == 0)
             return;
 
-        var newChildren = toAdd
-            .Select(item =>
-                item.IsGelato()
-                    ? new LinkedChild
-                    {
-                        LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                        Type = LinkedChildType.Manual,
-                    }
-                    : LinkedChild.Create(item)
-            )
-            .ToArray();
+        var newChildren = toAdd.Select(LinkedChild.Create).ToArray();
 
-        playlist.LinkedChildren = [.. playlist.LinkedChildren, .. newChildren];
+        playlist.LinkedChildren = Insert(playlist.LinkedChildren, newChildren, position);
         playlist.DateLastMediaAdded = DateTime.UtcNow;
 
         await playlist
@@ -94,6 +84,23 @@ public sealed class PlaylistManagerDecorator(
             new MetadataRefreshOptions(directoryService) { ForceSave = true },
             RefreshPriority.High
         );
+    }
+
+    // Mirrors Jellyfin's PlaylistManager.AddToPlaylistInternal: null appends, an out of range
+    // position clamps to the nearest end.
+    private static LinkedChild[] Insert(
+        LinkedChild[] existing,
+        LinkedChild[] additions,
+        int? position
+    )
+    {
+        if (position is null || position >= existing.Length)
+            return [.. existing, .. additions];
+
+        if (position <= 0)
+            return [.. additions, .. existing];
+
+        return [.. existing[..position.Value], .. additions, .. existing[position.Value..]];
     }
 
     public Task RemoveItemFromPlaylistAsync(string playlistId, IEnumerable<string> entryIds) =>

@@ -372,6 +372,17 @@ public static class ActionContextExtensions
     public static bool IsSingleItemList(this ActionExecutingContext ctx) =>
         ctx.HttpContext.IsSingleItemList();
 
+    /// <summary>
+    /// Whether the caller itself asked for specific item ids.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin 12 resolves a searchTerm to matching ids before it queries the repository, so
+    /// InternalItemsQuery.ItemIds is populated for ordinary searches too. Only the query string
+    /// distinguishes a caller-supplied id lookup from one the search manager produced.
+    /// </remarks>
+    public static bool HasExplicitItemIds(this HttpContext ctx) =>
+        ctx.Request.Query.ContainsKey("ids");
+
     public static bool TryGetRouteGuid(this ActionExecutingContext ctx, out Guid value)
     {
         value = Guid.Empty;
@@ -499,7 +510,7 @@ public static class BaseItemExtensions
     public static bool IsPrimaryVersion(this BaseItem item)
     {
         return !item.HasStreamTag()
-            && string.IsNullOrWhiteSpace((item as Video)?.PrimaryVersionId)
+            && (item as Video)?.PrimaryVersionId is null
             && !item.IsVirtualItem;
     }
 

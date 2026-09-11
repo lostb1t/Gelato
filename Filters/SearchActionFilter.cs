@@ -28,7 +28,10 @@ public class SearchActionFilter(
             cfg.DisableSearch
             || !ctx.IsApiSearchAction()
             || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
-            || !await cfg.Stremio.IsReady()
+            // GetConfig falls back to a bare configuration when the Gelato url is unset,
+            // which leaves Stremio null — let the request through untouched.
+            || cfg.Stremio is not { } stremio
+            || !await stremio.IsReady()
         )
         {
             await next();
@@ -167,6 +170,12 @@ public class SearchActionFilter(
 
         var dtos = new List<BaseItemDto>(metas.Count);
 
+        // The movie and series catalogs are searched separately and their results concatenated,
+        // but an addon may return the same title under both — a series showing up in the movie
+        // results, say. The ids are deterministic, so the same title yields the same id twice
+        // and the client renders it twice. Keep the first occurrence and drop later repeats.
+        var seen = new HashSet<Guid>();
+
         foreach (var meta in metas)
         {
             var baseItem = manager.IntoBaseItem(meta);
@@ -176,6 +185,10 @@ public class SearchActionFilter(
             var dto = dtoService.GetBaseItemDto(baseItem, options);
             var stremioUri = StremioUri.FromBaseItem(baseItem);
             dto.Id = stremioUri.ToGuid();
+
+            if (!seen.Add(dto.Id))
+                continue;
+
             dtos.Add(dto);
 
             manager.SaveStremioMeta(dto.Id, meta);

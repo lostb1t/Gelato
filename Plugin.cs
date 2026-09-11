@@ -83,27 +83,33 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         try
         {
-            return UserConfigs.GetOrAdd(
+            var cfg = UserConfigs.GetOrAdd(
                 userId,
                 _ =>
                 {
-                    var cfg = Instance?.Configuration;
+                    var built = Instance?.Configuration;
                     if (userId != Guid.Empty)
                     {
                         var userConfig = Instance?.Configuration.UserConfigs.FirstOrDefault(u =>
                             u.UserId == userId
                         );
-                        cfg =
+                        built =
                             userConfig?.ApplyOverrides(Instance?.Configuration)
                             ?? Instance?.Configuration;
                     }
-                    var stremio = _stremioFactory.Create(cfg);
-                    cfg.Stremio = stremio;
-                    cfg.MovieFolder = _manager.TryGetMovieFolder(cfg);
-                    cfg.SeriesFolder = _manager.TryGetSeriesFolder(cfg);
-                    return cfg;
+                    built.Stremio = _stremioFactory.Create(built);
+                    return built;
                 }
             );
+
+            // Resolved on every call rather than once with the cached entry. The libraries
+            // backing these paths are usually added after Gelato is first configured, and a
+            // null cached from before they existed would never recover on its own — the
+            // symptom being imports that quietly do nothing until the server is restarted.
+            // GelatoManager memoizes the underlying lookup, so this stays cheap.
+            cfg.MovieFolder = _manager.TryGetMovieFolder(cfg);
+            cfg.SeriesFolder = _manager.TryGetSeriesFolder(cfg);
+            return cfg;
         }
         catch (Exception ex)
         {

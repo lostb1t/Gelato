@@ -11,6 +11,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.IO;
@@ -23,12 +24,15 @@ public sealed class GelatoManager(
     ILoggerFactory loggerFactory,
     IProviderManager provider,
     GelatoItemRepository repo,
+    IItemPersistenceService persistence,
     IFileSystem fileSystem,
     IMemoryCache memoryCache,
     IServerConfigurationManager serverConfig,
     ILibraryManager libraryManager,
     IDirectoryService directoryService,
-    IApplicationPaths appPaths
+    IApplicationPaths appPaths,
+    IUserManager userManager,
+    IUserDataManager userDataManager
 )
 {
     public const string StreamTag = "gelato-stream";
@@ -199,6 +203,11 @@ public sealed class GelatoManager(
         return TryGetFolder(cfg.SeriesPath);
     }
 
+    // GetConfig asks for the root folders on every request, so the lookup is memoized.
+    // The window is deliberately short: libraries can be added, moved or removed at any
+    // time, and the answer must not be pinned for the lifetime of the process.
+    private static readonly TimeSpan FolderCacheTtl = TimeSpan.FromSeconds(10);
+
     private Folder? TryGetFolder(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -206,10 +215,21 @@ public sealed class GelatoManager(
             return null;
         }
 
+        var key = $"rootfolder:{path}";
+        if (memoryCache.TryGetValue(key, out Folder? cached))
+        {
+            return cached;
+        }
+
         SeedFolder(path);
-        return repo.GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
+        var folder = repo.GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
+
+        // Misses are cached too, so a configured-but-not-yet-added library does not cost
+        // a directory probe and a query on every request while it is being set up.
+        memoryCache.Set(key, folder, FolderCacheTtl);
+        return folder;
     }
 
     private BaseItem? Exist(StremioMeta meta, User? user = null)
@@ -352,7 +372,7 @@ public sealed class GelatoManager(
 
         if (mediaType == StremioMediaType.Movie)
         {
-            baseItem = SaveItem(baseItem, parent);
+            baseItem = await SaveItemAsync(baseItem, parent, ct).ConfigureAwait(false);
             if (baseItem is null)
             {
                 _log.LogWarning("InsertMeta: failed to create baseItem");
@@ -634,7 +654,7 @@ public sealed class GelatoManager(
         }
 
         //upsertedStreams = SaveItems(upsertedStreams, (Folder)primary.GetParent()).Cast<Video>().ToList();
-        repo.SaveItems(upsertedStreams, ct);
+        persistence.SaveItems(upsertedStreams, ct);
 
         var newIds = new HashSet<Guid>(upsertedStreams.Select(x => x.Id));
         var stale = existingByGuid
@@ -658,7 +678,7 @@ public sealed class GelatoManager(
 
         try
         {
-            //repo.DeleteItem([.. toDelete.Select(f => f.Id)]);
+            //persistence.DeleteItem([.. toDelete.Select(f => f.Id)]);
         }
         catch
         {
@@ -672,7 +692,7 @@ public sealed class GelatoManager(
             }
         }
 
-        repo.SaveItems(toSave, ct);
+        persistence.SaveItems(toSave, ct);
         upsertedStreams.Add(video);
 
         stopwatch.Stop();
@@ -767,6 +787,7 @@ public sealed class GelatoManager(
                 await tmpSeries.RefreshMetadata(options, ct).ConfigureAwait(false);
                 seriesRootFolder.AddChild(tmpSeries);
                 await tmpSeries.UpdateToRepositoryAsync(ItemUpdateType.MetadataImport, ct);
+                await ReattachWatchStateAsync([tmpSeries], ct).ConfigureAwait(false);
                 series = tmpSeries;
             }
             else
@@ -971,10 +992,16 @@ public sealed class GelatoManager(
         }
 
         if (newSeasons.Count > 0)
-            repo.SaveItems(newSeasons, ct);
+        {
+            persistence.SaveItems(newSeasons, ct);
+            await ReattachWatchStateAsync(newSeasons, ct).ConfigureAwait(false);
+        }
 
         if (allNewEpisodes.Count > 0)
-            repo.SaveItems(allNewEpisodes, ct);
+        {
+            persistence.SaveItems(allNewEpisodes, ct);
+            await ReattachWatchStateAsync(allNewEpisodes, ct).ConfigureAwait(false);
+        }
 
         stopwatch.Stop();
 
@@ -1108,7 +1135,7 @@ public sealed class GelatoManager(
             if (!chunkResults.IsEmpty)
             {
                 var toSave = chunkResults.ToList();
-                repo.SaveItems(toSave, cancellationToken);
+                persistence.SaveItems(toSave, cancellationToken);
                 totalSaved += toSave.Count;
             }
         }
@@ -1278,7 +1305,7 @@ public sealed class GelatoManager(
 
                     // Mark as synced so we skip on future runs
                     series.Tags = [.. (series.Tags ?? []), TreeSyncedTag];
-                    repo.SaveItems([series], ct);
+                    persistence.SaveItems([series], ct);
                 }
             }
             catch (Exception ex)
@@ -1386,7 +1413,7 @@ public sealed class GelatoManager(
         series.Tags = series
             .Tags?.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        repo.SaveItems([series], ct);
+        persistence.SaveItems([series], ct);
     }
 
     private void CleanVirtualTreeItems(CancellationToken ct)
@@ -1404,12 +1431,178 @@ public sealed class GelatoManager(
         }
     }
 
-    private BaseItem? SaveItem(BaseItem item, Folder parent)
+    /// <summary>
+    /// Clears the watch state of items that are about to be purged.
+    /// </summary>
+    /// <remarks>
+    /// Only the purge uses this. Ordinary deletion leaves watch state alone, the way Jellyfin does
+    /// for every item: the rows are parked rather than deleted, and come back if the item does. A
+    /// purge is the one place where that is the wrong answer, because "remove all gelato items" is
+    /// asking for a clean slate and the next catalog import would otherwise hand every play position
+    /// straight back.
+    ///
+    /// The rows are zeroed rather than deleted, which needs no database access: SaveUserData writes
+    /// one row per user data key, so what gets parked on deletion carries nothing.
+    ///
+    /// Cancellation is checked before each item. Items already cleared when the purge is cancelled
+    /// stay cleared and undeleted; running the purge again finishes the job.
+    /// </remarks>
+    public void ForgetWatchState(IEnumerable<BaseItem> items, CancellationToken ct)
     {
-        return SaveItems([item], parent).FirstOrDefault();
+        var users = userManager.GetUsers().ToList();
+        if (users.Count == 0)
+        {
+            return;
+        }
+
+        var cleared = 0;
+        var itemCount = 0;
+
+        foreach (var item in items)
+        {
+            ct.ThrowIfCancellationRequested();
+            itemCount++;
+
+            foreach (var user in users)
+            {
+                try
+                {
+                    if (userDataManager.GetUserData(user, item) is not { } data || IsBlank(data))
+                    {
+                        continue;
+                    }
+
+                    data.Played = false;
+                    data.PlayCount = 0;
+                    data.PlaybackPositionTicks = 0;
+                    data.IsFavorite = false;
+                    data.LastPlayedDate = null;
+                    data.Likes = null;
+                    data.Rating = null;
+                    data.AudioStreamIndex = null;
+                    data.SubtitleStreamIndex = null;
+
+                    userDataManager.SaveUserData(
+                        user,
+                        item,
+                        data,
+                        UserDataSaveReason.UpdateUserData,
+                        ct
+                    );
+                    cleared++;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Never let this block the deletion the user asked for.
+                    _log.LogWarning(
+                        ex,
+                        "Could not clear watch state for {Name} ({Id})",
+                        item.Name,
+                        item.Id
+                    );
+                }
+            }
+        }
+
+        if (cleared > 0)
+        {
+            // One row per item and user, so this is not an item count.
+            _log.LogInformation(
+                "Cleared {Rows} watch state row(s) for {Items} item(s) across {Users} user(s) being deleted",
+                cleared,
+                itemCount,
+                users.Count
+            );
+        }
     }
 
-    private List<BaseItem> SaveItems(IEnumerable<BaseItem> items, Folder parent)
+    private static bool IsBlank(UserItemData data) =>
+        !data.Played
+        && data.PlayCount == 0
+        && data.PlaybackPositionTicks == 0
+        && !data.IsFavorite
+        && data.LastPlayedDate is null
+        && data.Likes is null
+        && data.Rating is null;
+
+    /// <summary>
+    /// Reattaches watch state that Jellyfin parked on the detached-user-data placeholder the last
+    /// time these items were removed.
+    /// </summary>
+    /// <remarks>
+    /// Deleting an item does not delete its user data: Jellyfin moves the rows onto a placeholder
+    /// item and stamps a retention date. It reattaches them again from
+    /// <c>MetadataService.SaveItemAsync</c>, but only on an item's very first refresh
+    /// (<c>DateLastRefreshed == DateTime.MinValue</c>). Gelato writes items straight through
+    /// <see cref="IItemPersistenceService"/> with <c>DateLastRefreshed</c> already stamped, so that
+    /// hook never fires for us — which is why a bulk removal (the Jellyfin 12 upgrade migration,
+    /// <c>PurgeGelatoTask</c>) used to leave every resume position, played flag and favourite
+    /// orphaned even after the catalogs were re-imported.
+    ///
+    /// Rows are matched on user data keys — the imdb/tmdb/tvdb ids, falling back to the item id —
+    /// and Gelato item ids are a deterministic hash of path and type, so a re-imported item
+    /// reproduces the exact keys it had before it was removed.
+    /// </remarks>
+    private async Task ReattachWatchStateAsync(IEnumerable<BaseItem> items, CancellationToken ct)
+    {
+        var reattached = 0;
+
+        foreach (var item in items)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Stream rows copy the provider ids of the item they hang off, so they resolve to the
+            // same user data keys. Reattaching onto one would move the watch state to a row the
+            // user never sees.
+            if (item.IsStream())
+                continue;
+
+            var before = item.UserData?.Count ?? 0;
+
+            try
+            {
+                await persistence.ReattachUserDataAsync(item, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Jellyfin does not resolve key collisions here, so if the item already holds a row
+                // for one of these keys the update violates the primary key. That row is newer than
+                // anything on the placeholder, so leaving it untouched is the right outcome.
+                _log.LogWarning(
+                    ex,
+                    "Could not reattach watch state for {Name} ({Id})",
+                    item.Name,
+                    item.Id
+                );
+                continue;
+            }
+
+            if ((item.UserData?.Count ?? 0) > before)
+                reattached++;
+        }
+
+        if (reattached > 0)
+            _log.LogDebug("Reattached watch state for {Count} item(s)", reattached);
+    }
+
+    private async Task<BaseItem?> SaveItemAsync(BaseItem item, Folder parent, CancellationToken ct)
+    {
+        return (await SaveItemsAsync([item], parent, ct).ConfigureAwait(false)).FirstOrDefault();
+    }
+
+    private async Task<List<BaseItem>> SaveItemsAsync(
+        IEnumerable<BaseItem> items,
+        Folder parent,
+        CancellationToken ct
+    )
     {
         var baseItems = items.ToList();
         foreach (var item in baseItems)
@@ -1425,7 +1618,8 @@ public sealed class GelatoManager(
             parent.AddChild(item);
         }
 
-        repo.SaveItems(baseItems, CancellationToken.None);
+        persistence.SaveItems(baseItems, CancellationToken.None);
+        await ReattachWatchStateAsync(baseItems, ct).ConfigureAwait(false);
         return baseItems;
     }
 
