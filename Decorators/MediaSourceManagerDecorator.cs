@@ -110,6 +110,10 @@ public sealed class MediaSourceManagerDecorator(
             return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
         }
 
+        // A stream row is one version of its movie/episode. Jellyfin 12's web client loads it as
+        // an item when the version dropdown changes and rebuilds the dropdown from its sources.
+        var isStreamRow = item.HasStreamTag();
+
         var uri = StremioUri.FromBaseItem(item);
         var actionName =
             ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
@@ -131,7 +135,7 @@ public sealed class MediaSourceManagerDecorator(
                 uri?.ToString()
             );
         }
-        else if (uri is not null && !manager.HasStreamSync(cacheKey))
+        else if (uri is not null && !isStreamRow && !manager.HasStreamSync(cacheKey))
         {
             // Bug in web UI that calls the detail page twice. So that's why there's a lock.
             _lock
@@ -195,7 +199,11 @@ public sealed class MediaSourceManagerDecorator(
             libraryManager.GetItemById(item.Id);
         }
 
-        var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
+        // Jellyfin's own source for a stream row is the row itself, named after the item. It is
+        // not a placeholder path, so the cleanup below would keep it next to the real entry.
+        var sources = isStreamRow
+            ? []
+            : _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
 
         // we dont use jellyfins alternate versions crap. So we have to load it ourselves
 
@@ -275,6 +283,18 @@ public sealed class MediaSourceManagerDecorator(
         );
 
         sources.AddRange(gelatoSources);
+
+        if (isStreamRow)
+        {
+            // The requested version goes first: it becomes the Default source that keeps the
+            // item's id, like the movie's first stream does on the movie itself.
+            var ownId = item.Id.ToString("N", CultureInfo.InvariantCulture);
+            var own =
+                sources.FirstOrDefault(s => s.Id == ownId)
+                ?? GetVersionInfo(item, MediaSourceType.Grouping, user);
+            sources.Remove(own);
+            sources.Insert(0, own);
+        }
 
         if (sources.Count > 1)
         {

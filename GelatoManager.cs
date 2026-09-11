@@ -267,6 +267,29 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
+    /// Returns the movie or episode a stream row is a version of, or null.
+    /// </summary>
+    public BaseItem? FindPrimaryForStream(BaseItem streamRow, User? user = null)
+    {
+        if (streamRow is not Episode episode)
+            return FindExistingItem(streamRow, user);
+
+        // Same lookup GetStaticMediaSources uses to find an episode's stream rows.
+        var query = new InternalItemsQuery
+        {
+            IncludeItemTypes = [BaseItemKind.Episode],
+            ParentId = episode.SeasonId,
+            IndexNumber = episode.IndexNumber,
+            Recursive = false,
+            ExcludeTags = [StreamTag],
+            User = user,
+            IsDeadPerson = true, // skip filter marker
+        };
+
+        return libraryManager.GetItemList(query).FirstOrDefault(x => !x.HasStreamTag());
+    }
+
+    /// <summary>
     /// Inserts metadata into the library. Skip if it already exists.
     /// </summary>
     public async Task<(BaseItem? Item, bool Created)> InsertMeta(
