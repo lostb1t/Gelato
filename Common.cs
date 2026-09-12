@@ -557,6 +557,24 @@ public static class BaseItemExtensions
         data[key] = JsonSerializer.SerializeToElement(value);
         item.ExternalId = JsonSerializer.Serialize(data);
     }
+
+    /// <summary>
+    /// The file name Gelato hands Jellyfin when it saves a subtitle: the release filename the addon
+    /// sent, or <c>{id}.strm</c> when it sent none. A Gelato path is a URL or a <c>gelato://stub</c>,
+    /// which Jellyfin would turn into a name nothing looks for afterwards.
+    /// </summary>
+    public static string GelatoSubtitlePathName(this BaseItem item)
+    {
+        var gelatoFilename = item.GelatoData<string>("filename");
+        return string.IsNullOrEmpty(gelatoFilename) ? $"{item.Id:N}.strm" : gelatoFilename;
+    }
+
+    /// <summary>
+    /// The part Jellyfin puts in front of <c>.{lang}.{ext}</c>, derived from
+    /// <see cref="GelatoSubtitlePathName"/> the same way Jellyfin derives it from a media path.
+    /// </summary>
+    public static string GelatoSubtitleBaseName(this BaseItem item) =>
+        Path.GetFileNameWithoutExtension(item.GelatoSubtitlePathName());
 }
 
 public static class StringExtensions

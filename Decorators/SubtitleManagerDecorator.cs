@@ -2,9 +2,11 @@
 #pragma warning disable CS1591
 
 using System;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Providers;
@@ -16,11 +18,17 @@ namespace Gelato.Decorators
     {
         private readonly ISubtitleManager _inner;
         private readonly ILogger<SubtitleManagerDecorator> _log;
+        private readonly Lazy<ILibraryManager> _libraryManager;
 
-        public SubtitleManagerDecorator(ISubtitleManager inner, ILogger<SubtitleManagerDecorator> log)
+        public SubtitleManagerDecorator(
+            ISubtitleManager inner,
+            ILogger<SubtitleManagerDecorator> log,
+            Lazy<ILibraryManager> libraryManager
+        )
         {
             _inner = inner;
             _log = log;
+            _libraryManager = libraryManager;
         }
 
         public event EventHandler<SubtitleDownloadFailureEventArgs> SubtitleDownloadFailure
@@ -48,33 +56,26 @@ namespace Gelato.Decorators
             return _inner.SearchSubtitles(request, cancellationToken);
         }
 
-        public async Task DownloadSubtitles(
+        public Task DownloadSubtitles(
             Video video,
             string subtitleId,
             CancellationToken cancellationToken
         )
         {
-            var gelatoFilename = video.IsGelato() ? video.GelatoData<string>("filename") : null;
-            if (!string.IsNullOrEmpty(gelatoFilename))
+            // This is the overload Jellyfin calls (the scheduled task, metadata refresh and the
+            // subtitle API). The inner one loads the library options and saves on its own, so
+            // route Gelato items through the overload below.
+            if (video.IsGelato())
             {
-                var originalPath = video.Path;
-                video.Path = gelatoFilename;
-                try
-                {
-                    await _inner
-                        .DownloadSubtitles(video, subtitleId, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                finally
-                {
-                    video.Path = originalPath;
-                }
-                return;
+                return DownloadSubtitles(
+                    video,
+                    _libraryManager.Value.GetLibraryOptions(video),
+                    subtitleId,
+                    cancellationToken
+                );
             }
 
-            await _inner
-                .DownloadSubtitles(video, subtitleId, cancellationToken)
-                .ConfigureAwait(false);
+            return _inner.DownloadSubtitles(video, subtitleId, cancellationToken);
         }
 
         public async Task DownloadSubtitles(
@@ -86,33 +87,34 @@ namespace Gelato.Decorators
         {
             if (video.IsGelato())
             {
+                // A Gelato item has no folder to save next to. With the name swap below the "media
+                // folder" would be the server's working directory, and for a placeholder the path
+                // is a URL. Save to the item's metadata folder, the only place Gelato can find the
+                // file again. Copy the options: GetLibraryOptions returns the instance Jellyfin
+                // caches for the whole library.
                 if (libraryOptions.SaveSubtitlesWithMedia)
-                    _log.LogWarning(
-                        "SaveSubtitlesWithMedia is enabled but subtitles cannot be saved alongside Gelato stream items. Disable it in the library settings to suppress this warning."
-                    );
-
-                libraryOptions.SaveSubtitlesWithMedia = false;
-
-                // Jellyfin derives the subtitle save filename from video.Path.
-                // For gelato stream items the path is a URL, which produces garbage names.
-                // Use the BehaviorHints.Filename stored in GelatoData if available.
-                var gelatoFilename = video.GelatoData<string>("filename");
-                if (!string.IsNullOrEmpty(gelatoFilename))
                 {
-                    var originalPath = video.Path;
-                    video.Path = gelatoFilename;
-                    try
-                    {
-                        await _inner
-                            .DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                    finally
-                    {
-                        video.Path = originalPath;
-                    }
-                    return;
+                    libraryOptions = JsonSerializer.Deserialize<LibraryOptions>(
+                        JsonSerializer.Serialize(libraryOptions)
+                    );
+                    libraryOptions.SaveSubtitlesWithMedia = false;
                 }
+
+                // Jellyfin derives the file name from video.Path, which here is a URL or a
+                // gelato://stub path and would produce a name nothing looks for afterwards.
+                var originalPath = video.Path;
+                video.Path = video.GelatoSubtitlePathName();
+                try
+                {
+                    await _inner
+                        .DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                finally
+                {
+                    video.Path = originalPath;
+                }
+                return;
             }
 
             await _inner
