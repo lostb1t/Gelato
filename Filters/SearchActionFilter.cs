@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Gelato.Config;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
@@ -57,7 +58,7 @@ public class SearchActionFilter(
         ctx.TryGetActionArgument("startIndex", out var start, 0);
         ctx.TryGetActionArgument("limit", out var limit, 25);
 
-        var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, userId);
+        var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, stremio, userId);
 
         log.LogInformation(
             "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
@@ -116,10 +117,11 @@ public class SearchActionFilter(
         string searchTerm,
         HashSet<BaseItemKind> requestedTypes,
         PluginConfiguration cfg,
+        GelatoStremioProvider stremio,
         Guid userId
     )
     {
-        var tasks = new List<Task<IReadOnlyList<StremioMeta>>>();
+        var tasks = new List<(StremioMediaType Type, Task<IReadOnlyList<StremioMeta>> Task)>();
         var movieFolder = cfg.MovieFolder ?? manager.TryGetMovieFolder(userId);
         var seriesFolder = cfg.SeriesFolder ?? manager.TryGetSeriesFolder(userId);
 
@@ -129,7 +131,9 @@ public class SearchActionFilter(
 
         if (requestedTypes.Contains(BaseItemKind.Movie) && movieFolder is not null)
         {
-            tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Movie));
+            tasks.Add(
+                (StremioMediaType.Movie, stremio.SearchAsync(searchTerm, StremioMediaType.Movie))
+            );
         }
         else if (requestedTypes.Contains(BaseItemKind.Movie))
         {
@@ -140,7 +144,9 @@ public class SearchActionFilter(
 
         if (requestedTypes.Contains(BaseItemKind.Series) && seriesFolder is not null)
         {
-            tasks.Add(cfg.Stremio.SearchAsync(searchTerm, StremioMediaType.Series));
+            tasks.Add(
+                (StremioMediaType.Series, stremio.SearchAsync(searchTerm, StremioMediaType.Series))
+            );
         }
         else if (requestedTypes.Contains(BaseItemKind.Series))
         {
@@ -149,7 +155,33 @@ public class SearchActionFilter(
             );
         }
 
-        var results = (await Task.WhenAll(tasks)).SelectMany(r => r).ToList();
+        // Task.WhenAll used to throw for the first catalog that failed, which threw out of the filter and made
+        // Jellyfin answer the whole request with HTTP 500 — the results of a catalog that did answer included.
+        // Awaited one by one now (they all run, the tasks are started above), so a failure only costs its own
+        // catalog. A search where no catalog answered still fails the request: an empty or library-only list
+        // would look like a successful search to the client, and clients cache it.
+        var results = new List<StremioMeta>();
+        var failures = new List<Exception>();
+        foreach (var (type, task) in tasks)
+        {
+            try
+            {
+                results.AddRange(await task);
+            }
+            catch (Exception ex)
+            {
+                failures.Add(ex);
+                log.LogWarning(
+                    ex,
+                    "Search \"{Query}\" failed for the {MediaType} catalog",
+                    searchTerm,
+                    type
+                );
+            }
+        }
+
+        if (failures.Count > 0 && failures.Count == tasks.Count)
+            ExceptionDispatchInfo.Capture(failures[0]).Throw();
 
         var filterUnreleased = cfg.FilterUnreleased;
         var bufferDays = cfg.FilterUnreleasedBufferDays;
