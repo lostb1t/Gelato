@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.17.1] - 2026-09-12\n\n### 🐛 Bug Fixes\n\n- Make stream probes use Jellyfin's probe provider (#209)\n- Prevent duplicate entries in similar items and variant selector (#211)\n- Stop downloading the same subtitles for gelato items on every run (#210)\n",
+        "checksum": "b5f93a6152bf76a1b825ed7148c7ced5",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.17.1/gelato_0.26.17.1.zip",
+        "targetAbi": "12.0.0.0",
+        "timestamp": "2026-09-12T15:00:47Z",
+        "version": "0.26.17.1"
+      },
+      {
         "changelog": "## [0.26.17.0] - 2026-09-11\n\n### 🚀 Features\n\n- Jellyfin 12 compatibility (#202)\n",
         "checksum": "dab0e8b98771d5e1f82884fc1fd9a0cd",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.17.0/gelato_0.26.17.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-10T12:19:27Z",
         "version": "0.26.10.0"
-      },
-      {
-        "changelog": "## [0.26.9.0] - 2026-04-10\n\n### 🚀 Features\n\n- Gelato meta providers (#146)\n",
-        "checksum": "fa8a199ecd41cc43524bec58453e4e5d",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.9.0/gelato_0.26.9.0.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-10T09:27:46Z",
-        "version": "0.26.9.0"
       }
     ]
   }
