@@ -69,8 +69,7 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
         return (Math.Max(0, counts.Played - played), Math.Max(0, counts.Total - streams.Count));
     }
 
-    // Collections and playlists only link primaries (CollectionManagerDecorator,
-    // PlaylistManagerDecorator), so there are no stream rows to take off.
+    // Not corrected: a collection that links a whole series still counts that series' stream rows.
     public (int Played, int Total) GetPlayedAndTotalCountFromLinkedChildren(
         InternalItemsQuery filter,
         Guid parentId
@@ -93,7 +92,10 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
         foreach (var stream in streams)
         {
             var isPlayed = playedIds.Contains(stream.Id);
-            foreach (var ancestorId in stream.GetAncestorIds().Distinct())
+            // Walking the parents is only needed to tell several folders apart.
+            IEnumerable<Guid> ancestorIds =
+                result.Count == 1 ? result.Keys : stream.GetAncestorIds().Distinct();
+            foreach (var ancestorId in ancestorIds.ToList())
             {
                 if (!result.TryGetValue(ancestorId, out var counts))
                     continue;
@@ -174,6 +176,7 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
             IsFolder = false,
             IsVirtualItem = false,
             Recursive = true,
+            GroupByPresentationUniqueKey = false,
             // Marks the lookup as internal, so GelatoItemRepository does not hide the stream rows.
             IsDeadPerson = true,
             DtoOptions = new DtoOptions(false) { EnableImages = false },

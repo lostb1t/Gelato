@@ -1059,7 +1059,25 @@ public sealed class GelatoManager(
 
         if (updatedEpisodes.Count > 0)
         {
-            persistence.SaveItems(updatedEpisodes, ct);
+            // The episodes came fresh from the database, and the library manager caches only new
+            // items, so register them: a cached copy would keep serving the placeholder, and
+            // saving that copy later would write it back.
+            foreach (var group in updatedEpisodes.GroupBy(e => e.ParentId))
+            {
+                await libraryManager
+                    .UpdateItemsAsync(
+                        group.ToList(),
+                        group.First().GetParent() ?? series,
+                        ItemUpdateType.MetadataImport,
+                        ct
+                    )
+                    .ConfigureAwait(false);
+            }
+
+            foreach (var episode in updatedEpisodes)
+            {
+                libraryManager.RegisterItem(episode);
+            }
         }
 
         stopwatch.Stop();
@@ -1142,13 +1160,21 @@ public sealed class GelatoManager(
         )
         {
             episode.SetProviderId("StremioThumb", meta.Thumbnail);
-            ProviderManagerDecorator.SetRemoteImage(
-                appPaths,
-                episode,
-                ImageType.Primary,
-                null,
-                meta.Poster ?? meta.Thumbnail
-            );
+            try
+            {
+                ProviderManagerDecorator.SetRemoteImage(
+                    appPaths,
+                    episode,
+                    ImageType.Primary,
+                    null,
+                    meta.Poster ?? meta.Thumbnail
+                );
+            }
+            catch (IOException ex)
+            {
+                // Another sync of the same series is writing the same image; keep the rest.
+                _log.LogDebug(ex, "Could not update the image of {EpisodeName}", episode.Name);
+            }
             changed = true;
         }
 
