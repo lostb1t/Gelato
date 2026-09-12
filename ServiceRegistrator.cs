@@ -86,6 +86,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
+            .DecorateSingle<ISimilarItemsManager, SimilarItemsManagerDecorator>()
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
             .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
             .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
