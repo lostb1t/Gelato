@@ -288,30 +288,41 @@ public sealed class GelatoManager(
             return libraryManager.GetItemList(episodeQuery).FirstOrDefault(x => !x.HasStreamTag());
         }
 
-        // Stream rows copy the primary's provider ids, so a movie that exists more than once
-        // (two libraries, per-user folders) could match the wrong one. SyncStreams puts a row
-        // in the same folder as its movie, so look there first and only then in the library.
-        if (streamRow.ParentId != Guid.Empty)
+        // Stream rows copy all of the primary's provider ids, and some are shared between
+        // movies: every movie of a collection has the same TmdbCollection id. Match on the
+        // Stremio id the row was synced for instead - the association GetStaticMediaSources
+        // uses to list a movie's rows.
+        var stremioId = streamRow.GetProviderId("Stremio");
+        if (string.IsNullOrEmpty(stremioId))
+            return null;
+
+        var query = new InternalItemsQuery
         {
-            var inFolder = new InternalItemsQuery
+            IncludeItemTypes = [streamRow.GetBaseItemKind()],
+            // A local movie has no Stremio id; its stream rows use its Imdb id.
+            HasAnyProviderId = new Dictionary<string, string>
             {
-                IncludeItemTypes = [streamRow.GetBaseItemKind()],
-                ParentId = streamRow.ParentId,
-                HasAnyProviderId = streamRow.ProviderIds,
-                Recursive = false,
-                ExcludeTags = [StreamTag],
-                User = user,
-                IsDeadPerson = true, // skip filter marker
-            };
+                { "Stremio", stremioId },
+                { nameof(MetadataProvider.Imdb), stremioId },
+            },
+            Recursive = true,
+            ExcludeTags = [StreamTag],
+            User = user,
+            IsDeadPerson = true, // skip filter marker
+        };
 
-            var scoped = libraryManager
-                .GetItemList(inFolder)
-                .FirstOrDefault(x => !x.HasStreamTag());
-            if (scoped is not null)
-                return scoped;
-        }
+        var candidates = libraryManager
+            .GetItemList(query)
+            .Where(x =>
+                !x.HasStreamTag()
+                && StremioUri.FromBaseItem(x)?.ExternalId == stremioId
+            )
+            .ToList();
 
-        return FindExistingItem(streamRow, user);
+        // A movie that exists more than once (two libraries, per-user folders) matches more
+        // than once. SyncStreams puts a row in the same folder as its movie, so prefer that one.
+        return candidates.FirstOrDefault(x => x.ParentId == streamRow.ParentId)
+            ?? candidates.FirstOrDefault();
     }
 
     /// <summary>
@@ -579,11 +590,16 @@ public sealed class GelatoManager(
             .Where(s => s is not null)
             .ToList();
 
-        // Get existing streams
+        // Get existing streams. A movie's rows only by Stremio id: movies of a collection share
+        // the TmdbCollection id, and the other movies' rows would be treated as stale below.
+        // Episodes keep matching on all ids, which also finds rows synced under an older
+        // Stremio id (GetStaticMediaSources lists episode rows by season and index).
         var query = new InternalItemsQuery
         {
             IncludeItemTypes = [isEpisode ? BaseItemKind.Episode : BaseItemKind.Movie],
-            HasAnyProviderId = streamProviderIds,
+            HasAnyProviderId = isEpisode
+                ? streamProviderIds
+                : new Dictionary<string, string> { { "Stremio", uri.ExternalId } },
             Recursive = true,
             IsDeadPerson = true,
             //  IsVirtualItem = true,
