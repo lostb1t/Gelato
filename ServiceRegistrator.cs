@@ -16,6 +16,7 @@ using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Controller.Trickplay;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,7 +101,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
             .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
             .DecorateSingle<IProviderManager, ProviderManagerDecorator>()
-            .DecorateSingle<IImageProcessor, ImageProcessorDecorator>();
+            .DecorateSingle<IImageProcessor, ImageProcessorDecorator>()
+            .DecorateSingle<ITrickplayManager, TrickplayManagerDecorator>();
         // Expose the concrete decorator as Lazy so ImageProcessorDecorator can call SaveImageDirect
         // without introducing a circular dependency at construction time.
         services.AddSingleton(sp => new Lazy<ProviderManagerDecorator>(

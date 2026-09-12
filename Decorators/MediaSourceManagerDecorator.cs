@@ -103,7 +103,7 @@ public sealed class MediaSourceManagerDecorator(
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
-            (!cfg.EnableMixed && !IsGelatoPlaybackItem(item))
+            (!cfg.EnableMixed && !item.IsGelatoPlaybackItem())
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
         )
         {
@@ -228,7 +228,7 @@ public sealed class MediaSourceManagerDecorator(
             linkedVersions.Count == 0
             && primary is not null
             && !isStreamRow
-            && IsGelatoPlaybackItem(primary)
+            && primary.IsGelatoPlaybackItem()
             && manager.RelinkOwnedRows(primary)
         )
         {
@@ -249,7 +249,7 @@ public sealed class MediaSourceManagerDecorator(
         var mediaOwner = isStreamRow ? primary : item;
         var hasOwnMedia =
             mediaOwner is not null
-            && (!IsGelatoPlaybackItem(mediaOwner) || linkedVersions.Any(v => !v.HasStreamTag()));
+            && (!mediaOwner.IsGelatoPlaybackItem() || linkedVersions.Any(v => !v.HasStreamTag()));
         var sources = !hasOwnMedia
             ? []
             : _inner
@@ -470,7 +470,7 @@ public sealed class MediaSourceManagerDecorator(
             return sources;
 
         var owner = ResolveOwnerFor(selected, item);
-        if (!IsGelatoPlaybackItem(owner))
+        if (!owner.IsGelatoPlaybackItem())
         {
             // A local movie's linked stream rows are in Jellyfin's list too, with their real URLs.
             // They are played through their own source id, which the branch below handles. A file
@@ -479,7 +479,7 @@ public sealed class MediaSourceManagerDecorator(
             var streamRowIds = GetStreamRowIds(GetStreamRows(item as Video));
             var playbackSources = await _inner
                 .GetPlaybackMediaSources(
-                    IsGelatoPlaybackItem(item) ? owner : item,
+                    item.IsGelatoPlaybackItem() ? owner : item,
                     user,
                     allowMediaProbe,
                     enablePathSubstitution,
@@ -564,10 +564,6 @@ public sealed class MediaSourceManagerDecorator(
             ?? (Guid.TryParse(s.Id, out var id) ? libraryManager.GetItemById(id) : null)
             ?? fallback;
     }
-
-    private static bool IsGelatoPlaybackItem(BaseItem item) =>
-        item.HasStreamTag()
-        || (item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false);
 
     public Task<MediaSourceInfo> GetMediaSource(
         BaseItem item,

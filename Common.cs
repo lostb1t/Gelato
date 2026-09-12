@@ -558,6 +558,18 @@ public static class BaseItemExtensions
             ? primary
             : item;
 
+    /// <summary>
+    /// Whether Gelato serves this item: a stream row, or an item whose path is a <c>gelato://</c>
+    /// placeholder.
+    /// </summary>
+    /// <remarks>
+    /// A local file that only carries a Stremio id (EnableMixed) is not one of them and is left to
+    /// Jellyfin.
+    /// </remarks>
+    public static bool IsGelatoPlaybackItem(this BaseItem item) =>
+        item.HasStreamTag()
+        || (item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false);
+
     public static bool IsPrimaryVersion(this BaseItem item)
     {
         return !item.HasStreamTag()
