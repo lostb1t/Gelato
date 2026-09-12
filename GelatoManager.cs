@@ -731,6 +731,10 @@ public sealed class GelatoManager(
             var locked = streamItem.LockedFields?.ToList() ?? [];
             if (!locked.Contains(MetadataField.Tags))
                 locked.Add(MetadataField.Tags);
+            // The container's title tag would replace the name on probe when a library has
+            // embedded titles enabled.
+            if (!locked.Contains(MetadataField.Name))
+                locked.Add(MetadataField.Name);
             streamItem.LockedFields = locked.ToArray();
 
             streamItem.ProviderIds = streamProviderIds;
