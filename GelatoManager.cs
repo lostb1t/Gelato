@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using Gelato.Config;
 using Gelato.Decorators;
@@ -271,22 +271,47 @@ public sealed class GelatoManager(
     /// </summary>
     public BaseItem? FindPrimaryForStream(BaseItem streamRow, User? user = null)
     {
-        if (streamRow is not Episode episode)
-            return FindExistingItem(streamRow, user);
-
-        // Same lookup GetStaticMediaSources uses to find an episode's stream rows.
-        var query = new InternalItemsQuery
+        if (streamRow is Episode episode)
         {
-            IncludeItemTypes = [BaseItemKind.Episode],
-            ParentId = episode.SeasonId,
-            IndexNumber = episode.IndexNumber,
-            Recursive = false,
-            ExcludeTags = [StreamTag],
-            User = user,
-            IsDeadPerson = true, // skip filter marker
-        };
+            // Same lookup GetStaticMediaSources uses to find an episode's stream rows.
+            var episodeQuery = new InternalItemsQuery
+            {
+                IncludeItemTypes = [BaseItemKind.Episode],
+                ParentId = episode.SeasonId,
+                IndexNumber = episode.IndexNumber,
+                Recursive = false,
+                ExcludeTags = [StreamTag],
+                User = user,
+                IsDeadPerson = true, // skip filter marker
+            };
 
-        return libraryManager.GetItemList(query).FirstOrDefault(x => !x.HasStreamTag());
+            return libraryManager.GetItemList(episodeQuery).FirstOrDefault(x => !x.HasStreamTag());
+        }
+
+        // Stream rows copy the primary's provider ids, so a movie that exists more than once
+        // (two libraries, per-user folders) could match the wrong one. SyncStreams puts a row
+        // in the same folder as its movie, so look there first and only then in the library.
+        if (streamRow.ParentId != Guid.Empty)
+        {
+            var inFolder = new InternalItemsQuery
+            {
+                IncludeItemTypes = [streamRow.GetBaseItemKind()],
+                ParentId = streamRow.ParentId,
+                HasAnyProviderId = streamRow.ProviderIds,
+                Recursive = false,
+                ExcludeTags = [StreamTag],
+                User = user,
+                IsDeadPerson = true, // skip filter marker
+            };
+
+            var scoped = libraryManager
+                .GetItemList(inFolder)
+                .FirstOrDefault(x => !x.HasStreamTag());
+            if (scoped is not null)
+                return scoped;
+        }
+
+        return FindExistingItem(streamRow, user);
     }
 
     /// <summary>
