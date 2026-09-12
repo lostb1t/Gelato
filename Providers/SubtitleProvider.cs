@@ -143,7 +143,7 @@ namespace Gelato.Providers
                 {
                     _log.LogDebug(
                         "No Stremio ID, skipping subtitle search for {Path}",
-                        request.MediaPath
+                        Redact.Url(request.MediaPath)
                     );
                     return Array.Empty<RemoteSubtitleInfo>();
                 }
@@ -153,7 +153,11 @@ namespace Gelato.Providers
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Subtitle search failed for {Path}", request.MediaPath);
+                _log.LogError(
+                    ex,
+                    "Subtitle search failed for {Path}",
+                    Redact.Url(request.MediaPath)
+                );
                 return Array.Empty<RemoteSubtitleInfo>();
             }
 
@@ -267,7 +271,7 @@ namespace Gelato.Providers
                 _log.LogError(
                     "Failed to download subtitle id={Id} from {Url}. Status={Status}",
                     id,
-                    sub.Url,
+                    Redact.Url(sub.Url),
                     resp.StatusCode
                 );
                 throw new IOException($"Failed to download subtitles: {resp.StatusCode}");
@@ -306,7 +310,10 @@ namespace Gelato.Providers
             if (s.Contains("subs") && s.Contains(".strem.io"))
                 return "srt"; // Stremio proxies are always normalized to .srt
 
-            _log.LogWarning("unkown subtitle format for {Path}, defaulting to srt", s);
+            _log.LogWarning(
+                "unkown subtitle format for {Path}, defaulting to srt",
+                Redact.Url(urlOrPath)
+            );
             return "srt";
         }
 

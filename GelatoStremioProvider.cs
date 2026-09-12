@@ -61,7 +61,15 @@ public class GelatoStremioProvider(
 
     private async Task<T?> GetJsonAsync<T>(string url)
     {
-        log.LogDebug("GetJsonAsync: requesting {Url}", url);
+        // The base URL carries the user's addon config, so only the resource after it is logged.
+        var resource = url.StartsWith(baseUrl, StringComparison.Ordinal)
+            ? url[baseUrl.Length..]
+            : Redact.Url(url);
+        log.LogDebug(
+            "GetJsonAsync: requesting {Resource} from {Addon}",
+            resource,
+            Redact.Url(baseUrl)
+        );
 
         try
         {
@@ -71,8 +79,8 @@ public class GelatoStremioProvider(
             if (!resp.IsSuccessStatusCode)
             {
                 log.LogWarning(
-                    "GetJsonAsync: request failed for {Url} with {StatusCode} {ReasonPhrase}",
-                    url,
+                    "GetJsonAsync: request failed for {Resource} with {StatusCode} {ReasonPhrase}",
+                    resource,
                     resp.StatusCode,
                     resp.ReasonPhrase
                 );
@@ -89,7 +97,12 @@ public class GelatoStremioProvider(
         }
         catch (Exception ex)
         {
-            log.LogError(ex, "GetJsonAsync: error fetching or parsing {Url}", url);
+            log.LogError(
+                ex,
+                "GetJsonAsync: error fetching or parsing {Resource} from {Addon}",
+                resource,
+                Redact.Url(baseUrl)
+            );
             throw;
         }
     }

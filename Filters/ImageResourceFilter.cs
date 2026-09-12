@@ -74,7 +74,11 @@ public sealed class ImageResourceFilter(
             return;
         }
 
-        log.LogDebug("ImageFilter: proxying search result item={ItemId} url={Url}", guid, url);
+        log.LogDebug(
+            "ImageFilter: proxying search result item={ItemId} url={Url}",
+            guid,
+            Redact.Url(url)
+        );
 
         try
         {
@@ -91,7 +95,7 @@ public sealed class ImageResourceFilter(
                     "ImageFilter: upstream returned {Status} for item={ItemId} url={Url}",
                     res.StatusCode,
                     guid,
-                    url
+                    Redact.Url(url)
                 );
                 await next();
                 return;
@@ -110,7 +114,12 @@ public sealed class ImageResourceFilter(
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "ImageFilter: proxy failed for item={ItemId} url={Url}", guid, url);
+            log.LogWarning(
+                ex,
+                "ImageFilter: proxy failed for item={ItemId} url={Url}",
+                guid,
+                Redact.Url(url)
+            );
             await next();
         }
     }

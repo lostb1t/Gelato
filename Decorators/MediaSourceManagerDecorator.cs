@@ -777,7 +777,11 @@ public sealed class MediaSourceManagerDecorator(
 
         try
         {
-            _log.LogInformation("Probing stream for {Id} via {Url}", owner.Id, streamUrl);
+            _log.LogInformation(
+                "Probing stream for {Id} via {Url}",
+                owner.Id,
+                Redact.Url(streamUrl)
+            );
 
             var options = new MetadataRefreshOptions(directoryService)
             {
