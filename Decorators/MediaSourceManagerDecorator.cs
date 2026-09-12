@@ -618,19 +618,6 @@ public sealed class MediaSourceManagerDecorator(
         return info;
     }
 
-    private static readonly HashSet<string> _subtitleExtensions = new(
-        StringComparer.OrdinalIgnoreCase
-    )
-    {
-        "vtt",
-        "srt",
-        "ass",
-        "ssa",
-        "sub",
-        "idx",
-        "smi",
-    };
-
     // Jellyfin's MediaInfoResolver.GetExternalStreamsAsync bails immediately when !video.IsFileProtocol
     // (stream items have http:// paths). This means external subtitle files saved to the internal
     // metadata folder are never discovered during library refresh and never written to the DB.
@@ -640,15 +627,6 @@ public sealed class MediaSourceManagerDecorator(
     {
         var streams = _inner.GetMediaStreams(item.Id).ToList();
 
-        var gelatoFilename = item.GelatoData<string>("filename");
-        if (string.IsNullOrEmpty(gelatoFilename))
-            return streams;
-
-        var metaPath = item.GetInternalMetadataPath();
-        if (!Directory.Exists(metaPath))
-            return streams;
-
-        var baseName = Path.GetFileNameWithoutExtension(gelatoFilename);
         var existingPaths = new HashSet<string>(
             streams.Where(s => s.Path != null).Select(s => s.Path!),
             StringComparer.OrdinalIgnoreCase
@@ -656,25 +634,10 @@ public sealed class MediaSourceManagerDecorator(
 
         var nextIndex = streams.Count > 0 ? streams.Max(s => s.Index) + 1 : 0;
 
-        foreach (var file in Directory.EnumerateFiles(metaPath))
+        foreach (var (file, langCode, codec) in item.GetGelatoSubtitleFiles())
         {
-            var fname = Path.GetFileName(file);
-
-            // Must start with baseName + "."
-            if (!fname.StartsWith(baseName + ".", StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            var ext = Path.GetExtension(fname).TrimStart('.');
-            if (!_subtitleExtensions.Contains(ext))
-                continue;
-
             if (existingPaths.Contains(file))
                 continue;
-
-            // Parse language from suffix: {baseName}.{lang}.{ext} or {baseName}.{lang}.{N}.{ext}
-            var suffix = fname.Substring(baseName.Length + 1); // everything after "baseName."
-            var parts = Path.GetFileNameWithoutExtension(suffix).Split('.');
-            var langCode = parts.Length > 0 ? parts[0] : "und";
 
             streams.Add(
                 new MediaStream
@@ -685,7 +648,7 @@ public sealed class MediaSourceManagerDecorator(
                     SupportsExternalStream = true,
                     Path = file,
                     Language = langCode,
-                    Codec = ext.ToLowerInvariant(),
+                    Codec = codec,
                     Index = nextIndex++,
                     IsDefault = false,
                     IsForced = false,
