@@ -558,6 +558,19 @@ public static class BaseItemExtensions
         item.ExternalId = JsonSerializer.Serialize(data);
     }
 
+    private static readonly HashSet<string> SubtitleExtensions = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "vtt",
+        "srt",
+        "ass",
+        "ssa",
+        "sub",
+        "idx",
+        "smi",
+    };
+
     /// <summary>
     /// The file name Gelato hands Jellyfin when it saves a subtitle: the release filename the addon
     /// sent, or <c>{id}.strm</c> when it sent none. A Gelato path is a URL or a <c>gelato://stub</c>,
@@ -575,6 +588,42 @@ public static class BaseItemExtensions
     /// </summary>
     public static string GelatoSubtitleBaseName(this BaseItem item) =>
         Path.GetFileNameWithoutExtension(item.GelatoSubtitlePathName());
+
+    /// <summary>
+    /// Subtitle files saved for a Gelato item in its internal metadata folder, named
+    /// <c>{base}.{lang}.{ext}</c> or <c>{base}.{lang}.{N}.{ext}</c>. Jellyfin never records them as
+    /// media streams because the item has no local file, so Gelato has to look itself.
+    /// </summary>
+    public static IEnumerable<(string Path, string Language, string Codec)> GetGelatoSubtitleFiles(
+        this BaseItem item
+    )
+    {
+        var metaPath = item.GetInternalMetadataPath();
+        if (!Directory.Exists(metaPath))
+            yield break;
+
+        var baseName = item.GelatoSubtitleBaseName();
+
+        foreach (var file in Directory.EnumerateFiles(metaPath))
+        {
+            var fname = Path.GetFileName(file);
+
+            // Must start with baseName + "."
+            if (!fname.StartsWith(baseName + ".", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var ext = Path.GetExtension(fname).TrimStart('.');
+            if (!SubtitleExtensions.Contains(ext))
+                continue;
+
+            // Parse language from suffix: {baseName}.{lang}.{ext} or {baseName}.{lang}.{N}.{ext}
+            var suffix = fname.Substring(baseName.Length + 1); // everything after "baseName."
+            var parts = Path.GetFileNameWithoutExtension(suffix).Split('.');
+            var langCode = parts.Length > 0 ? parts[0] : "und";
+
+            yield return (file, langCode, ext.ToLowerInvariant());
+        }
+    }
 }
 
 public static class StringExtensions
