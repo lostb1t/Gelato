@@ -45,11 +45,16 @@ public sealed class CollectionManagerDecorator(
         var linkedChildrenList = collection.GetLinkedChildren();
         var currentLinkedChildrenIds = linkedChildrenList.Select(i => i.Id).ToList();
 
-        foreach (var id in itemIds)
+        foreach (var requestedId in itemIds)
         {
-            var item =
-                libraryManager.GetItemById(id)
-                ?? throw new ArgumentException("No item exists with the supplied Id " + id);
+            // A version's page adds the movie/episode it is a version of.
+            var item = GetPrimaryVersion(
+                libraryManager.GetItemById(requestedId)
+                    ?? throw new ArgumentException(
+                        "No item exists with the supplied Id " + requestedId
+                    )
+            );
+            var id = item.Id;
 
             if (!currentLinkedChildrenIds.Contains(id) && !item.IsStream())
             {
@@ -105,6 +110,20 @@ public sealed class CollectionManagerDecorator(
     public Task<Folder?> GetCollectionsFolder(bool createIfNeeded) =>
         inner.GetCollectionsFolder(createIfNeeded);
 
+    /// <summary>
+    /// Collections contain the movie/episode, never its stream rows. Jellyfin 12 clients show a
+    /// picked version as the page item, so look its collections up on the movie.
+    /// </summary>
     public IEnumerable<BoxSet> GetCollectionsContainingItem(User user, Guid itemId) =>
-        inner.GetCollectionsContainingItem(user, itemId);
+        inner.GetCollectionsContainingItem(
+            user,
+            libraryManager.GetItemById(itemId) is { } item ? GetPrimaryVersion(item).Id : itemId
+        );
+
+    private BaseItem GetPrimaryVersion(BaseItem item) =>
+        item.HasStreamTag()
+        && (item as Video)?.PrimaryVersionId is { } primaryId
+        && libraryManager.GetItemById(primaryId) is { } primary
+            ? primary
+            : item;
 }
