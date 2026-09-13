@@ -33,22 +33,6 @@ public class InsertActionFilter(
             return;
         }
 
-        // Jellyfin 12's web client makes the chosen version the page item when the version
-        // dropdown changes (refreshSelectedVersion). A stream row has no metadata of its own and
-        // is hidden from every list, so watch progress saved on it never shows up. Hand out the
-        // movie/episode instead: the client keeps the chosen version selected as media source.
-        if (
-            ctx.GetActionName() is "GetItem" or "GetItemLegacy"
-            && libraryManager.GetItemById(guid) is { } requested
-            && requested.HasStreamTag()
-            && manager.FindPrimaryForStream(requested, user) is { } primary
-        )
-        {
-            ctx.ReplaceGuid(primary.Id);
-            await next();
-            return;
-        }
-
         // Handle local (non-gelato) series: sync or clean tree on demand
         if (libraryManager.GetItemById(guid) is Series localSeries && !localSeries.IsGelato())
         {

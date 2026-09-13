@@ -1,6 +1,7 @@
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
@@ -8,6 +9,7 @@ namespace Gelato.ScheduledTasks;
 
 public sealed class PurgeGelatoStreamsTask(
     ILibraryManager libraryManager,
+    IItemPersistenceService persistence,
     ILogger<PurgeGelatoStreamsTask> log,
     GelatoManager manager
 ) : IScheduledTask
@@ -43,6 +45,8 @@ public sealed class PurgeGelatoStreamsTask(
                 { "stremio", string.Empty },
             },
             IsDeadPerson = true,
+            // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
+            IncludeOwnedItems = true,
         };
 
         var streams = libraryManager
@@ -50,6 +54,33 @@ public sealed class PurgeGelatoStreamsTask(
             .OfType<Video>()
             .Where(v => v.IsStream())
             .ToArray();
+
+        // Unlink them first: deleting a linked version makes Jellyfin save its movie once per row.
+        foreach (
+            var group in streams
+                .Where(v => v.PrimaryVersionId.HasValue)
+                .GroupBy(v => v.PrimaryVersionId!.Value)
+        )
+        {
+            if (libraryManager.GetItemById(group.Key) is Video primary)
+            {
+                var ids = group.Select(v => v.Id).ToHashSet();
+                primary.LinkedAlternateVersions = primary
+                    .LinkedAlternateVersions.Where(l => l.ItemId is not { } id || !ids.Contains(id))
+                    .ToArray();
+                persistence.SaveItems([primary], cancellationToken);
+            }
+
+            foreach (var stream in group)
+            {
+                stream.SetPrimaryVersionId(null);
+            }
+        }
+
+        // Their watch state is on the movie/episode (StreamUserDataSync). Deleted items park their
+        // user data under their keys, which rows share with the movie, so clear it first instead
+        // of leaving a stale copy that could be handed to another item with the same keys.
+        manager.ForgetWatchState(streams, cancellationToken);
 
         var total = streams.Length;
 

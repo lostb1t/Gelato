@@ -46,39 +46,15 @@ public sealed class DeleteResourceFilter(
 
     private void DeleteItem(BaseItem item)
     {
-        if (item.IsPrimaryVersion())
+        if (item is Video video && item.IsPrimaryVersion())
         {
-            DeleteStreams(item);
+            // Its stream rows first, with their watch state: Jellyfin would delete the linked rows
+            // along with the movie, but park their user data. Only this item's rows: another item
+            // of the same title (a local movie, another user's folder) keeps its own.
+            manager.DeleteStreamRows(video, manager.GetStreamRows(video), CancellationToken.None);
         }
-        else
-        {
-            log.LogInformation("Deleting {Name}", item.Name);
-            library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
-        }
-    }
 
-    private void DeleteStreams(BaseItem item)
-    {
-        var query = new InternalItemsQuery
-        {
-            IncludeItemTypes = [item.GetBaseItemKind()],
-            HasAnyProviderId = new Dictionary<string, string>
-            {
-                { "Stremio", item.ProviderIds["Stremio"] },
-            },
-            Recursive = false,
-            GroupByPresentationUniqueKey = false,
-            GroupBySeriesPresentationUniqueKey = false,
-            CollapseBoxSetItems = false,
-            // Skip filter
-            IsDeadPerson = true,
-        };
-
-        var sources = library.GetItemList(query);
-        foreach (var alt in sources)
-        {
-            log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
-            library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = true }, true);
-        }
+        log.LogInformation("Deleting {Name} ({Id})", item.Name, item.Id);
+        library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
     }
 }
