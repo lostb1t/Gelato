@@ -34,6 +34,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
+        services.AddSingleton<StreamUserDataFilter>();
         services.AddSingleton<GelatoManager>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
@@ -45,6 +46,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<PalcoCacheService>();
         services.AddSingleton<IHostedService, GelatoJavaScriptRegistrationService>();
         services.AddSingleton<IHostedService, UpgradeRepairService>();
+        services.AddSingleton<IHostedService, StreamUserDataSync>();
         services.AddSingleton<SubtitleProvider>();
         services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
         services.AddSingleton(sp => new Lazy<SubtitleProvider>(
@@ -113,6 +115,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
             o.Filters.AddService<DownloadFilter>();
+            o.Filters.AddService<StreamUserDataFilter>();
         });
     }
 

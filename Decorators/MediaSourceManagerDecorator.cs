@@ -37,6 +37,7 @@ public sealed class MediaSourceManagerDecorator(
     ILibraryManager libraryManager,
     ILogger<MediaSourceManagerDecorator> log,
     IHttpContextAccessor http,
+    IUserDataManager userDataManager,
     IDirectoryService directoryService,
     IServerConfigurationManager config,
     //Lazy<ISubtitleManager> subtitleManager,
@@ -314,6 +315,11 @@ public sealed class MediaSourceManagerDecorator(
             first.Id = primaryId;
         }
 
+        if (!isStreamRow && primary is not null && user is not null)
+        {
+            MoveResumedVersionFirst(sources, primary, versions, user);
+        }
+
         foreach (var source in sources)
         {
             if (source.Type == MediaSourceType.Default)
@@ -338,6 +344,53 @@ public sealed class MediaSourceManagerDecorator(
 
     private static HashSet<string> GetStreamRowIds(IEnumerable<Video> rows) =>
         rows.Select(r => r.Id.ToString("N", CultureInfo.InvariantCulture)).ToHashSet();
+
+    /// <summary>
+    /// Puts the stream the user is part way through first, so clients preselect it. The resume
+    /// point itself is shared: StreamUserDataSync copies it to the movie.
+    /// </summary>
+    private void MoveResumedVersionFirst(
+        List<MediaSourceInfo> sources,
+        Video primary,
+        List<(Video Row, MediaSourceInfo Source)> versions,
+        User user
+    )
+    {
+        if (sources.Count < 2 || versions.Count == 0)
+            return;
+
+        // The source with the movie's id plays with the movie's own watch state.
+        var primaryId = primary.Id.ToString("N", CultureInfo.InvariantCulture);
+        var streams = versions.Where(v => v.Source.Id != primaryId).ToList();
+        var userData = userDataManager.GetUserDataBatch(
+            [primary, .. streams.Select(v => v.Row)],
+            user
+        );
+        if (userData.GetValueOrDefault(primary.Id) is not { PlaybackPositionTicks: > 0 } movieData)
+            return;
+
+        var resumed = VersionPlaybackSelector.SelectMostRecentlyPlayed(
+            streams,
+            v => userData.GetValueOrDefault(v.Row.Id),
+            data => data.PlaybackPositionTicks > 0
+        );
+
+        // The movie holds a copy of the stream's state, dated CopyOffset after the stream; it is
+        // newer only when the stream with the movie's id was played since.
+        if (
+            resumed.Source is not { } source
+            || (userData[resumed.Row.Id].LastPlayedDate ?? DateTime.MinValue)
+                + StreamUserDataSync.CopyOffset
+                < (movieData.LastPlayedDate ?? DateTime.MinValue)
+            || ReferenceEquals(sources[0], source)
+        )
+        {
+            return;
+        }
+
+        sources.Remove(source);
+        sources.Insert(0, source);
+    }
 
     public void AddParts(IEnumerable<IMediaSourceProvider> providers)
     {

@@ -15,7 +15,8 @@ public sealed class DtoServiceDecorator(
     IDtoService inner,
     Lazy<GelatoManager> manager,
     IHttpContextAccessor http,
-    ILibraryManager libraryManager
+    ILibraryManager libraryManager,
+    IUserDataManager userDataManager
 ) : IDtoService
 {
     private readonly Lazy<GelatoManager> _manager = manager;
@@ -42,7 +43,8 @@ public sealed class DtoServiceDecorator(
     /// A stream row is a version of its movie/episode, and clients show it as the page item when it
     /// is picked. Give it the movie's images, cast and tags: rows store no images or people, and
     /// their only tag marks them as stream rows. Image requests for a row are served from the movie
-    /// by ImageResourceFilter.
+    /// by ImageResourceFilter. The watch state is the movie's too: StreamUserDataSync copies what is
+    /// saved on a stream to the movie, and rows linked or added later hold none of it.
     /// </summary>
     private void AddPrimaryVersionFields(
         BaseItemDto dto,
@@ -63,6 +65,22 @@ public sealed class DtoServiceDecorator(
         if (options.ContainsField(ItemFields.Tags))
         {
             dto.Tags = primary.Tags;
+        }
+
+        if (
+            dto.UserData is { } userData
+            && user is not null
+            && userDataManager.GetUserDataDto(primary, user) is { } primaryData
+        )
+        {
+            userData.Played = primaryData.Played;
+            userData.PlayCount = primaryData.PlayCount;
+            userData.PlaybackPositionTicks = primaryData.PlaybackPositionTicks;
+            userData.PlayedPercentage = primaryData.PlayedPercentage;
+            userData.LastPlayedDate = primaryData.LastPlayedDate;
+            userData.IsFavorite = primaryData.IsFavorite;
+            userData.Likes = primaryData.Likes;
+            userData.Rating = primaryData.Rating;
         }
 
         var addPeople = dto.People is not { Length: > 0 } && options.ContainsField(ItemFields.People);
