@@ -460,11 +460,41 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
+    /// One writer per movie/episode for its stream rows: a sync and a deletion of the same item
+    /// must not interleave. A sync that finishes after the item was deleted would save the rows
+    /// again and, when it links them, the item itself.
+    /// </summary>
+    private readonly KeyLock _itemWrites = new();
+
+    /// <summary>
+    /// Runs <paramref name="action"/> as the only writer of the given movie/episode's stream rows,
+    /// queued behind a running sync or deletion of the same item.
+    /// </summary>
+    public Task RunExclusiveAsync(
+        Guid itemId,
+        Func<CancellationToken, Task> action,
+        CancellationToken ct
+    ) => _itemWrites.RunQueuedAsync(itemId, action, ct);
+
+    /// <summary>
     /// Load streams and inserts them into the database keeping original
     /// sorting. We make sure to keep a one stable version based on primaryversionid
     /// </summary>
     /// <returns></returns>
     public async Task<int> SyncStreams(BaseItem item, Guid userId, CancellationToken ct)
+    {
+        var count = 0;
+        await RunExclusiveAsync(
+                item.Id,
+                async token =>
+                    count = await SyncStreamsCore(item, userId, token).ConfigureAwait(false),
+                ct
+            )
+            .ConfigureAwait(false);
+        return count;
+    }
+
+    private async Task<int> SyncStreamsCore(BaseItem item, Guid userId, CancellationToken ct)
     {
         _log.LogDebug($"SyncStreams for {item.Id}");
         var stopwatch = Stopwatch.StartNew();

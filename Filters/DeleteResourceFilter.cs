@@ -40,21 +40,38 @@ public sealed class DeleteResourceFilter(
         }
 
         // Handle deletion and return 204 No Content
-        DeleteItem(item);
+        await DeleteItemAsync(item).ConfigureAwait(false);
         ctx.Result = new NoContentResult();
     }
 
-    private void DeleteItem(BaseItem item)
+    private Task DeleteItemAsync(BaseItem item)
     {
-        if (item is Video video && item.IsPrimaryVersion())
-        {
-            // Its stream rows first, with their watch state: Jellyfin would delete the linked rows
-            // along with the movie, but park their user data. Only this item's rows: another item
-            // of the same title (a local movie, another user's folder) keeps its own.
-            manager.DeleteStreamRows(video, manager.GetStreamRows(video), CancellationToken.None);
-        }
+        // Queued behind a sync of the same movie/episode (a version's rows are its movie's): a sync
+        // that ran on after the deletion would save the rows and the item back into the library.
+        // Not cancelled with the request: half a deletion is worse than a late one.
+        var owner = (item as Video)?.PrimaryVersionId ?? item.Id;
+        return manager.RunExclusiveAsync(
+            owner,
+            _ =>
+            {
+                if (item is Video video && item.IsPrimaryVersion())
+                {
+                    // Its stream rows first, with their watch state: Jellyfin would delete the
+                    // linked rows along with the movie, but park their user data. Only this item's
+                    // rows: another item of the same title (a local movie, another user's folder)
+                    // keeps its own.
+                    manager.DeleteStreamRows(
+                        video,
+                        manager.GetStreamRows(video),
+                        CancellationToken.None
+                    );
+                }
 
-        log.LogInformation("Deleting {Name} ({Id})", item.Name, item.Id);
-        library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
+                log.LogInformation("Deleting {Name} ({Id})", item.Name, item.Id);
+                library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None
+        );
     }
 }
