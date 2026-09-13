@@ -906,7 +906,13 @@ public sealed class GelatoManager(
             .GroupBy(e => e.ParentIndexNumber!.Value)
             .ToDictionary(
                 g => g.Key,
-                g => g.GroupBy(e => e.IndexNumber!.Value).ToDictionary(n => n.Key, n => n.First())
+                g =>
+                    g.GroupBy(e => e.IndexNumber!.Value)
+                        // A local episode and a Gelato one can share a number; update the Gelato one.
+                        .ToDictionary(
+                            n => n.Key,
+                            n => n.FirstOrDefault(e => e.IsGelato()) ?? n.First()
+                        )
             );
 
         var seasonsInserted = 0;
@@ -1125,7 +1131,9 @@ public sealed class GelatoManager(
             changed = true;
         }
 
-        var overview = meta.Description ?? meta.Overview;
+        var overview = string.IsNullOrWhiteSpace(meta.Description)
+            ? meta.Overview
+            : meta.Description;
         if (
             !string.IsNullOrWhiteSpace(overview)
             && overview != episode.Overview
@@ -1159,7 +1167,6 @@ public sealed class GelatoManager(
             && meta.Thumbnail != episode.GetProviderId("StremioThumb")
         )
         {
-            episode.SetProviderId("StremioThumb", meta.Thumbnail);
             try
             {
                 ProviderManagerDecorator.SetRemoteImage(
@@ -1167,15 +1174,17 @@ public sealed class GelatoManager(
                     episode,
                     ImageType.Primary,
                     null,
-                    meta.Poster ?? meta.Thumbnail
+                    string.IsNullOrWhiteSpace(meta.Poster) ? meta.Thumbnail : meta.Poster
                 );
+                // Only recorded once the image is written, so a failed write is retried next run.
+                episode.SetProviderId("StremioThumb", meta.Thumbnail);
+                changed = true;
             }
             catch (IOException ex)
             {
                 // Another sync of the same series is writing the same image; keep the rest.
                 _log.LogDebug(ex, "Could not update the image of {EpisodeName}", episode.Name);
             }
-            changed = true;
         }
 
         if (
