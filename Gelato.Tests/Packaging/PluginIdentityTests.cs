@@ -89,9 +89,10 @@ public class PluginIdentityTests
             .Artifacts.Where(a => !File.Exists(Path.Combine(outputDir, a)))
             .ToList();
 
+        var missingList = string.Join(", ", missing);
         Assert.True(
             missing.Count == 0,
-            $"build.yaml lists artifacts that the build does not produce: {string.Join(", ", missing)}"
+            $"build.yaml lists artifacts that the build does not produce: {missingList}"
         );
     }
 
