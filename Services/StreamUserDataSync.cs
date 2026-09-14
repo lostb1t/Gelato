@@ -1,3 +1,4 @@
+using Gelato.Decorators;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
@@ -17,9 +18,11 @@ namespace Gelato.Services;
 /// Jellyfin marks every version itself. Favourites and ratings set on a stream are applied to the
 /// movie by <see cref="Filters.StreamUserDataFilter"/>: the saved event carries the stream's whole
 /// stored state, which is stale apart from the field that was set.
+/// Listens to <see cref="UserDataManagerDecorator.ItemSaved"/>: the rows' saves are not forwarded
+/// to other listeners, so the copy on the movie is what they see, with the stream's reason.
 /// </remarks>
 public sealed class StreamUserDataSync(
-    IUserDataManager userDataManager,
+    UserDataManagerDecorator userDataManager,
     IUserManager userManager,
     ILibraryManager libraryManager,
     ILogger<StreamUserDataSync> log
@@ -27,13 +30,13 @@ public sealed class StreamUserDataSync(
 {
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        userDataManager.UserDataSaved += OnUserDataSaved;
+        userDataManager.ItemSaved += OnUserDataSaved;
         return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        userDataManager.UserDataSaved -= OnUserDataSaved;
+        userDataManager.ItemSaved -= OnUserDataSaved;
         return Task.CompletedTask;
     }
 
@@ -98,15 +101,9 @@ public sealed class StreamUserDataSync(
                 data.PlaybackPositionTicks = source.PlaybackPositionTicks;
             }
 
-            // Not a playback reason: the movie was not played, and listeners on playback reasons
-            // would count the stream's playback twice.
-            userDataManager.SaveUserData(
-                user,
-                primary,
-                data,
-                UserDataSaveReason.UpdateUserData,
-                CancellationToken.None
-            );
+            // With the stream's reason: the stream's own save is not forwarded to other listeners,
+            // so this copy is the playback they see, on the movie.
+            userDataManager.SaveUserData(user, primary, data, e.SaveReason, CancellationToken.None);
 
             // Replaying a watched movie: the stream is watched too, so Jellyfin marks every other
             // version watched again right after this and resets their resume points, the movie's
@@ -152,13 +149,17 @@ public sealed class StreamUserDataSync(
                 return;
 
             data.PlaybackPositionTicks = stopped.Position;
-            userDataManager.SaveUserData(
-                user,
-                e.Item,
-                data,
-                UserDataSaveReason.UpdateUserData,
-                CancellationToken.None
-            );
+            // A repair of what the stream's copy already announced, not a change for listeners.
+            using (userDataManager.Quiet())
+            {
+                userDataManager.SaveUserData(
+                    user,
+                    e.Item,
+                    data,
+                    UserDataSaveReason.UpdateUserData,
+                    CancellationToken.None
+                );
+            }
         }
         catch (Exception ex)
         {
