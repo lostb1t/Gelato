@@ -22,6 +22,15 @@ public class InsertActionFilter(
         ActionExecutionDelegate next
     )
     {
+        // A client that opened a search result keeps the result's id in its page URL: the
+        // reload, images, seasons, episodes, similar items and playback all name it. Every such
+        // id goes to the item the result became, whatever the action.
+        if (ctx.RedirectGuids(manager.GetInsertedId))
+        {
+            await next();
+            return;
+        }
+
         if (
             !ctx.IsInsertableAction()
             || !ctx.TryGetRouteGuid(out var guid)
@@ -68,6 +77,7 @@ public class InsertActionFilter(
                     "Media already exists; redirecting to canonical id {Id}",
                     existing.Id
                 );
+                manager.RememberInsertedId(guid, existing.Id);
                 ctx.ReplaceGuid(existing.Id);
                 await next();
                 return;
@@ -95,6 +105,7 @@ public class InsertActionFilter(
         var baseItem = await InsertMetaAsync(guid, root, meta, user);
         if (baseItem is not null)
         {
+            manager.RememberInsertedId(guid, baseItem.Id);
             ctx.ReplaceGuid(baseItem.Id);
             manager.RemoveStremioMeta(guid);
         }

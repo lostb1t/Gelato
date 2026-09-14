@@ -116,6 +116,32 @@ public sealed class GelatoManager(
         memoryCache.Remove($"meta:{guid}");
     }
 
+    /// <summary>
+    /// Remembers which library item a search result became. A client that opened the result keeps
+    /// its id in the page URL, and asks for the page, images, seasons, episodes and playback with
+    /// it long after the result's metadata was dropped from the cache.
+    /// </summary>
+    public void RememberInsertedId(Guid searchId, Guid itemId)
+    {
+        memoryCache.Set($"inserted:{searchId}", itemId, TimeSpan.FromHours(24));
+    }
+
+    /// <summary>
+    /// The item a search result became, while it exists: once it is deleted the result is a
+    /// search result again, and opening it inserts anew.
+    /// </summary>
+    public Guid? GetInsertedId(Guid searchId)
+    {
+        if (!memoryCache.TryGetValue($"inserted:{searchId}", out Guid itemId))
+            return null;
+
+        if (libraryManager.GetItemById(itemId) is not null)
+            return itemId;
+
+        memoryCache.Remove($"inserted:{searchId}");
+        return null;
+    }
+
     public void ClearCache()
     {
         if (memoryCache is MemoryCache cache)

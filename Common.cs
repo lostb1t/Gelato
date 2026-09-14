@@ -432,6 +432,43 @@ public static class ActionContextExtensions
         return false;
     }
 
+    /// <summary>
+    /// Replaces every id in the route, the query-bound arguments and id lists that
+    /// <paramref name="map"/> knows a replacement for. Returns whether anything changed.
+    /// </summary>
+    public static bool RedirectGuids(this ActionExecutingContext ctx, Func<Guid, Guid?> map)
+    {
+        var changed = false;
+        foreach (var (key, raw) in ctx.RouteData.Values.ToList())
+        {
+            if (raw?.ToString() is { } s && Guid.TryParse(s, out var g) && map(g) is { } to)
+            {
+                ctx.RouteData.Values[key] = to.ToString("N");
+                if (ctx.ActionArguments.ContainsKey(key))
+                    ctx.ActionArguments[key] = to;
+                ctx.HttpContext.Items["GuidResolved"] = to;
+                changed = true;
+            }
+        }
+
+        foreach (var (key, value) in ctx.ActionArguments.ToList())
+        {
+            switch (value)
+            {
+                case Guid g when map(g) is { } to:
+                    ctx.ActionArguments[key] = to;
+                    changed = true;
+                    break;
+                case Guid[] ids when ids.Any(g => map(g) is not null):
+                    ctx.ActionArguments[key] = ids.Select(g => map(g) ?? g).Distinct().ToArray();
+                    changed = true;
+                    break;
+            }
+        }
+
+        return changed;
+    }
+
     public static void ReplaceGuid(this ActionExecutingContext ctx, Guid value)
     {
         var rd = ctx.RouteData.Values;

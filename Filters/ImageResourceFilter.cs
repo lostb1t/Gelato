@@ -47,6 +47,14 @@ public sealed class ImageResourceFilter(
             return;
         }
 
+        // The search result was opened and inserted: its images are the item's now.
+        if (manager.GetInsertedId(guid) is { } insertedId)
+        {
+            routeValues["itemId"] = insertedId.ToString("N");
+            await next();
+            return;
+        }
+
         // A stream row has no images of its own; the DTO hands out its movie's image tags.
         if (
             libraryManager.GetItemById(guid) is Video { PrimaryVersionId: { } primaryId } row
