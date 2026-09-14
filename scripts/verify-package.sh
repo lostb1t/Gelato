@@ -44,7 +44,7 @@ abi="$(yaml_scalar targetAbi)"
 [ -n "$guid" ] || fail "build.yaml has no guid"
 [ -n "$abi" ] || fail "build.yaml has no targetAbi"
 
-listing="$(unzip -Z1 "$zip")"
+listing="$(unzip -Z1 "$zip")" || fail "cannot list zip contents (corrupt or not a zip?): $zip"
 
 artifact_count=0
 while IFS= read -r artifact; do
@@ -55,7 +55,8 @@ done <<<"$(yaml_artifacts)"
 [ "$artifact_count" -gt 0 ] || fail "build.yaml lists no artifacts"
 
 grep -qx -- "meta.json" <<<"$listing" || fail "meta.json missing from zip"
-meta="$(unzip -p "$zip" meta.json)"
+meta="$(unzip -p "$zip" meta.json)" || fail "cannot read meta.json from zip"
+python3 -c 'import json, sys; json.load(sys.stdin)' <<<"$meta" 2>/dev/null || fail "meta.json is not valid JSON"
 
 meta_get() {
   python3 -c 'import json, sys; print(json.load(sys.stdin).get(sys.argv[1], ""))' "$1" <<<"$meta"
@@ -71,7 +72,7 @@ meta_version="$(meta_get version)"
 [ "$meta_abi" = "$abi" ] || fail "meta.json targetAbi '$meta_abi' != build.yaml targetAbi '$abi'"
 [ "$meta_version" = "$expected_version" ] || fail "meta.json version '$meta_version' != expected '$expected_version'"
 
-dll_size="$(unzip -l "$zip" | awk '$4 == "Gelato.dll" { print $1 }')"
+dll_size="$(unzip -l "$zip" | awk '$4 == "Gelato.dll" { print $1 }')" || fail "cannot list zip contents: $zip"
 [ -n "$dll_size" ] || fail "Gelato.dll missing from zip"
 [ "$dll_size" -gt 100000 ] || fail "Gelato.dll is implausibly small: ${dll_size} bytes"
 
