@@ -133,7 +133,10 @@ public sealed class MediaSourceManagerDecorator(
 
         var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
         var video = item as Video;
-        var cacheKey = (video?.PrimaryVersionId ?? item.Id).ToString();
+        var syncItemId = video?.PrimaryVersionId ?? item.Id;
+        // With the creation date: an item deleted and inserted again gets the same id (its path
+        // is hashed), but its rows went with it, so it must sync anew within StreamTTL.
+        var cacheKey = $"{syncItemId}:{item.DateCreated.Ticks}";
 
         if (userId != Guid.Empty)
         {
@@ -148,7 +151,7 @@ public sealed class MediaSourceManagerDecorator(
                 uri?.ToString()
             );
         }
-        else if (uri is not null && !isStreamRow && !manager.HasStreamSync(cacheKey))
+        else if (uri is not null && !isStreamRow && !manager.HasStreamSync(cacheKey, syncItemId))
         {
             // Bug in web UI that calls the detail page twice. So that's why there's a lock.
             _lock

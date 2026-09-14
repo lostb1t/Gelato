@@ -76,15 +76,14 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
-    /// Whether the streams behind the key (<c>[userId:]itemId</c>) were synced within StreamTTL
-    /// and the item was not reset since (<see cref="ResetStreamSync"/>).
+    /// Whether the streams behind the key were synced within StreamTTL and the movie/episode was
+    /// not reset since (<see cref="ResetStreamSync"/>).
     /// </summary>
-    public bool HasStreamSync(string guid)
+    public bool HasStreamSync(string guid, Guid itemId)
     {
         if (!memoryCache.TryGetValue($"streamsync:{guid}", out DateTime syncedAt))
             return false;
 
-        var itemId = guid[(guid.LastIndexOf(':') + 1)..];
         return !memoryCache.TryGetValue($"streamsync-reset:{itemId}", out DateTime resetAt)
             || syncedAt > resetAt;
     }
