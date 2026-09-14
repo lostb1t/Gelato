@@ -224,6 +224,16 @@ public sealed class MediaSourceManagerDecorator(
         var linkedVersions = primary is null
             ? []
             : _libraryManager.GetLinkedAlternateVersions(primary).ToList();
+        if (
+            linkedVersions.Count == 0
+            && primary is not null
+            && !isStreamRow
+            && IsGelatoPlaybackItem(primary)
+            && manager.RelinkOwnedRows(primary)
+        )
+        {
+            linkedVersions = _libraryManager.GetLinkedAlternateVersions(primary).ToList();
+        }
         var streamRows = linkedVersions
             .Where(v => v.HasStreamTag())
             .OrderBy(v => v.GelatoData<int?>("index") ?? int.MaxValue)

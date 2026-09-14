@@ -942,6 +942,39 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
+    /// Restores the version links of a movie/episode whose rows carry it as owner but are not
+    /// linked: a metadata refresh that loaded the item before a sync and saved it afterwards (the
+    /// one queued by a series insert, for the episode opened right away) writes the item's stale,
+    /// empty link list. Returns whether any link was restored.
+    /// </summary>
+    public bool RelinkOwnedRows(Video primary)
+    {
+        if (primary.GetProviderId("Stremio") is not { Length: > 0 } stremioId)
+            return false;
+
+        var owned = repo.GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = [primary.GetBaseItemKind()],
+                    HasAnyProviderId = new Dictionary<string, string> { { "Stremio", stremioId } },
+                    Tags = [StreamTag],
+                    Recursive = true,
+                    IsDeadPerson = true,
+                    IncludeOwnedItems = true,
+                }
+            )
+            .OfType<Video>()
+            .Where(v => v.HasStreamTag() && v.PrimaryVersionId == primary.Id)
+            .ToList();
+        if (owned.Count == 0)
+            return false;
+
+        _log.LogDebug("Restoring {Count} version link(s) of {Id}", owned.Count, primary.Id);
+        LinkVersions(primary, owned, CancellationToken.None);
+        return true;
+    }
+
+    /// <summary>
     /// The stream rows of a movie/episode: the ones linked to it, and rows of its title that no item
     /// has linked yet.
     /// </summary>
