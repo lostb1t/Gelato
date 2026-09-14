@@ -4,6 +4,7 @@ on:
   release:
     types:
       - released
+      - prereleased
   workflow_dispatch:
 
 permissions:
@@ -40,6 +41,10 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - upload
+    # Prereleases get built and attached to the GitHub Release for manual
+    # testing, but must not reach repository.json - that manifest is what
+    # users' Jellyfin servers poll for updates.
+    if: github.event.release.prerelease != true
     steps:
       - name: Jellyfin plugin repo
         uses: Kevinjil/jellyfin-plugin-repo-action@v0.4.3

@@ -2,6 +2,11 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: "Cut as a prerelease (builds and attaches assets, but does not update repository.json)"
+        type: boolean
+        default: false
 
 jobs:
   release:
@@ -26,6 +31,6 @@ jobs:
         uses: kenji-miyake/setup-git-cliff@v1
 
       - name: Run make release
-        run: make release
+        run: make ${{ inputs.prerelease && 'prerelease' || 'release' }}
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}

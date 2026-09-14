@@ -1,3 +1,5 @@
+RELEASE_FLAGS ?=
+
 release:
 	@echo "Fetching tags..."
 	git fetch --tags
@@ -7,13 +9,13 @@ release:
 	@echo "Generating changelog..."
 	@git cliff --unreleased --tag $(NEW_VERSION) --strip all > /tmp/release_notes.md
 	@echo "Updating version in build.yaml..."
-	sed -i 's/^version: .*/version: "$(NEW_VERSION:v%=%)"/' build.yaml
+	sed -i.bak 's/^version: .*/version: "$(NEW_VERSION:v%=%)"/' build.yaml && rm -f build.yaml.bak
 	git add build.yaml
 	git commit -m "chore(release): bump version to $(NEW_VERSION)"
 	@echo "Pushing to git..."
 	git push
 	@echo "Creating GitHub release..."
-	gh release create $(NEW_VERSION) --title "$(NEW_VERSION)" --notes-file /tmp/release_notes.md
+	gh release create $(NEW_VERSION) --title "$(NEW_VERSION)" --notes-file /tmp/release_notes.md $(RELEASE_FLAGS)
 	@echo "Release $(NEW_VERSION) created successfully!"
 
 test:
@@ -26,4 +28,7 @@ test:
 	@git cliff --unreleased --tag $(NEW_VERSION) --strip all > /tmp/release_notes.md
 	@cat /tmp/release_notes.md
 
-.PHONY: release test
+prerelease: RELEASE_FLAGS := --prerelease
+prerelease: release
+
+.PHONY: release prerelease test
