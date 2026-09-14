@@ -102,9 +102,14 @@ the test fails loudly, which is the correct outcome.
   including the fallback paths when IMDB id, `ParentIndexNumber` or
   `IndexNumber` are absent.
 - `Utils.ParseToTicks` across all four strategies and their boundaries:
-  `TimeSpan.TryParse` (`"2:29:00"`), ISO-8601 (`"PT2H29M"`), regex
-  (`"2h29min"`), bare number meaning minutes (`"149"`), plus null, empty and
-  unparseable input.
+  `TimeSpan.TryParse` (`"2:29:00"`), ISO-8601 (`"PT90S"`), regex
+  (`"2h29min"`), plus null, empty and unparseable input. Tests pin the
+  behaviour the code actually has, established by running it. Two cases are
+  pinned as **known defects** rather than fixed, since fixing them changes
+  runtime metadata on existing items: a bare number (`"149"`) parses as 149
+  *days* because `TimeSpan.TryParse` accepts it before the minutes branch is
+  reached, and `"PT2H29M"` loses its minutes because the input is lower-cased
+  before the case-sensitive `XmlConvert.ToTimeSpan`.
 - `EnumMappingExtensions` round-trips, `StringExtensions.IsUrl`, and `KeyLock`
   under concurrent access.
 
