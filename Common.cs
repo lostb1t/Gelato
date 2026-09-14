@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -506,6 +507,19 @@ public static class BaseItemExtensions
         return item.Tags is not null
             && item.Tags.Contains(GelatoManager.StreamTag, StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The movie/episode a stream row is a version of; any other item as it is.
+    /// </summary>
+    public static BaseItem PrimaryVersionOrSelf(
+        this BaseItem item,
+        ILibraryManager libraryManager
+    ) =>
+        item.HasStreamTag()
+        && (item as Video)?.PrimaryVersionId is { } primaryId
+        && libraryManager.GetItemById(primaryId) is { } primary
+            ? primary
+            : item;
 
     public static bool IsPrimaryVersion(this BaseItem item)
     {

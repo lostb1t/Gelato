@@ -77,6 +77,9 @@ public sealed class PurgeGelatoStreamsTask(
                             && libraryManager.GetItemById(group.Key) is Video primary
                         )
                         {
+                            // Playlist and collection entries that name a row move to the movie.
+                            manager.RerouteLinks(rows, primary.Id);
+
                             var ids = rows.Select(v => v.Id).ToHashSet();
                             primary.LinkedAlternateVersions = primary
                                 .LinkedAlternateVersions.Where(l =>

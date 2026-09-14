@@ -48,12 +48,10 @@ public sealed class CollectionManagerDecorator(
         foreach (var requestedId in itemIds)
         {
             // A version's page adds the movie/episode it is a version of.
-            var item = GetPrimaryVersion(
+            var item = (
                 libraryManager.GetItemById(requestedId)
-                    ?? throw new ArgumentException(
-                        "No item exists with the supplied Id " + requestedId
-                    )
-            );
+                ?? throw new ArgumentException("No item exists with the supplied Id " + requestedId)
+            ).PrimaryVersionOrSelf(libraryManager);
             var id = item.Id;
 
             if (!currentLinkedChildrenIds.Contains(id) && !item.IsStream())
@@ -117,13 +115,8 @@ public sealed class CollectionManagerDecorator(
     public IEnumerable<BoxSet> GetCollectionsContainingItem(User user, Guid itemId) =>
         inner.GetCollectionsContainingItem(
             user,
-            libraryManager.GetItemById(itemId) is { } item ? GetPrimaryVersion(item).Id : itemId
+            libraryManager.GetItemById(itemId) is { } item
+                ? item.PrimaryVersionOrSelf(libraryManager).Id
+                : itemId
         );
-
-    private BaseItem GetPrimaryVersion(BaseItem item) =>
-        item.HasStreamTag()
-        && (item as Video)?.PrimaryVersionId is { } primaryId
-        && libraryManager.GetItemById(primaryId) is { } primary
-            ? primary
-            : item;
 }

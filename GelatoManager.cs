@@ -70,14 +70,36 @@ public sealed class GelatoManager(
     {
         memoryCache.Set(
             $"streamsync:{guid}",
-            guid,
+            DateTime.UtcNow,
             TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
         );
     }
 
+    /// <summary>
+    /// Whether the streams behind the key (<c>[userId:]itemId</c>) were synced within StreamTTL
+    /// and the item was not reset since (<see cref="ResetStreamSync"/>).
+    /// </summary>
     public bool HasStreamSync(string guid)
     {
-        return memoryCache.TryGetValue($"streamsync:{guid}", out _);
+        if (!memoryCache.TryGetValue($"streamsync:{guid}", out DateTime syncedAt))
+            return false;
+
+        var itemId = guid[(guid.LastIndexOf(':') + 1)..];
+        return !memoryCache.TryGetValue($"streamsync-reset:{itemId}", out DateTime resetAt)
+            || syncedAt > resetAt;
+    }
+
+    /// <summary>
+    /// Makes the next visit of the movie/episode sync its streams again, for every user: after
+    /// Jellyfin's split versions cleared the rows' owner and the links, or a merge changed them.
+    /// </summary>
+    public void ResetStreamSync(Guid itemId)
+    {
+        memoryCache.Set(
+            $"streamsync-reset:{itemId}",
+            DateTime.UtcNow,
+            TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
+        );
     }
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
@@ -934,6 +956,10 @@ public sealed class GelatoManager(
         if (rows.Count == 0)
             return;
 
+        // Playlist and collection entries that name a row move to the movie/episode, as Jellyfin
+        // does for a deleted version while its owner is set. Before unlinking, which clears it.
+        RerouteLinks(rows, primary.Id);
+
         // Unlinked first: Jellyfin does not save the movie again for every row, and
         // StreamUserDataSync does not copy the cleared watch state to the movie.
         foreach (var row in rows)
@@ -961,6 +987,33 @@ public sealed class GelatoManager(
         }
 
         _log.LogDebug("Deleted {Count} stream(s) of {Id}", rows.Count, primary.Id);
+    }
+
+    /// <summary>
+    /// Moves playlist and collection entries that name one of <paramref name="rows"/> to the
+    /// movie/episode they are versions of (a version page adds the row it shows).
+    /// </summary>
+    public void RerouteLinks(IEnumerable<Video> rows, Guid primaryId)
+    {
+        foreach (var row in rows)
+        {
+            try
+            {
+                libraryManager
+                    .RerouteLinkedChildReferencesAsync(row.Id, primaryId)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(
+                    ex,
+                    "Could not move links of stream {Id} to {PrimaryId}",
+                    row.Id,
+                    primaryId
+                );
+            }
+        }
     }
 
     /// <summary>
