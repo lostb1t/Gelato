@@ -62,9 +62,8 @@ public sealed class StreamUserDataSync(
             return;
         }
 
-        // Rows being deleted are unlinked first, so clearing their watch state is not copied.
         if (
-            e.Item is not Video { PrimaryVersionId: { } primaryId } row
+            e.Item is not Video row
             || !row.HasStreamTag()
             || e.SaveReason
                 is not (
@@ -72,6 +71,20 @@ public sealed class StreamUserDataSync(
                     or UserDataSaveReason.PlaybackProgress
                     or UserDataSaveReason.PlaybackFinished
                 )
+        )
+        {
+            return;
+        }
+
+        // A session that started on the row before it was adopted as a version still holds the
+        // old instance; the owner is on the current one. Rows being deleted are unlinked first
+        // (on the current instance too), so clearing their watch state is not copied.
+        if (
+            (
+                row.PrimaryVersionId
+                ?? (libraryManager.GetItemById(row.Id) as Video)?.PrimaryVersionId
+            )
+            is not { } primaryId
         )
         {
             return;

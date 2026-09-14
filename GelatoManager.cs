@@ -621,6 +621,13 @@ public sealed class GelatoManager(
             )
             .ToList();
 
+        // Rows synced before they were versions (an older Gelato, or a split): their watch state
+        // moves to the movie/episode once they are adopted below.
+        var legacyRows = existingStreamItems
+            .Where(v => v.PrimaryVersionId is null)
+            .Select(v => v.Id)
+            .ToHashSet();
+
         // Match stream rows by persisted Gelato guid, not by volatile playback URL/path.
         var existingByGuid = new Dictionary<Guid, Video>();
         var duplicates = new List<Video>();
@@ -805,6 +812,7 @@ public sealed class GelatoManager(
         // Every row some user still has is a version of the movie/episode. Unlinking the rest
         // before they are deleted keeps Jellyfin from saving the movie once per deleted row.
         LinkVersions(video, kept, ct);
+        AdoptWatchState(video, kept.Where(r => legacyRows.Contains(r.Id)).ToList());
         DeleteStreamRows(video, toDelete, ct);
 
         upsertedStreams.Add(video);
@@ -986,6 +994,58 @@ public sealed class GelatoManager(
         }
 
         _log.LogDebug("Deleted {Count} stream(s) of {Id}", rows.Count, primary.Id);
+    }
+
+    /// <summary>
+    /// Playback through a row that was not a version yet saved its state on the row alone. When
+    /// the rows become versions, the newest state among them moves to the movie/episode, per user,
+    /// unless the movie's own is newer. Once: adopted rows have an owner from then on.
+    /// </summary>
+    private void AdoptWatchState(Video primary, IReadOnlyCollection<Video> rows)
+    {
+        if (rows.Count == 0)
+            return;
+
+        foreach (var user in userManager.GetUsers())
+        {
+            try
+            {
+                var best = rows.Select(r => userDataManager.GetUserData(user, r))
+                    .Where(d => d is not null && (d.PlaybackPositionTicks > 0 || d.Played))
+                    .OrderByDescending(d => d!.LastPlayedDate ?? DateTime.MinValue)
+                    .FirstOrDefault();
+                if (
+                    best is null
+                    || userDataManager.GetUserData(user, primary) is not { } data
+                    || (data.LastPlayedDate ?? DateTime.MinValue)
+                        >= (best.LastPlayedDate ?? DateTime.MinValue)
+                )
+                {
+                    continue;
+                }
+
+                data.PlaybackPositionTicks = best.PlaybackPositionTicks;
+                data.Played = best.Played || data.Played;
+                data.PlayCount = Math.Max(data.PlayCount, best.PlayCount);
+                data.LastPlayedDate = best.LastPlayedDate + Services.StreamUserDataSync.CopyOffset;
+                userDataManager.SaveUserData(
+                    user,
+                    primary,
+                    data,
+                    UserDataSaveReason.UpdateUserData,
+                    CancellationToken.None
+                );
+                _log.LogDebug(
+                    "Adopted the watch state of a legacy stream row for {Name} on {Id}",
+                    user.Username,
+                    primary.Id
+                );
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Could not adopt the watch state of {Id}'s rows", primary.Id);
+            }
+        }
     }
 
     /// <summary>
