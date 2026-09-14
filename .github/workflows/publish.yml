@@ -1,5 +1,13 @@
 name: "🚀 Publish Plugin"
 
+# Handles releases created by a HUMAN - chiefly promoting a prerelease to a
+# full release, which fires this because human-originated events are not
+# subject to the GITHUB_TOKEN recursion guard.
+#
+# Releases cut by release.yml do NOT reach here (that workflow builds and
+# publishes everything itself), so this rebuilding the same version is
+# expected and harmless - uploads overwrite rather than collide.
+
 on:
   release:
     types:
@@ -37,6 +45,7 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: ./*
+          overwrite: true
   generate:
     runs-on: ubuntu-latest
     needs:

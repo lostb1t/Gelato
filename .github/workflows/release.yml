@@ -8,29 +8,93 @@ on:
         type: boolean
         default: false
 
+# Everything runs in one job under GITHUB_TOKEN. This is deliberate: GitHub
+# does not trigger workflows from events created with GITHUB_TOKEN, so a
+# release cut here would never fire publish.yml. Rather than keep a PAT alive
+# just to defeat that guard, this workflow does the whole job itself.
+#
+# publish.yml still exists for the other path: when a human promotes a
+# prerelease to a full release, that IS a human-originated event, so it fires
+# normally and regenerates the manifest.
+
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.RELEASE_TOKEN }}
           fetch-depth: 0
-      
+
       - name: Configure Git
         run: |
-          git config user.name "${{ github.repository_owner }}"
-          git config user.email "${{ github.event.pusher.email || format('{0}@users.noreply.github.com', github.repository_owner) }}"
-      
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Set up git-cliff
         uses: kenji-miyake/setup-git-cliff@v1
 
-      - name: Run make release
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.*"
+
+      # Bumps build.yaml, commits, pushes, and creates the GitHub Release.
+      - name: Cut release
         run: make ${{ inputs.prerelease && 'prerelease' || 'release' }}
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Read back the version make just wrote, so the build and upload
+      # agree on it without recomputing from git-cliff.
+      - name: Resolve version
+        id: version
+        run: |
+          version="$(sed -n 's/^version: *"\(.*\)"/\1/p' build.yaml)"
+          if [ -z "$version" ]; then
+            echo "::error::Could not read version from build.yaml"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing ${version}"
+
+      - name: Build plugin
+        id: jprm
+        uses: oddstr13/jellyfin-plugin-repository-manager@v1.1.1
+        with:
+          dotnet-target: "net10.0"
+          version: ${{ steps.version.outputs.version }}
+
+      - name: Prepare release assets
+        id: assets
+        run: |
+          set -euo pipefail
+          staging="$(mktemp -d)"
+          cp "${{ steps.jprm.outputs.artifact }}" "$staging/"
+          cd "$staging"
+          for file in ./*.zip; do
+            base="${file#./}"
+            md5sum "$base" > "${base%.zip}.md5"
+            sha256sum "$base" > "${base%.zip}.sha256"
+          done
+          ls -l
+          echo "dir=${staging}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release assets
+        run: gh release upload "${{ steps.version.outputs.tag }}" "${{ steps.assets.outputs.dir }}"/* --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Prereleases stop here: installable by hand, but never advertised to
+      # the Jellyfin servers polling repository.json.
+      - name: Regenerate plugin manifest
+        if: ${{ !inputs.prerelease }}
+        uses: Kevinjil/jellyfin-plugin-repo-action@v0.4.3
+        with:
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
