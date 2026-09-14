@@ -31,8 +31,22 @@ public sealed class CollectionManagerDecorator(
         remove => inner.ItemsRemovedFromCollection -= value;
     }
 
-    public Task<BoxSet> CreateCollectionAsync(CollectionCreationOptions options) =>
-        inner.CreateCollectionAsync(options);
+    /// <summary>
+    /// A new collection made from a version's page holds the movie/episode, like an existing one
+    /// it is added to.
+    /// </summary>
+    public Task<BoxSet> CreateCollectionAsync(CollectionCreationOptions options)
+    {
+        options.ItemIdList = options
+            .ItemIdList.Select(id =>
+                Guid.TryParse(id, out var guid) && libraryManager.GetItemById(guid) is { } item
+                    ? item.PrimaryVersionOrSelf(libraryManager).Id.ToString("N")
+                    : id
+            )
+            .Distinct()
+            .ToList();
+        return inner.CreateCollectionAsync(options);
+    }
 
     public async Task AddToCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds)
     {
