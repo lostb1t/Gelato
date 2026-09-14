@@ -39,8 +39,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     // Event fired when the plugin configuration is updated via UpdateConfiguration
     public static new event Action<PluginConfiguration>? ConfigurationChanged;
 
-    public override string Name => "Gelato";
-    public override Guid Id => Guid.Parse("94EA4E14-8163-4989-96FE-0A2094BC2D6A");
+    public override string Name => "Chocolate Gelato";
+    public override Guid Id => Guid.Parse("E2513B6C-E574-47A5-B89D-CE05BF975685");
     public override string Description => "on-demand MediaSources and optional image suppression.";
 
     /// <inheritdoc />

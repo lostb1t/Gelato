@@ -1,0 +1,47 @@
+# git-cliff configuration for Chocolate Gelato
+# Drives `make release`: version bumping (--bumped-version) and release notes.
+
+[changelog]
+header = ""
+body = """
+{% if version %}\
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | upper_first }}
+{% for commit in commits %}\
+- {{ commit.message | upper_first }}
+{% endfor %}\
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = false
+filter_commits = false
+tag_pattern = "v[0-9]*"
+topo_order = false
+sort_commits = "oldest"
+
+commit_parsers = [
+  { message = "^feat", group = "🚀 Features" },
+  { message = "^fix", group = "🐛 Bug Fixes" },
+  { message = "^perf", group = "⚡ Performance" },
+  { message = "^refactor", group = "🚜 Refactor" },
+  { message = "^docs", group = "📚 Documentation" },
+  { message = "^test", group = "🧪 Testing" },
+  { message = "^ci|^build", group = "⚙️ CI/Build" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "🧹 Chores" },
+  { body = ".*security", group = "🛡️ Security" },
+]
+
+[bump]
+features_always_bump_minor = false
+breaking_always_bump_major = false

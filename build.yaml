@@ -1,10 +1,10 @@
 ---
-name: "Gelato"
-guid: "94EA4E14-8163-4989-96FE-0A2094BC2D6A"
+name: "Chocolate Gelato"
+guid: "E2513B6C-E574-47A5-B89D-CE05BF975685"
 version: "0.26.17.1"
 targetAbi: "12.0.0.0"
 framework: "net10.0"
-owner: "lstb1t"
+owner: "adamlippert"
 artifacts:
   - "Gelato.dll"
   - "Mono.Nat.dll"

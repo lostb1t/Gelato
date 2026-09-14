@@ -2,12 +2,18 @@
 > Looking for the next evolution of Gelato?
 > Check out [Remux](https://github.com/lostb1t/remux). A Rust-based media server designed as a full replacement for Jellyfin rather than a plugin. It supports local libraries, remote sources, Stremio addons, and works with existing Jellyfin clients.
 
+> [!IMPORTANT]
+> **Chocolate Gelato** is a fork of [lostb1t/Gelato](https://github.com/lostb1t/Gelato),
+> maintained by [@adamlippert](https://github.com/adamlippert). It ships under its own
+> plugin GUID, so it installs alongside upstream Gelato rather than replacing it.
+> All credit for the original plugin goes to lostb1t and its contributors.
+
 <div align="center">
    <img width="125" src="logo.png" alt="Logo">
 </div>
 
 <div align="center">
-  <h1><b>Gelato</b></h1>
+  <h1><b>Chocolate Gelato</b></h1>
   <p><i>Jellyfin Stremio Integration Plugin</i></p>
 </div>
 
@@ -35,7 +41,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
    At minimum you need the **tmdb addon enabled** for search and one addon that provides streams (comet for example).
    Alternative you can import the [starter config](aiostreams-config.json). Remember to enable your debrid providers under services after importing the config.
 
-2. Make sure you are running Jellyfin 12 and add `https://raw.githubusercontent.com/lostb1t/Gelato/refs/heads/gh-pages/repository.json` to your plugin repositories.
+2. Make sure you are running Jellyfin 12 and add `https://raw.githubusercontent.com/adamlippert/Gelato/refs/heads/gh-pages/repository.json` to your plugin repositories.
 
    **Upgrading from Jellyfin 10.11?** Update Gelato to the final 10.11 release first and shut the server down normally at least once before upgrading Jellyfin. The first Jellyfin 12 start deletes every Gelato item unless that release has emptied the Gelato library folders on shutdown, and its settings page shows whether the install is ready. If you upgraded without it, Gelato runs the repair watch state task once on the first start and recovers whatever still has watch state (see the FAQ).
 
