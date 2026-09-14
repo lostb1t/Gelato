@@ -23,6 +23,11 @@
     <!-- Embed all frontend assets so they are delivered with the plugin -->
     <EmbeddedResource Include="Frontend\**\*" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="tests\**\*" />
+  </ItemGroup>
   <Target Name="CleanupJellyfinDlls" AfterTargets="Build">
     <ItemGroup>
       <AllDlls Include="$(OutDir)*.dll" />
