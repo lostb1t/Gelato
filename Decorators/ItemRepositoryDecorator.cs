@@ -153,6 +153,9 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
 
     public IReadOnlyList<string> GetGenreNames() => inner.GetGenreNames();
 
+    public IReadOnlyList<string> GetTagNames(InternalItemsQuery filter) =>
+        inner.GetTagNames(filter);
+
     public IReadOnlyList<string> GetAllArtistNames() => inner.GetAllArtistNames();
 
     public IReadOnlyList<string> GetMediaStreamLanguages(
