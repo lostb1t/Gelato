@@ -1056,6 +1056,46 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
+    /// Makes legacy rows (no owner) versions of <paramref name="primary"/>: owner, refresh stamp,
+    /// links next to the rows already linked, and the rows' watch state on the movie/episode.
+    /// Run as the item's only writer (<see cref="RunExclusiveAsync"/>).
+    /// </summary>
+    public Task AdoptLegacyRows(
+        Video primary,
+        IReadOnlyCollection<Video> rows,
+        CancellationToken ct
+    )
+    {
+        var now = DateTime.UtcNow;
+        foreach (var row in rows)
+        {
+            row.SetPrimaryVersionId(primary.Id);
+            if (row.DateLastRefreshed == DateTime.MinValue)
+            {
+                row.DateLastRefreshed = now;
+                row.DateLastSaved = now;
+            }
+        }
+
+        persistence.SaveItems(rows.ToList<BaseItem>(), ct);
+        foreach (var row in rows)
+        {
+            libraryManager.RegisterItem(row);
+        }
+
+        var rowIds = rows.Select(r => r.Id).ToHashSet();
+        var all = libraryManager
+            .GetLinkedAlternateVersions(primary)
+            .Where(v => v.HasStreamTag() && !rowIds.Contains(v.Id))
+            .Concat(rows)
+            .ToList();
+        LinkVersions(primary, all, ct);
+        AdoptWatchState(primary, rows);
+        _log.LogDebug("Adopted {Count} legacy stream row(s) of {Id}", rows.Count, primary.Id);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Playback through a row that was not a version yet saved its state on the row alone. When
     /// the rows become versions, the newest state among them moves to the movie/episode, per user,
     /// unless the movie's own is newer. Once: adopted rows have an owner from then on.

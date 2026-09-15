@@ -52,7 +52,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<IHostedService, GelatoJavaScriptRegistrationService>();
         services.AddSingleton<IHostedService, UpgradeRepairService>();
         services.AddSingleton<IHostedService, StreamUserDataSync>();
-        services.AddSingleton<IHostedService, LegacyRowStampService>();
+        services.AddSingleton<IHostedService, LegacyRowAdoptionService>();
         services.AddSingleton<SubtitleProvider>();
         services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
         services.AddSingleton(sp => new Lazy<SubtitleProvider>(
