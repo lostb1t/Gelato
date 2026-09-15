@@ -34,9 +34,15 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
+        services.AddSingleton<StreamUserDataFilter>();
+        services.AddSingleton<VersionActionFilter>();
         services.AddSingleton<GelatoManager>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
+        services.DecorateSingle<IUserDataManager, UserDataManagerDecorator>();
+        services.AddSingleton(sp =>
+            (UserDataManagerDecorator)sp.GetRequiredService<IUserDataManager>()
+        );
         services.DecorateSingle<IItemCountService, ItemCountServiceDecorator>();
         services.AddSingleton<GelatoStremioProviderFactory>();
         services.AddSingleton(sp => new Lazy<GelatoManager>(sp.GetRequiredService<GelatoManager>));
@@ -45,6 +51,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<PalcoCacheService>();
         services.AddSingleton<IHostedService, GelatoJavaScriptRegistrationService>();
         services.AddSingleton<IHostedService, UpgradeRepairService>();
+        services.AddSingleton<IHostedService, StreamUserDataSync>();
+        services.AddSingleton<IHostedService, LegacyRowAdoptionService>();
         services.AddSingleton<SubtitleProvider>();
         services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
         services.AddSingleton(sp => new Lazy<SubtitleProvider>(
@@ -113,6 +121,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
             o.Filters.AddService<DownloadFilter>();
+            o.Filters.AddService<StreamUserDataFilter>();
+            o.Filters.AddService<VersionActionFilter>();
         });
     }
 

@@ -104,8 +104,9 @@ namespace Gelato.Decorators
             if (!path.IsUrl())
                 return false;
 
+            // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
             item ??= _libraryManager
-                .Value.GetItemList(new InternalItemsQuery { Path = path })
+                .Value.GetItemList(new InternalItemsQuery { Path = path, IncludeOwnedItems = true })
                 .FirstOrDefault();
             if (item is null || !item.IsGelato())
                 return false;

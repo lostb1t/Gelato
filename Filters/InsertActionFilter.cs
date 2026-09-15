@@ -22,6 +22,15 @@ public class InsertActionFilter(
         ActionExecutionDelegate next
     )
     {
+        // A client that opened a search result keeps the result's id in its page URL: the
+        // reload, images, seasons, episodes, similar items and playback all name it. Every such
+        // id goes to the item the result became, whatever the action.
+        if (ctx.RedirectGuids(manager.GetInsertedId))
+        {
+            await next();
+            return;
+        }
+
         if (
             !ctx.IsInsertableAction()
             || !ctx.TryGetRouteGuid(out var guid)
@@ -29,22 +38,6 @@ public class InsertActionFilter(
             || userManager.GetUserById(userId) is not { } user
         )
         {
-            await next();
-            return;
-        }
-
-        // Jellyfin 12's web client makes the chosen version the page item when the version
-        // dropdown changes (refreshSelectedVersion). A stream row has no metadata of its own and
-        // is hidden from every list, so watch progress saved on it never shows up. Hand out the
-        // movie/episode instead: the client keeps the chosen version selected as media source.
-        if (
-            ctx.GetActionName() is "GetItem" or "GetItemLegacy"
-            && libraryManager.GetItemById(guid) is { } requested
-            && requested.HasStreamTag()
-            && manager.FindPrimaryForStream(requested, user) is { } primary
-        )
-        {
-            ctx.ReplaceGuid(primary.Id);
             await next();
             return;
         }
@@ -84,6 +77,7 @@ public class InsertActionFilter(
                     "Media already exists; redirecting to canonical id {Id}",
                     existing.Id
                 );
+                manager.RememberInsertedId(guid, existing.Id);
                 ctx.ReplaceGuid(existing.Id);
                 await next();
                 return;
@@ -111,6 +105,7 @@ public class InsertActionFilter(
         var baseItem = await InsertMetaAsync(guid, root, meta, user);
         if (baseItem is not null)
         {
+            manager.RememberInsertedId(guid, baseItem.Id);
             ctx.ReplaceGuid(baseItem.Id);
             manager.RemoveStremioMeta(guid);
         }

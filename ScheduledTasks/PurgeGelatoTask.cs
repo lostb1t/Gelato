@@ -45,6 +45,10 @@ public sealed class PurgeGelatoTask(
                     GroupBySeriesPresentationUniqueKey = false,
                     CollapseBoxSetItems = false,
                     IsDeadPerson = true,
+                    // Stream rows are alternate versions, which Jellyfin leaves out of queries by
+                    // default. DeleteItemsUnsafeFast deletes only what it is given, so without this
+                    // every linked row would survive the purge, watch state included.
+                    IncludeOwnedItems = true,
                 }
             )
             .Where(item =>

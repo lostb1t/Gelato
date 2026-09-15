@@ -40,45 +40,38 @@ public sealed class DeleteResourceFilter(
         }
 
         // Handle deletion and return 204 No Content
-        DeleteItem(item);
+        await DeleteItemAsync(item).ConfigureAwait(false);
         ctx.Result = new NoContentResult();
     }
 
-    private void DeleteItem(BaseItem item)
+    private Task DeleteItemAsync(BaseItem item)
     {
-        if (item.IsPrimaryVersion())
-        {
-            DeleteStreams(item);
-        }
-        else
-        {
-            log.LogInformation("Deleting {Name}", item.Name);
-            library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
-        }
-    }
-
-    private void DeleteStreams(BaseItem item)
-    {
-        var query = new InternalItemsQuery
-        {
-            IncludeItemTypes = [item.GetBaseItemKind()],
-            HasAnyProviderId = new Dictionary<string, string>
+        // Queued behind a sync of the same movie/episode (a version's rows are its movie's): a sync
+        // that ran on after the deletion would save the rows and the item back into the library.
+        // Not cancelled with the request: half a deletion is worse than a late one.
+        var owner = (item as Video)?.PrimaryVersionId ?? item.Id;
+        return manager.RunExclusiveAsync(
+            owner,
+            _ =>
             {
-                { "Stremio", item.ProviderIds["Stremio"] },
-            },
-            Recursive = false,
-            GroupByPresentationUniqueKey = false,
-            GroupBySeriesPresentationUniqueKey = false,
-            CollapseBoxSetItems = false,
-            // Skip filter
-            IsDeadPerson = true,
-        };
+                if (item is Video video && item.IsPrimaryVersion())
+                {
+                    // Its stream rows first, with their watch state: Jellyfin would delete the
+                    // linked rows along with the movie, but park their user data. Only this item's
+                    // rows: another item of the same title (a local movie, another user's folder)
+                    // keeps its own.
+                    manager.DeleteStreamRows(
+                        video,
+                        manager.GetStreamRows(video),
+                        CancellationToken.None
+                    );
+                }
 
-        var sources = library.GetItemList(query);
-        foreach (var alt in sources)
-        {
-            log.LogInformation("Deleting {Name} ({Id})", alt.Name, alt.Id);
-            library.DeleteItem(alt, new DeleteOptions { DeleteFileLocation = true }, true);
-        }
+                log.LogInformation("Deleting {Name} ({Id})", item.Name, item.Id);
+                library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
+                return Task.CompletedTask;
+            },
+            CancellationToken.None
+        );
     }
 }

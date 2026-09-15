@@ -124,8 +124,9 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
             return result;
 
         // Jellyfin counts no user access here, only direct children: the episodes of a season by
-        // SeasonId, and by ParentId the items that sit in no season.
-        var streams = GetStreamRows(parentIds, null);
+        // SeasonId, and by ParentId the items that sit in no season. Unlike the played and total
+        // counts, this one does not leave out alternate versions, so the linked rows count too.
+        var streams = GetStreamRows(parentIds, null, includeLinked: true);
         foreach (var stream in streams)
         {
             var parentId =
@@ -142,14 +143,20 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
 
     /// <summary>
     /// The stream rows below any of <paramref name="ancestorIds"/> that
-    /// <paramref name="user"/> may see, which is what Jellyfin counted for them.
+    /// <paramref name="user"/> may see, which is what Jellyfin counted for them. Rows linked as
+    /// alternate versions are left out unless <paramref name="includeLinked"/> is set, matching the
+    /// counts that apply Jellyfin's access filter.
     /// </summary>
-    private List<BaseItem> GetStreamRows(IReadOnlyList<Guid> ancestorIds, User? user)
+    private List<BaseItem> GetStreamRows(
+        IReadOnlyList<Guid> ancestorIds,
+        User? user,
+        bool includeLinked = false
+    )
     {
         if (ancestorIds.Count == 0)
             return [];
 
-        return repo.GetItemList(StreamRowsQuery(ancestorIds, user))
+        return repo.GetItemList(StreamRowsQuery(ancestorIds, user, includeLinked))
             .Where(i => i.HasStreamTag())
             .ToList();
     }
@@ -167,7 +174,8 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
 
     private static InternalItemsQuery StreamRowsQuery(
         IReadOnlyList<Guid> ancestorIds,
-        User? user
+        User? user,
+        bool includeLinked = false
     ) =>
         new(user)
         {
@@ -179,6 +187,7 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
             GroupByPresentationUniqueKey = false,
             // Marks the lookup as internal, so GelatoItemRepository does not hide the stream rows.
             IsDeadPerson = true,
+            IncludeOwnedItems = includeLinked,
             DtoOptions = new DtoOptions(false) { EnableImages = false },
         };
 }
