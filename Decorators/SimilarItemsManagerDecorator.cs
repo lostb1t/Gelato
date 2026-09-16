@@ -15,11 +15,12 @@ namespace Gelato.Decorators;
 /// stream-row filter in <see cref="GelatoItemRepository"/> never applies. Stream rows share the
 /// <c>gelato-stream</c> tag, and some carry their movie's genres, studios and people, so they
 /// outscore everything else: a movie's page listed its own versions as similar items. Jellyfin
-/// only drops alternate versions by PrimaryVersionId, which stream rows do not have.
+/// drops alternate versions by PrimaryVersionId, which rows synced before they were linked as
+/// versions do not have.
 /// </remarks>
 public sealed class SimilarItemsManagerDecorator(
     ISimilarItemsManager inner,
-    Lazy<GelatoManager> manager
+    ILibraryManager libraryManager
 ) : ISimilarItemsManager
 {
     // Jellyfin's default when the client sends no limit.
@@ -48,10 +49,13 @@ public sealed class SimilarItemsManagerDecorator(
         CancellationToken cancellationToken
     )
     {
-        // A stream row has nothing to compare but the tag every stream row shares, so use its
-        // movie. InsertActionFilter keeps Jellyfin 12's web client off stream-row pages, but the
-        // API still accepts their ids.
-        if (item.HasStreamTag() && manager.Value.FindPrimaryForStream(item, user) is { } movie)
+        // A stream row is a version of its movie: the tag every stream row shares would make the
+        // other movies' rows its most similar items.
+        if (
+            item.HasStreamTag()
+            && (item as Video)?.PrimaryVersionId is { } primaryId
+            && libraryManager.GetItemById(primaryId) is { } movie
+        )
         {
             item = movie;
         }

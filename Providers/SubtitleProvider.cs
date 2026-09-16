@@ -95,8 +95,15 @@ namespace Gelato.Providers
             {
                 // Prefer the filename stored in GelatoData (set from BehaviorHints.Filename during stream
                 // insertion), since the stream URL often doesn't contain a meaningful filename.
+                // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
                 var streamItem = _library
-                    .GetItemList(new InternalItemsQuery { Path = request.MediaPath })
+                    .GetItemList(
+                        new InternalItemsQuery
+                        {
+                            Path = request.MediaPath,
+                            IncludeOwnedItems = true,
+                        }
+                    )
                     .FirstOrDefault();
                 var gelatoFilename = streamItem?.GelatoData<string>("filename");
 

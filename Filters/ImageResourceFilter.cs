@@ -1,3 +1,5 @@
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -5,12 +7,13 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Filters;
 
 /// <summary>
-/// Proxies image requests for search results (non-library gelato items).
-/// Library item images are handled by ImageProcessorDecorator.
+/// Proxies image requests for search results (non-library gelato items), and serves a stream
+/// row's images from its movie/episode. Library item images are handled by ImageProcessorDecorator.
 /// </summary>
 public sealed class ImageResourceFilter(
     IHttpClientFactory http,
     GelatoManager manager,
+    ILibraryManager libraryManager,
     ILogger<ImageResourceFilter> log
 ) : IAsyncResourceFilter
 {
@@ -23,6 +26,8 @@ public sealed class ImageResourceFilter(
             ctx.ActionDescriptor
             is not ControllerActionDescriptor
             {
+                // HEAD requests share these action names; the Head* names in ImageController are
+                // route names.
                 ActionName: "GetItemImage" or "GetItemImageByIndex" or "GetItemImage2"
             }
         )
@@ -38,6 +43,25 @@ public sealed class ImageResourceFilter(
             || !Guid.TryParse(guidString?.ToString(), out var guid)
         )
         {
+            await next();
+            return;
+        }
+
+        // The search result was opened and inserted: its images are the item's now.
+        if (manager.GetInsertedId(guid) is { } insertedId)
+        {
+            routeValues["itemId"] = insertedId.ToString("N");
+            await next();
+            return;
+        }
+
+        // A stream row has no images of its own; the DTO hands out its movie's image tags.
+        if (
+            libraryManager.GetItemById(guid) is Video { PrimaryVersionId: { } primaryId } row
+            && row.HasStreamTag()
+        )
+        {
+            routeValues["itemId"] = primaryId.ToString("N");
             await next();
             return;
         }

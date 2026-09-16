@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -431,6 +432,43 @@ public static class ActionContextExtensions
         return false;
     }
 
+    /// <summary>
+    /// Replaces every id in the route, the query-bound arguments and id lists that
+    /// <paramref name="map"/> knows a replacement for. Returns whether anything changed.
+    /// </summary>
+    public static bool RedirectGuids(this ActionExecutingContext ctx, Func<Guid, Guid?> map)
+    {
+        var changed = false;
+        foreach (var (key, raw) in ctx.RouteData.Values.ToList())
+        {
+            if (raw?.ToString() is { } s && Guid.TryParse(s, out var g) && map(g) is { } to)
+            {
+                ctx.RouteData.Values[key] = to.ToString("N");
+                if (ctx.ActionArguments.ContainsKey(key))
+                    ctx.ActionArguments[key] = to;
+                ctx.HttpContext.Items["GuidResolved"] = to;
+                changed = true;
+            }
+        }
+
+        foreach (var (key, value) in ctx.ActionArguments.ToList())
+        {
+            switch (value)
+            {
+                case Guid g when map(g) is { } to:
+                    ctx.ActionArguments[key] = to;
+                    changed = true;
+                    break;
+                case Guid[] ids when ids.Any(g => map(g) is not null):
+                    ctx.ActionArguments[key] = ids.Select(g => map(g) ?? g).Distinct().ToArray();
+                    changed = true;
+                    break;
+            }
+        }
+
+        return changed;
+    }
+
     public static void ReplaceGuid(this ActionExecutingContext ctx, Guid value)
     {
         var rd = ctx.RouteData.Values;
@@ -506,6 +544,19 @@ public static class BaseItemExtensions
         return item.Tags is not null
             && item.Tags.Contains(GelatoManager.StreamTag, StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The movie/episode a stream row is a version of; any other item as it is.
+    /// </summary>
+    public static BaseItem PrimaryVersionOrSelf(
+        this BaseItem item,
+        ILibraryManager libraryManager
+    ) =>
+        item.HasStreamTag()
+        && (item as Video)?.PrimaryVersionId is { } primaryId
+        && libraryManager.GetItemById(primaryId) is { } primary
+            ? primary
+            : item;
 
     public static bool IsPrimaryVersion(this BaseItem item)
     {

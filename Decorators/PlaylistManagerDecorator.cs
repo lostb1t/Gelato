@@ -22,8 +22,23 @@ public sealed class PlaylistManagerDecorator(
     public Playlist GetPlaylistForUser(Guid playlistId, Guid userId) =>
         inner.GetPlaylistForUser(playlistId, userId);
 
-    public Task<PlaylistCreationResult> CreatePlaylist(PlaylistCreationRequest request) =>
-        inner.CreatePlaylist(request);
+    /// <summary>
+    /// A version's page adds the movie/episode it is a version of, like collections do. Stream
+    /// rows come and go with the addon's list, and a deleted row takes its entry with it.
+    /// </summary>
+    public Task<PlaylistCreationResult> CreatePlaylist(PlaylistCreationRequest request)
+    {
+        request.ItemIdList = PrimaryIds(request.ItemIdList);
+        return inner.CreatePlaylist(request);
+    }
+
+    private IReadOnlyList<Guid> PrimaryIds(IEnumerable<Guid> itemIds) =>
+        itemIds
+            .Select(id =>
+                libraryManager.GetItemById(id)?.PrimaryVersionOrSelf(libraryManager).Id ?? id
+            )
+            .Distinct()
+            .ToList();
 
     public Task UpdatePlaylist(PlaylistUpdateRequest request) => inner.UpdatePlaylist(request);
 
@@ -48,7 +63,9 @@ public sealed class PlaylistManagerDecorator(
         var user = userId == Guid.Empty ? null : userManager.GetUserById(userId);
         var options = new DtoOptions(false) { EnableImages = true };
 
-        var resolved = itemIds.Select(libraryManager.GetItemById).Where(i => i is not null);
+        var resolved = PrimaryIds(itemIds)
+            .Select(libraryManager.GetItemById)
+            .Where(i => i is not null);
         var newItems = Playlist
             .GetPlaylistItems(resolved, user, options)
             .Where(i => i.SupportsAddingToPlaylist);
