@@ -164,6 +164,9 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
     public QueryFiltersLegacy GetQueryFiltersLegacy(InternalItemsQuery filter) =>
         inner.GetQueryFiltersLegacy(filter);
 
+    public IReadOnlyList<string> GetTagNames(InternalItemsQuery filter) =>
+        inner.GetTagNames(filter);
+
     public Task<bool> ItemExistsAsync(Guid id) => inner.ItemExistsAsync(id);
 
     public bool GetIsPlayed(User user, Guid id, bool recursive) =>
