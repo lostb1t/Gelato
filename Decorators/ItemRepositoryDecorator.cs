@@ -111,13 +111,33 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         if (!isPremiereFilteredQuery)
             return filter;
 
-        // All media types use EndDate (digital for movies, premiere for series/episodes).
-        // sentinel 9999 = no release date known → excluded by MaxEndDate <= today + bufferDays.
-        if (filter.MaxEndDate is null)
-            filter.MaxEndDate = DateTime.Today.AddDays(bufferDays);
+        // Gelato items carry their release in EndDate (digital for movies, premiere for
+        // series/episodes; sentinel 9999 = no release date known). Setting MaxEndDate on the query
+        // would also drop every row whose EndDate is null, which is every native item, collection,
+        // playlist and library folder, so the unreleased Gelato items are excluded by id instead.
+        var unreleased = GetUnreleasedGelatoIds(DateTime.Today.AddDays(bufferDays));
+        if (unreleased.Length > 0)
+            filter.ExcludeItemIds = [.. filter.ExcludeItemIds, .. unreleased];
 
         return filter;
     }
+
+    private Guid[] GetUnreleasedGelatoIds(DateTime cutoff) =>
+        inner
+            .GetItemIdsList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = PremiereFilterMediaKinds,
+                    // MinEndDate is inclusive; items released on the cutoff itself stay listed.
+                    MinEndDate = cutoff.AddTicks(1),
+                    HasAnyProviderId = new Dictionary<string, string>
+                    {
+                        ["Stremio"] = string.Empty,
+                    },
+                    ExcludeTags = [GelatoManager.StreamTag],
+                }
+            )
+            .ToArray();
 
     public IReadOnlyList<BaseItem> GetLatestItemList(
         InternalItemsQuery filter,
