@@ -539,6 +539,28 @@ public static class BaseItemExtensions
         return !string.IsNullOrWhiteSpace(item.GetProviderId("Stremio"));
     }
 
+    /// <summary>
+    /// Drops the EndDate a Gelato metadata result carries when the refreshed item is not Gelato's
+    /// own. <see cref="GelatoManager.IntoBaseItem"/> always sets EndDate, since the unreleased
+    /// filter needs one, but on a native item that is metadata the library never had: a running
+    /// series ends up with an end date, and an item whose release is unknown with the 9999
+    /// sentinel. Jellyfin only fills an empty EndDate, so the value stays until a metadata replace.
+    /// <paramref name="sourceProviderIds"/> are the ids of the item being refreshed.
+    /// </summary>
+    public static void KeepEndDateOnlyForGelato(
+        this BaseItem item,
+        IReadOnlyDictionary<string, string> sourceProviderIds
+    )
+    {
+        if (
+            !sourceProviderIds.TryGetValue("Stremio", out var stremioId)
+            || string.IsNullOrWhiteSpace(stremioId)
+        )
+        {
+            item.EndDate = null;
+        }
+    }
+
     public static bool HasStreamTag(this BaseItem item)
     {
         return item.Tags is not null

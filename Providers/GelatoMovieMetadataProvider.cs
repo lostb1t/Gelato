@@ -57,6 +57,7 @@ public sealed class GelatoMovieMetadataProvider(
             return result;
 
         movie.ProviderIds.Remove("Stremio");
+        movie.KeepEndDateOnlyForGelato(info.ProviderIds);
         result.HasMetadata = true;
         result.Item = movie;
         MapPeople(meta, result);

@@ -86,6 +86,7 @@ public sealed class GelatoEpisodeMetadataProvider(
             return result;
 
         ep.ProviderIds.Remove("Stremio");
+        ep.KeepEndDateOnlyForGelato(info.ProviderIds);
         result.HasMetadata = true;
         result.Item = ep;
         return result;
