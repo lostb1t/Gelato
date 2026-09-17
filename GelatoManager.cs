@@ -1195,6 +1195,22 @@ public sealed class GelatoManager(
         return item.IsGelato();
     }
 
+    /// <summary>
+    /// The path of a season Gelato adds to a series.
+    /// </summary>
+    /// <remarks>
+    /// No folder exists on disk for it. Below a Gelato series the series path is a gelato:// URL
+    /// and the season inherits it, but a local series sits on a real folder, so a season path
+    /// built from it (the series folder with <c>:2</c> appended) is a file path as far as Jellyfin
+    /// is concerned: a library scan deletes every file-backed child it does not find on disk, and
+    /// takes the season's episodes and their watch state with it. A gelato:// path makes the
+    /// season remote, which the scan leaves alone, the way it leaves the episodes below it alone.
+    /// </remarks>
+    private static string VirtualSeasonPath(Series series, int seasonIndex) =>
+        !series.IsFileProtocol && !string.IsNullOrEmpty(series.Path)
+            ? $"{series.Path}:{seasonIndex}"
+            : $"gelato://season/{series.Id:N}:{seasonIndex}";
+
     public async Task<BaseItem?> SyncSeriesTreesAsync(
         PluginConfiguration cfg,
         StremioMeta seriesMeta,
@@ -1341,6 +1357,7 @@ public sealed class GelatoManager(
         var episodesInserted = 0;
 
         var newSeasons = new List<Season>();
+        var repairedSeasons = new List<Season>();
         var allNewEpisodes = new List<Episode>();
         var updatedEpisodes = new List<Episode>();
 
@@ -1352,7 +1369,7 @@ public sealed class GelatoManager(
             ct.ThrowIfCancellationRequested();
 
             var seasonIndex = seasonGroup.Key;
-            var seasonPath = $"{series.Path}:{seasonIndex}";
+            var seasonPath = VirtualSeasonPath(series, seasonIndex);
 
             if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
             {
@@ -1406,6 +1423,14 @@ public sealed class GelatoManager(
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
                 newSeasons.Add(season);
                 seasonsInserted++;
+            }
+            else if (season.IsGelato() && season.IsFileProtocol)
+            {
+                // Added by an older Gelato below a local series, so still carrying a path that
+                // looks like a folder on disk. Repair it before the next scan takes the season
+                // and its episodes with it; the id stays as it is, so nothing below moves.
+                season.Path = seasonPath;
+                repairedSeasons.Add(season);
             }
 
             // Look up existing episodes for this season from the pre-fetched dict
@@ -1477,6 +1502,15 @@ public sealed class GelatoManager(
         {
             persistence.SaveItems(newSeasons, ct);
             await ReattachWatchStateAsync(newSeasons, ct).ConfigureAwait(false);
+        }
+
+        if (repairedSeasons.Count > 0)
+        {
+            persistence.SaveItems(repairedSeasons, ct);
+            foreach (var season in repairedSeasons)
+            {
+                libraryManager.RegisterItem(season);
+            }
         }
 
         if (allNewEpisodes.Count > 0)
