@@ -316,6 +316,15 @@ public static class ActionContextExtensions
         "GetVideoStream",
         "GetDownload",
         "GetSubtitleWithTicks",
+        // Clients offer these from a search result's context menu, before the result was opened.
+        "MarkPlayedItem",
+        "MarkPlayedItemLegacy",
+        "MarkFavoriteItem",
+        "MarkFavoriteItemLegacy",
+        "UpdateUserItemRating",
+        "UpdateUserItemRatingLegacy",
+        "UpdateItemUserData",
+        "UpdateItemUserDataLegacy",
     };
 
     private static readonly HashSet<string> InsertableListActionNames = new(
