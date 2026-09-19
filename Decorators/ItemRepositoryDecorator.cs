@@ -115,7 +115,12 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         // series/episodes; sentinel 9999 = no release date known). Setting MaxEndDate on the query
         // would also drop every row whose EndDate is null, which is every native item, collection,
         // playlist and library folder, so the unreleased Gelato items are excluded by id instead.
-        var unreleased = GetUnreleasedGelatoIds(DateTime.Today.AddDays(bufferDays));
+        // The buffer keeps an item hidden for that many days after its release, as the setting
+        // says ("Items released within these many days will be hidden"), which is also how
+        // StremioMeta.IsReleased reads it for the addon search. Adding the days to the cutoff
+        // instead of subtracting them listed items that many days *before* their release: a buffer
+        // of 120 put a film premiering in 89 days into the library.
+        var unreleased = GetUnreleasedGelatoIds(DateTime.Today.AddDays(-bufferDays));
         if (unreleased.Length > 0)
             filter.ExcludeItemIds = [.. filter.ExcludeItemIds, .. unreleased];
 
