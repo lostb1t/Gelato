@@ -1,11 +1,17 @@
 using System.Runtime.ExceptionServices;
 using Gelato.Config;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations;
+using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
@@ -13,6 +19,9 @@ namespace Gelato.Filters;
 public class SearchActionFilter(
     IDtoService dtoService,
     GelatoManager manager,
+    IUserManager userManager,
+    ILibraryManager libraryManager,
+    IDbContextFactory<JellyfinDbContext> dbFactory,
     ILogger<SearchActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -69,11 +78,12 @@ public class SearchActionFilter(
             metas.Count
         );
 
-        var dtos = ConvertMetasToDtos(metas);
-        var paged = dtos.Skip(start).Take(limit).ToArray();
+        var results = ConvertMetasToDtos(metas);
+        var page = results.Skip(start).Take(limit).ToList();
+        var paged = await UseLibraryItemsAsync(page, userId, ctx).ConfigureAwait(false);
 
         ctx.Result = new OkObjectResult(
-            new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = dtos.Count }
+            new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = results.Count }
         );
     }
 
@@ -194,13 +204,124 @@ public class SearchActionFilter(
         return results;
     }
 
-    private List<BaseItemDto> ConvertMetasToDtos(List<StremioMeta> metas)
+    /// <summary>
+    /// A title that is already in the library is returned as the library item, so the client
+    /// gets its real id and the user's played, favorite and resume state. A synthetic result
+    /// carries no user data, so a watched title shows as unwatched in search.
+    /// </summary>
+    /// <remarks>
+    /// Most results are not in the library, so the lookup has to be cheap for a miss: one query
+    /// for the provider ids of the whole page and one for the items behind the hits, however
+    /// many results the page has.
+    /// </remarks>
+    private async Task<BaseItemDto[]> UseLibraryItemsAsync(
+        List<(BaseItemDto Dto, BaseItem Item)> page,
+        Guid userId,
+        ActionExecutingContext ctx
+    )
+    {
+        if (
+            page.Count == 0
+            || userId == Guid.Empty
+            || userManager.GetUserById(userId) is not { } user
+        )
+        {
+            return page.Select(r => r.Dto).ToArray();
+        }
+
+        var libraryItems = await FindLibraryItemsAsync(
+                page.Select(r => r.Item),
+                user,
+                ctx.HttpContext.RequestAborted
+            )
+            .ConfigureAwait(false);
+        if (libraryItems.Count == 0)
+            return page.Select(r => r.Dto).ToArray();
+
+        // A real item gets what Jellyfin's own search would return: the fields the client asked
+        // for. All fields, as the synthetic results use, makes a series count its episodes.
+        ctx.TryGetActionArgument<ItemFields[]>("fields", out var fields, []);
+        ctx.TryGetActionArgument<bool?>("enableUserData", out var enableUserData);
+        var options = new DtoOptions
+        {
+            Fields = fields,
+            EnableImages = true,
+            EnableUserData = enableUserData ?? true,
+        };
+
+        return page.Select(r =>
+                FindMatch(libraryItems, r.Item) is { } existing
+                    ? dtoService.GetBaseItemDto(existing, options, user)
+                    : r.Dto
+            )
+            // Two metas with different ids can be the same library item.
+            .DistinctBy(dto => dto.Id)
+            .ToArray();
+    }
+
+    private async Task<IReadOnlyList<BaseItem>> FindLibraryItemsAsync(
+        IEnumerable<BaseItem> candidates,
+        User user,
+        CancellationToken ct
+    )
+    {
+        var providerIds = candidates.SelectMany(c => c.ProviderIds).ToList();
+        var names = providerIds.Select(p => p.Key).Distinct().ToArray();
+        var values = providerIds.Select(p => p.Value).Distinct().ToArray();
+        if (values.Length == 0)
+            return [];
+
+        Guid[] itemIds;
+        var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using (db.ConfigureAwait(false))
+        {
+            itemIds = await db
+                .BaseItemProviders.AsNoTracking()
+                .Where(p => names.Contains(p.ProviderId) && values.Contains(p.ProviderValue))
+                .Select(p => p.ItemId)
+                .Distinct()
+                .ToArrayAsync(ct)
+                .ConfigureAwait(false);
+        }
+
+        if (itemIds.Length == 0)
+            return [];
+
+        return libraryManager.GetItemList(
+            new InternalItemsQuery(user)
+            {
+                ItemIds = itemIds,
+                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
+                ExcludeTags = [GelatoManager.StreamTag],
+                IsDeadPerson = true, // skip filter marker
+            }
+        );
+    }
+
+    /// <summary>Same rule as <see cref="GelatoManager.FindExistingItem"/>, on loaded items.</summary>
+    private static BaseItem? FindMatch(IReadOnlyList<BaseItem> libraryItems, BaseItem candidate)
+    {
+        var kind = candidate.GetBaseItemKind();
+        return libraryItems.FirstOrDefault(item =>
+            item.GetBaseItemKind() == kind
+            && !(item is Video video && video.IsStream())
+            && candidate.ProviderIds.Any(id =>
+                string.Equals(
+                    item.GetProviderId(id.Key),
+                    id.Value,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+        );
+    }
+
+    private List<(BaseItemDto Dto, BaseItem Item)> ConvertMetasToDtos(List<StremioMeta> metas)
     {
         // theres a reason i initally disabled all fields but forgot....
         // infuse breaks if we do a small subset. Not sure which field it needs. Prolly mediasources
         var options = new DtoOptions { EnableImages = true, EnableUserData = false };
 
-        var dtos = new List<BaseItemDto>(metas.Count);
+        var dtos = new List<(BaseItemDto Dto, BaseItem Item)>(metas.Count);
 
         // The movie and series catalogs are searched separately and their results concatenated,
         // but an addon may return the same title under both — a series showing up in the movie
@@ -221,7 +342,7 @@ public class SearchActionFilter(
             if (!seen.Add(dto.Id))
                 continue;
 
-            dtos.Add(dto);
+            dtos.Add((dto, baseItem));
 
             manager.SaveStremioMeta(dto.Id, meta);
         }
