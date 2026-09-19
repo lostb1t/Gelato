@@ -1239,6 +1239,15 @@ public sealed class GelatoManager(
             )
             .Any(s => s.IsGelato());
 
+    /// <summary>
+    /// The item the tree sync would overwrite by creating one at <paramref name="path"/>, if there
+    /// is one: every Gelato item takes its id from the hash of its path
+    /// (<see cref="ILibraryManager.GetNewItemId"/>), so two items at the same path are one row.
+    /// </summary>
+    private T? ExistingItemAt<T>(string path)
+        where T : BaseItem =>
+        libraryManager.GetItemById(libraryManager.GetNewItemId(path, typeof(T))) as T;
+
     public async Task<BaseItem?> SyncSeriesTreesAsync(
         PluginConfiguration cfg,
         StremioMeta seriesMeta,
@@ -1399,7 +1408,37 @@ public sealed class GelatoManager(
             var seasonIndex = seasonGroup.Key;
             var seasonPath = VirtualSeasonPath(series, seasonIndex);
 
-            if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
+            if (
+                !existingSeasonsDict.TryGetValue(seasonIndex, out var season)
+                && ExistingItemAt<Season>(seasonPath) is { } collidingSeason
+                && collidingSeason.SeriesId == series.Id
+            )
+            {
+                // A season whose number someone cleared or changed is not in the dictionary, but
+                // its row still lives at the path a new season for that number would get, and the
+                // id is the path's hash: saving the new season would land on that row and replace
+                // everything on it, the metadata lock included (lostb1t/Gelato#73). Keep the row
+                // and only put the number back, which a locked season does not get either. Only
+                // for a row of this series: a second copy of the same show (a local series beside
+                // the addon's) shares those paths, and taking its items over is how extending a
+                // local tree has always worked.
+                season = collidingSeason;
+                if (season.IsLocked)
+                {
+                    _log.LogDebug(
+                        "Season {SeasonIndex:D2} of {SeriesName} is locked, leaving it as it is",
+                        seasonIndex,
+                        series.Name
+                    );
+                }
+                else if (season.IndexNumber != seasonIndex)
+                {
+                    season.IndexNumber = seasonIndex;
+                    repairedSeasons.Add(season);
+                }
+            }
+
+            if (season is null)
             {
                 _log.LogTrace(
                     "Creating series {SeriesName} season {SeasonIndex:D2}",
@@ -1497,7 +1536,7 @@ public sealed class GelatoManager(
                     epMeta.GetName(),
                     index,
                     series.Name,
-                    season.IndexNumber
+                    seasonIndex
                 );
 
                 epMeta.Type = StremioMediaType.Episode;
@@ -1510,8 +1549,39 @@ public sealed class GelatoManager(
                     continue;
                 }
 
+                // Same as the season above: an episode of this series whose Season/Episode
+                // someone cleared or changed is not in the lookup, but its row still lives at the
+                // path the new episode gets and the id is that path's hash, so saving the new one
+                // would replace it, lock and all (lostb1t/Gelato#73). Update that row from the
+                // meta instead, which leaves a locked episode untouched.
+                if (
+                    ExistingItemAt<Episode>(episode.Path) is { } collidingEpisode
+                    && collidingEpisode.SeriesId == series.Id
+                )
+                {
+                    if (collidingEpisode.IsLocked)
+                    {
+                        _log.LogDebug(
+                            "S{SeasonIndex:D2}E{Index:D2} of {SeriesName} is locked, leaving it as it is",
+                            seasonIndex,
+                            index,
+                            series.Name
+                        );
+                    }
+                    else if (ApplyEpisodeMeta(collidingEpisode, epMeta))
+                    {
+                        _log.LogTrace(
+                            "Updated episode {EpisodeName} at {Path}",
+                            collidingEpisode.Name,
+                            collidingEpisode.Path
+                        );
+                        updatedEpisodes.Add(collidingEpisode);
+                    }
+                    continue;
+                }
+
                 episode.IndexNumber = index;
-                episode.ParentIndexNumber = season.IndexNumber;
+                episode.ParentIndexNumber = seasonIndex;
                 episode.SeasonId = season.Id;
                 episode.SeriesId = series.Id;
                 episode.SeriesName = series.Name;
@@ -1603,6 +1673,21 @@ public sealed class GelatoManager(
 
         var locked = episode.LockedFields ?? [];
         var changed = false;
+
+        // Season and episode number: only relevant for an episode the caller found by its path
+        // rather than by its number, i.e. one whose numbers were cleared or changed by hand. They
+        // have no field of their own to lock, so the lock above is all there is to go by.
+        if (meta.Season is { } season && season != episode.ParentIndexNumber)
+        {
+            episode.ParentIndexNumber = season;
+            changed = true;
+        }
+
+        if ((meta.Episode ?? meta.Number) is { } number && number != episode.IndexNumber)
+        {
+            episode.IndexNumber = number;
+            changed = true;
+        }
 
         var name = meta.GetName();
         if (
@@ -1730,7 +1815,12 @@ public sealed class GelatoManager(
                     },
                 }
             )
-            .Where(m => m.EndDate is null || m.EndDate >= sentinel || m.EndDate > now)
+            // A locked item keeps the dates it has, like everywhere else the plugin writes
+            // metadata (lostb1t/Gelato#73). A null EndDate only means the item is never taken for
+            // unreleased, so leaving it is safe.
+            .Where(m =>
+                !m.IsLocked && (m.EndDate is null || m.EndDate >= sentinel || m.EndDate > now)
+            )
             .ToList();
 
         var total = needsEndDate.Count;
