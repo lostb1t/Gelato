@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.19.1] - 2026-09-19\n\n### 🐛 Bug Fixes\n\n- Keep native items listed when filtering unreleased items (#222)\n- Search hardening (#219)\n- Ignore non-supported library options (#221)\n- Keep debrid keys and addon config out of the logs (#220)\n- Stop writing EndDate on native items (#223)\n- Keep extended local series trees through a library scan (#224)\n",
+        "checksum": "c2c6de7b012e16086ac2d1dc4a5a72ea",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.19.1/gelato_0.26.19.1.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-09-19T10:02:54Z",
+        "version": "0.26.19.1"
+      },
+      {
         "changelog": "## [0.26.19.0] - 2026-09-16\n\n### 🚀 Features\n\n- Jellyfin 12.1 support (based on native versions) (#218)\n",
         "checksum": "0402b2589495dfbf1a2436d7d6a70a1d",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.19.0/gelato_0.26.19.0.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-10T15:39:35Z",
         "version": "0.26.12.1"
-      },
-      {
-        "changelog": "## [0.26.12.0] - 2026-04-10\n\n### 🚀 Features\n\n- Series meta sync\n",
-        "checksum": "29bc95fa5de0dcd1f648a329eb82ef3a",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.12.0/gelato_0.26.12.0.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-10T15:18:48Z",
-        "version": "0.26.12.0"
       }
     ]
   }
