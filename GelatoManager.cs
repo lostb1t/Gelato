@@ -1661,7 +1661,15 @@ public sealed class GelatoManager(
                         BaseItemKind.Series,
                         BaseItemKind.Season,
                         BaseItemKind.Episode,
-                    ]
+                    ],
+                    // Gelato's own items only: a native item has no EndDate, and writing one gives
+                    // a running series an end date and stamps the 9999 sentinel on items whose
+                    // premiere date the library does not know. Jellyfin's refresh only fills an
+                    // empty EndDate, so those values would stay until a full metadata replace.
+                    HasAnyProviderId = new Dictionary<string, string>
+                    {
+                        ["Stremio"] = string.Empty,
+                    },
                 }
             )
             .Where(m => m.EndDate is null || m.EndDate >= sentinel || m.EndDate > now)

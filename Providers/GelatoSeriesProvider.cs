@@ -172,6 +172,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
             return result;
 
         series.ProviderIds.Remove("Stremio");
+        series.KeepEndDateOnlyForGelato(info.ProviderIds);
         result.HasMetadata = true;
         result.Item = series;
         MapPeople(meta, result);
