@@ -44,7 +44,7 @@ public sealed class ProviderManagerDecorator(
             // Always persist the URL at the gelato fake path so it can be resolved on demand
             // regardless of LazyImages mode — this is the permanent source-of-truth for the URL.
             var info = BuildImageInfo(appPaths, item.Id, type, imageIndex);
-            File.WriteAllText(info.Path + ".url", url);
+            WriteUrlSidecar(info.Path + ".url", url);
 
             if (GelatoPlugin.Instance?.Configuration.LazyImages == true)
             {
@@ -85,8 +85,58 @@ public sealed class ProviderManagerDecorator(
         var info = BuildImageInfo(appPaths, item.Id, type, imageIndex);
         // Store the remote URL in a sidecar file next to the placeholder.
         // ImageResourceFilter reads this file to proxy the image.
-        File.WriteAllText(info.Path + ".url", url);
+        WriteUrlSidecar(info.Path + ".url", url);
         item.SetImage(info, imageIndex ?? 0);
+    }
+
+    // Clients fan a search out over item types, and two of those requests can reach the same title at the same
+    // moment. Both write the same bytes, but the second one used to hit a sharing violation ("being used by
+    // another process" on Windows; on Unix .NET only locks exclusively for FileShare.None, so it does not happen
+    // there) and that exception failed the whole /Items request. Serialise the writes per path and let a concurrent
+    // writer win.
+    private static readonly object[] FileLocks = Enumerable
+        .Range(0, 32)
+        .Select(_ => new object())
+        .ToArray();
+
+    private static object LockFor(string path) =>
+        FileLocks[(uint)StringComparer.OrdinalIgnoreCase.GetHashCode(path) % FileLocks.Length];
+
+    private static void WriteUrlSidecar(string path, string url)
+    {
+        lock (LockFor(path))
+        {
+            try
+            {
+                if (
+                    File.Exists(path)
+                    && string.Equals(File.ReadAllText(path), url, StringComparison.Ordinal)
+                )
+                    return;
+
+                File.WriteAllText(path, url);
+            }
+            catch (IOException)
+            {
+                // Someone else is writing the same URL to it.
+            }
+        }
+    }
+
+    private static void CreatePlaceholder(string path)
+    {
+        lock (LockFor(path))
+        {
+            try
+            {
+                if (!File.Exists(path))
+                    File.WriteAllBytes(path, Array.Empty<byte>());
+            }
+            catch (IOException)
+            {
+                // Someone else created it first, and one empty file is as good as another.
+            }
+        }
     }
 
     public static ItemImageInfo BuildImageInfo(
@@ -106,8 +156,7 @@ public sealed class ProviderManagerDecorator(
         );
 
         Directory.CreateDirectory(Path.GetDirectoryName(fakePath)!);
-        if (!File.Exists(fakePath))
-            File.WriteAllBytes(fakePath, Array.Empty<byte>());
+        CreatePlaceholder(fakePath);
 
         return new ItemImageInfo
         {
