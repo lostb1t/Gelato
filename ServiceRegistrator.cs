@@ -6,6 +6,7 @@ using Gelato.ScheduledTasks;
 using Gelato.Services;
 //using IntroDbPlugin.Services;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Dto;
@@ -16,6 +17,7 @@ using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
+using MediaBrowser.Controller.Trickplay;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -100,7 +102,9 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
             .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
             .DecorateSingle<IProviderManager, ProviderManagerDecorator>()
-            .DecorateSingle<IImageProcessor, ImageProcessorDecorator>();
+            .DecorateSingle<IImageProcessor, ImageProcessorDecorator>()
+            .DecorateSingle<ITrickplayManager, TrickplayManagerDecorator>()
+            .DecorateSingle<IChapterManager, ChapterManagerDecorator>();
         // Expose the concrete decorator as Lazy so ImageProcessorDecorator can call SaveImageDirect
         // without introducing a circular dependency at construction time.
         services.AddSingleton(sp => new Lazy<ProviderManagerDecorator>(
