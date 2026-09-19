@@ -157,11 +157,13 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         StremioMeta? meta;
         try
         {
-            meta = await stremio.GetMetaAsync(id, StremioMediaType.Series).ConfigureAwait(false);
+            meta = await stremio
+                .GetMetaAsync(info.ProviderIds, StremioMediaType.Series)
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _log.LogWarning(ex, "GelatoSeriesProvider: failed to fetch meta for {Id}", id);
+            _log.LogWarning(ex, "GelatoSeriesProvider: failed to fetch meta for {Name}", info.Name);
             return result;
         }
 

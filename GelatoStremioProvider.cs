@@ -191,21 +191,133 @@ public class GelatoStremioProvider(
         return r?.Meta;
     }
 
+    /// <summary>
+    /// Fetches the meta of a catalog result by every id it carries: its own (<c>tt</c>,
+    /// <c>tmdb:</c>, ...) and, when it has one, its <c>imdb_id</c>. An addon's meta resource does
+    /// not have to accept both formats - AIOStreams' tmdb-addon preset declares only <c>tmdb:</c>
+    /// and answers 404 for an IMDb id - so asking for one id alone can fail although the addon has
+    /// the meta under the other one.
+    /// </summary>
+    public async Task<StremioMeta?> GetMetaAsync(StremioMeta meta, TimeSpan? ttl = null)
+    {
+        return await GetMetaAsync([meta.ImdbId, meta.Id], meta.Type, ttl).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc cref="GetMetaAsync(StremioMeta, TimeSpan?)"/>
+    public async Task<StremioMeta?> GetMetaAsync(
+        IReadOnlyDictionary<string, string> providerIds,
+        StremioMediaType mediaType,
+        TimeSpan? ttl = null
+    )
+    {
+        providerIds.TryGetValue(nameof(MetadataProvider.Imdb), out var imdbId);
+        providerIds.TryGetValue(nameof(MetadataProvider.Tmdb), out var tmdbId);
+        return await GetMetaAsync(
+                [imdbId, string.IsNullOrWhiteSpace(tmdbId) ? null : $"tmdb:{tmdbId}"],
+                mediaType,
+                ttl
+            )
+            .ConfigureAwait(false);
+    }
+
     public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
     {
-        var id = item.GetProviderId("Imdb");
-        if (id is null)
-        {
+        var imdbId = item.GetProviderId("Imdb");
+        var tmdbId = item.GetProviderId("Tmdb");
+        if (imdbId is null)
             log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
-            id = item.GetProviderId("Tmdb");
-            if (id is null)
-            {
-                log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
-                return null;
-            }
-            id = $"tmdb:{id}";
+        if (imdbId is null && tmdbId is null)
+        {
+            log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
+            return null;
         }
-        return await GetMetaAsync(id, item.GetBaseItemKind().ToStremio()).ConfigureAwait(false);
+
+        return await GetMetaAsync(item.ProviderIds, item.GetBaseItemKind().ToStremio())
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Asks for the meta under each of <paramref name="ids"/> until one answers. The addon's
+    /// manifest decides the order: an id whose prefix its meta resource declares goes first, so
+    /// the id the addon cannot serve is only ever tried as a fallback. Blanks and duplicates drop
+    /// out; the last id's failure is the caller's, as a single-id lookup's always was.
+    /// </summary>
+    private async Task<StremioMeta?> GetMetaAsync(
+        IEnumerable<string?> ids,
+        StremioMediaType mediaType,
+        TimeSpan? ttl = null
+    )
+    {
+        var candidates = ids.Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (candidates.Count == 0)
+            return null;
+
+        if (candidates.Count > 1)
+        {
+            var prefixes = await MetaIdPrefixesAsync(mediaType).ConfigureAwait(false);
+            if (prefixes.Count > 0)
+                candidates = candidates
+                    .OrderByDescending(id =>
+                        prefixes.Any(p => id.StartsWith(p, StringComparison.OrdinalIgnoreCase))
+                    )
+                    .ToList();
+        }
+
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var last = i == candidates.Count - 1;
+            try
+            {
+                var meta = await GetMetaAsync(candidates[i], mediaType, ttl).ConfigureAwait(false);
+                if (meta is not null || last)
+                    return meta;
+            }
+            catch (Exception ex) when (!last)
+            {
+                log.LogWarning(
+                    ex,
+                    "GetMetaAsync: {Addon} cannot serve meta for {Id}",
+                    Redact.Url(baseUrl),
+                    candidates[i]
+                );
+            }
+
+            log.LogInformation(
+                "GetMetaAsync: no meta for {Id}, asking for {Fallback} instead",
+                candidates[i],
+                candidates[i + 1]
+            );
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The id prefixes the addon's meta resource declares for this type. Empty when the manifest
+    /// is unreachable or says nothing about them - the ids are then all tried in order.
+    /// </summary>
+    private async Task<List<string>> MetaIdPrefixesAsync(StremioMediaType mediaType)
+    {
+        var manifest = await GetManifestAsync().ConfigureAwait(false);
+        if (manifest is null)
+            return [];
+
+        var type = mediaType.ToString().ToLowerInvariant();
+        return manifest
+            .Resources.Where(r =>
+                string.Equals(r.Name, "meta", StringComparison.OrdinalIgnoreCase)
+                && (
+                    r.Types.Count == 0
+                    || r.Types.Any(t => string.Equals(t, type, StringComparison.OrdinalIgnoreCase))
+                )
+            )
+            .SelectMany(r => r.IdPrefixes)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .ToList();
     }
 
     /// <summary>

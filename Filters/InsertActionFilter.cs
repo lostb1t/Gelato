@@ -86,10 +86,7 @@ public class InsertActionFilter(
 
         // Fetch full metadata
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
-        var meta = await cfg.Stremio.GetMetaAsync(
-            stremioMeta.ImdbId ?? stremioMeta.Id,
-            stremioMeta.Type
-        );
+        var meta = await cfg.Stremio.GetMetaAsync(stremioMeta);
         if (meta is null)
         {
             log.LogError(
