@@ -38,6 +38,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<DownloadFilter>();
         services.AddSingleton<StreamUserDataFilter>();
         services.AddSingleton<VersionActionFilter>();
+        services.AddSingleton<UnreleasedListingFilter>();
         services.AddSingleton<GelatoManager>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
@@ -127,6 +128,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<DownloadFilter>();
             o.Filters.AddService<StreamUserDataFilter>();
             o.Filters.AddService<VersionActionFilter>();
+            o.Filters.AddService<UnreleasedListingFilter>();
         });
     }
 
