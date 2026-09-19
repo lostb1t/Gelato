@@ -255,8 +255,8 @@ public class GelatoStremioProvider(
         var tmdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Tmdb));
         if (string.IsNullOrWhiteSpace(tmdbId))
         {
-            // A meta is keyed by whatever id the catalog uses, and that is an IMDb id for almost
-            // everything, so GetProviderIds hands back no TMDB id to ask with. Resolve one.
+            // An addon that reports no TMDB id of its own leaves only the imdb id the catalog
+            // keys on, so ask TMDB which movie that is.
             var imdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Imdb));
             if (string.IsNullOrWhiteSpace(imdbId))
                 return;
@@ -557,6 +557,13 @@ public class StremioMeta
 
     [JsonPropertyName("imdb_id")]
     public string? ImdbId { get; set; }
+
+    [JsonPropertyName("_tmdbId")]
+    public string? TmdbIdExtra { get; set; }
+
+    [JsonPropertyName("_tvdbId")]
+    public string? TvdbIdExtra { get; set; }
+
     public DateTime? Released { get; set; }
 
     [JsonConverter(typeof(SafeStringEnumConverter<StremioStatus>))]
@@ -606,6 +613,18 @@ public class StremioMeta
     public Dictionary<string, string> GetProviderIds()
     {
         var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // AIOStreams reports the ids it resolved next to the Stremio one. The Stremio id itself is
+        // an imdb id for almost every catalog, so without these the meta carries no TMDB id at all.
+        if (!string.IsNullOrWhiteSpace(TmdbIdExtra))
+        {
+            dict[nameof(MetadataProvider.Tmdb)] = TmdbIdExtra;
+        }
+
+        if (!string.IsNullOrWhiteSpace(TvdbIdExtra))
+        {
+            dict[nameof(MetadataProvider.Tvdb)] = TvdbIdExtra;
+        }
 
         if (!string.IsNullOrWhiteSpace(Id))
         {
