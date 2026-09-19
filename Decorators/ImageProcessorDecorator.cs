@@ -86,12 +86,17 @@ public sealed class ImageProcessorDecorator(
                             "ImageProcessor: resolved image for {Id} type={Type} from {Url}",
                             options.Item.Id,
                             options.Image.Type,
-                            url
+                            Redact.Url(url)
                         );
                     }
                     catch (Exception ex)
                     {
-                        log.LogWarning(ex, "ImageProcessor: download failed for {Url}", url);
+                        log.LogWarning(
+                            ex,
+                            "ImageProcessor: download failed for {Id} from {Url}",
+                            options.Item.Id,
+                            Redact.Url(url)
+                        );
                     }
                 }
                 else

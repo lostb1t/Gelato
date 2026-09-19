@@ -38,7 +38,7 @@ public sealed class ProviderManagerDecorator(
                 item.Name,
                 type,
                 imageIndex,
-                url
+                Redact.Url(url)
             );
 
             // Always persist the URL at the gelato fake path so it can be resolved on demand

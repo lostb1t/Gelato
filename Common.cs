@@ -199,6 +199,36 @@ public sealed class KeyLock
     }
 }
 
+/// <summary>
+/// Makes URLs safe to write to Jellyfin's log. Stream URLs, addon URLs and the http paths of
+/// stream items carry the user's debrid API key or addon config in their path or query, and
+/// users paste their logs into public issues and chats.
+/// </summary>
+public static class Redact
+{
+    /// <summary>
+    /// Reduces an absolute URL to scheme, host and port, dropping user info, path, query and
+    /// fragment. Local file paths are returned as they are. Anything else that looks like a URL
+    /// but does not parse is replaced entirely, never partially masked.
+    /// </summary>
+    public static string Url(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            if (uri.IsFile || uri.IsUnc)
+                return value;
+            return string.IsNullOrEmpty(uri.Authority)
+                ? $"{uri.Scheme}:<redacted>"
+                : $"{uri.Scheme}://{uri.Authority}/<redacted>";
+        }
+
+        return value.Contains("://", StringComparison.Ordinal) ? "<redacted>" : value;
+    }
+}
+
 public static class EnumMappingExtensions
 {
     public static StremioMediaType ToStremio(this BaseItemKind kind)
