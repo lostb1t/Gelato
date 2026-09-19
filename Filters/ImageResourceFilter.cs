@@ -1,5 +1,9 @@
+using Gelato.Decorators;
+using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -14,6 +18,7 @@ public sealed class ImageResourceFilter(
     IHttpClientFactory http,
     GelatoManager manager,
     ILibraryManager libraryManager,
+    IApplicationPaths appPaths,
     ILogger<ImageResourceFilter> log
 ) : IAsyncResourceFilter
 {
@@ -51,7 +56,7 @@ public sealed class ImageResourceFilter(
         if (manager.GetInsertedId(guid) is { } insertedId)
         {
             routeValues["itemId"] = insertedId.ToString("N");
-            await next();
+            await NotFoundOrNext(ctx, next, insertedId);
             return;
         }
 
@@ -62,7 +67,7 @@ public sealed class ImageResourceFilter(
         )
         {
             routeValues["itemId"] = primaryId.ToString("N");
-            await next();
+            await NotFoundOrNext(ctx, next, primaryId);
             return;
         }
 
@@ -70,7 +75,7 @@ public sealed class ImageResourceFilter(
         var url = manager.GetStremioMeta(guid)?.Poster;
         if (url is null)
         {
-            await next();
+            await NotFoundOrNext(ctx, next, guid);
             return;
         }
 
@@ -121,6 +126,57 @@ public sealed class ImageResourceFilter(
                 Redact.Url(url)
             );
             await next();
+        }
+    }
+
+    /// <summary>
+    /// Answers not found for an image whose remote failed recently, and hands the request on for
+    /// everything else. ProcessImage ends in the same not found once it has looked at the empty
+    /// placeholder; stopping here keeps the repeat out of the controller and out of the log.
+    /// </summary>
+    private async Task NotFoundOrNext(
+        ResourceExecutingContext ctx,
+        ResourceExecutionDelegate next,
+        Guid itemId
+    )
+    {
+        if (IsKnownDeadImage(ctx, itemId))
+        {
+            ctx.Result = new NotFoundResult();
+            return;
+        }
+
+        await next();
+    }
+
+    private bool IsKnownDeadImage(ResourceExecutingContext ctx, Guid itemId)
+    {
+        var values = ctx.RouteData.Values;
+        if (
+            !Enum.TryParse<ImageType>(values["imageType"]?.ToString(), true, out var type)
+            || libraryManager.GetItemById(itemId) is not { } item
+        )
+            return false;
+
+        _ = int.TryParse(values["imageIndex"]?.ToString(), out var index);
+        if (item.GetImageInfo(type, index)?.Path is not { } path)
+            return false;
+
+        var file = new FileInfo(path);
+        if (file.Exists && file.Length > 0)
+            return false;
+
+        var urlFile = ImageProcessorDecorator.ResolveUrlFile(appPaths, itemId, path, type, index);
+        if (urlFile is null)
+            return false;
+
+        try
+        {
+            return ImageProcessorDecorator.IsKnownDead(File.ReadAllText(urlFile).Trim());
+        }
+        catch (IOException)
+        {
+            return false;
         }
     }
 }
