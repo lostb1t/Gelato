@@ -27,6 +27,11 @@ public class GelatoStremioProvider(
         (StremioMeta Meta, DateTime Expiry)
     > _metaCache = new(StringComparer.OrdinalIgnoreCase);
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        string?
+    > _tmdbIdByImdbId = new(StringComparer.OrdinalIgnoreCase);
+
     private StremioMeta? GetCachedMeta(string id)
     {
         if (_metaCache.TryGetValue(id, out var entry) && entry.Expiry > DateTime.UtcNow)
@@ -245,11 +250,23 @@ public class GelatoStremioProvider(
         if (meta.App_Extras?.ReleaseDates is not null)
             return;
 
-        var tmdbId = meta.GetProviderIds().GetValueOrDefault(nameof(MetadataProvider.Tmdb));
-        if (string.IsNullOrWhiteSpace(tmdbId))
-            return;
-
+        var providerIds = meta.GetProviderIds();
         var apiKey = GetTmdbApiKey();
+        var tmdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Tmdb));
+        if (string.IsNullOrWhiteSpace(tmdbId))
+        {
+            // A meta is keyed by whatever id the catalog uses, and that is an IMDb id for almost
+            // everything, so GetProviderIds hands back no TMDB id to ask with. Resolve one.
+            var imdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Imdb));
+            if (string.IsNullOrWhiteSpace(imdbId))
+                return;
+
+            tmdbId = await ResolveTmdbIdAsync(imdbId, apiKey, cancellationToken)
+                .ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(tmdbId))
+                return;
+        }
+
         var url =
             $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(tmdbId)}/release_dates?api_key={apiKey}";
 
@@ -274,6 +291,46 @@ public class GelatoStremioProvider(
         {
             log.LogDebug(ex, "EnrichDigitalReleaseDate: failed for tmdb:{TmdbId}", tmdbId);
         }
+    }
+
+    /// <summary>
+    /// The TMDB movie id behind an IMDb id, through TMDB's find endpoint, or null when it cannot be
+    /// resolved. Answers are memoised for the process, negatives included, so a library full of
+    /// movies without a digital release date does not ask for the same id over and over.
+    /// </summary>
+    private async Task<string?> ResolveTmdbIdAsync(
+        string imdbId,
+        string apiKey,
+        CancellationToken cancellationToken
+    )
+    {
+        if (_tmdbIdByImdbId.TryGetValue(imdbId, out var cached))
+            return cached;
+
+        string? resolved = null;
+        try
+        {
+            using var client = http.CreateClient(nameof(GelatoStremioProvider));
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var url =
+                $"https://api.themoviedb.org/3/find/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&external_source=imdb_id";
+            var response = await client
+                .GetStringAsync(url, cancellationToken)
+                .ConfigureAwait(false);
+            var id = JsonSerializer
+                .Deserialize<TmdbFindResponse>(response, JsonOpts)
+                ?.MovieResults?.FirstOrDefault()
+                ?.Id;
+            if (id is { } value)
+                resolved = value.ToString(CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex)
+        {
+            log.LogDebug(ex, "ResolveTmdbId: failed for {ImdbId}", imdbId);
+        }
+
+        _tmdbIdByImdbId[imdbId] = resolved;
+        return resolved;
     }
 
     public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
@@ -774,6 +831,17 @@ public class StremioAppExtras
 
     [JsonPropertyName("releaseDates")]
     public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
+}
+
+public class TmdbFindResponse
+{
+    [JsonPropertyName("movie_results")]
+    public List<TmdbFindResult>? MovieResults { get; set; }
+}
+
+public class TmdbFindResult
+{
+    public int? Id { get; set; }
 }
 
 public class TmdbReleaseDatesContainer
