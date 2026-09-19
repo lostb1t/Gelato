@@ -119,10 +119,7 @@ public class InsertActionFilter(
 
         if (cfg.ExtendLocalSeriesTrees)
         {
-            var alreadySynced =
-                series.Tags?.Contains(GelatoManager.TreeSyncedTag, StringComparer.OrdinalIgnoreCase)
-                ?? false;
-            if (alreadySynced)
+            if (manager.HasExtendedTree(series))
                 return;
 
             if (cfg.Stremio is not { } stremio)

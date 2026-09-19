@@ -1199,6 +1199,46 @@ public sealed class GelatoManager(
         return item.IsGelato();
     }
 
+    /// <summary>
+    /// The path of a season Gelato adds to a series.
+    /// </summary>
+    /// <remarks>
+    /// No folder exists on disk for it. Below a Gelato series the series path is a gelato:// URL
+    /// and the season inherits it, but a local series sits on a real folder, so a season path
+    /// built from it (the series folder with <c>:2</c> appended) is a file path as far as Jellyfin
+    /// is concerned: a library scan deletes every file-backed child it does not find on disk, and
+    /// takes the season's episodes and their watch state with it. A gelato:// path makes the
+    /// season remote, which the scan leaves alone, the way it leaves the episodes below it alone.
+    /// </remarks>
+    private static string VirtualSeasonPath(Series series, int seasonIndex) =>
+        !series.IsFileProtocol && !string.IsNullOrEmpty(series.Path)
+            ? $"{series.Path}:{seasonIndex}"
+            : $"gelato://season/{series.Id:N}:{seasonIndex}";
+
+    /// <summary>
+    /// Whether the series still carries the tree it was extended with: the mark the sync task
+    /// leaves, and at least one of the seasons Gelato added.
+    /// </summary>
+    /// <remarks>
+    /// The mark alone used to decide this, which made the skip permanent. Anything that removed
+    /// the added seasons — a library scan on the paths of an older Gelato, a user deleting a
+    /// season — left the mark behind, and from then on neither the task nor opening the series
+    /// rebuilt the tree; only turning the option off and on did. Only the added seasons count: a
+    /// series Gelato merely filled episodes into is looked at on every run, which costs one meta
+    /// request and writes nothing.
+    /// </remarks>
+    public bool HasExtendedTree(Series series) =>
+        (series.Tags?.Contains(TreeSyncedTag, StringComparer.OrdinalIgnoreCase) ?? false)
+        && libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    ParentId = series.Id,
+                    IncludeItemTypes = [BaseItemKind.Season],
+                }
+            )
+            .Any(s => s.IsGelato());
+
     public async Task<BaseItem?> SyncSeriesTreesAsync(
         PluginConfiguration cfg,
         StremioMeta seriesMeta,
@@ -1345,6 +1385,7 @@ public sealed class GelatoManager(
         var episodesInserted = 0;
 
         var newSeasons = new List<Season>();
+        var repairedSeasons = new List<Season>();
         var allNewEpisodes = new List<Episode>();
         var updatedEpisodes = new List<Episode>();
 
@@ -1356,7 +1397,7 @@ public sealed class GelatoManager(
             ct.ThrowIfCancellationRequested();
 
             var seasonIndex = seasonGroup.Key;
-            var seasonPath = $"{series.Path}:{seasonIndex}";
+            var seasonPath = VirtualSeasonPath(series, seasonIndex);
 
             if (!existingSeasonsDict.TryGetValue(seasonIndex, out var season))
             {
@@ -1410,6 +1451,14 @@ public sealed class GelatoManager(
                 season.PresentationUniqueKey = season.CreatePresentationUniqueKey();
                 newSeasons.Add(season);
                 seasonsInserted++;
+            }
+            else if (season.IsGelato() && season.IsFileProtocol)
+            {
+                // Added by an older Gelato below a local series, so still carrying a path that
+                // looks like a folder on disk. Repair it before the next scan takes the season
+                // and its episodes with it; the id stays as it is, so nothing below moves.
+                season.Path = seasonPath;
+                repairedSeasons.Add(season);
             }
 
             // Look up existing episodes for this season from the pre-fetched dict
@@ -1481,6 +1530,15 @@ public sealed class GelatoManager(
         {
             persistence.SaveItems(newSeasons, ct);
             await ReattachWatchStateAsync(newSeasons, ct).ConfigureAwait(false);
+        }
+
+        if (repairedSeasons.Count > 0)
+        {
+            persistence.SaveItems(repairedSeasons, ct);
+            foreach (var season in repairedSeasons)
+            {
+                libraryManager.RegisterItem(season);
+            }
         }
 
         if (allNewEpisodes.Count > 0)
@@ -1903,7 +1961,7 @@ public sealed class GelatoManager(
                     !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
                     || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
                 )
-                && !(s.Tags?.Contains(TreeSyncedTag, StringComparer.OrdinalIgnoreCase) ?? false)
+                && !HasExtendedTree(s)
             )
             .ToList();
 
@@ -1926,9 +1984,23 @@ public sealed class GelatoManager(
                     await SyncSeriesTreesAsync(cfg, meta, ct, existingSeries: series)
                         .ConfigureAwait(false);
 
-                    // Mark as synced so we skip on future runs
-                    series.Tags = [.. (series.Tags ?? []), TreeSyncedTag];
-                    persistence.SaveItems([series], ct);
+                    // Mark as synced so we skip on future runs. A series whose tree was rebuilt
+                    // after it lost its seasons carries the mark already; adding it twice would
+                    // show the tag twice on the item. The series came from the database, so the
+                    // library manager's copy is the one from before the mark: register it, or
+                    // the series page keeps extending the tree it already has, and the clean-up
+                    // would later write the unmarked copy back.
+                    if (
+                        !(
+                            series.Tags?.Contains(TreeSyncedTag, StringComparer.OrdinalIgnoreCase)
+                            ?? false
+                        )
+                    )
+                    {
+                        series.Tags = [.. (series.Tags ?? []), TreeSyncedTag];
+                        persistence.SaveItems([series], ct);
+                        libraryManager.RegisterItem(series);
+                    }
                 }
             }
             catch (Exception ex)
@@ -1964,7 +2036,13 @@ public sealed class GelatoManager(
         var virtualEpisodes = allEpisodes.Where(ep => ep.IsGelato()).ToList();
 
         if (virtualEpisodes.Count == 0)
+        {
+            // Nothing left to remove, but the mark has to go: it is what makes the sync task and
+            // the series page skip the series, and a series without added episodes is one whose
+            // tree is waiting to be rebuilt, not one that has it.
+            ClearTreeSyncedTag(series, ct);
             return;
+        }
 
         var virtualEpIds = virtualEpisodes.Select(e => e.Id).ToHashSet();
         var seasonsWithRemainingEpisodes = allEpisodes
@@ -2033,10 +2111,24 @@ public sealed class GelatoManager(
             }
         }
 
-        series.Tags = series
-            .Tags?.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase))
-            .ToArray();
+        ClearTreeSyncedTag(series, ct);
+    }
+
+    /// <summary>Takes the sync task's mark off a series, if it carries one.</summary>
+    private void ClearTreeSyncedTag(Series series, CancellationToken ct)
+    {
+        if (
+            series.Tags is not { } tags
+            || !tags.Contains(TreeSyncedTag, StringComparer.OrdinalIgnoreCase)
+        )
+            return;
+
+        series.Tags =
+        [
+            .. tags.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase)),
+        ];
         persistence.SaveItems([series], ct);
+        libraryManager.RegisterItem(series);
     }
 
     private void CleanVirtualTreeItems(CancellationToken ct)
