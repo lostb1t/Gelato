@@ -716,9 +716,11 @@ public class StremioMeta
             if (digital.HasValue)
                 return digital.Value.AddDays(bufferDays) <= now;
 
-            // Old media without a digital release date — if premiered > 1 year ago, treat as released.
-            if (Released.HasValue && Released.Value < now.AddYears(-1))
-                return true;
+            // No digital release date: released only once the premiere is over a year old, the
+            // rule GelatoManager.IntoBaseItem writes into EndDate for the library listing filter.
+            // Falling through to the generic premiere check below made the addon search offer
+            // films that the library view hides.
+            return GetPremiereDate() is { } premiere && premiere < now.AddYears(-1);
         }
 
         if (Released.HasValue)
