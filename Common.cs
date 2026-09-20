@@ -320,6 +320,10 @@ public static class ActionContextExtensions
         "GetPlaybackInfo",
         "GetPostedPlaybackInfo",
         "GetVideoStream",
+        // Same stream, under a container extension: a separate action that delegates to
+        // GetVideoStream. Clients that play /Videos/{id}/stream.mkv would otherwise get a 404
+        // for a search result that was never opened, because nothing materializes it.
+        "GetVideoStreamByContainer",
         "GetDownload",
         "GetSubtitleWithTicks",
         // Clients offer these from a search result's context menu, before the result was opened.
