@@ -562,18 +562,33 @@ public static class ActionContextExtensions
         return ctx.HttpContext.TryGetUserId(out userId);
     }
 
+    /// <summary>
+    /// The user a request acts for: the one its token authenticated, or, when the token carries
+    /// none, the one the caller names in the query or in the route.
+    /// </summary>
+    /// <remarks>
+    /// An API key authenticates without a user, and Jellyfin still puts a UserId claim on the
+    /// request: the empty guid. Taking the claim as the answer hid the user the caller had
+    /// named, and a search result opened with an API key materialized for nobody: the request
+    /// reached Jellyfin with the synthetic id and answered 404.
+    /// </remarks>
     public static bool TryGetUserId(this HttpContext ctx, out Guid userId)
     {
+        string?[] candidates =
+        [
+            ctx.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")?.Value,
+            ctx.Request.Query["userId"].FirstOrDefault(),
+            ctx.Request.RouteValues.TryGetValue("userId", out var route) ? route?.ToString() : null,
+        ];
+
+        foreach (var candidate in candidates)
+        {
+            if (Guid.TryParse(candidate, out userId) && userId != Guid.Empty)
+                return true;
+        }
+
         userId = Guid.Empty;
-
-        var userIdStr =
-            ctx.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")?.Value
-            ?? ctx.Request.Query["userId"].FirstOrDefault();
-
-        if (!Guid.TryParse(userIdStr, out userId))
-            return false;
-
-        return userId != Guid.Empty;
+        return false;
     }
 
     public static bool TryGetActionArgument<T>(
