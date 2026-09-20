@@ -63,6 +63,19 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
             return filter;
         }
 
+        // Jellyfin loads a folder's children with this exact query and keeps the result in memory
+        // for the rest of the server's life (Folder.GetCachedChildren, and the same shape again for
+        // a library scan's GetChildrenForValidation). Rewriting it puts the listing filter's result
+        // into that cache: a non-recursive listing then stayed short even after the filter was
+        // turned off, and a scan would compare the library against a set of children it trimmed.
+        if (
+            filter.ParentId != Guid.Empty
+            && filter.User is null
+            && !filter.GroupByPresentationUniqueKey
+            && includeTypes.Length == 0
+        )
+            return filter;
+
         var ctx = _http.HttpContext;
         var isListingIntent =
             ctx is not null && (ctx.IsApiListing() || ctx.IsHomeScreenSectionListing());
@@ -115,12 +128,26 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         // series/episodes; sentinel 9999 = no release date known). Setting MaxEndDate on the query
         // would also drop every row whose EndDate is null, which is every native item, collection,
         // playlist and library folder, so the unreleased Gelato items are excluded by id instead.
-        var unreleased = GetUnreleasedGelatoIds(DateTime.Today.AddDays(bufferDays));
+        // The buffer keeps an item hidden for that many days after its release, as the setting
+        // says ("Items released within these many days will be hidden"), which is also how
+        // StremioMeta.IsReleased reads it for the addon search. Adding the days to the cutoff
+        // instead of subtracting them listed items that many days *before* their release: a buffer
+        // of 120 put a film premiering in 89 days into the library.
+        var unreleased = GetUnreleasedGelatoIds(DateTime.Today.AddDays(-bufferDays));
         if (unreleased.Length > 0)
             filter.ExcludeItemIds = [.. filter.ExcludeItemIds, .. unreleased];
 
         return filter;
     }
+
+    /// <summary>
+    /// The Gelato items the unreleased filter hides, for the configured buffer. Jellyfin answers a
+    /// non-recursive listing from a folder's cached children instead of querying the repository,
+    /// so <see cref="Filters.UnreleasedListingFilter"/> needs the same set to finish the job on the
+    /// response.
+    /// </summary>
+    public Guid[] GetUnreleasedIds(int bufferDays) =>
+        GetUnreleasedGelatoIds(DateTime.Today.AddDays(-bufferDays));
 
     private Guid[] GetUnreleasedGelatoIds(DateTime cutoff) =>
         inner

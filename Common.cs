@@ -301,6 +301,10 @@ public static class ActionContextExtensions
         "GetSuggestions",
         "GetItemCounts",
         "GetSectionContent",
+        // The search bar's suggestion dropdown. It lists library rows through the item repository
+        // like any other listing, so without it the unreleased filter and the stream-row exclusion
+        // never run for it.
+        "GetSearchHints",
     };
 
     private static readonly HashSet<string> InsertableActionNames = new(
