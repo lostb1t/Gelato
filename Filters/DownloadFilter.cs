@@ -25,15 +25,12 @@ public sealed class DownloadFilter(
             return;
         }
 
-        var userIdStr = ctx
-            .HttpContext.User.Claims.FirstOrDefault(c => c.Type is "UserId" or "Jellyfin-UserId")
-            ?.Value;
-
-        User? user = null;
-        if (Guid.TryParse(userIdStr, out var userId))
-        {
-            user = userManager.GetUserById(userId);
-        }
+        // An API key authenticates without a user, and Jellyfin still puts a UserId claim on the
+        // request: the empty guid. GetUserById throws on that, which turned every download made
+        // with an API key into a 400 — the library's own items as much as Gelato's
+        // (lostb1t/Gelato#187). TryGetUserId leaves the user null instead, and a download without
+        // a user goes to Jellyfin.
+        User? user = ctx.TryGetUserId(out var userId) ? userManager.GetUserById(userId) : null;
 
         if (user is not null)
         {
