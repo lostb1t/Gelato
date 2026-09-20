@@ -60,21 +60,110 @@ public class SearchActionFilter(
 
         var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, stremio, userId);
 
+        // A client asks for every type it wants in one request: the web client's global search
+        // sends Movie, Series, Episode, BoxSet, TvChannel and more together. Answering all of it
+        // with the addon's movies and series dropped the rest, so a channel was only ever found
+        // inside Live TV, where the client asks for TvChannel alone and the search never gets
+        // this far (lostb1t/Gelato#162). Let Jellyfin answer for the types the addon has nothing
+        // to say about and put its results after the addon's.
+        var (executed, localItems, localTotal) = await SearchOtherTypesAsync(
+            ctx,
+            next,
+            start + limit
+        );
+
         log.LogInformation(
-            "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results}",
+            "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results} library={Library}",
             searchTerm,
             string.Join(",", requestedTypes),
             start,
             limit,
-            metas.Count
+            metas.Count,
+            localTotal
         );
 
         var dtos = ConvertMetasToDtos(metas);
-        var paged = dtos.Skip(start).Take(limit).ToArray();
+        var paged = dtos.Concat(localItems).Skip(start).Take(limit).ToArray();
 
-        ctx.Result = new OkObjectResult(
-            new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = dtos.Count }
+        var result = new OkObjectResult(
+            new QueryResult<BaseItemDto>
+            {
+                Items = paged,
+                TotalRecordCount = dtos.Count + localTotal,
+            }
         );
+
+        // Setting ctx.Result only short-circuits while the action has not run; once next() has
+        // been awaited the answer is the executed context's.
+        if (executed is null)
+            ctx.Result = result;
+        else
+            executed.Result = result;
+    }
+
+    /// <summary>
+    /// Runs the untouched Jellyfin search for the item types the request asked for that the addon
+    /// does not answer for, and returns its items and total. Nothing runs, and the result is empty,
+    /// when the request asked for movies and series only.
+    /// </summary>
+    private async Task<(
+        ActionExecutedContext? Executed,
+        IReadOnlyList<BaseItemDto> Items,
+        int Total
+    )> SearchOtherTypesAsync(ActionExecutingContext ctx, ActionExecutionDelegate next, int upTo)
+    {
+        if (GetPassThroughExcludes(ctx) is not { } excludeTypes)
+            return (null, [], 0);
+
+        // Jellyfin pages its own answer, so ask it for everything up to the end of the page that
+        // is being served and page the concatenation here.
+        ctx.ActionArguments["excludeItemTypes"] = excludeTypes;
+        ctx.ActionArguments["startIndex"] = 0;
+        ctx.ActionArguments["limit"] = upTo;
+
+        var executed = await next();
+
+        // The library half failing is no reason to lose the addon's results: the search answers
+        // with those alone, the way it did before it asked for the other types at all.
+        if (executed.Exception is { } ex)
+        {
+            log.LogWarning(ex, "The library search for the other item types failed");
+            executed.ExceptionHandled = true;
+            return (executed, [], 0);
+        }
+
+        if (
+            executed.Result is ObjectResult { Value: QueryResult<BaseItemDto> local }
+            && local.Items is { } items
+        )
+        {
+            return (executed, items, local.TotalRecordCount);
+        }
+
+        return (executed, [], 0);
+    }
+
+    /// <summary>
+    /// The excludeItemTypes the pass-through search runs with: the request's own excludes plus the
+    /// types the addon answers for. Null when the request named movies and series only, so there is
+    /// nothing left for Jellyfin to look for.
+    /// </summary>
+    private static BaseItemKind[]? GetPassThroughExcludes(ActionExecutingContext ctx)
+    {
+        ctx.TryGetActionArgument<BaseItemKind[]>("includeItemTypes", out var includeTypes);
+        if (
+            includeTypes is { Length: > 0 }
+            && includeTypes.All(t => t is BaseItemKind.Movie or BaseItemKind.Series)
+        )
+        {
+            return null;
+        }
+
+        ctx.TryGetActionArgument<BaseItemKind[]>("excludeItemTypes", out var excludeTypes);
+        return (excludeTypes ?? [])
+            .Concat([BaseItemKind.Movie, BaseItemKind.Series])
+            .Distinct()
+            .ToArray();
     }
 
     private HashSet<BaseItemKind> GetRequestedItemTypes(ActionExecutingContext ctx)
