@@ -2123,7 +2123,14 @@ public sealed class GelatoManager(
             .OfType<Episode>()
             .ToList();
 
-        var virtualEpisodes = allEpisodes.Where(ep => ep.IsGelato()).ToList();
+        // Only what Gelato itself put there. A file-backed episode belongs to the library that
+        // scanned it, whatever provider ids it picked up along the way: Gelato's metadata
+        // providers used to leave their Stremio id on local episodes, and removing those took the
+        // show's own episodes out of the library — with the seasons they emptied — while the files
+        // stayed on disk, so only a rescan of the library brought them back (lostb1t/Gelato#153).
+        var virtualEpisodes = allEpisodes
+            .Where(ep => ep.IsGelato() && !ep.IsFileProtocol)
+            .ToList();
 
         if (virtualEpisodes.Count == 0)
         {
@@ -2179,6 +2186,11 @@ public sealed class GelatoManager(
         {
             ct.ThrowIfCancellationRequested();
             if (seasonsWithRemainingEpisodes.Contains(season.Id))
+                continue;
+
+            // A season of the local series itself stays, even with nothing left below it: the
+            // library owns it, and the next scan would only have to find it again.
+            if (!season.IsGelato())
                 continue;
 
             try
