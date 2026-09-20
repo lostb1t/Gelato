@@ -8,6 +8,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.19.2] - 2026-09-20\n\n### 🐛 Bug Fixes\n\n- Resolve a TMDB id from the imdb id so digital release dates are fetched again\n- Stop the release buffer working backwards\n- Filter unreleased items out of a non-recursive listing too\n- Apply the unreleased filter to the search suggestions\n- Stop the addon search offering films the library hides\n- Take the TMDB id the addon reports before asking TMDB for it\n- Keep the other item types in a search the addon answers (#232)\n- Ask the meta addon for every id a result carries (#231)\n",
+        "checksum": "87839b9f612691c0f100b4b517587411",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.19.2/gelato_0.26.19.2.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-09-20T09:37:18Z",
+        "version": "0.26.19.2"
+      },
+      {
         "changelog": "## [0.26.19.1] - 2026-09-19\n\n### 🐛 Bug Fixes\n\n- Keep native items listed when filtering unreleased items (#222)\n- Search hardening (#219)\n- Ignore non-supported library options (#221)\n- Keep debrid keys and addon config out of the logs (#220)\n- Stop writing EndDate on native items (#223)\n- Keep extended local series trees through a library scan (#224)\n",
         "checksum": "c2c6de7b012e16086ac2d1dc4a5a72ea",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.19.1/gelato_0.26.19.1.zip",
@@ -238,14 +246,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-10T16:30:30Z",
         "version": "0.26.12.2"
-      },
-      {
-        "changelog": "## [0.26.12.1] - 2026-04-10\n\n### 🐛 Bug Fixes\n\n- Stremio directors cane be array or string\n",
-        "checksum": "be7aeb37f2ce2fa5bb37a4b9458c90f7",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.12.1/gelato_0.26.12.1.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-10T15:39:35Z",
-        "version": "0.26.12.1"
       }
     ]
   }
