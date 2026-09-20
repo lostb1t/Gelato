@@ -225,13 +225,6 @@ public sealed class DtoServiceDecorator(
 
         if (IsGelato(dto))
         {
-            if (dto.Path is not null && dto.Path.IsUrl())
-            {
-                // dto.Path = "/stub";
-
-
-            }
-
             dto.CanDownload = true;
             // mark if placeholder
             if (
@@ -242,21 +235,36 @@ public sealed class DtoServiceDecorator(
                     .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
             )
             {
-                if (dto.MediaSources != null)
-                {
-                    foreach (var source in dto.MediaSources)
-                    {
-                        //source.Path = "/stub";
-                        //source.IsRemote = false;
-                        // source.Protocol = MediaProtocol.File;
-                    }
-                }
+                StubStreamPaths(dto);
                 return;
             }
 
             dto.LocationType = LocationType.Virtual;
             dto.Path = null;
             dto.CanDownload = false;
+            StubStreamPaths(dto);
+        }
+    }
+
+    /// <summary>
+    /// Takes the stream paths out of the DTO. A stream row's own path and the paths of a movie's
+    /// or an episode's media sources are addon URLs with the debrid API key in them, so any client
+    /// asking for Fields=MediaSources, and anything that logs or caches that answer, would get the
+    /// key; the host in them is often one only the server can reach, and a client that trusts
+    /// SupportsDirectPlay from the DTO instead of from PlaybackInfo tries it and times out.
+    /// Clients get a stub they can only play through Jellyfin. MediaSourceManagerDecorator keeps
+    /// the real URL on Jellyfin's own playback path.
+    /// </summary>
+    private static void StubStreamPaths(BaseItemDto dto)
+    {
+        if (dto.Path is not null && dto.Path.IsUrl())
+        {
+            dto.Path = "/stub";
+        }
+
+        foreach (var source in dto.MediaSources ?? [])
+        {
+            source.Stub();
         }
     }
 }

@@ -532,11 +532,10 @@ public sealed class MediaSourceManagerDecorator(
 
         // Stub path after probing is done so the real URL is never sent to clients.
         // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
-        if (ctx.GetActionName() == "GetPostedPlaybackInfo")
+        // Both playback info actions, not the POST alone: native clients use the GET.
+        if (ctx.IsPlaybackInfoAction())
         {
-            selected.Path = "/stub";
-            selected.IsRemote = false;
-            selected.Protocol = MediaProtocol.File;
+            selected.Stub();
         }
 
         return [selected];

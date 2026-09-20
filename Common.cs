@@ -7,7 +7,9 @@ using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -331,6 +333,16 @@ public static class ActionContextExtensions
         "UpdateItemUserDataLegacy",
     };
 
+    // Jellyfin answers playback info under two actions: GET /Items/{id}/PlaybackInfo and
+    // POST /Items/{id}/PlaybackInfo. The web client posts, several native clients use the GET.
+    private static readonly HashSet<string> PlaybackInfoActionNames = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "GetPlaybackInfo",
+        "GetPostedPlaybackInfo",
+    };
+
     private static readonly HashSet<string> InsertableListActionNames = new(
         StringComparer.OrdinalIgnoreCase
     )
@@ -379,6 +391,9 @@ public static class ActionContextExtensions
 
     public static bool IsApiSearchAction(this ActionExecutingContext ctx) =>
         ctx.GetActionName() is { } actionName && SearchActionNames.Contains(actionName);
+
+    public static bool IsPlaybackInfoAction(this HttpContext? ctx) =>
+        ctx?.GetActionName() is { } actionName && PlaybackInfoActionNames.Contains(actionName);
 
     public static bool IsInsertableAction(this HttpContext ctx)
     {
@@ -759,4 +774,33 @@ public static class StringExtensions
     public static bool IsUrl(this string s) =>
         s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
         || s.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+}
+
+public static class MediaSourceExtensions
+{
+    /// <summary>
+    /// Hands the client a stub on the File protocol instead of the stream's own path. The addon
+    /// URL carries the debrid API key and names a host only Jellyfin has to reach, so no response
+    /// a client can ask for may contain it; File and a path the client cannot open is what makes
+    /// clients stream through Jellyfin, which resolves the real URL again. A placeholder
+    /// (gelato://, stremio://) is stubbed the same way, there is no file behind it either. A real
+    /// file path is left alone, so a version merged in by hand still direct-plays from the share.
+    /// </summary>
+    public static bool Stub(this MediaSourceInfo source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        if (source.Path is not { Length: > 0 } path || !IsStubbed(path))
+            return false;
+
+        source.Path = "/stub";
+        source.IsRemote = false;
+        source.Protocol = MediaProtocol.File;
+        return true;
+    }
+
+    private static bool IsStubbed(string path) =>
+        path.IsUrl()
+        || path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase);
 }
