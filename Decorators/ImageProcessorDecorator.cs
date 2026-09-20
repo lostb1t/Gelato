@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Drawing;
@@ -18,7 +19,48 @@ public sealed class ImageProcessorDecorator(
     ILogger<ImageProcessorDecorator> log
 ) : IImageProcessor
 {
-    private string GelatoImagesDir => Path.Combine(appPaths.DataPath, "gelato", "images");
+    // Remote images that answered with an error, and until when they are left alone. A still of an
+    // episode that has not aired yet is simply not there yet, and retrying it on every single
+    // request only produced the same 404 again (issue 226). A permanent answer is remembered for
+    // hours — the still usually appears within days — a transient one only for minutes.
+    private static readonly ConcurrentDictionary<string, DateTime> FailedUrls = new(
+        StringComparer.Ordinal
+    );
+    private static readonly TimeSpan PermanentFailureTtl = TimeSpan.FromHours(6);
+    private static readonly TimeSpan TransientFailureTtl = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Whether the URL failed recently and should not be fetched again yet.
+    /// </summary>
+    public static bool IsKnownDead(string url)
+    {
+        if (!FailedUrls.TryGetValue(url, out var until))
+            return false;
+        if (DateTime.UtcNow < until)
+            return true;
+        FailedUrls.TryRemove(url, out _);
+        return false;
+    }
+
+    private static void RememberFailure(string url, Exception ex)
+    {
+        // A 4xx means the image is not there; anything else (5xx, a timeout, no route) can be over
+        // in a moment.
+        var permanent =
+            ex is HttpRequestException { StatusCode: { } status }
+            && (int)status is >= 400 and < 500;
+        if (FailedUrls.Count > 4096)
+        {
+            var now = DateTime.UtcNow;
+            foreach (var (key, expiry) in FailedUrls)
+            {
+                if (expiry <= now)
+                    FailedUrls.TryRemove(key, out _);
+            }
+        }
+
+        FailedUrls[url] = DateTime.UtcNow + (permanent ? PermanentFailureTtl : TransientFailureTtl);
+    }
 
     // Return a hardcoded blurhash for any zero-byte/missing placeholder that has a .url sidecar,
     // so Jellyfin never tries to decode the placeholder file.
@@ -63,6 +105,16 @@ public sealed class ImageProcessorDecorator(
                 if (urlFile is not null)
                 {
                     var url = (await File.ReadAllTextAsync(urlFile).ConfigureAwait(false)).Trim();
+                    if (IsKnownDead(url))
+                    {
+                        log.LogDebug(
+                            "ImageProcessor: {Url} failed recently, not fetching it again for {Id}",
+                            Redact.Url(url),
+                            options.Item.Id
+                        );
+                        throw NotFound(options);
+                    }
+
                     try
                     {
                         await providerManager.Value
@@ -88,6 +140,7 @@ public sealed class ImageProcessorDecorator(
                             options.Image.Type,
                             Redact.Url(url)
                         );
+                        FailedUrls.TryRemove(url, out _);
                     }
                     catch (Exception ex)
                     {
@@ -97,6 +150,7 @@ public sealed class ImageProcessorDecorator(
                             options.Item.Id,
                             Redact.Url(url)
                         );
+                        RememberFailure(url, ex);
                     }
                 }
                 else
@@ -107,28 +161,50 @@ public sealed class ImageProcessorDecorator(
                     );
                 }
 
+                // Whatever happened above, an image of zero bytes is not an image: served as it
+                // is, the endpoint answers 200 and the client draws an empty card instead of its
+                // own placeholder, because it cannot tell the two apart.
+                var current = new FileInfo(options.Image!.Path);
+                if (!current.Exists || current.Length == 0)
+                    throw NotFound(options);
             }
         }
 
         return await inner.ProcessImage(options).ConfigureAwait(false);
     }
 
+    private static FileNotFoundException NotFound(ImageProcessingOptions options) =>
+        new($"No image of type {options.Image?.Type} for item {options.Item?.Id}");
+
     // Returns the .url sidecar path to use, checking the image's own path first, then
     // falling back to the gelato fake path for this item + image type.
-    private string? ResolveUrlFile(string imagePath, ImageProcessingOptions options)
+    private string? ResolveUrlFile(string imagePath, ImageProcessingOptions options) =>
+        options.Item is null || options.Image is null
+            ? null
+            : ResolveUrlFile(
+                appPaths,
+                options.Item.Id,
+                imagePath,
+                options.Image.Type,
+                options.ImageIndex
+            );
+
+    public static string? ResolveUrlFile(
+        IApplicationPaths appPaths,
+        Guid itemId,
+        string imagePath,
+        ImageType type,
+        int index
+    )
     {
         var direct = imagePath + ".url";
         if (File.Exists(direct))
             return direct;
 
-        if (options.Item is null || options.Image is null)
-            return null;
-
-        var type = options.Image.Type;
-        var index = options.ImageIndex;
         var fileName = index > 0 ? $"{type}_{index}.jpg" : $"{type}.jpg";
         var fallback =
-            Path.Combine(GelatoImagesDir, options.Item.Id.ToString("N"), fileName) + ".url";
+            Path.Combine(appPaths.DataPath, "gelato", "images", itemId.ToString("N"), fileName)
+            + ".url";
         return File.Exists(fallback) ? fallback : null;
     }
 
