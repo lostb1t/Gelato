@@ -42,11 +42,11 @@ public sealed class GelatoImageProvider(
         StremioMeta? meta;
         try
         {
-            meta = await stremio.GetMetaAsync(id, mediaType).ConfigureAwait(false);
+            meta = await stremio.GetMetaAsync(item.ProviderIds, mediaType).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "GelatoImageProvider: failed to fetch meta for {Id}", id);
+            log.LogWarning(ex, "GelatoImageProvider: failed to fetch meta for {Name}", item.Name);
             return [];
         }
 

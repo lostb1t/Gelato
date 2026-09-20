@@ -365,7 +365,7 @@ public sealed class GelatoManager(
             }
 
             var lookupId = meta.ImdbId ?? meta.Id;
-            meta = await cfg.Stremio!.GetMetaAsync(lookupId, mediaType).ConfigureAwait(false);
+            meta = await cfg.Stremio!.GetMetaAsync(meta).ConfigureAwait(false);
 
             if (meta is null)
             {

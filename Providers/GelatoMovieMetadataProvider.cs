@@ -40,11 +40,17 @@ public sealed class GelatoMovieMetadataProvider(
         StremioMeta? meta;
         try
         {
-            meta = await stremio.GetMetaAsync(id, StremioMediaType.Movie).ConfigureAwait(false);
+            meta = await stremio
+                .GetMetaAsync(info.ProviderIds, StremioMediaType.Movie)
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            log.LogWarning(ex, "GelatoMovieMetadataProvider: failed to fetch meta for {Id}", id);
+            log.LogWarning(
+                ex,
+                "GelatoMovieMetadataProvider: failed to fetch meta for {Name}",
+                info.Name
+            );
             return result;
         }
 
