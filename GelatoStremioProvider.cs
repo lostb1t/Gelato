@@ -208,6 +208,45 @@ public class GelatoStremioProvider(
         return await GetMetaAsync([meta.ImdbId, meta.Id], meta.Type, ttl).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The addon meta ids an item's provider ids stand for, best first: the IMDb and TMDB ids
+    /// every catalog keys on, then the addon's own id and the ids <see cref="GelatoManager.IntoBaseItem"/>
+    /// writes for the namespaces an anime addon hands out.
+    /// </summary>
+    /// <remarks>
+    /// Only IMDb and TMDB used to be looked at, so an item carrying neither could never have its
+    /// meta fetched again: the tree sync and the series page both gave up on it ("has no imdb and
+    /// tmdb ID"), and the seasons it was created with were all it ever got (lostb1t/Gelato#225).
+    /// Anime is where that happens - the catalogs hand out <c>kitsu:</c>, <c>mal:</c>,
+    /// <c>anilist:</c> and <c>anidb:</c> ids, and plenty of titles have no IMDb or TMDB id at all -
+    /// while playback kept working, because <see cref="StremioUri.FromBaseItem"/> has always fallen
+    /// back to the addon's own id.
+    /// </remarks>
+    private static IEnumerable<string?> MetaIdCandidates(
+        IReadOnlyDictionary<string, string> providerIds
+    )
+    {
+        string? Id(string provider, string prefix = "")
+        {
+            return
+                providerIds.TryGetValue(provider, out var value)
+                && !string.IsNullOrWhiteSpace(value)
+                ? prefix + value
+                : null;
+        }
+
+        yield return Id(nameof(MetadataProvider.Imdb));
+        yield return Id(nameof(MetadataProvider.Tmdb), "tmdb:");
+        // The id the addon itself gave the item, already in the addon's own format.
+        yield return Id("Stremio");
+        yield return Id("Kitsu", "kitsu:");
+        yield return Id("Mal", "mal:");
+        yield return Id("Anilist", "anilist:");
+        yield return Id("AniDB", "anidb:");
+        yield return Id(nameof(MetadataProvider.Tvdb), "tvdb:");
+        yield return Id(nameof(MetadataProvider.TvMaze), "tvmaze:");
+    }
+
     /// <inheritdoc cref="GetMetaAsync(StremioMeta, TimeSpan?)"/>
     public async Task<StremioMeta?> GetMetaAsync(
         IReadOnlyDictionary<string, string> providerIds,
@@ -215,25 +254,18 @@ public class GelatoStremioProvider(
         TimeSpan? ttl = null
     )
     {
-        providerIds.TryGetValue(nameof(MetadataProvider.Imdb), out var imdbId);
-        providerIds.TryGetValue(nameof(MetadataProvider.Tmdb), out var tmdbId);
-        return await GetMetaAsync(
-                [imdbId, string.IsNullOrWhiteSpace(tmdbId) ? null : $"tmdb:{tmdbId}"],
-                mediaType,
-                ttl
-            )
+        return await GetMetaAsync(MetaIdCandidates(providerIds), mediaType, ttl)
             .ConfigureAwait(false);
     }
 
     public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
     {
-        var imdbId = item.GetProviderId("Imdb");
-        var tmdbId = item.GetProviderId("Tmdb");
-        if (imdbId is null)
+        if (item.GetProviderId("Imdb") is null)
             log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
-        if (imdbId is null && tmdbId is null)
+
+        if (!MetaIdCandidates(item.ProviderIds).Any(id => !string.IsNullOrWhiteSpace(id)))
         {
-            log.LogWarning("GetMetaAsync: {Name} has no imdb and tmdb ID", item.Name);
+            log.LogWarning("GetMetaAsync: {Name} has no id the addon could serve", item.Name);
             return null;
         }
 
