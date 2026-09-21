@@ -58,6 +58,14 @@ public sealed class PurgeGelatoTask(
                     return false;
                 }
 
+                // A collection lives in Jellyfin's own collections directory, so its path always exists
+                // and the guard below skipped every one of them: a purge left the catalogs' collections
+                // in the library. A collection carrying a Stremio id is one Gelato created.
+                if (item.GetBaseItemKind() == BaseItemKind.BoxSet)
+                {
+                    return true;
+                }
+
                 if (File.Exists(item.Path) || Directory.Exists(item.Path))
                 {
                     log.LogWarning("Skipping item {ItemId} with local path {Path}", item.Id, item.Path);
@@ -82,7 +90,12 @@ public sealed class PurgeGelatoTask(
         var totalItems = items.Count;
         var processed = 0;
 
-        foreach (var batch in items.Chunk(batchSize))
+        // Collections are deleted with their folder: the database rows alone would leave
+        // "<name> [boxset]/collection.xml" behind, and the next library scan reads it back in.
+        var collections = items.Where(i => i.GetBaseItemKind() == BaseItemKind.BoxSet).ToList();
+        var rest = items.Where(i => i.GetBaseItemKind() != BaseItemKind.BoxSet).ToList();
+
+        foreach (var batch in rest.Chunk(batchSize))
         {
             ct.ThrowIfCancellationRequested();
 
@@ -92,6 +105,15 @@ public sealed class PurgeGelatoTask(
             manager.ForgetWatchState(batch, ct);
             libraryManager.DeleteItemsUnsafeFast(batch);
             processed += batch.Length;
+            progress?.Report((double)processed / totalItems * 100);
+        }
+
+        if (collections.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            manager.ForgetWatchState(collections, ct);
+            libraryManager.DeleteItemsUnsafeFast(collections, deleteSourceFiles: true);
+            processed += collections.Count;
             progress?.Report((double)processed / totalItems * 100);
         }
 
