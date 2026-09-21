@@ -23,7 +23,7 @@ public sealed class GelatoEpisodeMetadataProvider(
     {
         var result = new MetadataResult<Episode> { HasMetadata = false, QueriedById = true };
 
-        // Episode meta requires a series IMDB id + season + episode numbers
+        // Episode meta requires an id of the series the addon serves + season + episode numbers
         info.ProviderIds.TryGetValue(MetadataProvider.Imdb.ToString(), out var seriesImdbId);
         if (string.IsNullOrWhiteSpace(seriesImdbId))
             info.SeriesProviderIds.TryGetValue(MetadataProvider.Imdb.ToString(), out seriesImdbId);
@@ -31,10 +31,10 @@ public sealed class GelatoEpisodeMetadataProvider(
         var season = info.ParentIndexNumber;
         var episode = info.IndexNumber;
 
-        if (string.IsNullOrWhiteSpace(seriesImdbId) || season is null || episode is null)
+        if (season is null || episode is null)
         {
             log.LogDebug(
-                "GelatoEpisodeMetadataProvider: missing series IMDB id or season/episode numbers for {Name}",
+                "GelatoEpisodeMetadataProvider: missing season/episode numbers for {Name}",
                 info.Name
             );
             return result;
@@ -44,13 +44,24 @@ public sealed class GelatoEpisodeMetadataProvider(
         if (stremio is null)
             return result;
 
-        var seriesId = seriesImdbId;
+        // Only for the log lines below: the id the lookup starts from.
+        var seriesId = string.IsNullOrWhiteSpace(seriesImdbId)
+            ? info.SeriesProviderIds.GetValueOrDefault("Stremio", info.Name)
+            : seriesImdbId;
         StremioMeta? seriesMeta;
         try
         {
-            seriesMeta = await stremio
-                .GetMetaAsync(seriesId, StremioMediaType.Series)
-                .ConfigureAwait(false);
+            // Without an IMDb id the series' other ids are all there is to go by: the addon's own
+            // one and the kitsu:/mal:/anilist:/anidb: namespaces an anime catalog hands out
+            // (lostb1t/Gelato#225). Only the series' ids, never the episode's - an episode carries
+            // a TVDB id of its own, which names the episode rather than the show.
+            seriesMeta = string.IsNullOrWhiteSpace(seriesImdbId)
+                ? await stremio
+                    .GetMetaAsync(info.SeriesProviderIds, StremioMediaType.Series)
+                    .ConfigureAwait(false)
+                : await stremio
+                    .GetMetaAsync(seriesImdbId, StremioMediaType.Series)
+                    .ConfigureAwait(false);
         }
         catch (Exception ex)
         {

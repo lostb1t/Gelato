@@ -26,8 +26,7 @@ public sealed class GelatoMovieMetadataProvider(
     {
         var result = new MetadataResult<Movie> { HasMetadata = false, QueriedById = true };
 
-        var id = ResolveId(info.ProviderIds);
-        if (id is null)
+        if (!GelatoStremioProvider.HasMetaId(info.ProviderIds))
         {
             log.LogDebug("GelatoMovieMetadataProvider: no usable ID for {Name}", info.Name);
             return result;
@@ -182,21 +181,6 @@ public sealed class GelatoMovieMetadataProvider(
             ImageUrl = meta.Poster ?? meta.Thumbnail,
             ProviderIds = meta.GetProviderIds(),
         };
-
-    private static string? ResolveId(Dictionary<string, string> providerIds)
-    {
-        if (
-            providerIds.TryGetValue(MetadataProvider.Imdb.ToString(), out var imdb)
-            && !string.IsNullOrWhiteSpace(imdb)
-        )
-            return imdb;
-        if (
-            providerIds.TryGetValue(MetadataProvider.Tmdb.ToString(), out var tmdb)
-            && !string.IsNullOrWhiteSpace(tmdb)
-        )
-            return $"tmdb:{tmdb}";
-        return null;
-    }
 
     private static GelatoStremioProvider? GetStremio() =>
         GelatoPlugin.Instance?.Configuration.Stremio;

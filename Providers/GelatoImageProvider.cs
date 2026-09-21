@@ -27,8 +27,16 @@ public sealed class GelatoImageProvider(
         CancellationToken cancellationToken
     )
     {
-        var id = ResolveId(item);
-        if (id is null)
+        // A stream row is a version of its movie and shows the movie's images. It carries a
+        // Stremio id of its own, so letting it through here would give it an image set of its own
+        // and the movie's images would stop showing on the version page.
+        if (item.IsStream())
+        {
+            log.LogDebug("GelatoImageProvider: {Name} is a stream row", item.Name);
+            return [];
+        }
+
+        if (!GelatoStremioProvider.HasMetaId(item.ProviderIds))
         {
             log.LogDebug("GelatoImageProvider: no usable ID for {Name}", item.Name);
             return [];
@@ -106,18 +114,5 @@ public sealed class GelatoImageProvider(
             );
 
         return images;
-    }
-
-    private static string? ResolveId(BaseItem item)
-    {
-        var imdb = item.GetProviderId(MetadataProvider.Imdb);
-        if (!string.IsNullOrWhiteSpace(imdb))
-            return imdb;
-
-        var tmdb = item.GetProviderId(MetadataProvider.Tmdb);
-        if (!string.IsNullOrWhiteSpace(tmdb))
-            return $"tmdb:{tmdb}";
-
-        return null;
     }
 }
