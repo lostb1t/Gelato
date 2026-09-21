@@ -98,8 +98,18 @@ public class InsertActionFilter(
             return;
         }
 
-        // Insert the item
-        var baseItem = await InsertMetaAsync(guid, root, meta, user);
+        // A played write reaches a series' episodes, and the tree it just created is still growing:
+        // the metadata refresh brings the episodes the first pass did not have. The answer goes out
+        // without waiting for it (that took up to a minute on a long series), and the state is
+        // applied again behind it, by the same call that runs the refresh the insert would queue.
+        var wantsPlayed = isSeries ? ctx.WantsPlayedState() : null;
+        var baseItem = await InsertMetaAsync(
+            guid,
+            root,
+            meta,
+            user,
+            refreshItem: wantsPlayed is null
+        );
         if (baseItem is not null)
         {
             manager.RememberInsertedId(guid, baseItem.Id);
@@ -108,6 +118,11 @@ public class InsertActionFilter(
         }
 
         await next();
+
+        if (baseItem is not null && wantsPlayed is bool played)
+        {
+            manager.RefreshAndReapplyPlayedState(baseItem, user, played);
+        }
     }
 
     private async Task HandleLocalSeriesAsync(Guid userId, Series series, CancellationToken ct)
@@ -147,7 +162,8 @@ public class InsertActionFilter(
         Guid guid,
         Folder root,
         StremioMeta meta,
-        User user
+        User user,
+        bool refreshItem = true
     )
     {
         BaseItem? baseItem = null;
@@ -163,7 +179,7 @@ public class InsertActionFilter(
                     meta,
                     user,
                     false,
-                    true,
+                    refreshItem,
                     meta.Type is StremioMediaType.Series,
                     ct
                 );
