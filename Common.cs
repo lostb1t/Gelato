@@ -353,6 +353,12 @@ public static class ActionContextExtensions
             "GetVideoStreamByContainer",
             "GetDownload",
             "GetSubtitleWithTicks",
+            // The breadcrumb of a details page. jellyfin-web asks for it before it asks for the
+            // item (seen in the browser 2026-09-22: Ancestors 404, then the item 200, then
+            // Ancestors again 200), so nothing has materialized the title when it arrives and
+            // resolving it to an existing item is not enough. The other per-item reads of that
+            // page follow the item call and are answered by the redirect it remembers.
+            "GetAncestors",
             .. UserDataActionNames,
             ],
         StringComparer.OrdinalIgnoreCase
@@ -433,6 +439,23 @@ public static class ActionContextExtensions
 
     public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
         ctx.HttpContext.IsInsertableAction();
+
+    /// <summary>
+    /// Whether the request may be answered from the library item a search result is, without
+    /// materializing anything: every safe read.
+    /// </summary>
+    /// <remarks>
+    /// A client that opened a search result keeps the result's id in the page URL and asks for
+    /// the ancestors, similar items, theme media and the rest with it. None of those actions
+    /// insert, so they are not insertable actions, and Jellyfin has never stored the id: the
+    /// breadcrumb of a title the library already holds answered 404. Resolving the id to the
+    /// item it belongs to costs a cache lookup for ids no search produced.
+    /// </remarks>
+    public static bool IsCanonicalIdRead(this HttpContext ctx) =>
+        HttpMethods.IsGet(ctx.Request.Method) || HttpMethods.IsHead(ctx.Request.Method);
+
+    public static bool IsCanonicalIdRead(this ActionExecutingContext ctx) =>
+        ctx.HttpContext.IsCanonicalIdRead();
 
     /// <summary>
     /// The played state a user data write asks for, or null when the action does not set one. The

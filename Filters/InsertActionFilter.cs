@@ -31,8 +31,9 @@ public class InsertActionFilter(
             return;
         }
 
+        var insertable = ctx.IsInsertableAction();
         if (
-            !ctx.IsInsertableAction()
+            (!insertable && !ctx.IsCanonicalIdRead())
             || !ctx.TryGetRouteGuid(out var guid)
             || !ctx.TryGetUserId(out var userId)
             || userManager.GetUserById(userId) is not { } user
@@ -43,7 +44,11 @@ public class InsertActionFilter(
         }
 
         // Handle local (non-gelato) series: sync or clean tree on demand
-        if (libraryManager.GetItemById(guid) is Series localSeries && !localSeries.IsGelato())
+        if (
+            insertable
+            && libraryManager.GetItemById(guid) is Series localSeries
+            && !localSeries.IsGelato()
+        )
         {
             await HandleLocalSeriesAsync(userId, localSeries, ctx.HttpContext.RequestAborted);
             await next();
@@ -52,18 +57,6 @@ public class InsertActionFilter(
 
         if (manager.GetStremioMeta(guid) is not { } stremioMeta)
         {
-            await next();
-            return;
-        }
-
-        // Get root folder
-        var isSeries = stremioMeta.Type == StremioMediaType.Series;
-        var root = isSeries
-            ? manager.TryGetSeriesFolder(userId)
-            : manager.TryGetMovieFolder(userId);
-        if (root is null)
-        {
-            log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
             await next();
             return;
         }
@@ -82,6 +75,26 @@ public class InsertActionFilter(
                 await next();
                 return;
             }
+        }
+
+        // A read answers for what the library has; it never puts a title in. The result stays a
+        // search result until something opens it.
+        if (!insertable)
+        {
+            await next();
+            return;
+        }
+
+        // Get root folder
+        var isSeries = stremioMeta.Type == StremioMediaType.Series;
+        var root = isSeries
+            ? manager.TryGetSeriesFolder(userId)
+            : manager.TryGetMovieFolder(userId);
+        if (root is null)
+        {
+            log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
+            await next();
+            return;
         }
 
         // Fetch full metadata
