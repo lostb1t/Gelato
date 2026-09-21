@@ -143,8 +143,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
     {
         var result = new MetadataResult<Series> { HasMetadata = false, QueriedById = true };
 
-        var id = ResolveId(info.ProviderIds);
-        if (id is null)
+        if (!GelatoStremioProvider.HasMetaId(info.ProviderIds))
         {
             _log.LogDebug("GelatoSeriesProvider: no usable ID for {Name}", info.Name);
             return result;
@@ -289,21 +288,6 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
             ImageUrl = meta.Poster ?? meta.Thumbnail,
             ProviderIds = meta.GetProviderIds(),
         };
-
-    private static string? ResolveId(Dictionary<string, string> providerIds)
-    {
-        if (
-            providerIds.TryGetValue(MetadataProvider.Imdb.ToString(), out var imdb)
-            && !string.IsNullOrWhiteSpace(imdb)
-        )
-            return imdb;
-        if (
-            providerIds.TryGetValue(MetadataProvider.Tmdb.ToString(), out var tmdb)
-            && !string.IsNullOrWhiteSpace(tmdb)
-        )
-            return $"tmdb:{tmdb}";
-        return null;
-    }
 
     private bool IsEnabledForLibrary(BaseItem item)
     {

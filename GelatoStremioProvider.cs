@@ -247,6 +247,12 @@ public class GelatoStremioProvider(
         yield return Id(nameof(MetadataProvider.TvMaze), "tvmaze:");
     }
 
+    /// <summary>
+    /// Whether those provider ids name anything the addon's meta resource could be asked for.
+    /// </summary>
+    public static bool HasMetaId(IReadOnlyDictionary<string, string> providerIds) =>
+        MetaIdCandidates(providerIds).Any(id => !string.IsNullOrWhiteSpace(id));
+
     /// <inheritdoc cref="GetMetaAsync(StremioMeta, TimeSpan?)"/>
     public async Task<StremioMeta?> GetMetaAsync(
         IReadOnlyDictionary<string, string> providerIds,
@@ -263,7 +269,7 @@ public class GelatoStremioProvider(
         if (item.GetProviderId("Imdb") is null)
             log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
 
-        if (!MetaIdCandidates(item.ProviderIds).Any(id => !string.IsNullOrWhiteSpace(id)))
+        if (!HasMetaId(item.ProviderIds))
         {
             log.LogWarning("GetMetaAsync: {Name} has no id the addon could serve", item.Name);
             return null;

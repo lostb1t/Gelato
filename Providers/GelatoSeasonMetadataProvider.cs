@@ -28,9 +28,12 @@ public sealed class GelatoSeasonMetadataProvider(
 
         var seasonNumber = info.IndexNumber;
 
-        if (string.IsNullOrWhiteSpace(seriesImdbId))
+        if (
+            string.IsNullOrWhiteSpace(seriesImdbId)
+            && !GelatoStremioProvider.HasMetaId(info.SeriesProviderIds)
+        )
         {
-            log.LogDebug("GelatoSeasonMetadataProvider: no series IMDB id for {Name}", info.Name);
+            log.LogDebug("GelatoSeasonMetadataProvider: no usable series id for {Name}", info.Name);
             return result;
         }
 
@@ -38,19 +41,31 @@ public sealed class GelatoSeasonMetadataProvider(
         if (stremio is null)
             return result;
 
+        // Only for the log lines below: the id the lookup starts from.
+        var seriesId = string.IsNullOrWhiteSpace(seriesImdbId)
+            ? info.SeriesProviderIds.GetValueOrDefault("Stremio", info.Name)
+            : seriesImdbId;
         StremioMeta? seriesMeta;
         try
         {
-            seriesMeta = await stremio
-                .GetMetaAsync(seriesImdbId, StremioMediaType.Series)
-                .ConfigureAwait(false);
+            // Without an IMDb id the series' other ids are all there is to go by: the addon's own
+            // one and the kitsu:/mal:/anilist:/anidb: namespaces an anime catalog hands out
+            // (lostb1t/Gelato#225). Only the series' ids, never the season's - a season carries a
+            // Stremio id of its own, the series id with the season number appended.
+            seriesMeta = string.IsNullOrWhiteSpace(seriesImdbId)
+                ? await stremio
+                    .GetMetaAsync(info.SeriesProviderIds, StremioMediaType.Series)
+                    .ConfigureAwait(false)
+                : await stremio
+                    .GetMetaAsync(seriesImdbId, StremioMediaType.Series)
+                    .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             log.LogWarning(
                 ex,
                 "GelatoSeasonMetadataProvider: failed to fetch series meta for {Id}",
-                seriesImdbId
+                seriesId
             );
             return result;
         }
