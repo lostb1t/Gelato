@@ -309,24 +309,12 @@ public static class ActionContextExtensions
         "GetSearchHints",
     };
 
-    private static readonly HashSet<string> InsertableActionNames = new(
+    // The user data writes. A client offers them from a search result's context menu, before the
+    // result was opened, so they materialize the title like any other insertable action.
+    private static readonly HashSet<string> UserDataActionNames = new(
         StringComparer.OrdinalIgnoreCase
     )
     {
-        "GetItems",
-        "GetItem",
-        "GetItemLegacy",
-        "GetItemsByUserIdLegacy",
-        "GetPlaybackInfo",
-        "GetPostedPlaybackInfo",
-        "GetVideoStream",
-        // Same stream, under a container extension: a separate action that delegates to
-        // GetVideoStream. Clients that play /Videos/{id}/stream.mkv would otherwise get a 404
-        // for a search result that was never opened, because nothing materializes it.
-        "GetVideoStreamByContainer",
-        "GetDownload",
-        "GetSubtitleWithTicks",
-        // Clients offer these from a search result's context menu, before the result was opened.
         "MarkPlayedItem",
         "MarkPlayedItemLegacy",
         "MarkFavoriteItem",
@@ -336,6 +324,39 @@ public static class ActionContextExtensions
         "UpdateItemUserData",
         "UpdateItemUserDataLegacy",
     };
+
+    // The ones that reach a series' episodes: played is stored per episode and a folder counts as
+    // played when all of them are, so these need the tree to be complete before they run. A
+    // favourite or a rating is kept on the series itself and does not wait for anything.
+    private static readonly HashSet<string> PlayedStateActionNames = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "MarkPlayedItem",
+        "MarkPlayedItemLegacy",
+        "UpdateItemUserData",
+        "UpdateItemUserDataLegacy",
+    };
+
+    private static readonly HashSet<string> InsertableActionNames = new(
+        [
+            "GetItems",
+            "GetItem",
+            "GetItemLegacy",
+            "GetItemsByUserIdLegacy",
+            "GetPlaybackInfo",
+            "GetPostedPlaybackInfo",
+            "GetVideoStream",
+            // Same stream, under a container extension: a separate action that delegates to
+            // GetVideoStream. Clients that play /Videos/{id}/stream.mkv would otherwise get a 404
+            // for a search result that was never opened, because nothing materializes it.
+            "GetVideoStreamByContainer",
+            "GetDownload",
+            "GetSubtitleWithTicks",
+            .. UserDataActionNames,
+            ],
+        StringComparer.OrdinalIgnoreCase
+    );
 
     // Jellyfin answers playback info under two actions: GET /Items/{id}/PlaybackInfo and
     // POST /Items/{id}/PlaybackInfo. The web client posts, several native clients use the GET.
@@ -412,6 +433,31 @@ public static class ActionContextExtensions
 
     public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
         ctx.HttpContext.IsInsertableAction();
+
+    /// <summary>
+    /// The played state a user data write asks for, or null when the action does not set one. The
+    /// mark actions say played; the generic update carries the flag in its body.
+    /// </summary>
+    public static bool? WantsPlayedState(this ActionExecutingContext ctx)
+    {
+        if (
+            ctx.GetActionName() is not { } actionName
+            || !PlayedStateActionNames.Contains(actionName)
+        )
+            return null;
+
+        if (!actionName.StartsWith("UpdateItemUserData", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        // The body is one of Jellyfin's API models, which a plugin does not reference.
+        foreach (var argument in ctx.ActionArguments.Values)
+        {
+            if (argument?.GetType().GetProperty("Played")?.GetValue(argument) is bool played)
+                return played;
+        }
+
+        return null;
+    }
 
     public static bool IsSingleItemList(this HttpContext ctx)
     {

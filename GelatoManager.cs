@@ -465,6 +465,59 @@ public sealed class GelatoManager(
         return (baseItem, true);
     }
 
+    /// <summary>
+    /// A played write on a series reaches its episodes, and it only has the ones that exist while it
+    /// runs: a series materialized by that very write is still growing, because the metadata refresh
+    /// is what brings the episodes the first pass did not have. Waiting for that refresh inside the
+    /// request took up to a minute on a long series, so the answer goes out first and the state is
+    /// applied again here, once the tree is complete. This runs the refresh the insert would have
+    /// queued, so the item is refreshed once either way.
+    /// </summary>
+    public void RefreshAndReapplyPlayedState(BaseItem item, User user, bool played)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var options = new MetadataRefreshOptions(new DirectoryService(fileSystem))
+                {
+                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                    ReplaceAllImages = false,
+                    ReplaceAllMetadata = false,
+                    ForceSave = true,
+                };
+                await provider
+                    .RefreshFullItem(item, options, CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                var refreshed = libraryManager.GetItemById(item.Id) ?? item;
+                if (played)
+                {
+                    refreshed.MarkPlayed(user, DateTime.UtcNow, true);
+                }
+                else
+                {
+                    refreshed.MarkUnplayed(user);
+                }
+
+                _log.LogDebug(
+                    "played={Played} applied again to {Name} now that its tree is complete",
+                    played,
+                    refreshed.Name
+                );
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(
+                    ex,
+                    "Could not apply the played state again to {Id} after its tree was built",
+                    item.Id
+                );
+            }
+        });
+    }
+
     private IEnumerable<BaseItem> FindByProviderIds(
         Dictionary<string, string> providerIds,
         BaseItemKind kind,
