@@ -1554,7 +1554,7 @@ public sealed class GelatoManager(
                     ParentId = series.Id,
                 };
 
-                var primary = seriesMeta.App_Extras?.SeasonPosters?.Get(
+                var primary = seriesMeta.App_Extras?.GetSeasonPoster(
                     seasonIndex,
                     seriesMeta.Videos
                 );

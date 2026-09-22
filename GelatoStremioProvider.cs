@@ -1002,14 +1002,28 @@ public class StremioAppExtras
     [JsonConverter(typeof(SeasonPostersConverter))]
     public StremioSeasonPosters? SeasonPosters { get; set; }
 
+    /// <summary>
+    /// The keyed map AIOMetadata sent next to the legacy list before 3.0 moved it into
+    /// <see cref="SeasonPosters"/>.
+    /// </summary>
+    [JsonConverter(typeof(SeasonPostersConverter))]
+    public StremioSeasonPosters? SeasonPosterByNumber { get; set; }
+
     [JsonPropertyName("releaseDates")]
     public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
+
+    /// <summary>The poster for a season, preferring a map keyed by season number over the list.</summary>
+    public string? GetSeasonPoster(int seasonNumber, IEnumerable<StremioMeta>? videos) =>
+        SeasonPosterByNumber?.ByNumber is not null
+            ? SeasonPosterByNumber.Get(seasonNumber, videos)
+            : SeasonPosters?.Get(seasonNumber, videos);
 }
 
 /// <summary>
 /// Season posters as the addon sends them. AIOMetadata 3.0 keys them by season number
 /// (<c>{"0": url, "1": url}</c>); older versions send a bare list in the order of the provider's
 /// seasons, specials first when the show has them, without saying which season is which.
+/// Only AIOMetadata sends season posters; with other meta addons this is absent.
 /// </summary>
 public class StremioSeasonPosters
 {

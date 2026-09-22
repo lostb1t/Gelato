@@ -103,7 +103,7 @@ public sealed class GelatoSeasonMetadataProvider(
         // Use season-specific poster when available
         if (
             seasonNumber.HasValue
-            && seriesMeta.App_Extras?.SeasonPosters?.Get(seasonNumber.Value, seriesMeta.Videos)
+            && seriesMeta.App_Extras?.GetSeasonPoster(seasonNumber.Value, seriesMeta.Videos)
                 is { } poster
         )
             season.SetProviderId("StremioSeasonPoster", poster);
