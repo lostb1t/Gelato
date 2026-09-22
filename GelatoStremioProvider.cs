@@ -998,10 +998,119 @@ public class StremioAppExtras
     public List<StremioCast>? Directors { get; set; }
     public List<StremioCast>? Writers { get; set; }
     public string? Certification { get; set; }
-    public List<String?>? SeasonPosters { get; set; }
+
+    [JsonConverter(typeof(SeasonPostersConverter))]
+    public StremioSeasonPosters? SeasonPosters { get; set; }
 
     [JsonPropertyName("releaseDates")]
     public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
+}
+
+/// <summary>
+/// Season posters as the addon sends them. AIOMetadata 3.0 keys them by season number
+/// (<c>{"0": url, "1": url}</c>); older versions send a bare list in the order of the provider's
+/// seasons, specials first when the show has them, without saying which season is which.
+/// </summary>
+public class StremioSeasonPosters
+{
+    public Dictionary<int, string>? ByNumber { get; set; }
+    public List<string?>? Ordered { get; set; }
+
+    /// <summary>
+    /// The poster for a season, or null. For the legacy list the position is mapped onto the
+    /// seasons the meta's videos carry; when those do not line up with the list, index 0 is
+    /// taken as specials only if the videos have a season 0.
+    /// </summary>
+    public string? Get(int seasonNumber, IEnumerable<StremioMeta>? videos)
+    {
+        if (ByNumber is not null)
+            return ByNumber.TryGetValue(seasonNumber, out var keyed) ? keyed : null;
+
+        if (Ordered is not { Count: > 0 } list)
+            return null;
+
+        var seasons = (videos ?? [])
+            .Where(v => v.Season.HasValue)
+            .Select(v => v.Season!.Value)
+            .Distinct()
+            .Order()
+            .ToList();
+
+        int index;
+        if (seasons.Count == list.Count)
+            index = seasons.IndexOf(seasonNumber);
+        else
+            index = seasons.Contains(0) ? seasonNumber : seasonNumber - 1;
+
+        var poster = index >= 0 && index < list.Count ? list[index] : null;
+        return string.IsNullOrWhiteSpace(poster) ? null : poster;
+    }
+}
+
+/// <summary>
+/// Reads <c>seasonPosters</c> as either the keyed object of AIOMetadata 3.0 or the legacy list.
+/// Anything else, or a key that is not a season number, is skipped.
+/// </summary>
+public sealed class SeasonPostersConverter : JsonConverter<StremioSeasonPosters?>
+{
+    public override StremioSeasonPosters? Read(
+        ref Utf8JsonReader r,
+        Type t,
+        JsonSerializerOptions o
+    )
+    {
+        switch (r.TokenType)
+        {
+            case JsonTokenType.StartObject:
+                var byNumber = new Dictionary<int, string>();
+                while (r.Read() && r.TokenType != JsonTokenType.EndObject)
+                {
+                    var key = r.GetString();
+                    r.Read();
+                    if (
+                        r.TokenType == JsonTokenType.String
+                        && int.TryParse(
+                            key,
+                            NumberStyles.Integer,
+                            CultureInfo.InvariantCulture,
+                            out var n
+                        )
+                        && r.GetString() is { } url
+                        && !string.IsNullOrWhiteSpace(url)
+                    )
+                        byNumber[n] = url;
+                    else
+                        r.Skip();
+                }
+                return new StremioSeasonPosters { ByNumber = byNumber };
+            case JsonTokenType.StartArray:
+                var ordered = new List<string?>();
+                while (r.Read() && r.TokenType != JsonTokenType.EndArray)
+                {
+                    ordered.Add(r.TokenType == JsonTokenType.String ? r.GetString() : null);
+                    r.Skip();
+                }
+                return new StremioSeasonPosters { Ordered = ordered };
+            default:
+                r.Skip();
+                return null;
+        }
+    }
+
+    public override void Write(Utf8JsonWriter w, StremioSeasonPosters? v, JsonSerializerOptions o)
+    {
+        if (v?.ByNumber is { } byNumber)
+        {
+            w.WriteStartObject();
+            foreach (var (n, url) in byNumber)
+                w.WriteString(n.ToString(CultureInfo.InvariantCulture), url);
+            w.WriteEndObject();
+        }
+        else if (v?.Ordered is { } ordered)
+            JsonSerializer.Serialize(w, ordered, o);
+        else
+            w.WriteNullValue();
+    }
 }
 
 public class TmdbFindResponse

@@ -1554,7 +1554,10 @@ public sealed class GelatoManager(
                     ParentId = series.Id,
                 };
 
-                var primary = seriesMeta.App_Extras?.SeasonPosters?.ElementAtOrDefault(seasonIndex);
+                var primary = seriesMeta.App_Extras?.SeasonPosters?.Get(
+                    seasonIndex,
+                    seriesMeta.Videos
+                );
                 if (!string.IsNullOrWhiteSpace(primary))
                 {
                     ProviderManagerDecorator.SetRemoteImage(
