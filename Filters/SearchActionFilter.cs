@@ -324,6 +324,16 @@ public class SearchActionFilter(
     }
 
     /// <summary>
+    /// Every field but the two extras counts. Each of those runs a library query for the item's
+    /// extras, about 45 ms apiece, and a search answers with 40 results: 3.5 s of a 4.3 s search
+    /// went into counting trailers and special features, which a placeholder item never has and
+    /// a search result never shows.
+    /// </summary>
+    private static readonly ItemFields[] SearchResultFields = Enum.GetValues<ItemFields>()
+        .Where(f => f is not (ItemFields.LocalTrailerCount or ItemFields.SpecialFeatureCount))
+        .ToArray();
+
+    /// <summary>
     /// The addon's results as DTOs, and, per result, the library item it stands in for when the
     /// library has the title already.
     /// </summary>
@@ -334,12 +344,22 @@ public class SearchActionFilter(
     {
         // theres a reason i initally disabled all fields but forgot....
         // infuse breaks if we do a small subset. Not sure which field it needs. Prolly mediasources
-        var options = new DtoOptions { EnableImages = true, EnableUserData = false };
+        var options = new DtoOptions(false)
+        {
+            Fields = SearchResultFields,
+            EnableImages = true,
+            EnableUserData = false,
+        };
 
         // The library's own item is answered with its user data: what the grid draws a watched
         // tick and a resume bar from. A stand-in has none to read — the id is a title the library
         // does not hold — which is why the results the addon answers for alone keep it off.
-        var libraryOptions = new DtoOptions { EnableImages = true, EnableUserData = true };
+        var libraryOptions = new DtoOptions(false)
+        {
+            Fields = SearchResultFields,
+            EnableImages = true,
+            EnableUserData = true,
+        };
         var user = userManager.GetUserById(userId);
 
         var dtos = new List<BaseItemDto>(metas.Count);
