@@ -1,12 +1,17 @@
 using System.Runtime.ExceptionServices;
 using Gelato.Config;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations;
+using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
@@ -14,6 +19,9 @@ namespace Gelato.Filters;
 public class SearchActionFilter(
     IDtoService dtoService,
     IUserManager userManager,
+    ILibraryManager libraryManager,
+    ISearchManager searchManager,
+    IDbContextFactory<JellyfinDbContext> dbFactory,
     GelatoManager manager,
     ILogger<SearchActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
@@ -87,7 +95,13 @@ public class SearchActionFilter(
         // owned title belongs where its result was — so the library half only has to leave those
         // items out. What stays in it is what the addon did not answer for: a file the library
         // holds that no catalog carries.
-        var (dtos, covered) = ConvertMetasToDtos(metas, userId);
+        ctx.TryGetActionArgument<ItemFields[]>("fields", out var fields, []);
+        var (dtos, covered) = await ConvertMetasToDtos(
+            metas,
+            userId,
+            fields,
+            ctx.HttpContext.RequestAborted
+        );
         var libraryItems = localItems.Where(i => !covered.Contains(i.Id)).ToArray();
         var paged = dtos.Concat(libraryItems).Skip(start).Take(limit).ToArray();
 
@@ -147,10 +161,69 @@ public class SearchActionFilter(
             && local.Items is { } items
         )
         {
-            return (executed, items, local.TotalRecordCount);
+            // A full answer is no total: Jellyfin 12.1 asks its search providers for three times
+            // the limit and counts what they returned, so the total grew with the page (30 for a
+            // first page of 10, 60 for the second) and the two pages of one search disagreed.
+            // A client that asked for no total (the web client's search) pays nothing for it.
+            ctx.TryGetActionArgument("enableTotalRecordCount", out var wantsTotal, true);
+            var total =
+                items.Count < upTo || !wantsTotal
+                    ? local.TotalRecordCount
+                    : Math.Max(local.TotalRecordCount, await CountLibraryMatchesAsync(ctx));
+            return (executed, items, total);
         }
 
         return (executed, [], 0);
+    }
+
+    private const int MaxCountedLibraryMatches = 5000;
+
+    /// <summary>
+    /// How many items the library search matches for this request, whatever the page: the
+    /// providers' hits without a limit, counted under the user and the scope the request has.
+    /// </summary>
+    private async Task<int> CountLibraryMatchesAsync(ActionExecutingContext ctx)
+    {
+        ctx.TryGetUserId(out var userId);
+        ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm);
+        ctx.TryGetActionArgument<BaseItemKind[]>("includeItemTypes", out var include, []);
+        ctx.TryGetActionArgument<BaseItemKind[]>("excludeItemTypes", out var exclude, []);
+        ctx.TryGetActionArgument<MediaType[]>("mediaTypes", out var mediaTypes, []);
+        ctx.TryGetActionArgument<Guid?>("parentId", out var parentId);
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return 0;
+
+        var hits = await searchManager
+            .GetSearchResultsAsync(
+                new SearchProviderQuery
+                {
+                    SearchTerm = searchTerm,
+                    UserId = userId.Equals(Guid.Empty) ? null : userId,
+                    IncludeItemTypes = include,
+                    ExcludeItemTypes = exclude,
+                    MediaTypes = mediaTypes,
+                    ParentId = parentId,
+                    // Without a limit the providers stop at 100. A fixed cap keeps the count the
+                    // same for every page; a term matching more than this is no page anyone reaches.
+                    Limit = MaxCountedLibraryMatches,
+                },
+                ctx.HttpContext.RequestAborted
+            )
+            .ConfigureAwait(false);
+        if (hits.Count == 0)
+            return 0;
+
+        return libraryManager.GetCount(
+            new InternalItemsQuery(userManager.GetUserById(userId))
+            {
+                ItemIds = hits.Select(h => h.ItemId).ToArray(),
+                IncludeItemTypes = include,
+                ExcludeItemTypes = exclude,
+                MediaTypes = mediaTypes,
+                ParentId = parentId ?? Guid.Empty,
+                Recursive = true,
+            }
+        );
     }
 
     /// <summary>
@@ -337,9 +410,11 @@ public class SearchActionFilter(
     /// The addon's results as DTOs, and, per result, the library item it stands in for when the
     /// library has the title already.
     /// </summary>
-    private (List<BaseItemDto> Dtos, HashSet<Guid> Covered) ConvertMetasToDtos(
+    private async Task<(List<BaseItemDto> Dtos, HashSet<Guid> Covered)> ConvertMetasToDtos(
         List<StremioMeta> metas,
-        Guid userId
+        Guid userId,
+        ItemFields[] fields,
+        CancellationToken ct
     )
     {
         // theres a reason i initally disabled all fields but forgot....
@@ -354,13 +429,23 @@ public class SearchActionFilter(
         // The library's own item is answered with its user data: what the grid draws a watched
         // tick and a resume bar from. A stand-in has none to read — the id is a title the library
         // does not hold — which is why the results the addon answers for alone keep it off.
+        // It carries the fields the client asked for, as Jellyfin's own search does: all of them
+        // cost a series its season and episode counts and a movie its cast and streams, per
+        // result, for a grid that shows a poster and a title.
         var libraryOptions = new DtoOptions(false)
         {
-            Fields = SearchResultFields,
+            Fields = fields,
             EnableImages = true,
             EnableUserData = true,
         };
         var user = userManager.GetUserById(userId);
+
+        var results = metas
+            .Select(meta => (Meta: meta, Item: manager.IntoBaseItem(meta)))
+            .Where(r => r.Item is not null)
+            .Select(r => (r.Meta, Item: r.Item!))
+            .ToList();
+        var libraryItems = await FindLibraryItemsAsync(results.Select(r => r.Item), user, ct);
 
         var dtos = new List<BaseItemDto>(metas.Count);
 
@@ -371,24 +456,20 @@ public class SearchActionFilter(
         var seen = new HashSet<Guid>();
         var covered = new HashSet<Guid>();
 
-        foreach (var meta in metas)
+        foreach (var (meta, baseItem) in results)
         {
-            var baseItem = manager.IntoBaseItem(meta);
-            if (baseItem is null)
-                continue;
-
             var stremioUri = StremioUri.FromBaseItem(baseItem);
             var searchId = stremioUri.ToGuid();
 
             if (!seen.Add(searchId))
                 continue;
 
-            // The library's own item for this title, looked up from the same base item the DTO
-            // would be built from: one query per result and no second conversion. It answers in
-            // the result's place; the library half leaves it out. Two results of one title — an
-            // addon that carries it under a tmdb: id and a tt one — resolve to the same item, and
-            // only the first takes it, so the answer holds no id twice.
-            var existing = manager.FindExistingItem(baseItem, user);
+            // The library's own item for this title, matched from the same base item the DTO
+            // would be built from. It answers in the result's place; the library half leaves it
+            // out. Two results of one title — an addon that carries it under a tmdb: id and a tt
+            // one — resolve to the same item, and only the first takes it, so the answer holds no
+            // id twice.
+            var existing = FindMatch(libraryItems, baseItem);
             var dto =
                 existing is not null && covered.Add(existing.Id)
                     ? dtoService.GetBaseItemDto(existing, libraryOptions, user)
@@ -406,5 +487,69 @@ public class SearchActionFilter(
         }
 
         return (dtos, covered);
+    }
+
+    /// <summary>
+    /// The library items any of the results stands in for, in two queries for the whole search:
+    /// the items holding one of the results' provider ids, then those items. Asking
+    /// <see cref="GelatoManager.FindExistingItem"/> per result cost a query each, about 16 ms, and
+    /// most results are not in the library, so the miss has to be the cheap case.
+    /// </summary>
+    private async Task<IReadOnlyList<BaseItem>> FindLibraryItemsAsync(
+        IEnumerable<BaseItem> candidates,
+        User? user,
+        CancellationToken ct
+    )
+    {
+        var providerIds = candidates.SelectMany(c => c.ProviderIds).ToList();
+        var names = providerIds.Select(p => p.Key).Distinct().ToArray();
+        var values = providerIds.Select(p => p.Value).Distinct().ToArray();
+        if (values.Length == 0)
+            return [];
+
+        Guid[] itemIds;
+        var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using (db.ConfigureAwait(false))
+        {
+            // Names and values are matched separately, so a pair from two different results
+            // can match too; FindMatch sorts that out on the loaded items.
+            itemIds = await db
+                .BaseItemProviders.AsNoTracking()
+                .Where(p => names.Contains(p.ProviderId) && values.Contains(p.ProviderValue))
+                .Select(p => p.ItemId)
+                .Distinct()
+                .ToArrayAsync(ct)
+                .ConfigureAwait(false);
+        }
+
+        if (itemIds.Length == 0)
+            return [];
+
+        return libraryManager.GetItemList(
+            new InternalItemsQuery(user)
+            {
+                ItemIds = itemIds,
+                IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
+                ExcludeTags = [GelatoManager.StreamTag],
+                IsDeadPerson = true, // skip filter marker
+            }
+        );
+    }
+
+    /// <summary>Same rule as <see cref="GelatoManager.FindExistingItem"/>, on loaded items.</summary>
+    private static BaseItem? FindMatch(IReadOnlyList<BaseItem> libraryItems, BaseItem candidate)
+    {
+        var kind = candidate.GetBaseItemKind();
+        return libraryItems.FirstOrDefault(item =>
+            item.GetBaseItemKind() == kind
+            && !(item is Video video && video.IsStream())
+            && candidate.ProviderIds.Any(id =>
+                string.Equals(
+                    item.GetProviderId(id.Key),
+                    id.Value,
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+        );
     }
 }
