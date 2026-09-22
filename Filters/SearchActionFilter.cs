@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using Gelato.Config;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Querying;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ namespace Gelato.Filters;
 
 public class SearchActionFilter(
     IDtoService dtoService,
+    IUserManager userManager,
     GelatoManager manager,
     ILogger<SearchActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
@@ -64,13 +66,9 @@ public class SearchActionFilter(
         // sends Movie, Series, Episode, BoxSet, TvChannel and more together. Answering all of it
         // with the addon's movies and series dropped the rest, so a channel was only ever found
         // inside Live TV, where the client asks for TvChannel alone and the search never gets
-        // this far (lostb1t/Gelato#162). Let Jellyfin answer for the types the addon has nothing
-        // to say about and put its results after the addon's.
-        var (executed, localItems, localTotal) = await SearchOtherTypesAsync(
-            ctx,
-            next,
-            start + limit
-        );
+        // this far (lostb1t/Gelato#162). Let Jellyfin answer for everything it holds and put its
+        // results after the addon's.
+        var (executed, localItems, localTotal) = await SearchLibraryAsync(ctx, next, start + limit);
 
         log.LogInformation(
             "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results} library={Library}",
@@ -82,14 +80,28 @@ public class SearchActionFilter(
             localTotal
         );
 
-        var dtos = ConvertMetasToDtos(metas);
-        var paged = dtos.Concat(localItems).Skip(start).Take(limit).ToArray();
+        // The addon's result for a title the library already has and the library's own item are
+        // the same title twice. The addon's half answers with the library's item where there is
+        // one, in the result's own place — the addon's order is the search's relevance, and an
+        // owned title belongs where its result was — so the library half only has to leave those
+        // items out. What stays in it is what the addon did not answer for: a file the library
+        // holds that no catalog carries.
+        var (dtos, covered) = ConvertMetasToDtos(metas, userId);
+        var libraryItems = localItems.Where(i => !covered.Contains(i.Id)).ToArray();
+        var paged = dtos.Concat(libraryItems).Skip(start).Take(limit).ToArray();
 
         var result = new OkObjectResult(
             new QueryResult<BaseItemDto>
             {
                 Items = paged,
-                TotalRecordCount = dtos.Count + localTotal,
+                // An estimate, the way it was before: the library's total counts the items the
+                // addon's half already answers with, and only the page that was fetched shows
+                // which those are. Counting them all out keeps the number the same from page to
+                // page, which is what a client pages by.
+                TotalRecordCount = Math.Max(
+                    dtos.Count + localTotal - covered.Count,
+                    dtos.Count + libraryItems.Length
+                ),
             }
         );
 
@@ -102,32 +114,29 @@ public class SearchActionFilter(
     }
 
     /// <summary>
-    /// Runs the untouched Jellyfin search for the item types the request asked for that the addon
-    /// does not answer for, and returns its items and total. Nothing runs, and the result is empty,
-    /// when the request asked for movies and series only.
+    /// Runs the untouched Jellyfin search for the item types the request asked for and returns its
+    /// items and total. It answers for every type, movies and series included: the library's own
+    /// copy of a title the addon answered for is taken out of the concatenation afterwards, which
+    /// leaves the files the library holds that no catalog carries findable.
     /// </summary>
     private async Task<(
         ActionExecutedContext? Executed,
         IReadOnlyList<BaseItemDto> Items,
         int Total
-    )> SearchOtherTypesAsync(ActionExecutingContext ctx, ActionExecutionDelegate next, int upTo)
+    )> SearchLibraryAsync(ActionExecutingContext ctx, ActionExecutionDelegate next, int upTo)
     {
-        if (GetPassThroughExcludes(ctx) is not { } excludeTypes)
-            return (null, [], 0);
-
         // Jellyfin pages its own answer, so ask it for everything up to the end of the page that
         // is being served and page the concatenation here.
-        ctx.ActionArguments["excludeItemTypes"] = excludeTypes;
         ctx.ActionArguments["startIndex"] = 0;
         ctx.ActionArguments["limit"] = upTo;
 
         var executed = await next();
 
         // The library half failing is no reason to lose the addon's results: the search answers
-        // with those alone, the way it did before it asked for the other types at all.
+        // with those alone, the way it did before it asked the library at all.
         if (executed.Exception is { } ex)
         {
-            log.LogWarning(ex, "The library search for the other item types failed");
+            log.LogWarning(ex, "The library search failed");
             executed.ExceptionHandled = true;
             return (executed, [], 0);
         }
@@ -141,29 +150,6 @@ public class SearchActionFilter(
         }
 
         return (executed, [], 0);
-    }
-
-    /// <summary>
-    /// The excludeItemTypes the pass-through search runs with: the request's own excludes plus the
-    /// types the addon answers for. Null when the request named movies and series only, so there is
-    /// nothing left for Jellyfin to look for.
-    /// </summary>
-    private static BaseItemKind[]? GetPassThroughExcludes(ActionExecutingContext ctx)
-    {
-        ctx.TryGetActionArgument<BaseItemKind[]>("includeItemTypes", out var includeTypes);
-        if (
-            includeTypes is { Length: > 0 }
-            && includeTypes.All(t => t is BaseItemKind.Movie or BaseItemKind.Series)
-        )
-        {
-            return null;
-        }
-
-        ctx.TryGetActionArgument<BaseItemKind[]>("excludeItemTypes", out var excludeTypes);
-        return (excludeTypes ?? [])
-            .Concat([BaseItemKind.Movie, BaseItemKind.Series])
-            .Distinct()
-            .ToArray();
     }
 
     private HashSet<BaseItemKind> GetRequestedItemTypes(ActionExecutingContext ctx)
@@ -283,11 +269,24 @@ public class SearchActionFilter(
         return results;
     }
 
-    private List<BaseItemDto> ConvertMetasToDtos(List<StremioMeta> metas)
+    /// <summary>
+    /// The addon's results as DTOs, and, per result, the library item it stands in for when the
+    /// library has the title already.
+    /// </summary>
+    private (List<BaseItemDto> Dtos, HashSet<Guid> Covered) ConvertMetasToDtos(
+        List<StremioMeta> metas,
+        Guid userId
+    )
     {
         // theres a reason i initally disabled all fields but forgot....
         // infuse breaks if we do a small subset. Not sure which field it needs. Prolly mediasources
         var options = new DtoOptions { EnableImages = true, EnableUserData = false };
+
+        // The library's own item is answered with its user data: what the grid draws a watched
+        // tick and a resume bar from. A stand-in has none to read — the id is a title the library
+        // does not hold — which is why the results the addon answers for alone keep it off.
+        var libraryOptions = new DtoOptions { EnableImages = true, EnableUserData = true };
+        var user = userManager.GetUserById(userId);
 
         var dtos = new List<BaseItemDto>(metas.Count);
 
@@ -296,6 +295,7 @@ public class SearchActionFilter(
         // results, say. The ids are deterministic, so the same title yields the same id twice
         // and the client renders it twice. Keep the first occurrence and drop later repeats.
         var seen = new HashSet<Guid>();
+        var covered = new HashSet<Guid>();
 
         foreach (var meta in metas)
         {
@@ -303,18 +303,34 @@ public class SearchActionFilter(
             if (baseItem is null)
                 continue;
 
-            var dto = dtoService.GetBaseItemDto(baseItem, options);
             var stremioUri = StremioUri.FromBaseItem(baseItem);
-            dto.Id = stremioUri.ToGuid();
+            var searchId = stremioUri.ToGuid();
 
-            if (!seen.Add(dto.Id))
+            if (!seen.Add(searchId))
                 continue;
+
+            // The library's own item for this title, looked up from the same base item the DTO
+            // would be built from: one query per result and no second conversion. It answers in
+            // the result's place; the library half leaves it out. Two results of one title — an
+            // addon that carries it under a tmdb: id and a tt one — resolve to the same item, and
+            // only the first takes it, so the answer holds no id twice.
+            var existing = manager.FindExistingItem(baseItem, user);
+            var dto =
+                existing is not null && covered.Add(existing.Id)
+                    ? dtoService.GetBaseItemDto(existing, libraryOptions, user)
+                    : dtoService.GetBaseItemDto(baseItem, options);
+
+            if (dto.Id != existing?.Id)
+                dto.Id = searchId;
 
             dtos.Add(dto);
 
-            manager.SaveStremioMeta(dto.Id, meta);
+            // Kept under the id the result would have carried either way: a client that opened
+            // this title before the library had it holds that id in its page URL, and the reads
+            // it issues with it are resolved through the meta saved here.
+            manager.SaveStremioMeta(searchId, meta);
         }
 
-        return dtos;
+        return (dtos, covered);
     }
 }
