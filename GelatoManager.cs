@@ -240,6 +240,33 @@ public sealed class GelatoManager(
         );
     }
 
+    /// <summary>
+    /// Whether the folder is what a scoped search is scoped to, or lies inside it. A request
+    /// without a parentId is scoped to nothing and takes everything.
+    /// </summary>
+    /// <remarks>
+    /// A client searching inside one library sends that library as parentId. The addon's answer
+    /// belongs to the library Gelato's folder is in: handing it to a search of another library
+    /// fills that library with titles it does not hold, and the items the results stand in for
+    /// are that other library's.
+    /// </remarks>
+    public bool IsWithinScope(Guid scope, BaseItem? folder)
+    {
+        if (scope.Equals(Guid.Empty))
+            return true;
+
+        if (folder is null)
+            return false;
+
+        if (folder.Id == scope)
+            return true;
+
+        if (libraryManager.GetCollectionFolders(folder).Any(f => f.Id == scope))
+            return true;
+
+        return folder.GetParents().Any(p => p.Id == scope);
+    }
+
     public Folder? TryGetMovieFolder(PluginConfiguration cfg)
     {
         return TryGetFolder(cfg.MoviePath);

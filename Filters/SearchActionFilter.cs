@@ -51,6 +51,7 @@ public class SearchActionFilter(
 
         // Handle Stremio search
         var requestedTypes = GetRequestedItemTypes(ctx);
+        LimitToScope(ctx, cfg, userId, requestedTypes);
         if (requestedTypes.Count == 0)
         {
             await next();
@@ -150,6 +151,59 @@ public class SearchActionFilter(
         }
 
         return (executed, [], 0);
+    }
+
+    /// <summary>
+    /// Drops the types whose Gelato folder is not inside the library the request is scoped to, so
+    /// a search inside one library is not answered with another library's titles.
+    /// </summary>
+    /// <remarks>
+    /// A client searching inside a library sends it as parentId: Jellyfin scopes its own half to
+    /// it, and the addon's half has to be scoped the same way or the library is filled with
+    /// titles it does not hold — and with the items those results stand in for, which belong to
+    /// the Gelato library. A search that names no parent is scoped to nothing and keeps both
+    /// types. topParentId is not a parameter of the endpoint (it is the web client's route, not
+    /// its query), so it scopes nothing here either.
+    /// </remarks>
+    private void LimitToScope(
+        ActionExecutingContext ctx,
+        PluginConfiguration cfg,
+        Guid userId,
+        HashSet<BaseItemKind> requestedTypes
+    )
+    {
+        if (
+            !ctx.TryGetActionArgument<Guid>("parentId", out var scope)
+            || scope.Equals(Guid.Empty)
+            || requestedTypes.Count == 0
+        )
+        {
+            return;
+        }
+
+        if (
+            requestedTypes.Contains(BaseItemKind.Movie)
+            && !manager.IsWithinScope(scope, cfg.MovieFolder ?? manager.TryGetMovieFolder(userId))
+        )
+        {
+            requestedTypes.Remove(BaseItemKind.Movie);
+        }
+
+        if (
+            requestedTypes.Contains(BaseItemKind.Series)
+            && !manager.IsWithinScope(scope, cfg.SeriesFolder ?? manager.TryGetSeriesFolder(userId))
+        )
+        {
+            requestedTypes.Remove(BaseItemKind.Series);
+        }
+
+        if (requestedTypes.Count == 0)
+        {
+            log.LogDebug(
+                "The search is scoped to {Scope}, which holds neither Gelato folder: the library answers it alone",
+                scope
+            );
+        }
     }
 
     private HashSet<BaseItemKind> GetRequestedItemTypes(ActionExecutingContext ctx)
