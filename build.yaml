@@ -20,9 +20,9 @@ artifacts:
   - "MonoTorrent.PortForwarding.dll"
   - "MonoTorrent.Trackers.dll"
   - "ReusableTasks.dll"
-overview: "Stream external media."
+overview: "Stremio addons as Jellyfin library items: search, catalogs and on-demand streams through AIOStreams."
 description: >
-  Stream external media.
+  Gelato brings AIOStreams (Stremio addons) into Jellyfin. Search results and imported catalogs show up as regular movies and series, and streams are resolved when you press play and proxied through Jellyfin.
 category: "General"
 # The card in the plugin catalog; Jellyfin downloads it when it reads the repository.
 imageUrl: "https://raw.githubusercontent.com/lostb1t/Gelato/main/banner.png"

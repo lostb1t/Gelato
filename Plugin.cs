@@ -41,7 +41,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public override string Name => "Gelato";
     public override Guid Id => Guid.Parse("94EA4E14-8163-4989-96FE-0A2094BC2D6A");
-    public override string Description => "on-demand MediaSources and optional image suppression.";
+    public override string Description =>
+        "Gelato brings AIOStreams (Stremio addons) into Jellyfin. Search results and imported catalogs show up as regular movies and series, and streams are resolved when you press play and proxied through Jellyfin.";
 
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
