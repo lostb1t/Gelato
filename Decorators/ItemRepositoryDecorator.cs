@@ -76,9 +76,20 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
         )
             return filter;
 
-        var ctx = _http.HttpContext;
-        var isListingIntent =
-            ctx is not null && (ctx.IsApiListing() || ctx.IsHomeScreenSectionListing());
+        // Targeted ItemIds lookups are generally internal existence/permission checks.
+        // Keep those untouched so the caller gets strict results from the underlying query.
+        // The ids must have come from the caller: Jellyfin 12 turns a searchTerm into a list of
+        // ItemIds before querying, so treating any populated ItemIds as targeted would let every
+        // search return the hidden stream rows alongside the item they belong to.
+        var isListingIntent = _http.ReadRequest(
+            ctx =>
+                (ctx.IsApiListing() || ctx.IsHomeScreenSectionListing())
+                && !(
+                    (filter.ItemIds.Length > 0 && ctx.HasExplicitItemIds())
+                    || ctx.IsSingleItemList()
+                ),
+            false
+        );
         if (!isListingIntent)
             return filter;
 
@@ -89,17 +100,6 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
             GelatoManager.StreamTag,
             StringComparer.OrdinalIgnoreCase
         );
-        var isTargetedLookup =
-            ctx is not null
-            && ((filter.ItemIds.Length > 0 && ctx.HasExplicitItemIds()) || ctx.IsSingleItemList());
-
-        // Targeted ItemIds lookups are generally internal existence/permission checks.
-        // Keep those untouched so the caller gets strict results from the underlying query.
-        // The ids must have come from the caller: Jellyfin 12 turns a searchTerm into a list of
-        // ItemIds before querying, so treating any populated ItemIds as targeted would let every
-        // search return the hidden stream rows alongside the item they belong to.
-        if (isTargetedLookup)
-            return filter;
 
         if (!includesPerson)
             filter.IsDeadPerson = null;

@@ -382,6 +382,35 @@ public static class ActionContextExtensions
         "GetItemsByUserIdLegacy",
     };
 
+    /// <summary>
+    /// Reads from the request the accessor carries, or returns <paramref name="none"/> when there
+    /// is no request or it has already finished.
+    /// </summary>
+    /// <remarks>
+    /// The accessor's context flows with the ExecutionContext, so work a request started, such as
+    /// a scheduled task run from the dashboard, still sees that request after it has finished.
+    /// Reading a finished request throws ObjectDisposedException, which failed the task on its
+    /// first repository query, so a finished request counts as no request.
+    /// </remarks>
+    public static T ReadRequest<T>(
+        this IHttpContextAccessor http,
+        Func<HttpContext, T> read,
+        T none
+    )
+    {
+        if (http.HttpContext is not { } ctx)
+            return none;
+
+        try
+        {
+            return read(ctx);
+        }
+        catch (ObjectDisposedException)
+        {
+            return none;
+        }
+    }
+
     public static string? GetActionName(this ActionExecutingContext ctx) =>
         (ctx.ActionDescriptor as ControllerActionDescriptor)?.ActionName;
 

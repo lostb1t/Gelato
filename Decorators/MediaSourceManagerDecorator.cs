@@ -90,16 +90,9 @@ public sealed class MediaSourceManagerDecorator(
     {
         var manager = _manager.Value;
         _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
-        var ctx = _http.HttpContext;
-        Guid userId;
-        if (user != null)
-        {
-            userId = user.Id;
-        }
-        else
-        {
-            ctx.TryGetUserId(out userId);
-        }
+        var userId =
+            user?.Id
+            ?? _http.ReadRequest(ctx => ctx.TryGetUserId(out var id) ? id : Guid.Empty, Guid.Empty);
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
@@ -128,10 +121,13 @@ public sealed class MediaSourceManagerDecorator(
         var isStreamRow = item.HasStreamTag();
 
         var uri = StremioUri.FromBaseItem(item);
-        var actionName =
-            ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
+        var actionName = _http.ReadRequest(
+            ctx => ctx.Items.TryGetValue("actionName", out var ao) ? ao as string : null,
+            null
+        );
 
-        var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
+        var allowSync =
+            _http.ReadRequest(ctx => ctx.IsInsertableAction(), false) && userId != Guid.Empty;
         var video = item as Video;
         var syncItemId = video?.PrimaryVersionId ?? item.Id;
         // With the creation date: an item deleted and inserted again gets the same id (its path
@@ -442,14 +438,14 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         var manager = _manager.Value;
-        var ctx = _http.HttpContext;
-
         var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
 
+        var requestedSourceId = _http.ReadRequest(
+            ctx => ctx.Items.TryGetValue("MediaSourceId", out var idObj) ? idObj as string : null,
+            null
+        );
         Guid? mediaSourceId =
-            ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true
-            && idObj is string idStr
-            && Guid.TryParse(idStr, out var fromCtx)
+            Guid.TryParse(requestedSourceId, out var fromCtx)
                 ? fromCtx
                 : (
                     item.IsPrimaryVersion()
@@ -533,7 +529,7 @@ public sealed class MediaSourceManagerDecorator(
         // Stub path after probing is done so the real URL is never sent to clients.
         // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
         // Both playback info actions, not the POST alone: native clients use the GET.
-        if (ctx.IsPlaybackInfoAction())
+        if (_http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false))
         {
             selected.Stub();
         }
