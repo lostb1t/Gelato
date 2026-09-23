@@ -50,20 +50,6 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         GenericEventArgs<BaseItem> genericEventArgs
     )
     {
-        var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-        var stremio = cfg.Stremio;
-        if (stremio == null)
-        {
-            _log.LogWarning("Gelato not configured (stremio provider missing); skipping refresh.");
-            return;
-        }
-
-        if (!await stremio.IsReady().ConfigureAwait(false))
-        {
-            _log.LogWarning("Gelato is not ready");
-            return;
-        }
-
         if (!IsEnabledForLibrary(genericEventArgs.Argument))
         {
             _log.LogTrace(
@@ -77,6 +63,22 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         if (genericEventArgs.Argument is not Series series)
         {
             _log.LogTrace("{Name} is not a Series", genericEventArgs.Argument.Name);
+            return;
+        }
+
+        // After the checks above: every item's refresh passes through here, and warning for each
+        // movie of a library scan says nothing new.
+        var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
+        var stremio = cfg.Stremio;
+        if (stremio == null)
+        {
+            _log.LogWarning("Gelato not configured (stremio provider missing); skipping refresh.");
+            return;
+        }
+
+        if (!await stremio.IsReady().ConfigureAwait(false))
+        {
+            _log.LogWarning("Gelato is not ready");
             return;
         }
 
@@ -128,12 +130,12 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
             }
 
             await _manager.SyncSeriesTreesAsync(cfg, meta, CancellationToken.None, existingSeries: isLocal ? series : null);
+            _log.LogInformation("synced series tree for {Name}", series.Name);
         }
         catch (Exception ex)
         {
             _log.LogError(ex, "failed sync series for {Name}", series.Name);
         }
-        _log.LogInformation("synced series tree for {Name}", series.Name);
     }
 
     public async Task<MetadataResult<Series>> GetMetadata(

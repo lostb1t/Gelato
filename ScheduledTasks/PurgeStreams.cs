@@ -33,8 +33,6 @@ public sealed class PurgeGelatoStreamsTask(
 
     public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
     {
-        log.LogInformation("purging streams");
-
         var query = new InternalItemsQuery
         {
             IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
@@ -57,6 +55,8 @@ public sealed class PurgeGelatoStreamsTask(
 
         var total = streams.Length;
         var done = 0;
+        var failed = 0;
+        log.LogInformation("purging {Count} stream(s)", total);
 
         // Per movie/episode, as its only writer: a sync of the same item running at the same time
         // would save the rows back. Rows never linked to an item go by themselves.
@@ -106,7 +106,12 @@ public sealed class PurgeGelatoStreamsTask(
 
                             try
                             {
-                                libraryManager.DeleteItem(
+                                log.LogDebug(
+                                    "Purging stream {ItemId} {Path}",
+                                    item.Id,
+                                    Redact.Url(item.Path)
+                                );
+                                manager.DeleteStreamRow(
                                     item,
                                     new DeleteOptions { DeleteFileLocation = true },
                                     true
@@ -114,6 +119,7 @@ public sealed class PurgeGelatoStreamsTask(
                             }
                             catch (Exception ex)
                             {
+                                failed++;
                                 log.LogWarning(ex, "Failed to delete item {ItemId}", item.Id);
                             }
 
@@ -131,6 +137,11 @@ public sealed class PurgeGelatoStreamsTask(
         progress?.Report(100.0);
         manager.ClearCache();
 
-        log.LogInformation("stream purge completed");
+        log.LogInformation(
+            "stream purge completed: {Deleted} of {Total} stream(s) deleted, {Failed} failed",
+            done - failed,
+            total,
+            failed
+        );
     }
 }

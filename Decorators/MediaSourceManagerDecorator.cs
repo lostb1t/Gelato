@@ -204,7 +204,7 @@ public sealed class MediaSourceManagerDecorator(
                         }
                         catch (Exception ex)
                         {
-                            _log.LogError(ex, "Failed to sync streams");
+                            _log.LogError(ex, "Failed to sync streams for {Id}", item.Id);
                         }
                     }
                 )

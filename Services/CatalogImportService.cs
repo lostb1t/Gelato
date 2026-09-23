@@ -57,6 +57,7 @@ public class CatalogImportService(
         var maxItems = catalogCfg.MaxItems;
 
         var stopwatch = Stopwatch.StartNew();
+        var outcome = "failed";
         logger.LogInformation(
             "Starting import for catalog {Name} ({Id}) - Limit: {Limit}",
             catalogCfg.Name,
@@ -68,6 +69,10 @@ public class CatalogImportService(
         {
             var skip = 0;
             var processedItems = 0;
+            var created = 0;
+            var existing = 0;
+            var skipped = 0;
+            var failed = 0;
             // keyed on stremio meta.Id to deduplicate within the import run
             var importedIds = new ConcurrentDictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
@@ -99,6 +104,7 @@ public class CatalogImportService(
                         {
                             if (!importedIds.TryAdd(meta.Id, Guid.Empty))
                             {
+                                Interlocked.Increment(ref skipped);
                                 Interlocked.Increment(ref processedItems);
                                 return;
                             }
@@ -118,7 +124,7 @@ public class CatalogImportService(
                             {
                                 try
                                 {
-                                    var (item, _) = await manager
+                                    var (item, isNew) = await manager
                                         .InsertMeta(
                                             root,
                                             meta,
@@ -131,10 +137,20 @@ public class CatalogImportService(
                                         .ConfigureAwait(false);
 
                                     if (item != null)
+                                    {
                                         importedIds[meta.Id] = item.Id;
+                                        Interlocked.Increment(
+                                            ref isNew ? ref created : ref existing
+                                        );
+                                    }
+                                    else
+                                    {
+                                        Interlocked.Increment(ref failed);
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
+                                    Interlocked.Increment(ref failed);
                                     logger.LogError(
                                         "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
                                         catalogId,
@@ -143,6 +159,10 @@ public class CatalogImportService(
                                         ex.StackTrace
                                     );
                                 }
+                            }
+                            else
+                            {
+                                Interlocked.Increment(ref skipped);
                             }
 
                             var done = Interlocked.Increment(ref processedItems);
@@ -156,17 +176,26 @@ public class CatalogImportService(
 
             if (catalogCfg.CreateCollection)
             {
-                await UpdateCollectionAsync(
-                        catalogCfg,
-                        importedIds.Values.Where(id => id != Guid.Empty).Take(100).ToList()
-                    )
+                var itemIds = importedIds.Values.Where(id => id != Guid.Empty).ToList();
+                await UpdateCollectionAsync(catalogCfg, itemIds.Take(100).ToList(), itemIds.Count)
                     .ConfigureAwait(false);
             }
 
-            logger.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processedItems);
+            // Skipped: listed twice in the catalog, or a type without a library folder.
+            logger.LogInformation(
+                "{Id}: processed {Count} items: {Created} new, {Existing} already in the library, {Skipped} skipped, {Failed} failed",
+                catalogCfg.Id,
+                processedItems,
+                created,
+                existing,
+                skipped,
+                failed
+            );
+            outcome = "completed";
         }
         catch (OperationCanceledException ex)
         {
+            outcome = "aborted";
             logger.LogWarning(
                 ex,
                 "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
@@ -175,6 +204,7 @@ public class CatalogImportService(
         }
         catch (Exception ex)
         {
+            outcome = "failed";
             logger.LogError(
                 ex,
                 "Catalog sync failed for {Id}: {Message}",
@@ -186,8 +216,9 @@ public class CatalogImportService(
         stopwatch.Stop();
         progress?.Report(100);
         logger.LogInformation(
-            "Catalog {catalog} sync completed in {Minutes}m {Seconds}s ({TotalSeconds:F2}s total)",
+            "Catalog {catalog} sync {Outcome} after {Minutes}m {Seconds}s ({TotalSeconds:F2}s total)",
             catalogCfg.Name,
+            outcome,
             (int)stopwatch.Elapsed.TotalMinutes,
             stopwatch.Elapsed.Seconds,
             stopwatch.Elapsed.TotalSeconds
@@ -231,12 +262,14 @@ public class CatalogImportService(
         return collection;
     }
 
-    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids)
+    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids, int available)
     {
+        // A collection holds at most 100 of the catalog's items.
         logger.LogInformation(
-            "Updating collection {Name} with {Count} items",
+            "Updating collection {Name} with {Count} of {Available} items",
             config.Name,
-            ids.Count
+            ids.Count,
+            available
         );
         try
         {
@@ -283,7 +316,6 @@ public class CatalogImportService(
         foreach (var cat in enabled)
         {
             ct.ThrowIfCancellationRequested();
-            logger.LogInformation("Processing enabled catalog: {Name}", cat.Name);
 
             var catMax = cat.MaxItems;
             var localOffset = offset;

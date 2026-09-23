@@ -68,7 +68,12 @@ public sealed class DeleteResourceFilter(
                 }
 
                 log.LogInformation("Deleting {Name} ({Id})", item.Name, item.Id);
-                library.DeleteItem(item, new DeleteOptions { DeleteFileLocation = false }, true);
+                var options = new DeleteOptions { DeleteFileLocation = false };
+                // A stream row's path is the stream URL, which Jellyfin would log with its key.
+                if (item is Video row && row.IsStream())
+                    manager.DeleteStreamRow(row, options, true);
+                else
+                    library.DeleteItem(item, options, true);
                 return Task.CompletedTask;
             },
             CancellationToken.None
