@@ -156,10 +156,21 @@ public sealed class GelatoManager(
     {
         Directory.CreateDirectory(path);
         var seed = Path.Combine(path, SeedFileName);
-        if (!File.Exists(seed))
+        if (File.Exists(seed))
         {
-            File.WriteAllText(seed, SeedFileContent);
+            return;
         }
+
+        // Two lookups can seed the same folder at once. CreateNew lets exactly one of them
+        // write; the other finds the file there, which is all it wanted. Checking and then
+        // writing let both write, and on Windows the loser failed on the winner's open handle.
+        try
+        {
+            using var stream = new FileStream(seed, FileMode.CreateNew, FileAccess.Write);
+            using var writer = new StreamWriter(stream);
+            writer.Write(SeedFileContent);
+        }
+        catch (IOException) when (File.Exists(seed)) { }
     }
 
     /// <summary>
