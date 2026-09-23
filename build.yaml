@@ -24,5 +24,7 @@ overview: "Stream external media."
 description: >
   Stream external media.
 category: "General"
+# The card in the plugin catalog; Jellyfin downloads it when it reads the repository.
+imageUrl: "https://raw.githubusercontent.com/lostb1t/Gelato/main/banner.png"
 changelog: >
   changelog
