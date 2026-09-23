@@ -132,8 +132,9 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
 
         if (result is null)
         {
+            // Also reached when IntroDB answered with an error, which the client logged already.
             _logger.LogInformation(
-                "IntroDB returned no intro for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
+                "No intro from IntroDB for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
                 request.ItemId,
                 imdbId,
                 seasonNumber,

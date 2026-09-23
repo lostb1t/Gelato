@@ -110,7 +110,7 @@ public sealed partial class RepairWatchStateTask(
             .ConfigureAwait(false);
 
         log.LogInformation(
-            "RepairWatchState: reattached {Reattached} existing item(s) ({AlreadyHeld} already held their state), re-imported {Movies} movie(s) and the episodes of {Series} series",
+            "RepairWatchState: reattached {Reattached} existing item(s) ({AlreadyHeld} already held their state), re-imported {Movies} movie(s) and synced the episode trees of {Series} series",
             reattached,
             alreadyHeld,
             movies,
@@ -320,9 +320,10 @@ public sealed partial class RepairWatchStateTask(
             .ToList();
 
         log.LogInformation(
-            "RepairWatchState: {Missing} of {Total} movie(s) with parked watch state are gone from the library, re-importing",
+            "RepairWatchState: {Missing} of {Total} movie(s) with parked watch state are gone from the library{Action}",
             missing.Count,
-            imdbKeys.Count
+            imdbKeys.Count,
+            missing.Count > 0 ? ", re-importing" : ""
         );
 
         var resurrected = 0;

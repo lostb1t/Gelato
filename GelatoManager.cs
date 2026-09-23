@@ -858,7 +858,6 @@ public sealed class GelatoManager(
             upsertedStreams.Add(streamItem);
         }
 
-        //upsertedStreams = SaveItems(upsertedStreams, (Folder)primary.GetParent()).Cast<Video>().ToList();
         persistence.SaveItems(upsertedStreams, ct);
 
         var newIds = new HashSet<Guid>(upsertedStreams.Select(x => x.Id));
@@ -930,7 +929,11 @@ public sealed class GelatoManager(
         stopwatch.Stop();
 
         _log.LogInformation(
-            $"SyncStreams finished GelatoId={uri.ExternalId} userId={userId} duration={Math.Round(stopwatch.Elapsed.TotalSeconds, 1)}s streams={upsertedStreams.Count}"
+            "SyncStreams finished GelatoId={GelatoId} userId={UserId} duration={Duration}s streams={Count}",
+            uri.ExternalId,
+            userId,
+            Math.Round(stopwatch.Elapsed.TotalSeconds, 1).ToString(CultureInfo.InvariantCulture),
+            acceptable.Count
         );
 
         return acceptable.Count;
@@ -1120,15 +1123,13 @@ public sealed class GelatoManager(
         // Deleted items park their user data under their keys, which rows share with the movie.
         ForgetWatchState(rows, ct);
 
+        var deleted = 0;
         foreach (var row in rows)
         {
             try
             {
-                libraryManager.DeleteItem(
-                    row,
-                    new DeleteOptions { DeleteFileLocation = false },
-                    false
-                );
+                DeleteStreamRow(row, new DeleteOptions { DeleteFileLocation = false }, false);
+                deleted++;
             }
             catch (Exception ex)
             {
@@ -1136,7 +1137,33 @@ public sealed class GelatoManager(
             }
         }
 
-        _log.LogDebug("Deleted {Count} stream(s) of {Id}", rows.Count, primary.Id);
+        _log.LogDebug(
+            "Deleted {Count} of {Total} stream(s) of {Id}",
+            deleted,
+            rows.Count,
+            primary.Id
+        );
+    }
+
+    /// <summary>
+    /// Deletes a stream row through Jellyfin, which logs every removed item's path at
+    /// Information. A row's path is the stream URL, and a debrid addon's URL carries the API key,
+    /// so Jellyfin is handed the redacted one. It only decides whether a file is deleted, which a
+    /// URL never is. The path goes back if the delete fails: the cached item is this object.
+    /// </summary>
+    public void DeleteStreamRow(Video row, DeleteOptions options, bool notifyParentItem)
+    {
+        var path = row.Path;
+        row.Path = Redact.Url(path);
+        try
+        {
+            libraryManager.DeleteItem(row, options, notifyParentItem);
+        }
+        catch
+        {
+            row.Path = path;
+            throw;
+        }
     }
 
     /// <summary>
@@ -1941,7 +1968,7 @@ public sealed class GelatoManager(
                                         await EnrichMetaAsync(meta, ct).ConfigureAwait(false);
                                         var digital = meta.GetDigitalReleaseDate();
                                         var oneYearAgo = DateTime.UtcNow.AddYears(-1);
-                                        movie.EndDate =
+                                        var endDate =
                                             digital
                                             ?? (
                                                 movie.PremiereDate.HasValue
@@ -1949,6 +1976,9 @@ public sealed class GelatoManager(
                                                     ? movie.PremiereDate.Value
                                                     : sentinel
                                             );
+                                        if (movie.EndDate == endDate)
+                                            break;
+                                        movie.EndDate = endDate;
                                         chunkResults.Add(movie);
                                         _log.LogDebug(
                                             "SyncReleaseDates: movie {Name} EndDate → {Date}",
@@ -1962,9 +1992,14 @@ public sealed class GelatoManager(
                                     }
 
                                 case BaseItem other when other is Series or Season or Episode:
-                                    other.EndDate = other.PremiereDate ?? sentinel;
-                                    chunkResults.Add(other);
-                                    break;
+                                    {
+                                        var endDate = other.PremiereDate ?? sentinel;
+                                        if (other.EndDate == endDate)
+                                            break;
+                                        other.EndDate = endDate;
+                                        chunkResults.Add(other);
+                                        break;
+                                    }
                             }
                         }
                         catch (Exception ex)
@@ -1994,8 +2029,10 @@ public sealed class GelatoManager(
             }
         }
 
+        // Unreleased items are checked again on every run, so most of them keep their date.
         _log.LogInformation(
-            "SyncReleaseDates completed. EndDate fixed for {Count} item(s).",
+            "SyncReleaseDates completed. Checked {Total} unreleased item(s), EndDate changed for {Count}.",
+            total,
             totalSaved
         );
     }
@@ -2057,6 +2094,8 @@ public sealed class GelatoManager(
 
         var total = continuingSeries.Count;
         var i = 0;
+        var failed = 0;
+        var noMeta = 0;
 
         await Parallel.ForEachAsync(
             continuingSeries,
@@ -2070,7 +2109,9 @@ public sealed class GelatoManager(
                 try
                 {
                     var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
-                    if (meta is not null)
+                    if (meta is null)
+                        Interlocked.Increment(ref noMeta);
+                    else
                     {
                         var isLocal = !series.IsGelato();
                         await SyncSeriesTreesAsync(
@@ -2084,6 +2125,7 @@ public sealed class GelatoManager(
                 }
                 catch (Exception ex)
                 {
+                    Interlocked.Increment(ref failed);
                     _log.LogError(
                         ex,
                         "SyncSeriesTrees: tree sync failed for {Name} ({Id})",
@@ -2100,8 +2142,10 @@ public sealed class GelatoManager(
         );
 
         _log.LogInformation(
-            "SyncSeriesTrees: continuing series synced: {SeriesCount}.",
-            continuingSeries.Count
+            "SyncSeriesTrees: continuing series synced: {SeriesCount}, no meta: {NoMeta}, failed: {Failed}.",
+            continuingSeries.Count - noMeta - failed,
+            noMeta,
+            failed
         );
 
         if (cfg.ExtendLocalSeriesTrees)
@@ -2138,10 +2182,14 @@ public sealed class GelatoManager(
             )
             .ToList();
 
+        // Not only new ones: a series whose tree is being rebuilt, or that only had episodes
+        // filled in, is not marked yet and comes back on every run.
         _log.LogInformation(
-            "SyncSeriesTrees: {Count} local (non-gelato, non-continuing) series to extend for the first time.",
+            "SyncSeriesTrees: {Count} local (non-gelato, non-continuing) series without an extended tree to check.",
             localSeries.Count
         );
+        var extended = 0;
+        var failed = 0;
 
         var total = progressTotal + localSeries.Count;
         var i = progressOffset;
@@ -2156,6 +2204,7 @@ public sealed class GelatoManager(
                 {
                     await SyncSeriesTreesAsync(cfg, meta, ct, existingSeries: series)
                         .ConfigureAwait(false);
+                    extended++;
 
                     // Mark as synced so we skip on future runs. A series whose tree was rebuilt
                     // after it lost its seasons carries the mark already; adding it twice would
@@ -2178,6 +2227,7 @@ public sealed class GelatoManager(
             }
             catch (Exception ex)
             {
+                failed++;
                 _log.LogError(
                     ex,
                     "SyncSeriesTrees: virtual tree sync failed for {Name} ({Id})",
@@ -2191,6 +2241,14 @@ public sealed class GelatoManager(
                     progress?.Report(100.0 * ++i / total);
             }
         }
+
+        if (localSeries.Count > 0)
+            _log.LogInformation(
+                "SyncSeriesTrees: local series extended: {Extended}, no meta: {NoMeta}, failed: {Failed}.",
+                extended,
+                localSeries.Count - extended - failed,
+                failed
+            );
     }
 
     public void CleanVirtualTreeItem(Series series, CancellationToken ct)

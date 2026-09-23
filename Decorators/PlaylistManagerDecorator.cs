@@ -68,12 +68,15 @@ public sealed class PlaylistManagerDecorator(
             .Where(i => i is not null);
         var newItems = Playlist
             .GetPlaylistItems(resolved, user, options)
-            .Where(i => i.SupportsAddingToPlaylist);
+            .Where(i => i.SupportsAddingToPlaylist)
+            .ToList();
 
         var existingIds = playlist.LinkedChildren.Select(c => c.ItemId).ToHashSet();
         var toAdd = newItems.Where(i => !existingIds.Contains(i.Id)).Distinct().ToList();
 
-        var numDuplicates = itemIds.Count - toAdd.Count;
+        // Counted on the resolved items: a series id adds all its episodes, and an id that does
+        // not resolve is no duplicate.
+        var numDuplicates = newItems.Count - toAdd.Count;
         if (numDuplicates > 0)
             log.LogWarning(
                 "Ignored adding {DuplicateCount} duplicate items to playlist {PlaylistName}.",

@@ -44,7 +44,7 @@ namespace Gelato.Services
             {
                 logger.LogWarning(
                     ex,
-                    "Error resolving IJavaScriptRegistrationService at StartAsync"
+                    "Error looking up the JavaScript Injector plugin at StartAsync"
                 );
                 _pluginInterfaceType = null;
             }
@@ -128,7 +128,7 @@ namespace Gelato.Services
             if (_pluginInterfaceType is null)
             {
                 logger.LogInformation(
-                    "IJavaScriptRegistrationService not available; skipping JS registration."
+                    "JavaScript Injector plugin not found; skipping JS registration."
                 );
                 return;
             }
@@ -187,9 +187,8 @@ namespace Gelato.Services
                         };
 
                         // Register the script
-                        var registerResult = _pluginInterfaceType
-                            .GetMethod("RegisterScript")
-                            ?.Invoke(null, [scriptRegistration]);
+                        var register = _pluginInterfaceType.GetMethod("RegisterScript");
+                        var registerResult = register?.Invoke(null, [scriptRegistration]);
 
                         if (registerResult is true)
                         {
@@ -201,8 +200,11 @@ namespace Gelato.Services
                         else
                         {
                             logger.LogWarning(
-                                "Failed to register {Resource} with JavaScript Injector plugin. RegisterScript returned false.",
-                                res
+                                "Failed to register {Resource} with JavaScript Injector plugin. {Reason}",
+                                res,
+                                register is null
+                                    ? "It has no RegisterScript method."
+                                    : "RegisterScript returned false."
                             );
                         }
                     }
@@ -230,7 +232,7 @@ namespace Gelato.Services
             if (_pluginInterfaceType is null)
             {
                 logger.LogInformation(
-                    "IJavaScriptRegistrationService not available; nothing to unregister."
+                    "JavaScript Injector plugin not found; nothing to unregister."
                 );
                 return;
             }
@@ -240,9 +242,18 @@ namespace Gelato.Services
                 if (_pluginInterfaceType != null)
                 {
                     var pluginId = GelatoPlugin.Instance?.Id.ToString() ?? "gelato-plugin";
-                    var unregisterResult = _pluginInterfaceType
-                        .GetMethod("UnregisterAllScriptsFromPlugin")
-                        ?.Invoke(null, [pluginId]);
+                    var unregister = _pluginInterfaceType.GetMethod(
+                        "UnregisterAllScriptsFromPlugin"
+                    );
+                    if (unregister is null)
+                    {
+                        logger.LogInformation(
+                            "JavaScript Injector plugin has no UnregisterAllScriptsFromPlugin method; cannot unregister scripts."
+                        );
+                        return;
+                    }
+
+                    var unregisterResult = unregister.Invoke(null, [pluginId]);
 
                     if (unregisterResult is int removedCount)
                     {
@@ -258,10 +269,6 @@ namespace Gelato.Services
                         );
                     }
                 }
-
-                logger.LogInformation(
-                    "No suitable unregister method found on IJavaScriptRegistrationService; cannot automatically unregister resources."
-                );
             }
             catch (Exception ex)
             {

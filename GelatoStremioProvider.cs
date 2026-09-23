@@ -100,7 +100,8 @@ public class GelatoStremioProvider(
             await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
             return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        // A non-success status was logged above; the exception only carries it to the caller.
+        catch (Exception ex) when (ex is not HttpRequestException { StatusCode: not null })
         {
             log.LogError(
                 ex,
@@ -266,8 +267,9 @@ public class GelatoStremioProvider(
 
     public async Task<StremioMeta?> GetMetaAsync(BaseItem item)
     {
+        // Not a failure: the meta is looked up under the item's other ids too.
         if (item.GetProviderId("Imdb") is null)
-            log.LogWarning("GetMetaAsync: {Name} has no imdb ID", item.Name);
+            log.LogDebug("GetMetaAsync: {Name} has no imdb ID", item.Name);
 
         if (!HasMetaId(item.ProviderIds))
         {
@@ -321,7 +323,8 @@ public class GelatoStremioProvider(
             }
             catch (Exception ex) when (!last)
             {
-                log.LogWarning(
+                // The line below says a fallback follows; the exception is for debugging.
+                log.LogDebug(
                     ex,
                     "GetMetaAsync: {Addon} cannot serve meta for {Id}",
                     Redact.Url(baseUrl),
@@ -436,6 +439,19 @@ public class GelatoStremioProvider(
                 meta.App_Extras ??= new StremioAppExtras();
                 meta.App_Extras.ReleaseDates = container;
             }
+        }
+        // TMDB answering with an error is not transient: an addon that maps the movie to a TMDB id
+        // TMDB does not have leaves it without a digital release date on every run, so it stays
+        // unreleased for good.
+        catch (HttpRequestException ex) when (ex.StatusCode is not null)
+        {
+            log.LogWarning(
+                "EnrichDigitalReleaseDate: TMDB answered {Status} for tmdb:{TmdbId} ({Name}, {Id}), no digital release date",
+                (int)ex.StatusCode,
+                tmdbId,
+                meta.Name,
+                meta.Id
+            );
         }
         catch (Exception ex)
         {

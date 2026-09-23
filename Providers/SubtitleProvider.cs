@@ -189,10 +189,7 @@ namespace Gelato.Providers
                 rawFilename = rawFilename[..^5];
             var releaseName = Path.GetFileNameWithoutExtension(rawFilename);
 
-            _log.LogInformation(
-                "Matching subtitles against release name: {ReleaseName}",
-                releaseName
-            );
+            _log.LogDebug("Matching subtitles against release name: {ReleaseName}", releaseName);
 
             var scored = filtered
                 .Select(s =>
@@ -221,23 +218,18 @@ namespace Gelato.Providers
                     s.Title ?? "(no title)"
                 );
 
-            var bestIdx = scored.FindIndex(x => x.Score > 0.4);
-            if (bestIdx >= 0)
+            // Nothing is picked here: Jellyfin gets the whole list in this order.
+            if (scored.Count > 0)
             {
-                var best = scored[bestIdx];
+                var top = scored[0];
                 _log.LogInformation(
-                    "Best subtitle match: '{Title}' (score={Score:F2} title={TitleScore:F2} bonus={Bonus:F2})",
-                    best.Sub.Title ?? "(no title)",
-                    best.Score,
-                    best.TitleScore,
-                    best.Bonus
+                    "Top ranked subtitle: '{Title}' (score={Score:F2} title={TitleScore:F2} bonus={Bonus:F2})",
+                    top.Sub.Title ?? "(no title)",
+                    top.Score,
+                    top.TitleScore,
+                    top.Bonus
                 );
             }
-            else if (scored.Count > 0)
-                _log.LogInformation(
-                    "No title match above threshold, using first: '{Title}'",
-                    scored[0].Sub.Title ?? "(no title)"
-                );
 
             return scored.Select(x => new RemoteSubtitleInfo
             {

@@ -117,6 +117,12 @@ public sealed class ImageResourceFilter(
                 ctx.HttpContext.RequestAborted
             );
         }
+        catch (OperationCanceledException)
+            when (ctx.HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            // The client went away, e.g. an image scrolled out of view.
+            log.LogDebug("ImageFilter: client aborted image for item={ItemId}", guid);
+        }
         catch (Exception ex)
         {
             log.LogWarning(

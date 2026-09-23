@@ -79,16 +79,6 @@ public class SearchActionFilter(
         // results after the addon's.
         var (executed, localItems, localTotal) = await SearchLibraryAsync(ctx, next, start + limit);
 
-        log.LogInformation(
-            "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} results={Results} library={Library}",
-            searchTerm,
-            string.Join(",", requestedTypes),
-            start,
-            limit,
-            metas.Count,
-            localTotal
-        );
-
         // The addon's result for a title the library already has and the library's own item are
         // the same title twice. The addon's half answers with the library's item where there is
         // one, in the result's own place — the addon's order is the search's relevance, and an
@@ -105,19 +95,32 @@ public class SearchActionFilter(
         var libraryItems = localItems.Where(i => !covered.Contains(i.Id)).ToArray();
         var paged = dtos.Concat(libraryItems).Skip(start).Take(limit).ToArray();
 
+        // An estimate, the way it was before: the library's total counts the items the addon's
+        // half already answers with, and only the page that was fetched shows which those are.
+        // Counting them all out keeps the number the same from page to page, which is what a
+        // client pages by.
+        var total = Math.Max(
+            dtos.Count + localTotal - covered.Count,
+            dtos.Count + libraryItems.Length
+        );
+
+        // addon: what the addon's half answers with, after invalid and duplicate results are
+        // dropped; owned: of those, titles the library already has.
+        log.LogInformation(
+            "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} addon={Addon} owned={Owned} library={Library} returned={Returned} total={Total}",
+            searchTerm,
+            string.Join(",", requestedTypes),
+            start,
+            limit,
+            dtos.Count,
+            covered.Count,
+            localTotal,
+            paged.Length,
+            total
+        );
+
         var result = new OkObjectResult(
-            new QueryResult<BaseItemDto>
-            {
-                Items = paged,
-                // An estimate, the way it was before: the library's total counts the items the
-                // addon's half already answers with, and only the page that was fetched shows
-                // which those are. Counting them all out keeps the number the same from page to
-                // page, which is what a client pages by.
-                TotalRecordCount = Math.Max(
-                    dtos.Count + localTotal - covered.Count,
-                    dtos.Count + libraryItems.Length
-                ),
-            }
+            new QueryResult<BaseItemDto> { Items = paged, TotalRecordCount = total }
         );
 
         // Setting ctx.Result only short-circuits while the action has not run; once next() has
