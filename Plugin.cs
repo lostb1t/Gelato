@@ -51,6 +51,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         {
             Name = "config",
             EnableInMainMenu = true,
+            MenuIcon = "movie",
             EmbeddedResourcePath = prefix + ".Config.config.html",
         };
     }
