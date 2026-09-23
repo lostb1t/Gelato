@@ -6,9 +6,12 @@ release:
 	@echo "New version will be: $(NEW_VERSION)"
 	@echo "Generating changelog..."
 	@git cliff --unreleased --tag $(NEW_VERSION) --strip all > /tmp/release_notes.md
-	@echo "Updating version in build.yaml..."
+	@echo "Updating version in build.yaml and Gelato.csproj..."
 	sed -i 's/^version: .*/version: "$(NEW_VERSION:v%=%)"/' build.yaml
-	git add build.yaml
+	@# Local builds take their version from the project file; keep it in step so a dev build
+	@# reports the version its plugin folder and meta.json carry.
+	sed -i 's#<Version>[^<]*</Version>#<Version>$(NEW_VERSION:v%=%)</Version>#' Gelato.csproj
+	git add build.yaml Gelato.csproj
 	git commit -m "chore(release): bump version to $(NEW_VERSION)"
 	@echo "Pushing to git..."
 	git push
