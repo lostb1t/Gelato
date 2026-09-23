@@ -35,7 +35,7 @@ public sealed class DtoServiceDecorator(
         var dto = inner.GetBaseItemDto(item, options, user, owner);
         AddPrimaryVersionFields(dto, item, options, user);
         CountStreamsAsOneSource(dto, item);
-        Patch(dto, item, _http.HttpContext?.IsApiListing() == true, user);
+        Patch(dto, item, _http.ReadRequest(ctx => ctx.IsApiListing(), false), user);
         return dto;
     }
 
@@ -200,7 +200,7 @@ public sealed class DtoServiceDecorator(
     )
     {
         var dto = inner.GetItemByNameDto(item, options, taggedItems, user);
-        Patch(dto, item, _http.HttpContext?.IsApiListing() == true, user);
+        Patch(dto, item, _http.ReadRequest(ctx => ctx.IsApiListing(), false), user);
         return dto;
     }
 
