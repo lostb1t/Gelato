@@ -40,6 +40,19 @@ public class GelatoStremioProvider(
         return null;
     }
 
+    private const string AioStreamsUserAgent = "AIOStreams/1.0";
+
+    /// <summary>
+    /// Whether the addon is AIOStreams. Instances can rebrand the manifest id
+    /// (<c>com.aiostreams.viren070</c> by default) and name, but keep the product in one of them.
+    /// </summary>
+    private static bool IsAioStreams(StremioManifest? manifest) =>
+        manifest is not null
+        && (
+            manifest.Id.Contains("aiostreams", StringComparison.OrdinalIgnoreCase)
+            || manifest.Name.Contains("aiostreams", StringComparison.OrdinalIgnoreCase)
+        );
+
     private HttpClient NewClient()
     {
         var c = http.CreateClient(nameof(GelatoStremioProvider));
@@ -65,7 +78,7 @@ public class GelatoStremioProvider(
         return url;
     }
 
-    private async Task<T?> GetJsonAsync<T>(string url)
+    private async Task<T?> GetJsonAsync<T>(string url, string? userAgent = null)
     {
         // The base URL carries the user's addon config, so only the resource after it is logged.
         var resource = url.StartsWith(baseUrl, StringComparison.Ordinal)
@@ -80,7 +93,10 @@ public class GelatoStremioProvider(
         try
         {
             var c = NewClient();
-            var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (userAgent is not null)
+                request.Headers.UserAgent.ParseAdd(userAgent);
+            var resp = await c.SendAsync(request).ConfigureAwait(false); // No using statement
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -508,7 +524,15 @@ public class GelatoStremioProvider(
     private async Task<List<StremioStream>> GetStreamsAsync(string id, StremioMediaType mediaType)
     {
         var url = BuildUrl(["stream", mediaType.ToString().ToLower(), id]);
-        var r = await GetJsonAsync<StremioStreamsResponse>(url);
+        // AIOStreams only adds its stream data (the torrent's info hash, the file's size) for
+        // requests it takes for another AIOStreams, told by the User-Agent. RemuxDB needs the
+        // hash to match and accept a file; Remux asks the same way. Other addons keep getting
+        // Gelato's own.
+        var manifest = await GetManifestAsync().ConfigureAwait(false);
+        var r = await GetJsonAsync<StremioStreamsResponse>(
+            url,
+            IsAioStreams(manifest) ? AioStreamsUserAgent : null
+        );
 
         return r?.Streams ?? [];
     }
