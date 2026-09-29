@@ -1257,11 +1257,6 @@ public class StremioStream
         return !(uri.PathAndQuery == "/" || string.IsNullOrEmpty(uri.PathAndQuery));
     }
 
-    public bool IsFile()
-    {
-        return !string.IsNullOrWhiteSpace(Url);
-    }
-
     public bool IsTorrent()
     {
         return !string.IsNullOrWhiteSpace(InfoHash);

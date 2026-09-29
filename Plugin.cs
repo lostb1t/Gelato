@@ -60,10 +60,6 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override void UpdateConfiguration(BasePluginConfiguration configuration)
     {
         var cfg = (PluginConfiguration)configuration;
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("DISABLE_P2P")))
-        {
-            cfg.P2PEnabled = false;
-        }
         base.UpdateConfiguration(cfg);
 
         _manager.ClearCache();

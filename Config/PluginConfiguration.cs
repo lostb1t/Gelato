@@ -18,9 +18,6 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool FilterUnreleased { get; set; } = false;
     public int FilterUnreleasedBufferDays { get; set; } = 0;
     public bool DisableSourceCount { get; set; } = true;
-    public bool P2PEnabled { get; set; } = false;
-    public int P2PDLSpeed { get; set; } = 0;
-    public int P2PULSpeed { get; set; } = 0;
     public string FFmpegAnalyzeDuration { get; set; } = "5M";
     public string FFmpegProbeSize { get; set; } = "40M";
     public bool CreateCollections { get; set; } = false;
@@ -142,9 +139,6 @@ public class UserConfig
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
             DisableSourceCount = baseConfig.DisableSourceCount,
-            P2PEnabled = baseConfig.P2PEnabled,
-            P2PDLSpeed = baseConfig.P2PDLSpeed,
-            P2PULSpeed = baseConfig.P2PULSpeed,
             FFmpegAnalyzeDuration = baseConfig.FFmpegAnalyzeDuration,
             FFmpegProbeSize = baseConfig.FFmpegProbeSize,
             CreateCollections = baseConfig.CreateCollections,
