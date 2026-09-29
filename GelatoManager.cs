@@ -27,7 +27,6 @@ public sealed class GelatoManager(
     IItemPersistenceService persistence,
     IFileSystem fileSystem,
     IMemoryCache memoryCache,
-    IServerConfigurationManager serverConfig,
     ILibraryManager libraryManager,
     IDirectoryService directoryService,
     IApplicationPaths appPaths,
@@ -49,12 +48,6 @@ public sealed class GelatoManager(
         "This is a seed file created by Gelato so that library scans are triggered. Do not remove.";
 
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
-
-    private int GetHttpPort()
-    {
-        var networkConfig = serverConfig.GetNetworkConfiguration();
-        return networkConfig.InternalHttpPort;
-    }
 
     public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
     {
@@ -683,7 +676,6 @@ public sealed class GelatoManager(
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         var stremio = cfg.Stremio;
         var streams = await stremio.GetStreamsAsync(uri).ConfigureAwait(false);
-        var httpPort = GetHttpPort();
 
         // Filter valid streams
         var acceptable = streams
@@ -695,7 +687,7 @@ public sealed class GelatoManager(
                     return null;
                 }
 
-                if (!cfg.P2PEnabled && s.IsTorrent())
+                if (s.IsTorrent())
                 {
                     _log.LogDebug($"P2P stream, skipping {s.Name}");
                     return null;
@@ -777,15 +769,7 @@ public sealed class GelatoManager(
         {
             var s = acceptable[i];
             var index = i + 1;
-            var path = s.IsFile()
-                ? s.Url
-                : $"http://127.0.0.1:{httpPort}/gelato/stream?ih={s.InfoHash}"
-                    + (s.FileIdx is not null ? $"&idx={s.FileIdx}" : "")
-                    + (
-                        s.Sources is { Count: > 0 }
-                            ? $"&trackers={Uri.EscapeDataString(string.Join(',', s.Sources))}"
-                            : ""
-                    );
+            var path = s.Url;
 
             var streamGuid = s.GetGuid();
             var isNewStreamItem = !existingByGuid.TryGetValue(streamGuid, out var streamItem);

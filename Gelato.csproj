@@ -13,7 +13,6 @@
     <PackageReference Include="Jellyfin.Model" Version="12.1.0" />
     <PackageReference Include="Jellyfin.Controller" Version="12.1.0" />
     <PackageReference Include="Jellyfin.Common" Version="12.1.0" />
-    <PackageReference Include="MonoTorrent" Version="3.0.2" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="System.Reflection.TypeExtensions" Version="4.7.0" />
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.0" PrivateAssets="all" />
@@ -27,7 +26,7 @@
     <ItemGroup>
       <AllDlls Include="$(OutDir)*.dll" />
       <FilesToKeep
-        Include="&#xA;        $(OutDir)Gelato.dll;&#xA;        $(OutDir)JellyfinLoaderStub*.dll;  &#xA;        $(OutDir)0Harmony.dll;             &#xA;        $(OutDir)MonoTorrent*.dll;&#xA;        $(OutDir)Mono.Nat.dll;&#xA;        $(OutDir)ReusableTasks.dll"
+        Include="&#xA;        $(OutDir)Gelato.dll;&#xA;        $(OutDir)JellyfinLoaderStub*.dll;  &#xA;        $(OutDir)0Harmony.dll"
       />
       <FilesToDelete Include="@(AllDlls)" Exclude="@(FilesToKeep)" />
     </ItemGroup>
