@@ -1,7 +1,9 @@
 using Gelato.Config;
 using Gelato.Decorators;
 using Gelato.Filters;
+using System.Net;
 using Gelato.Providers;
+using Gelato.RemuxDb;
 using Gelato.ScheduledTasks;
 using Gelato.Services;
 //using IntroDbPlugin.Services;
@@ -93,6 +95,19 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             client.Timeout = TimeSpan.FromSeconds(IntroDbClient.DefaultTimeoutSeconds);
         });
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
+
+        services
+            .AddHttpClient<RemuxDbClient>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.UserAgent.TryParseAdd(GelatoPlugin.UserAgent);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() =>
+                new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All }
+            );
+        services.AddSingleton<RemuxDbContributor>();
+        services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<RemuxDbContributor>());
+        services.AddSingleton<RemuxDbService>();
 
         services.AddHostedService<GelatoService>();
         services
