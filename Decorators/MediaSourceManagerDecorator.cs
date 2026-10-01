@@ -495,9 +495,16 @@ public sealed class MediaSourceManagerDecorator(
                 return sources;
         }
 
-        if (NeedsProbe(selected))
+        // RemuxDB's media info plays as it is and is probed afterwards, unless it lacks what the
+        // playback decides on.
+        var fromRemuxDb = owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb;
+        if (
+            NeedsProbe(selected)
+            || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams))
+        )
         {
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
+            var remuxDbStreams = fromRemuxDb ? remuxDb.GetStreams(owner.Id) : null;
 
             var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(
                 owner,
@@ -510,9 +517,15 @@ public sealed class MediaSourceManagerDecorator(
 
             await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
 
-            if (owner is Video probedRow && probedRow.HasStreamTag())
+            if (
+                owner is Video probedRow
+                && probedRow.HasStreamTag()
+                && !remuxDb.OnProbed(probedRow, libraryOptions)
+                && remuxDbStreams is not null
+            )
             {
-                remuxDb.OnProbed(probedRow, libraryOptions);
+                // A dead link: keep RemuxDB's, and try again on the next playback.
+                remuxDb.RestoreStreams(owner.Id, remuxDbStreams);
             }
 
             await owner
@@ -525,7 +538,7 @@ public sealed class MediaSourceManagerDecorator(
             if (selected is null)
                 return refreshed;
         }
-        else if (owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb)
+        else if (fromRemuxDb)
         {
             ProbeLater(owner.Id);
         }
