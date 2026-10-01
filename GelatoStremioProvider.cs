@@ -40,10 +40,24 @@ public class GelatoStremioProvider(
         return null;
     }
 
+    private const string AioStreamsUserAgent = "AIOStreams/1.0";
+
+    /// <summary>
+    /// Whether the addon is AIOStreams. Instances can rebrand the manifest id
+    /// (<c>com.aiostreams.viren070</c> by default) and name, but keep the product in one of them.
+    /// </summary>
+    private static bool IsAioStreams(StremioManifest? manifest) =>
+        manifest is not null
+        && (
+            manifest.Id.Contains("aiostreams", StringComparison.OrdinalIgnoreCase)
+            || manifest.Name.Contains("aiostreams", StringComparison.OrdinalIgnoreCase)
+        );
+
     private HttpClient NewClient()
     {
         var c = http.CreateClient(nameof(GelatoStremioProvider));
         c.Timeout = TimeSpan.FromSeconds(30);
+        c.DefaultRequestHeaders.UserAgent.TryParseAdd(GelatoPlugin.UserAgent);
         return c;
     }
 
@@ -64,7 +78,7 @@ public class GelatoStremioProvider(
         return url;
     }
 
-    private async Task<T?> GetJsonAsync<T>(string url)
+    private async Task<T?> GetJsonAsync<T>(string url, string? userAgent = null)
     {
         // The base URL carries the user's addon config, so only the resource after it is logged.
         var resource = url.StartsWith(baseUrl, StringComparison.Ordinal)
@@ -79,7 +93,10 @@ public class GelatoStremioProvider(
         try
         {
             var c = NewClient();
-            var resp = await c.GetAsync(url).ConfigureAwait(false); // No using statement
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            if (userAgent is not null)
+                request.Headers.UserAgent.ParseAdd(userAgent);
+            var resp = await c.SendAsync(request).ConfigureAwait(false); // No using statement
 
             if (!resp.IsSuccessStatusCode)
             {
@@ -507,7 +524,15 @@ public class GelatoStremioProvider(
     private async Task<List<StremioStream>> GetStreamsAsync(string id, StremioMediaType mediaType)
     {
         var url = BuildUrl(["stream", mediaType.ToString().ToLower(), id]);
-        var r = await GetJsonAsync<StremioStreamsResponse>(url);
+        // AIOStreams only adds its stream data (the torrent's info hash, the file's size) for
+        // requests it takes for another AIOStreams, told by the User-Agent. RemuxDB needs the
+        // hash to match and accept a file; Remux asks the same way. Other addons keep getting
+        // Gelato's own.
+        var manifest = await GetManifestAsync().ConfigureAwait(false);
+        var r = await GetJsonAsync<StremioStreamsResponse>(
+            url,
+            IsAioStreams(manifest) ? AioStreamsUserAgent : null
+        );
 
         return r?.Streams ?? [];
     }
@@ -1205,6 +1230,80 @@ public class StremioStream
     public int? FileIdx { get; set; }
     public List<string>? Sources { get; set; }
     public StremioBehaviorHints? BehaviorHints { get; set; }
+
+    /// <summary>
+    /// AIOStreams' details of the stream (torrent, size, file name, …). Not part of the Stremio
+    /// protocol and only sent to clients AIOStreams chooses, so read loosely: a different shape
+    /// from another addon must not fail the whole response.
+    /// </summary>
+    public JsonElement? StreamData { get; set; }
+
+    /// <summary>
+    /// What identifies the stream's file for RemuxDB. The torrent comes from AIOStreams'
+    /// stream data, or from a URL that carries its info hash as a path segment (Torrentio and
+    /// similar debrid resolve URLs).
+    /// </summary>
+    public RemuxDb.StreamIdentity GetIdentity()
+    {
+        var data = StreamData is { ValueKind: JsonValueKind.Object } d ? d : (JsonElement?)null;
+        var torrent =
+            data is { } sd
+            && sd.TryGetProperty("torrent", out var t)
+            && t.ValueKind == JsonValueKind.Object
+                ? t
+                : (JsonElement?)null;
+
+        var infoHash = torrent is { } tor ? GetString(tor, "infoHash") : null;
+        infoHash = IsInfoHash(infoHash) ? infoHash : InfoHashFromUrl(Url);
+
+        int? fileIdx =
+            torrent is { } tor2 && GetLong(tor2, "fileIdx") is { } idx && idx is >= 0 and <= int.MaxValue
+                ? (int)idx
+                : null;
+
+        var size = data is { } sd2 ? GetLong(sd2, "size") : null;
+        size = size is > 0 ? size : BehaviorHints?.VideoSize;
+
+        var filename = BehaviorHints?.Filename;
+        if (string.IsNullOrWhiteSpace(filename) && data is { } sd3)
+            filename = GetString(sd3, "filename");
+
+        return new RemuxDb.StreamIdentity(
+            infoHash?.ToLowerInvariant(),
+            fileIdx,
+            size is > 0 ? size : null,
+            string.IsNullOrWhiteSpace(filename) ? null : filename
+        );
+
+        static string? GetString(JsonElement obj, string name) =>
+            obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+                ? v.GetString()
+                : null;
+
+        static long? GetLong(JsonElement obj, string name) =>
+            obj.TryGetProperty(name, out var v)
+                ? v.ValueKind switch
+                {
+                    JsonValueKind.Number when v.TryGetInt64(out var n) => n,
+                    JsonValueKind.String
+                        when long.TryParse(
+                            v.GetString(),
+                            NumberStyles.None,
+                            CultureInfo.InvariantCulture,
+                            out var n
+                        ) => n,
+                    _ => null,
+                }
+                : null;
+    }
+
+    private static bool IsInfoHash(string? value) =>
+        value is { Length: 40 } && value.All(char.IsAsciiHexDigit);
+
+    private static string? InfoHashFromUrl(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            ? uri.AbsolutePath.Split('/').FirstOrDefault(IsInfoHash)
+            : null;
 
     public string GetName()
     {

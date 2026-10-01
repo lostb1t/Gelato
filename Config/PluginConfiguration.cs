@@ -29,6 +29,25 @@ public class PluginConfiguration : BasePluginConfiguration
     public List<UserConfig> UserConfigs { get; set; } = [];
 
     /// <summary>
+    /// Fill in a stream's tracks, runtime and size from RemuxDB when its streams are synced,
+    /// so they show before playback and playback skips its probe.
+    /// </summary>
+    public bool RemuxDbEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Submit a stream's probe to RemuxDB when it played a file RemuxDB did not know. Anonymous,
+    /// and only for streams whose torrent is known.
+    /// </summary>
+    public bool RemuxDbContribute { get; set; } = true;
+
+    public string RemuxDbUrl { get; set; } = RemuxDb.RemuxDbClient.DefaultUrl;
+
+    /// <summary>
+    /// Random id RemuxDB requires of every client, created on first use. Tied to nothing else.
+    /// </summary>
+    public string RemuxDbClientId { get; set; } = "";
+
+    /// <summary>
     /// The Jellyfin version Gelato last started against, so it can tell when the server has been
     /// upgraded underneath it. Empty until the first start that records one.
     /// </summary>
@@ -143,6 +162,10 @@ public class UserConfig
             FFmpegProbeSize = baseConfig.FFmpegProbeSize,
             CreateCollections = baseConfig.CreateCollections,
             MaxCollectionItems = baseConfig.MaxCollectionItems,
+            RemuxDbEnabled = baseConfig.RemuxDbEnabled,
+            RemuxDbContribute = baseConfig.RemuxDbContribute,
+            RemuxDbUrl = baseConfig.RemuxDbUrl,
+            RemuxDbClientId = baseConfig.RemuxDbClientId,
             UserConfigs = baseConfig.UserConfigs,
         };
     }

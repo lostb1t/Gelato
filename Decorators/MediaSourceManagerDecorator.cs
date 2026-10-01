@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using Gelato.Providers;
+using Gelato.RemuxDb;
 using Gelato.Services;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
@@ -44,7 +45,8 @@ public sealed class MediaSourceManagerDecorator(
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
-    Lazy<IProviderManager> providerManager
+    Lazy<IProviderManager> providerManager,
+    RemuxDbService remuxDb
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -508,6 +510,11 @@ public sealed class MediaSourceManagerDecorator(
 
             await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
 
+            if (owner is Video probedRow && probedRow.HasStreamTag())
+            {
+                remuxDb.OnProbed(probedRow, libraryOptions);
+            }
+
             await owner
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
                 .ConfigureAwait(false);
@@ -517,6 +524,10 @@ public sealed class MediaSourceManagerDecorator(
 
             if (selected is null)
                 return refreshed;
+        }
+        else if (owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb)
+        {
+            ProbeLater(owner.Id);
         }
 
         if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
@@ -749,6 +760,89 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         return streams;
+    }
+
+    /// <summary>How long after playback starts a stream with RemuxDB's media info is probed.</summary>
+    private static readonly TimeSpan ProbeLaterDelay = TimeSpan.FromSeconds(30);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> _probingLater =
+        new();
+
+    /// <summary>
+    /// Probes a row that played with RemuxDB's media info once, in the background. It adds what
+    /// RemuxDB does not record (attachments, such as the fonts of ASS subtitles), corrects a wrong
+    /// match, and runs the segment providers, which run next to the probe. Late enough not to hold
+    /// up the playback's own requests to the stream.
+    /// </summary>
+    private void ProbeLater(Guid rowId)
+    {
+        if (!_probingLater.TryAdd(rowId, 0))
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(ProbeLaterDelay).ConfigureAwait(false);
+
+                // A copy from the database: the probe points the item at a temporary file while it
+                // runs, and the cached instance serves the playback meanwhile.
+                if (
+                    _libraryManager.RetrieveItem(rowId) is not Video row
+                    || row.GelatoData<string>("mediaInfo") != RemuxDbService.SourceRemuxDb
+                    || string.IsNullOrEmpty(row.Path)
+                )
+                {
+                    return;
+                }
+
+                var libraryOptions = _libraryManager.GetLibraryOptions(row);
+                var before = remuxDb.GetStreams(rowId);
+                var segments = _mediaSegmentManager.HasSegments(rowId)
+                    ? Task.CompletedTask
+                    : _mediaSegmentManager.RunSegmentPluginProviders(
+                        row,
+                        libraryOptions,
+                        false,
+                        CancellationToken.None
+                    );
+                await Task.WhenAll(ProbeStreamAsync(row, row.Path, CancellationToken.None), segments)
+                    .ConfigureAwait(false);
+
+                // As a writer of the movie's rows: a sync meanwhile may have deleted this one, and
+                // saving it would bring it back.
+                await _manager
+                    .Value.RunExclusiveAsync(
+                        row.PrimaryVersionId ?? rowId,
+                        async ct =>
+                        {
+                            if (_libraryManager.GetItemById(rowId) is null)
+                                return;
+
+                            if (!remuxDb.OnProbed(row, libraryOptions))
+                            {
+                                // A dead link: keep RemuxDB's, and try again on the next playback.
+                                remuxDb.RestoreStreams(rowId, before);
+                                return;
+                            }
+
+                            remuxDb.CompareWithProbe(rowId, before, remuxDb.GetStreams(rowId));
+                            await row.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+                                .ConfigureAwait(false);
+                        },
+                        CancellationToken.None
+                    )
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Background probe failed for {Id}", rowId);
+            }
+            finally
+            {
+                _probingLater.TryRemove(rowId, out _);
+            }
+        });
     }
 
     private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Gelato.Config;
 using Gelato.Decorators;
+using Gelato.RemuxDb;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
@@ -31,7 +32,8 @@ public sealed class GelatoManager(
     IDirectoryService directoryService,
     IApplicationPaths appPaths,
     IUserManager userManager,
-    IUserDataManager userDataManager
+    IUserDataManager userDataManager,
+    RemuxDbService remuxDb
 )
 {
     public const string StreamTag = "gelato-stream";
@@ -675,6 +677,9 @@ public sealed class GelatoManager(
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         var stremio = cfg.Stremio;
+        // Next to the addon's request: RemuxDB answers in well under a second, and gives up after
+        // a few.
+        var remuxDbLookup = remuxDb.LookupAsync(uri.ExternalId, ct);
         var streams = await stremio.GetStreamsAsync(uri).ConfigureAwait(false);
 
         // Filter valid streams
@@ -764,6 +769,18 @@ public sealed class GelatoManager(
 
         var upsertedStreams = new List<Video>();
         var now = DateTime.UtcNow;
+        IReadOnlyList<RemuxDbVersion> remuxDbVersions;
+        try
+        {
+            remuxDbVersions = await remuxDbLookup.ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _log.LogWarning(ex, "RemuxDB lookup failed for {Id}", uri.ExternalId);
+            remuxDbVersions = [];
+        }
+        var libraryOptions = libraryManager.GetLibraryOptions(video);
+        var mediaInfo = new List<PendingMediaInfo>();
 
         for (var i = 0; i < acceptable.Count; i++)
         {
@@ -813,7 +830,9 @@ public sealed class GelatoManager(
             streamItem.LockedFields = locked.ToArray();
 
             streamItem.ProviderIds = streamProviderIds;
-            streamItem.RunTimeTicks = video.RunTimeTicks ?? video.RunTimeTicks;
+            // A row with media info keeps the runtime of its file.
+            if (streamItem.GelatoData<string>("mediaInfo") is null)
+                streamItem.RunTimeTicks = video.RunTimeTicks;
             streamItem.LinkedAlternateVersions = [];
             streamItem.SetPrimaryVersionId(video.Id);
             CopyVersionMetadata(video, streamItem);
@@ -840,6 +859,27 @@ public sealed class GelatoManager(
             }
             streamItem.SetGelatoData("index", index);
             streamItem.SetGelatoData("guid", streamGuid);
+            try
+            {
+                if (
+                    remuxDb.Apply(
+                        streamItem,
+                        isNewStreamItem,
+                        s.GetIdentity(),
+                        remuxDbVersions,
+                        video,
+                        libraryOptions
+                    )
+                    is { } info
+                )
+                {
+                    mediaInfo.Add(info);
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "RemuxDB media info failed for stream {Guid}", streamGuid);
+            }
             // Keep map current so stale detection below uses the final upserted set.
             existingByGuid[streamGuid] = streamItem;
 
@@ -854,6 +894,14 @@ public sealed class GelatoManager(
         }
 
         persistence.SaveItems(upsertedStreams, ct);
+        try
+        {
+            remuxDb.Save(mediaInfo, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            _log.LogWarning(ex, "Saving RemuxDB media info failed for {Id}", uri.ExternalId);
+        }
 
         var newIds = new HashSet<Guid>(upsertedStreams.Select(x => x.Id));
         var stale = existingByGuid
@@ -924,11 +972,12 @@ public sealed class GelatoManager(
         stopwatch.Stop();
 
         _log.LogInformation(
-            "SyncStreams finished GelatoId={GelatoId} userId={UserId} duration={Duration}s streams={Count}",
+            "SyncStreams finished GelatoId={GelatoId} userId={UserId} duration={Duration}s streams={Count} remuxdb={RemuxDb}",
             uri.ExternalId,
             userId,
             Math.Round(stopwatch.Elapsed.TotalSeconds, 1).ToString(CultureInfo.InvariantCulture),
-            acceptable.Count
+            acceptable.Count,
+            mediaInfo.Count
         );
 
         return acceptable.Count;
