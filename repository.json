@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.21.1] - 2026-10-01\n\n### 🐛 Bug Fixes\n\n- Probe remuxdb streams that lack a video bitrate before playback (#255)\n",
+        "checksum": "e3afc472ea4a0b7e1c792b96a194642e",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.21.1/gelato_0.26.21.1.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-01T18:58:29Z",
+        "version": "0.26.21.1"
+      },
+      {
         "changelog": "## [0.26.21.0] - 2026-10-01\n\n### 🚀 Features\n\n- Fill in stream media info from remuxdb (#251)\n\n### 🐛 Bug Fixes\n\n- Scheduled tasks failing when started from the dashboard (#247)\n- Seed gelato folders once when lookups race (#248)\n\n### ⚙️ Miscellaneous Tasks\n\n- Various housekeeping tasks (#246)\n- Remove p2p torrent streaming (#250)\n",
         "checksum": "07b268517dd047cbacdb0e4e594d1ff5",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.21.0/gelato_0.26.21.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-11T15:28:40Z",
         "version": "0.26.13.3"
-      },
-      {
-        "changelog": "## [0.26.13.2] - 2026-04-11\n\n### 🐛 Bug Fixes\n\n- Show all external subs (#150)\n",
-        "checksum": "1f0309e0bcee19d375a58c4c6a028614",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.2/gelato_0.26.13.2.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-11T13:46:24Z",
-        "version": "0.26.13.2"
       }
     ]
   }
