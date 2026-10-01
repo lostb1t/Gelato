@@ -540,6 +540,7 @@ public sealed class MediaSourceManagerDecorator(
         }
         else if (fromRemuxDb)
         {
+            await EnsureSegmentsAsync(owner, ct).ConfigureAwait(false);
             ProbeLater(owner.Id);
         }
 
@@ -775,6 +776,41 @@ public sealed class MediaSourceManagerDecorator(
         return streams;
     }
 
+    /// <summary>How long playback waits for the segment providers of a row that plays on RemuxDB's media info.</summary>
+    private static readonly TimeSpan SegmentWait = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>
+    /// Fetches the row's segments (intro) before playback starts, so the client has them for its
+    /// skip button on the first play. Playback waits at most <see cref="SegmentWait"/>; a slower
+    /// provider finishes in the background.
+    /// </summary>
+    private async Task EnsureSegmentsAsync(BaseItem owner, CancellationToken ct)
+    {
+        if (_mediaSegmentManager.HasSegments(owner.Id))
+            return;
+
+        var run = Task.Run(async () =>
+        {
+            try
+            {
+                await _mediaSegmentManager
+                    .RunSegmentPluginProviders(
+                        owner,
+                        _libraryManager.GetLibraryOptions(owner),
+                        false,
+                        CancellationToken.None
+                    )
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Segment lookup failed for {Id}", owner.Id);
+            }
+        });
+
+        await Task.WhenAny(run, Task.Delay(SegmentWait, ct)).ConfigureAwait(false);
+    }
+
     /// <summary>How long after playback starts a stream with RemuxDB's media info is probed.</summary>
     private static readonly TimeSpan ProbeLaterDelay = TimeSpan.FromSeconds(30);
 
@@ -783,8 +819,9 @@ public sealed class MediaSourceManagerDecorator(
 
     /// <summary>
     /// Probes a row that played with RemuxDB's media info once, in the background. It adds what
-    /// RemuxDB does not record (attachments, such as the fonts of ASS subtitles), corrects a wrong
-    /// match, and runs the segment providers, which run next to the probe. Late enough not to hold
+    /// RemuxDB does not record (attachments, such as the fonts of ASS subtitles) and corrects a
+    /// wrong match. The segment providers run before playback (<see cref="EnsureSegmentsAsync"/>).
+    /// Late enough not to hold
     /// up the playback's own requests to the stream.
     /// </summary>
     private void ProbeLater(Guid rowId)
@@ -811,15 +848,7 @@ public sealed class MediaSourceManagerDecorator(
 
                 var libraryOptions = _libraryManager.GetLibraryOptions(row);
                 var before = remuxDb.GetStreams(rowId);
-                var segments = _mediaSegmentManager.HasSegments(rowId)
-                    ? Task.CompletedTask
-                    : _mediaSegmentManager.RunSegmentPluginProviders(
-                        row,
-                        libraryOptions,
-                        false,
-                        CancellationToken.None
-                    );
-                await Task.WhenAll(ProbeStreamAsync(row, row.Path, CancellationToken.None), segments)
+                await ProbeStreamAsync(row, row.Path, CancellationToken.None)
                     .ConfigureAwait(false);
 
                 // As a writer of the movie's rows: a sync meanwhile may have deleted this one, and
