@@ -547,10 +547,13 @@ public sealed class MediaSourceManagerDecorator(
         // RemuxDB's media info plays as it is and is probed afterwards, unless it lacks what the
         // playback decides on.
         var fromRemuxDb = owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb;
-        if (
+        var needsProbe =
             NeedsProbe(selected)
-            || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams))
-        )
+            || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams));
+
+        // A pre-probe that starts while this playback probes sees it and stays out.
+        using var claim = needsProbe && !preProbe ? ClaimProbe(PreProbeKey(selected)) : null;
+        if (needsProbe)
         {
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
             var remuxDbStreams = fromRemuxDb ? remuxDb.GetStreams(owner.Id) : null;
@@ -831,6 +834,38 @@ public sealed class MediaSourceManagerDecorator(
     // stream has the movie's id, whichever row that is at the moment.
     private static string PreProbeKey(MediaSourceInfo source) => source.ETag ?? source.Id;
 
+    private IDisposable? ClaimProbe(string key)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return _preProbing.TryAdd(key, done.Task) ? new ProbeClaim(this, key, done) : null;
+    }
+
+    private sealed class ProbeClaim(
+        MediaSourceManagerDecorator owner,
+        string key,
+        TaskCompletionSource done
+    ) : IDisposable
+    {
+        public void Dispose()
+        {
+            owner._preProbing.TryRemove(key, out _);
+            done.TrySetResult();
+        }
+    }
+
+    /// <summary>How long a page or version stays open before it is pre-probed.</summary>
+    private static readonly TimeSpan PreProbeDelay = TimeSpan.FromSeconds(1);
+
+    // Pre-probes running at once. A playback is never held up by this: it probes on its own.
+    private readonly SemaphoreSlim _preProbeSlots = new(2);
+
+    // The pre-probe waiting out its delay, per user and title: the next version of the title
+    // replaces it, so flicking through the versions probes the one that is stopped on.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        CancellationTokenSource
+    > _pendingPreProbe = new();
+
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task> _preProbing =
         new();
 
@@ -848,9 +883,39 @@ public sealed class MediaSourceManagerDecorator(
 
         // Not in the request's context: the request is over when this runs, and the source list it
         // builds must not see it as a page visit again.
+        var pending = new CancellationTokenSource();
+        var pendingKey = $"{user.Id}:{(item as Video)?.PrimaryVersionId ?? item.Id}";
+        _pendingPreProbe.AddOrUpdate(
+            pendingKey,
+            pending,
+            (_, previous) =>
+            {
+                previous.Cancel();
+                return pending;
+            }
+        );
+
         using (ExecutionContext.SuppressFlow())
         {
-            _ = Task.Run(() => PreProbeAsync(item, source, user));
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(PreProbeDelay, pending.Token).ConfigureAwait(false);
+                    _pendingPreProbe.TryRemove(
+                        new KeyValuePair<string, CancellationTokenSource>(pendingKey, pending)
+                    );
+                    await PreProbeAsync(item, source, user).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Another page or version took its place.
+                }
+                finally
+                {
+                    pending.Dispose();
+                }
+            });
         }
     }
 
@@ -861,9 +926,16 @@ public sealed class MediaSourceManagerDecorator(
     private async Task PreProbeAsync(BaseItem item, MediaSourceInfo source, User user)
     {
         var key = PreProbeKey(source);
+
+        // Registered only once running: a playback waits for a pre-probe under way, not for one
+        // queued behind the others.
+        await _preProbeSlots.WaitAsync().ConfigureAwait(false);
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!_preProbing.TryAdd(key, done.Task))
+        {
+            _preProbeSlots.Release();
             return;
+        }
 
         try
         {
@@ -886,6 +958,7 @@ public sealed class MediaSourceManagerDecorator(
         {
             _preProbing.TryRemove(key, out _);
             done.TrySetResult();
+            _preProbeSlots.Release();
         }
     }
 
