@@ -1,12 +1,21 @@
 [
   {
     "category": "General",
-    "description": "Stream external media.\n",
+    "description": "Gelato brings AIOStreams (Stremio addons) into Jellyfin. Search results and imported catalogs show up as regular movies and series, and streams are resolved when you press play and proxied through Jellyfin.\n",
     "guid": "94EA4E14-8163-4989-96FE-0A2094BC2D6A",
+    "imageUrl": "https://raw.githubusercontent.com/lostb1t/Gelato/main/banner.png",
     "name": "Gelato",
-    "overview": "Stream external media.",
+    "overview": "Stremio addons as Jellyfin library items: search, catalogs and on-demand streams through AIOStreams.",
     "owner": "lstb1t",
     "versions": [
+      {
+        "changelog": "## [0.26.21.0] - 2026-10-01\n\n### 🚀 Features\n\n- Fill in stream media info from remuxdb (#251)\n\n### 🐛 Bug Fixes\n\n- Scheduled tasks failing when started from the dashboard (#247)\n- Seed gelato folders once when lookups race (#248)\n\n### ⚙️ Miscellaneous Tasks\n\n- Various housekeeping tasks (#246)\n- Remove p2p torrent streaming (#250)\n",
+        "checksum": "07b268517dd047cbacdb0e4e594d1ff5",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.21.0/gelato_0.26.21.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-01T07:21:34Z",
+        "version": "0.26.21.0"
+      },
       {
         "changelog": "## [0.26.20.0] - 2026-09-22\n\n### 🚀 Features\n\n- Scope library search correctly (#243)\n- Aiometadata v3 support (#244)\n\n### 🐛 Bug Fixes\n\n- Support canonical ids for breadcrumbs (#241)\n- Dedupe search results (#242)\n\n### ⚡ Performance\n\n- Speed up search results (#245)\n",
         "checksum": "4b33bd09d2fc18759e2236c444a9335d",
@@ -238,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-11T13:46:24Z",
         "version": "0.26.13.2"
-      },
-      {
-        "changelog": "## [0.26.13.1] - 2026-04-11\n\n### 🐛 Bug Fixes\n\n- Disable local tree sync by default\n",
-        "checksum": "ca3d9f8087a2512d2cb03291a8795c60",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.1/gelato_0.26.13.1.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-11T12:46:27Z",
-        "version": "0.26.13.1"
       }
     ]
   }
