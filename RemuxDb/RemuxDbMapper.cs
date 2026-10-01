@@ -201,6 +201,8 @@ public static class RemuxDbMapper
             nextIdx = track.Idx + 1;
         }
 
+        ApplyVideoBitrateFallback(streams, version.Bitrate);
+
         // What Jellyfin's probe drops for the library's embedded subtitle setting.
         if (embeddedSubtitles is EmbeddedSubtitleOptions.AllowText or EmbeddedSubtitleOptions.AllowNone)
             RemoveSubtitles(streams, text: false);
@@ -223,6 +225,47 @@ public static class RemuxDbMapper
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// A single video track without a bitrate gets the file's bitrate less the other tracks',
+    /// when every audio track's is known. As Jellyfin's probe and Remux estimate it.
+    /// </summary>
+    private static void ApplyVideoBitrateFallback(List<MediaStream> streams, long? totalBitrate)
+    {
+        if (totalBitrate is not > 0)
+            return;
+
+        var videos = streams.Where(s => s.Type == MediaStreamType.Video).ToList();
+        if (videos.Count != 1 || videos[0].BitRate is > 0)
+            return;
+
+        var others = streams.Where(s => s.Type != MediaStreamType.Video).ToList();
+        if (others.Any(s => s.Type == MediaStreamType.Audio && s.BitRate is not > 0))
+            return;
+
+        var estimated = totalBitrate.Value - others.Sum(s => (long)(s.BitRate ?? 0));
+        if (estimated is > 0 and <= int.MaxValue)
+            videos[0].BitRate = (int)estimated;
+    }
+
+    /// <summary>
+    /// Whether RemuxDB's tracks lack what playback decides on, so the file is probed before it
+    /// plays instead of afterwards. Without a video bitrate Jellyfin encodes a transcode at the
+    /// client's maximum, which hardware encoders reject; H.264 device profile rules need the
+    /// reference frames (the one case Remux probes for).
+    /// </summary>
+    public static bool LacksPlaybackInfo(IReadOnlyList<MediaStream>? streams)
+    {
+        var video = streams?.FirstOrDefault(s => s.Type == MediaStreamType.Video);
+        if (video is null)
+            return true;
+
+        return video.BitRate is not > 0
+            || (
+                string.Equals(video.Codec, "h264", StringComparison.OrdinalIgnoreCase)
+                && video.RefFrames is not > 0
+            );
     }
 
     private static MediaStream ToMediaStream(RemuxDbTrack t, int index)
