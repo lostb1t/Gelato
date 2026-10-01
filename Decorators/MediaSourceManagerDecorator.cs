@@ -134,12 +134,7 @@ public sealed class MediaSourceManagerDecorator(
         var syncItemId = video?.PrimaryVersionId ?? item.Id;
         // With the creation date: an item deleted and inserted again gets the same id (its path
         // is hashed), but its rows went with it, so it must sync anew within StreamTTL.
-        var cacheKey = $"{syncItemId}:{item.DateCreated.Ticks}";
-
-        if (userId != Guid.Empty)
-        {
-            cacheKey = $"{userId.ToString()}:{cacheKey}";
-        }
+        var cacheKey = SyncCacheKey(item, userId);
 
         if (!allowSync)
         {
@@ -338,7 +333,24 @@ public sealed class MediaSourceManagerDecorator(
         }
         sources[0].Type = MediaSourceType.Default;
 
+        // A page opened or another version picked: the web client loads the version's row as an
+        // item when the dropdown changes, so this is also the pick of a version.
+        if (
+            user is not null
+            && _http.ReadRequest(ctx => ctx.GetActionName() is "GetItem" or "GetItemLegacy", false)
+        )
+        {
+            SchedulePreProbe(item, sources[0], user);
+        }
+
         return sources;
+    }
+
+    private static string SyncCacheKey(BaseItem item, Guid userId)
+    {
+        var syncItemId = (item as Video)?.PrimaryVersionId ?? item.Id;
+        var key = $"{syncItemId}:{item.DateCreated.Ticks}";
+        return userId != Guid.Empty ? $"{userId}:{key}" : key;
     }
 
     /// <summary>
@@ -424,11 +436,36 @@ public sealed class MediaSourceManagerDecorator(
     public IReadOnlyList<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query) =>
         _inner.GetMediaAttachments(query);
 
-    public async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSources(
+    public Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSources(
         BaseItem item,
         User user,
         bool allowMediaProbe,
         bool enablePathSubstitution,
+        CancellationToken ct
+    ) =>
+        GetPlaybackMediaSourcesCore(
+            item,
+            user,
+            allowMediaProbe,
+            enablePathSubstitution,
+            null,
+            false,
+            ct
+        );
+
+    /// <param name="requestedSourceId">The source to prepare; null reads it from the request.</param>
+    /// <param name="preProbe">
+    /// Prepares the source ahead of playback: nothing is stubbed, and a row on RemuxDB's media
+    /// info gets its segment lookup but not the delayed probe, which would resolve a stream
+    /// nobody may play.
+    /// </param>
+    private async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSourcesCore(
+        BaseItem item,
+        User user,
+        bool allowMediaProbe,
+        bool enablePathSubstitution,
+        string? requestedSourceId,
+        bool preProbe,
         CancellationToken ct
     )
     {
@@ -442,7 +479,7 @@ public sealed class MediaSourceManagerDecorator(
         var manager = _manager.Value;
         var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
 
-        var requestedSourceId = _http.ReadRequest(
+        requestedSourceId ??= _http.ReadRequest(
             ctx => ctx.Items.TryGetValue("MediaSourceId", out var idObj) ? idObj as string : null,
             null
         );
@@ -495,6 +532,18 @@ public sealed class MediaSourceManagerDecorator(
                 return sources;
         }
 
+        // A pre-probe of this source is under way: its result is what plays, not a second probe.
+        if (!preProbe && _preProbing.TryGetValue(PreProbeKey(selected), out var running))
+        {
+            await running.WaitAsync(ct).ConfigureAwait(false);
+            sources = GetStaticMediaSources(
+                owner.IsPrimaryVersion() ? owner : item,
+                enablePathSubstitution,
+                user
+            );
+            selected = SelectByIdOrFirst(sources, mediaSourceId) ?? selected;
+        }
+
         // RemuxDB's media info plays as it is and is probed afterwards, unless it lacks what the
         // playback decides on.
         var fromRemuxDb = owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb;
@@ -541,7 +590,8 @@ public sealed class MediaSourceManagerDecorator(
         else if (fromRemuxDb)
         {
             await EnsureSegmentsAsync(owner, ct).ConfigureAwait(false);
-            ProbeLater(owner.Id);
+            if (!preProbe)
+                ProbeLater(owner.Id);
         }
 
         if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
@@ -554,24 +604,12 @@ public sealed class MediaSourceManagerDecorator(
         // Stub path after probing is done so the real URL is never sent to clients.
         // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
         // Both playback info actions, not the POST alone: native clients use the GET.
-        if (_http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false))
+        if (!preProbe && _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false))
         {
             selected.Stub();
         }
 
         return [selected];
-
-        static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
-        {
-            if (!id.HasValue)
-                return list.FirstOrDefault();
-
-            var target = id.Value;
-
-            return list.FirstOrDefault(s =>
-                    !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
-                ) ?? list.FirstOrDefault();
-        }
 
         static bool NeedsProbe(MediaSourceInfo s) =>
             (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
@@ -583,6 +621,18 @@ public sealed class MediaSourceManagerDecorator(
             (Guid.TryParse(s.ETag, out var etag) ? libraryManager.GetItemById(etag) : null)
             ?? (Guid.TryParse(s.Id, out var id) ? libraryManager.GetItemById(id) : null)
             ?? fallback;
+    }
+
+    private static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
+    {
+        if (!id.HasValue)
+            return list.FirstOrDefault();
+
+        var target = id.Value;
+
+        return list.FirstOrDefault(s =>
+                !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
+            ) ?? list.FirstOrDefault();
     }
 
     public Task<MediaSourceInfo> GetMediaSource(
@@ -774,6 +824,106 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         return streams;
+    }
+
+    // Sources being pre-probed, by the row they play: a playback of the same source waits for the
+    // result instead of probing it a second time. The source's id is not the key: a movie's first
+    // stream has the movie's id, whichever row that is at the moment.
+    private static string PreProbeKey(MediaSourceInfo source) => source.ETag ?? source.Id;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task> _preProbing =
+        new();
+
+    private void SchedulePreProbe(BaseItem item, MediaSourceInfo source, User user)
+    {
+        if (
+            !GelatoPlugin.Instance!.GetConfig(user.Id).PreProbe
+            || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
+            || !item.IsGelatoPlaybackItem()
+            || _preProbing.ContainsKey(PreProbeKey(source))
+        )
+        {
+            return;
+        }
+
+        // Not in the request's context: the request is over when this runs, and the source list it
+        // builds must not see it as a page visit again.
+        using (ExecutionContext.SuppressFlow())
+        {
+            _ = Task.Run(() => PreProbeAsync(item, source, user));
+        }
+    }
+
+    /// <summary>
+    /// Prepares the source for playback as a playback request would: probes it when it needs one
+    /// and looks its segments up. Does nothing for a source already being prepared.
+    /// </summary>
+    private async Task PreProbeAsync(BaseItem item, MediaSourceInfo source, User user)
+    {
+        var key = PreProbeKey(source);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_preProbing.TryAdd(key, done.Task))
+            return;
+
+        try
+        {
+            await GetPlaybackMediaSourcesCore(
+                    item,
+                    user,
+                    true,
+                    false,
+                    source.Id,
+                    true,
+                    CancellationToken.None
+                )
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Pre-probe failed for {Id} source {Source}", item.Id, source.Id);
+        }
+        finally
+        {
+            _preProbing.TryRemove(key, out _);
+            done.TrySetResult();
+        }
+    }
+
+    /// <summary>
+    /// Pre-probes the source an episode plays by default, syncing its streams first when they
+    /// are not: the next episode of one that is nearing its end.
+    /// </summary>
+    public async Task PreProbeDefaultAsync(BaseItem item, User user)
+    {
+        if (
+            !GelatoPlugin.Instance!.GetConfig(user.Id).PreProbe
+            || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
+            || !item.IsGelatoPlaybackItem()
+        )
+        {
+            return;
+        }
+
+        var manager = _manager.Value;
+        var syncKey = SyncCacheKey(item, user.Id);
+        var syncItemId = (item as Video)?.PrimaryVersionId ?? item.Id;
+        if (!manager.HasStreamSync(syncKey, syncItemId))
+        {
+            await _lock
+                .RunSingleFlightAsync(
+                    item.Id,
+                    async ct =>
+                    {
+                        if (await manager.SyncStreams(item, user.Id, ct).ConfigureAwait(false) > 0)
+                            manager.SetStreamSync(syncKey);
+                    }
+                )
+                .ConfigureAwait(false);
+        }
+
+        var sources = GetStaticMediaSources(item, false, user);
+        if (sources.Count > 0)
+            await PreProbeAsync(item, sources[0], user).ConfigureAwait(false);
     }
 
     /// <summary>How long playback waits for the segment providers of a row that plays on RemuxDB's media info.</summary>
