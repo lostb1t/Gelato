@@ -1,3 +1,4 @@
+using Gelato.Services;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
@@ -19,8 +20,11 @@ namespace Gelato.Decorators;
 /// and never showed as watched. The counts are taken as Jellyfin computes them, minus the stream
 /// rows below each folder.
 /// </remarks>
-public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepository repo)
-    : IItemCountService
+public sealed class ItemCountServiceDecorator(
+    IItemCountService inner,
+    IItemRepository repo,
+    ItemIdLookup lookup
+) : IItemCountService
 {
     public int GetCount(InternalItemsQuery filter) => inner.GetCount(filter);
 
@@ -151,9 +155,13 @@ public sealed class ItemCountServiceDecorator(IItemCountService inner, IItemRepo
         if (ancestorIds.Count == 0)
             return [];
 
-        return repo.GetItemList(StreamRowsQuery(ancestorIds, user))
-            .Where(i => i.HasStreamTag())
-            .ToList();
+        var ids = lookup.StreamRowsUnder(ancestorIds);
+        if (ids.Length == 0)
+            return [];
+
+        var query = StreamRowsQuery(ancestorIds, user);
+        query.ItemIds = ids;
+        return repo.GetItemList(query).Where(i => i.HasStreamTag()).ToList();
     }
 
     private HashSet<Guid> GetPlayedIds(IReadOnlyList<BaseItem> streams, User? user)

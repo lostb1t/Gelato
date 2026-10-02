@@ -149,7 +149,22 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
     public Guid[] GetUnreleasedIds(int bufferDays) =>
         GetUnreleasedGelatoIds(DateTime.Today.AddDays(-bufferDays));
 
-    private Guid[] GetUnreleasedGelatoIds(DateTime cutoff) =>
+    // One request lists through the repository several times (a search: four times), and the set
+    // cannot change within it, so it is computed once per request.
+    private Guid[] GetUnreleasedGelatoIds(DateTime cutoff)
+    {
+        var items = _http.HttpContext?.Items;
+        var key = "gelato:unreleased:" + cutoff.Ticks;
+        if (items?[key] is Guid[] cached)
+            return cached;
+
+        var ids = QueryUnreleasedGelatoIds(cutoff);
+        if (items is not null)
+            items[key] = ids;
+        return ids;
+    }
+
+    private Guid[] QueryUnreleasedGelatoIds(DateTime cutoff) =>
         inner
             .GetItemIdsList(
                 new InternalItemsQuery
