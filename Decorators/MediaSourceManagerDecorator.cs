@@ -569,19 +569,23 @@ public sealed class MediaSourceManagerDecorator(
 
             await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
 
-            if (
-                owner is Video probedRow
-                && probedRow.HasStreamTag()
-                && !remuxDb.OnProbed(probedRow, libraryOptions)
-                && remuxDbStreams is not null
-            )
-            {
-                // A dead link: keep RemuxDB's, and try again on the next playback.
-                remuxDb.RestoreStreams(owner.Id, remuxDbStreams);
-            }
-
-            await owner
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+            await SaveProbedAsync(
+                    owner,
+                    () =>
+                    {
+                        if (
+                            owner is Video probedRow
+                            && probedRow.HasStreamTag()
+                            && !remuxDb.OnProbed(probedRow, libraryOptions)
+                            && remuxDbStreams is not null
+                        )
+                        {
+                            // A dead link: keep RemuxDB's, and try again on the next playback.
+                            remuxDb.RestoreStreams(owner.Id, remuxDbStreams);
+                        }
+                    },
+                    ct
+                )
                 .ConfigureAwait(false);
 
             var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
@@ -600,8 +604,7 @@ public sealed class MediaSourceManagerDecorator(
         if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
         {
             item.RunTimeTicks = selected.RunTimeTicks;
-            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                .ConfigureAwait(false);
+            await SaveProbedAsync(item, null, ct).ConfigureAwait(false);
         }
 
         // Stub path after probing is done so the real URL is never sent to clients.
@@ -625,6 +628,29 @@ public sealed class MediaSourceManagerDecorator(
             ?? (Guid.TryParse(s.Id, out var id) ? libraryManager.GetItemById(id) : null)
             ?? fallback;
     }
+
+    /// <summary>
+    /// Saves an item after its probe, as a writer of its movie/episode's rows. Not when it was
+    /// deleted while the probe ran: saving it would bring it back.
+    /// </summary>
+    private Task SaveProbedAsync(BaseItem probed, Action? beforeSave, CancellationToken ct) =>
+        _manager.Value.RunExclusiveAsync(
+            (probed as Video)?.PrimaryVersionId ?? probed.Id,
+            async token =>
+            {
+                if (_libraryManager.GetItemById(probed.Id) is null)
+                {
+                    _log.LogDebug("Not saving the probe of {Id}: it was deleted", probed.Id);
+                    return;
+                }
+
+                beforeSave?.Invoke();
+                await probed
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, token)
+                    .ConfigureAwait(false);
+            },
+            ct
+        );
 
     private static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
     {
@@ -939,8 +965,13 @@ public sealed class MediaSourceManagerDecorator(
 
         try
         {
+            // Deleted while this waited: the instance at hand would be probed and saved back. An
+            // item inserted again since has the same id, so the library's instance is the one.
+            if (_libraryManager.GetItemById(item.Id) is not { } current)
+                return;
+
             await GetPlaybackMediaSourcesCore(
-                    item,
+                    current,
                     user,
                     true,
                     false,
