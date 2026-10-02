@@ -185,6 +185,14 @@
               <div class="fieldDescription">Cache duration for external stream URLs.</div>
             </div>
 
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkPreProbe" />
+                <span>Probe streams before playback</span>
+              </label>
+              <div class="fieldDescription">Probes a stream when you open its page or pick another version, and the next episode while one is ending, so playback starts without waiting for the probe.</div>
+            </div>
+
             <h3 class="sectionTitle">RemuxDB</h3>
             <div class="checkboxContainer checkboxContainer-withDescription">
               <label>
@@ -316,6 +324,7 @@
         const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
         const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
         const chkLazyImages = page.querySelector('#chkLazyImages');
+        const chkPreProbe = page.querySelector('#chkPreProbe');
         const chkRemuxDbEnabled = page.querySelector('#chkRemuxDbEnabled');
         const chkRemuxDbContribute = page.querySelector('#chkRemuxDbContribute');
 
@@ -612,6 +621,7 @@
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
             if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
             if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? false;
+            if (chkPreProbe) chkPreProbe.checked = cfg.PreProbe ?? true;
             if (chkRemuxDbEnabled) chkRemuxDbEnabled.checked = cfg.RemuxDbEnabled ?? true;
             if (chkRemuxDbContribute) chkRemuxDbContribute.checked = cfg.RemuxDbContribute ?? true;
 
@@ -649,6 +659,7 @@
             cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
             cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
             cfg.LazyImages = chkLazyImages.checked;
+            cfg.PreProbe = chkPreProbe.checked;
             cfg.RemuxDbEnabled = chkRemuxDbEnabled.checked;
             cfg.RemuxDbContribute = chkRemuxDbContribute.checked;
 

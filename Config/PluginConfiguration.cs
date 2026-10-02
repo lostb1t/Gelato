@@ -35,6 +35,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool RemuxDbEnabled { get; set; } = true;
 
     /// <summary>
+    /// Probe a stream before it is played: when its item is opened or another version of it is
+    /// picked, and the next episode while an episode nears its end. Playback of a stream
+    /// that needs a probe then starts without waiting for it.
+    /// </summary>
+    public bool PreProbe { get; set; } = true;
+
+    /// <summary>
     /// Submit a stream's probe to RemuxDB when it played a file RemuxDB did not know. Anonymous,
     /// and only for streams whose torrent is known.
     /// </summary>
@@ -163,6 +170,7 @@ public class UserConfig
             CreateCollections = baseConfig.CreateCollections,
             MaxCollectionItems = baseConfig.MaxCollectionItems,
             RemuxDbEnabled = baseConfig.RemuxDbEnabled,
+            PreProbe = baseConfig.PreProbe,
             RemuxDbContribute = baseConfig.RemuxDbContribute,
             RemuxDbUrl = baseConfig.RemuxDbUrl,
             RemuxDbClientId = baseConfig.RemuxDbClientId,
