@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediaBrowser.Controller.Entities;
@@ -426,13 +427,19 @@ public class GelatoStremioProvider(
         if (string.IsNullOrWhiteSpace(tmdbId))
         {
             // An addon that reports no TMDB id of its own leaves only the imdb id the catalog
-            // keys on, so ask TMDB which movie that is.
+            // keys on. TMDB's movie details take that id, so one request answers both which
+            // movie it is and its release dates; /find and then /release_dates took two round
+            // trips, 0.3 s each, on every movie opened from search.
             var imdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Imdb));
             if (string.IsNullOrWhiteSpace(imdbId))
                 return;
 
-            tmdbId = await ResolveTmdbIdAsync(imdbId, apiKey, cancellationToken)
-                .ConfigureAwait(false);
+            if (!_tmdbIdByImdbId.TryGetValue(imdbId, out tmdbId))
+            {
+                await EnrichByImdbIdAsync(meta, imdbId, apiKey, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
             if (string.IsNullOrWhiteSpace(tmdbId))
                 return;
         }
@@ -477,43 +484,42 @@ public class GelatoStremioProvider(
     }
 
     /// <summary>
-    /// The TMDB movie id behind an IMDb id, through TMDB's find endpoint, or null when it cannot be
-    /// resolved. Answers are memoised for the process, negatives included, so a library full of
-    /// movies without a digital release date does not ask for the same id over and over.
+    /// Sets the release dates of the movie TMDB knows under <paramref name="imdbId"/>, and
+    /// memoises its TMDB id. A movie TMDB does not know (404) is memoised as null, so a library
+    /// full of movies without a digital release date does not ask for the same id over and over.
     /// </summary>
-    private async Task<string?> ResolveTmdbIdAsync(
+    private async Task EnrichByImdbIdAsync(
+        StremioMeta meta,
         string imdbId,
         string apiKey,
         CancellationToken cancellationToken
     )
     {
-        if (_tmdbIdByImdbId.TryGetValue(imdbId, out var cached))
-            return cached;
-
-        string? resolved = null;
         try
         {
             using var client = http.CreateClient(nameof(GelatoStremioProvider));
             client.Timeout = TimeSpan.FromSeconds(10);
             var url =
-                $"https://api.themoviedb.org/3/find/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&external_source=imdb_id";
+                $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&append_to_response=release_dates";
             var response = await client
                 .GetStringAsync(url, cancellationToken)
                 .ConfigureAwait(false);
-            var id = JsonSerializer
-                .Deserialize<TmdbFindResponse>(response, JsonOpts)
-                ?.MovieResults?.FirstOrDefault()
-                ?.Id;
-            if (id is { } value)
-                resolved = value.ToString(CultureInfo.InvariantCulture);
+            var movie = JsonSerializer.Deserialize<TmdbMovieReleaseDates>(response, JsonOpts);
+            _tmdbIdByImdbId[imdbId] = movie?.Id?.ToString(CultureInfo.InvariantCulture);
+            if (movie?.ReleaseDates is { } container)
+            {
+                meta.App_Extras ??= new StremioAppExtras();
+                meta.App_Extras.ReleaseDates = container;
+            }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            _tmdbIdByImdbId[imdbId] = null;
         }
         catch (Exception ex)
         {
-            log.LogDebug(ex, "ResolveTmdbId: failed for {ImdbId}", imdbId);
+            log.LogDebug(ex, "EnrichDigitalReleaseDate: failed for {ImdbId}", imdbId);
         }
-
-        _tmdbIdByImdbId[imdbId] = resolved;
-        return resolved;
     }
 
     public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
@@ -1168,15 +1174,12 @@ public sealed class SeasonPostersConverter : JsonConverter<StremioSeasonPosters?
     }
 }
 
-public class TmdbFindResponse
-{
-    [JsonPropertyName("movie_results")]
-    public List<TmdbFindResult>? MovieResults { get; set; }
-}
-
-public class TmdbFindResult
+public class TmdbMovieReleaseDates
 {
     public int? Id { get; set; }
+
+    [JsonPropertyName("release_dates")]
+    public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
 }
 
 public class TmdbReleaseDatesContainer
