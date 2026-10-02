@@ -638,8 +638,10 @@ public sealed class MediaSourceManagerDecorator(
             (probed as Video)?.PrimaryVersionId ?? probed.Id,
             async token =>
             {
+                // Asked of the database as well: an episode deleted with its series stays in the
+                // library's cache.
                 var current = _libraryManager.GetItemById(probed.Id);
-                if (current is null)
+                if (current is null || _libraryManager.RetrieveItem(probed.Id) is null)
                 {
                     _log.LogDebug("Not saving the probe of {Id}: it was deleted", probed.Id);
                     return;
