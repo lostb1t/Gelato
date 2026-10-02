@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.22.0] - 2026-10-02\n\n### 🚀 Features\n\n- Probe streams before playback (#257)\n\n### 🐛 Bug Fixes\n\n- Fetch intro segments before the first play of a remuxdb stream (#256)\n\n### ⚡ Performance\n\n- Fetch a movie's tmdb id and release dates in one request (#259)\n- Find stream rows and stremio ids through indexes (#258)\n",
+        "checksum": "d9410d90eb42eaebac87a2b7af78fc14",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.22.0/gelato_0.26.22.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-02T23:45:46Z",
+        "version": "0.26.22.0"
+      },
+      {
         "changelog": "## [0.26.21.1] - 2026-10-01\n\n### 🐛 Bug Fixes\n\n- Probe remuxdb streams that lack a video bitrate before playback (#255)\n",
         "checksum": "e3afc472ea4a0b7e1c792b96a194642e",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.21.1/gelato_0.26.21.1.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-11T15:40:00Z",
         "version": "0.26.13.4"
-      },
-      {
-        "changelog": "## [0.26.13.3] - 2026-04-11\n\n### 🐛 Bug Fixes\n\n- Dti error when path empty\n- Dti error when path empty\n- Add status to provider\n",
-        "checksum": "",
-        "sourceUrl": "",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-11T15:28:40Z",
-        "version": "0.26.13.3"
       }
     ]
   }
