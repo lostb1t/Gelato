@@ -901,6 +901,7 @@ public sealed class MediaSourceManagerDecorator(
             !GelatoPlugin.Instance!.GetConfig(user.Id).PreProbe
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
             || !item.IsGelatoPlaybackItem()
+            || IsPlaceholder(source)
             || _preProbing.ContainsKey(PreProbeKey(source))
         )
         {
@@ -1026,9 +1027,19 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         var sources = GetStaticMediaSources(item, false, user);
-        if (sources.Count > 0)
+        if (sources.Count > 0 && !IsPlaceholder(sources[0]))
             await PreProbeAsync(item, sources[0], user).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// The movie/episode's own placeholder, listed when the user has no streams: there is nothing
+    /// to probe, and probing it would save the movie on every visit. Asked before the source
+    /// goes into a response, which stubs its path.
+    /// </summary>
+    private static bool IsPlaceholder(MediaSourceInfo source) =>
+        string.IsNullOrEmpty(source.Path)
+        || source.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
+        || source.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>How long playback waits for the segment providers of a row that plays on RemuxDB's media info.</summary>
     private static readonly TimeSpan SegmentWait = TimeSpan.FromSeconds(1.5);
