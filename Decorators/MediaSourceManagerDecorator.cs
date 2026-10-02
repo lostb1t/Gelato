@@ -882,6 +882,9 @@ public sealed class MediaSourceManagerDecorator(
     /// <summary>How long a page or version stays open before it is pre-probed.</summary>
     private static readonly TimeSpan PreProbeDelay = TimeSpan.FromSeconds(1);
 
+    /// <summary>How long a pre-probe may run. A probe takes 2 to 5 seconds.</summary>
+    private static readonly TimeSpan PreProbeTimeout = TimeSpan.FromSeconds(60);
+
     // Pre-probes running at once. A playback is never held up by this: it probes on its own.
     private readonly SemaphoreSlim _preProbeSlots = new(2);
 
@@ -971,6 +974,9 @@ public sealed class MediaSourceManagerDecorator(
             if (_libraryManager.GetItemById(item.Id) is not { } current)
                 return;
 
+            // A stream that takes the connection and never answers would hold its slot, and the
+            // playbacks waiting for it, for good.
+            using var timeout = new CancellationTokenSource(PreProbeTimeout);
             await GetPlaybackMediaSourcesCore(
                     current,
                     user,
@@ -978,7 +984,7 @@ public sealed class MediaSourceManagerDecorator(
                     false,
                     source.Id,
                     true,
-                    CancellationToken.None
+                    timeout.Token
                 )
                 .ConfigureAwait(false);
         }
