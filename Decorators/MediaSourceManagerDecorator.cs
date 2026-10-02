@@ -532,6 +532,21 @@ public sealed class MediaSourceManagerDecorator(
                 return sources;
         }
 
+        // Ahead of playback only the source that was asked for is prepared. When the title's rows
+        // changed since the page was opened (a split, a sync), the list falls back to another
+        // source or to the title's placeholder, and probing that would save the movie/episode
+        // in the middle of the change.
+        if (
+            preProbe
+            && (
+                IsPlaceholder(selected)
+                || !string.Equals(selected.Id, requestedSourceId, StringComparison.OrdinalIgnoreCase)
+            )
+        )
+        {
+            return sources;
+        }
+
         // A pre-probe of this source is under way: its result is what plays, not a second probe.
         if (!preProbe && _preProbing.TryGetValue(PreProbeKey(selected), out var running))
         {
