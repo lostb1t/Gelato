@@ -638,19 +638,56 @@ public sealed class MediaSourceManagerDecorator(
             (probed as Video)?.PrimaryVersionId ?? probed.Id,
             async token =>
             {
-                if (_libraryManager.GetItemById(probed.Id) is null)
+                var current = _libraryManager.GetItemById(probed.Id);
+                if (current is null)
                 {
                     _log.LogDebug("Not saving the probe of {Id}: it was deleted", probed.Id);
                     return;
                 }
 
+                // A sync that ran during the probe saved the item from a copy of its own and made
+                // that the library's instance. Saving the probed one as it is would undo the sync:
+                // the user it added to the row loses the version until the next sync.
+                var saved = probed;
+                if (!ReferenceEquals(current, probed))
+                {
+                    if (probed.HasStreamTag())
+                    {
+                        TakeSyncedData(current, probed);
+                    }
+                    else
+                    {
+                        // A movie/episode gets nothing but its runtime from a probe.
+                        current.RunTimeTicks ??= probed.RunTimeTicks;
+                        saved = current;
+                    }
+                }
+
                 beforeSave?.Invoke();
-                await probed
+                await saved
                     .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, token)
                     .ConfigureAwait(false);
             },
             ct
         );
+
+    /// <summary>
+    /// Puts what a sync writes on a stream row onto the instance that was probed: its users,
+    /// order, names and file (the Gelato data), its URL and its movie/episode. What the probe set
+    /// stays.
+    /// </summary>
+    private static void TakeSyncedData(BaseItem synced, BaseItem probed)
+    {
+        probed.ExternalId = synced.ExternalId;
+        probed.Path = synced.Path;
+        probed.ProviderIds = synced.ProviderIds;
+        probed.Tags = synced.Tags;
+        probed.LockedFields = synced.LockedFields;
+        probed.ParentId = synced.ParentId;
+        probed.DateLastRefreshed = synced.DateLastRefreshed;
+        if (synced is Video { PrimaryVersionId: { } primaryId } && probed is Video row)
+            row.SetPrimaryVersionId(primaryId);
+    }
 
     private static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
     {
