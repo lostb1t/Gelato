@@ -3,6 +3,7 @@ using System.Globalization;
 using Gelato.Config;
 using Gelato.Decorators;
 using Gelato.RemuxDb;
+using Gelato.Services;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
@@ -33,7 +34,8 @@ public sealed class GelatoManager(
     IApplicationPaths appPaths,
     IUserManager userManager,
     IUserDataManager userDataManager,
-    RemuxDbService remuxDb
+    RemuxDbService remuxDb,
+    ItemIdLookup idLookup
 )
 {
     public const string StreamTag = "gelato-stream";
@@ -1083,9 +1085,14 @@ public sealed class GelatoManager(
         if (primary.GetProviderId("Stremio") is not { Length: > 0 } stremioId)
             return false;
 
+        var ids = idLookup.WithProviderId("Stremio", stremioId);
+        if (ids.Length == 0)
+            return false;
+
         var owned = repo.GetItemList(
                 new InternalItemsQuery
                 {
+                    ItemIds = ids,
                     IncludeItemTypes = [primary.GetBaseItemKind()],
                     HasAnyProviderId = new Dictionary<string, string> { { "Stremio", stremioId } },
                     Tags = [StreamTag],
@@ -1116,11 +1123,15 @@ public sealed class GelatoManager(
             .Where(v => v.HasStreamTag())
             .ToList();
 
-        if (primary.GetProviderId("Stremio") is { Length: > 0 } stremioId)
+        if (
+            primary.GetProviderId("Stremio") is { Length: > 0 } stremioId
+            && idLookup.WithProviderId("Stremio", stremioId) is { Length: > 0 } ids
+        )
         {
             var unlinked = repo.GetItemList(
                     new InternalItemsQuery
                     {
+                        ItemIds = ids,
                         IncludeItemTypes = [primary.GetBaseItemKind()],
                         HasAnyProviderId = new Dictionary<string, string>
                         {
