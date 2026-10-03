@@ -20,6 +20,7 @@ using MediaBrowser.Model;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaSegments;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Providers;
@@ -42,8 +43,15 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         RegexOptions.Compiled | RegexOptions.IgnoreCase
     );
 
+    /// <summary>
+    /// How long an episode IntroDB had no intro for is not asked again. The providers run for
+    /// every stream row that plays, and for a row without segments on every playback.
+    /// </summary>
+    private static readonly TimeSpan NoIntroTtl = TimeSpan.FromHours(6);
+
     private readonly ILibraryManager _libraryManager;
     private readonly IntroDbClient _introDbClient;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<IntroDbSegmentProvider> _logger;
 
     /// <summary>
@@ -51,19 +59,23 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     /// </summary>
     /// <param name="libraryManager">Library manager.</param>
     /// <param name="introDbClient">IntroDB client.</param>
+    /// <param name="cache">Remembers the episodes IntroDB has no intro for.</param>
     /// <param name="logger">Logger.</param>
     public IntroDbSegmentProvider(
         ILibraryManager libraryManager,
         IntroDbClient introDbClient,
+        IMemoryCache cache,
         ILogger<IntroDbSegmentProvider> logger
     )
     {
         ArgumentNullException.ThrowIfNull(libraryManager);
         ArgumentNullException.ThrowIfNull(introDbClient);
+        ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(logger);
 
         _libraryManager = libraryManager;
         _introDbClient = introDbClient;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -106,6 +118,20 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
             return Array.Empty<MediaSegmentDto>();
         }
 
+        // Per episode: every stream row of it asks for the same intro.
+        var noIntroKey = $"gelato:introdb:none:{imdbId}:{seasonNumber}:{episodeNumber}";
+        if (_cache.TryGetValue(noIntroKey, out _))
+        {
+            _logger.LogDebug(
+                "IntroDB had no intro for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}) lately, not asking again.",
+                request.ItemId,
+                imdbId,
+                seasonNumber,
+                episodeNumber
+            );
+            return Array.Empty<MediaSegmentDto>();
+        }
+
         IntroDbIntroResult? result;
         try
         {
@@ -132,6 +158,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
 
         if (result is null)
         {
+            _cache.Set(noIntroKey, true, NoIntroTtl);
             // Also reached when IntroDB answered with an error, which the client logged already.
             _logger.LogInformation(
                 "No intro from IntroDB for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
