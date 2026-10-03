@@ -337,7 +337,10 @@ public sealed class MediaSourceManagerDecorator(
         // item when the dropdown changes, so this is also the pick of a version.
         if (
             user is not null
-            && _http.ReadRequest(ctx => ctx.GetActionName() is "GetItem" or "GetItemLegacy", false)
+            && _http.ReadRequest(
+                ctx => ctx.GetActionName() is "GetItem" or "GetItemLegacy" && RequestsMediaSources(ctx),
+                false
+            )
         )
         {
             SchedulePreProbe(item, sources[0], user);
@@ -345,6 +348,19 @@ public sealed class MediaSourceManagerDecorator(
 
         return sources;
     }
+
+    /// <summary>
+    /// Whether an item request wants the item's sources, as a page does: Jellyfin Web's details
+    /// page sends no Fields and gets every field. A script that asks for some fields of the item
+    /// (KefinTweaks' home sections ask for People) has not opened its page.
+    /// </summary>
+    private static bool RequestsMediaSources(HttpContext ctx) =>
+        !ctx.Request.Query.TryGetValue("fields", out var fields)
+        || fields.Any(value =>
+            value
+                ?.Split(',', StringSplitOptions.TrimEntries)
+                .Contains("MediaSources", StringComparer.OrdinalIgnoreCase) ?? false
+        );
 
     private static string SyncCacheKey(BaseItem item, Guid userId)
     {
