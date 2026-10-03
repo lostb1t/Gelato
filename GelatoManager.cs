@@ -1074,13 +1074,12 @@ public sealed class GelatoManager(
         }
 
         var isEpisode = video is Episode;
-        // A movie in a folder of its own, a catalog's or one a catalog had, keeps its rows next to
-        // it: Jellyfin hides a version only when it is in the same library as its primary.
-        var own = video.GetParent() as Folder;
+        // The rows go next to the movie or episode, whoever syncs them: Jellyfin hides a version
+        // only when it is in the same library as its primary. In the syncing user's own movie
+        // folder, as they used to go, the rows of a movie from another folder were listed and
+        // counted as movies of their own.
         var parent =
-            isEpisode || (own is not null && !IsDefaultFolder(own))
-                ? own
-                : TryGetMovieFolder(userId);
+            video.GetParent() as Folder ?? (isEpisode ? null : TryGetMovieFolder(userId));
         if (parent is null)
         {
             _log.LogWarning("SyncStreams: no parent, skipping");
