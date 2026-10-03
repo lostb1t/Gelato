@@ -92,6 +92,10 @@ public class SearchActionFilter(
             fields,
             ctx.HttpContext.RequestAborted
         );
+        // Opted in, the titles the library already has lead, each group in the addon's order.
+        if (cfg.SearchLibraryFirst)
+            dtos = dtos.OrderBy(d => !covered.Contains(d.Id)).ToList();
+
         var libraryItems = localItems.Where(i => !covered.Contains(i.Id)).ToArray();
         var paged = dtos.Concat(libraryItems).Skip(start).Take(limit).ToArray();
 

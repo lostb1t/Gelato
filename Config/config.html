@@ -107,6 +107,14 @@
               </label>
             </div>
 
+            <div class="checkboxContainer checkboxContainer-withDescription">
+              <label>
+                <input is="emby-checkbox" type="checkbox" id="chkSearchLibraryFirst" />
+                <span>List library items first in search results</span>
+              </label>
+              <div class="fieldDescription checkboxFieldDescription">Titles already in the library come before the addon's other results.</div>
+            </div>
+
             <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
               <label>
                 <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
@@ -319,6 +327,7 @@
         const chkExtendLocalSeriesTrees = page.querySelector('#chkExtendLocalSeriesTrees');
         const chkDisableSearch = page.querySelector('#chkDisableSearch');
         const chkFilterUnreleased = page.querySelector('#chkFilterUnreleased');
+        const chkSearchLibraryFirst = page.querySelector('#chkSearchLibraryFirst');
         const txtBufferDays = page.querySelector('#txtBufferDays');
         const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
         const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
@@ -616,6 +625,7 @@
             if (chkExtendLocalSeriesTrees) chkExtendLocalSeriesTrees.checked = cfg.ExtendLocalSeriesTrees ?? false;
             if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
             if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
+            if (chkSearchLibraryFirst) chkSearchLibraryFirst.checked = cfg.SearchLibraryFirst || false;
             if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 0;
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
@@ -653,6 +663,7 @@
 
             cfg.DisableSearch = chkDisableSearch.checked;
             cfg.FilterUnreleased = chkFilterUnreleased.checked;
+            cfg.SearchLibraryFirst = chkSearchLibraryFirst.checked;
             cfg.FilterUnreleasedBufferDays = txtBufferDays.value !== '' ? parseInt(txtBufferDays.value) : 0;
 
             cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
