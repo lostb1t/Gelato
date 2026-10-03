@@ -42,7 +42,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 3. Install and configure the plugin.
    **Note:** Only **AIOStreams** is supported.
 
-4. Add the configured base paths to the Jellyfin library of your choice. After adding them, start a library scan.
+4. Create a movies and a shows library in Jellyfin (they can be empty) and pick them as the default libraries in the Gelato settings. Gelato adds a folder of its own to each and starts a library scan.
    4.5 For shows, enable the "Gelato missing season/episode fetcher" and put it on top of the metadata downloaders.
 
 5. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
@@ -63,6 +63,7 @@ For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/
 - I suggest lowering the default timeout on your stremio addons in aiostreams (5 seconds for example)
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - Stream cache can be cleared by restarting the server
+- A catalog can import into a library of its own (the Library column under Catalogs), an Anime or Documentaries library say. Create the library in Jellyfin (it can be empty), pick it and save: Gelato adds a folder of its own to it. On the next import new items go there, and items the catalog imported before move there, watch state included. An item two catalogs list stays with the one that took it first. A movies library only takes the catalog's movies and a shows library its series; the other kind goes to the default library. Setting the catalog back to Default moves its items back. A search inside such a library is answered by the addon too, and a result opened from it goes into that library.
 
 ### ❤️ Support the Project
 
