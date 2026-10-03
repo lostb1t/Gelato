@@ -452,14 +452,87 @@ public sealed class MediaSourceManagerDecorator(
     public IReadOnlyList<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query) =>
         _inner.GetMediaAttachments(query);
 
-    public Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSources(
+    /// <summary>How long a source prepared for streaming answers the requests that follow it.</summary>
+    private static readonly TimeSpan PreparedTtl = TimeSpan.FromSeconds(10);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (DateTime Until, Task<IReadOnlyList<MediaSourceInfo>> Sources)
+    > _prepared = new();
+
+    /// <remarks>
+    /// Starting a playback asks for its source several times within a second: PlaybackInfo, then
+    /// Jellyfin's HLS controller for the master playlist, the variant playlist and the first
+    /// segment (the pre-probe the player's reload of the item schedules stays out, see
+    /// <see cref="PreparedForPlaybackWindow"/>). Each preparation reads the item's versions and
+    /// streams and may look up segments, so the streaming requests share the first one's answer
+    /// for <see cref="PreparedTtl"/>. PlaybackInfo is prepared on its own: its answer is stubbed.
+    /// </remarks>
+    public async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSources(
         BaseItem item,
         User user,
         bool allowMediaProbe,
         bool enablePathSubstitution,
         CancellationToken ct
-    ) =>
-        GetPlaybackMediaSourcesCore(
+    )
+    {
+        if (
+            item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
+            || _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false)
+        )
+        {
+            return await GetPlaybackMediaSourcesCore(
+                    item,
+                    user,
+                    allowMediaProbe,
+                    enablePathSubstitution,
+                    null,
+                    false,
+                    ct
+                )
+                .ConfigureAwait(false);
+        }
+
+        var sourceId = _http.ReadRequest(
+            ctx => ctx.Items.TryGetValue("MediaSourceId", out var idObj) ? idObj as string : null,
+            null
+        );
+        var key = string.Join(
+            ':',
+            item.Id.ToString("N", CultureInfo.InvariantCulture),
+            UserKey(user),
+            sourceId?.ToLowerInvariant(),
+            allowMediaProbe,
+            enablePathSubstitution
+        );
+
+        var now = DateTime.UtcNow;
+        if (_prepared.TryGetValue(key, out var prepared) && prepared.Until > now)
+        {
+            try
+            {
+                var sources = await prepared.Sources.WaitAsync(ct).ConfigureAwait(false);
+                _log.LogDebug(
+                    "GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}: prepared {Ago} ms ago",
+                    item.Id,
+                    sourceId,
+                    (int)(now - prepared.Until + PreparedTtl).TotalMilliseconds
+                );
+                return sources;
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
+                // The request that prepared it failed or was cancelled: this one prepares it again.
+            }
+        }
+
+        foreach (var (k, entry) in _prepared)
+        {
+            if (entry.Until <= now)
+                _prepared.TryRemove(k, out _);
+        }
+
+        var task = GetPlaybackMediaSourcesCore(
             item,
             user,
             allowMediaProbe,
@@ -468,6 +541,13 @@ public sealed class MediaSourceManagerDecorator(
             false,
             ct
         );
+        _prepared[key] = (now + PreparedTtl, task);
+        return await task.ConfigureAwait(false);
+    }
+
+    // Jellyfin's streaming requests pass no user, the declared type notwithstanding.
+    private static string? UserKey(User? user) =>
+        user?.Id.ToString("N", CultureInfo.InvariantCulture);
 
     /// <param name="requestedSourceId">The source to prepare; null reads it from the request.</param>
     /// <param name="preProbe">
@@ -511,9 +591,11 @@ public sealed class MediaSourceManagerDecorator(
                 );
 
         _log.LogDebug(
-            "GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}",
+            "GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId} action={Action} preProbe={PreProbe}",
             item.Id,
-            mediaSourceId
+            mediaSourceId,
+            _http.ReadRequest(ctx => ctx.GetActionName(), null),
+            preProbe
         );
 
         var selected = SelectByIdOrFirst(sources, mediaSourceId);
@@ -647,6 +729,9 @@ public sealed class MediaSourceManagerDecorator(
             item.RunTimeTicks = selected.RunTimeTicks;
             await SaveProbedAsync(item, null, ct).ConfigureAwait(false);
         }
+
+        if (!preProbe)
+            MarkPreparedForPlayback(PreProbeKey(selected));
 
         // Stub path after probing is done so the real URL is never sent to clients.
         // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
@@ -988,6 +1073,33 @@ public sealed class MediaSourceManagerDecorator(
         return false;
     }
 
+    /// <summary>
+    /// How long a source a playback prepared is not pre-probed. The player loads the item again
+    /// when it starts, which schedules a pre-probe of the source it is already playing.
+    /// </summary>
+    private static readonly TimeSpan PreparedForPlaybackWindow = TimeSpan.FromMinutes(1);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        DateTime
+    > _preparedForPlayback = new();
+
+    private void MarkPreparedForPlayback(string key)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var (staleKey, preparedAt) in _preparedForPlayback)
+        {
+            if (now - preparedAt >= PreparedForPlaybackWindow)
+                _preparedForPlayback.TryRemove(staleKey, out _);
+        }
+
+        _preparedForPlayback[key] = now;
+    }
+
+    private bool PreparedForPlaybackRecently(string key) =>
+        _preparedForPlayback.TryGetValue(key, out var preparedAt)
+        && DateTime.UtcNow - preparedAt < PreparedForPlaybackWindow;
+
     private void MarkPreProbeFailed(string key)
     {
         // Sources nobody opens again are dropped once the map grows.
@@ -1075,7 +1187,7 @@ public sealed class MediaSourceManagerDecorator(
     private async Task PreProbeAsync(BaseItem item, MediaSourceInfo source, User user)
     {
         var key = PreProbeKey(source);
-        if (PreProbeFailedRecently(key))
+        if (PreProbeFailedRecently(key) || PreparedForPlaybackRecently(key))
             return;
 
         // Registered only once running: a playback waits for a pre-probe under way, not for one
