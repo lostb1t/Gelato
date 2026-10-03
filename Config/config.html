@@ -45,15 +45,24 @@
             </div>
 
             <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtMoviePath">Movies path:</label>
-              <input is="emby-input" type="text" id="txtMoviePath" class="emby-input" />
-              <div class="fieldDescription">Filesystem path for movie items. Use this path as library folder.</div>
+              <label class="inputLabel inputLabelUnfocused" for="txtBasePath">Gelato folder:</label>
+              <input is="emby-input" type="text" id="txtBasePath" class="emby-input" />
+              <div class="fieldDescription">Where Gelato creates the folders it adds to picked libraries. Empty uses
+                the default shown.</div>
             </div>
 
             <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtSeriesPath">Series path:</label>
-              <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
-              <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
+              <label class="inputLabel inputLabelUnfocused" for="selMovieLibrary">Default movies library:</label>
+              <select is="emby-select" id="selMovieLibrary" class="emby-select"></select>
+              <div class="fieldDescription">Where movies go unless a catalog picks its own library. Create the library
+                under Dashboard &gt; Libraries first.</div>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="selSeriesLibrary">Default series library:</label>
+              <select is="emby-select" id="selSeriesLibrary" class="emby-select"></select>
+              <div class="fieldDescription">Where series go unless a catalog picks its own library. Create the library
+                under Dashboard &gt; Libraries first.</div>
             </div>
             
 
@@ -235,13 +244,15 @@
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel" for="txtUserMoviePath">Movie path:</label>
-                <input is="emby-input" type="text" id="txtUserMoviePath" class="emby-input" />
+                <label class="inputLabel" for="selUserMovieLibrary">Default movies library:</label>
+                <select is="emby-select" id="selUserMovieLibrary" class="emby-select"></select>
+                <div class="fieldDescription">Where this user's movies go.</div>
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel" for="txtUserSeriesPath">Series path:</label>
-                <input is="emby-input" type="text" id="txtUserSeriesPath" class="emby-input" />
+                <label class="inputLabel" for="selUserSeriesLibrary">Default series library:</label>
+                <select is="emby-select" id="selUserSeriesLibrary" class="emby-select"></select>
+                <div class="fieldDescription">Where this user's series go.</div>
               </div>
 
               <div class="checkboxContainer">
@@ -311,8 +322,9 @@
 
         // Elements
         const txtUrl = page.querySelector('#txtUrl');
-        const txtMoviePath = page.querySelector('#txtMoviePath');
-        const txtSeriesPath = page.querySelector('#txtSeriesPath');
+        const txtBasePath = page.querySelector('#txtBasePath');
+        const selMovieLibrary = page.querySelector('#selMovieLibrary');
+        const selSeriesLibrary = page.querySelector('#selSeriesLibrary');
 
         const txtStreamTTL = page.querySelector('#txtStreamTTL');
         const chkEnableMixed = page.querySelector('#chkEnableMixed');
@@ -339,8 +351,8 @@
         const userOverrideContainer = page.querySelector('#userOverrideContainer');
         const userOverridesList = page.querySelector('#userOverridesList');
         const txtUserUrl = page.querySelector('#txtUserUrl');
-        const txtUserMoviePath = page.querySelector('#txtUserMoviePath');
-        const txtUserSeriesPath = page.querySelector('#txtUserSeriesPath');
+        const selUserMovieLibrary = page.querySelector('#selUserMovieLibrary');
+        const selUserSeriesLibrary = page.querySelector('#selUserSeriesLibrary');
         const chkUserDisableSearch = page.querySelector('#chkUserDisableSearch');
 
         let currentConfig = null;
@@ -360,6 +372,105 @@
           });
           return obj;
         }
+        // Libraries: a pick is a library, what gets saved is Gelato's folder in it. A select's value is
+        // 'lib:<id>', 'path:<path>' for a saved path no library holds, or '' for a catalog's default.
+        let libraries = [];
+        const LIBRARY_KINDS = { movie: ['movies', 'mixed'], series: ['tvshows', 'mixed'] };
+
+        // ApiClient rejects with the Response: its body holds the server's reason.
+        async function errorText(e) {
+          try {
+            if (e && typeof e.text === 'function') return (await e.text()) || e.statusText || ('HTTP ' + e.status);
+          } catch (_) { /* fall through */ }
+          return e?.responseText || e?.message || e?.statusText || String(e);
+        }
+
+        async function loadLibraries() {
+          try {
+            const base = txtBasePath.value.trim();
+            const res = await window.ApiClient.getJSON(
+              window.ApiClient.getUrl('gelato/libraries', base ? { basePath: base } : {})) || {};
+            libraries = res.Libraries || [];
+            txtBasePath.placeholder = res.DefaultBasePath || '';
+          } catch (e) {
+            console.error('Error loading libraries:', e);
+            libraries = [];
+          }
+        }
+
+        function libraryFits(lib, kind) {
+          const type = (lib.CollectionType || 'mixed').toLowerCase();
+          const kinds = LIBRARY_KINDS[kind] || [...LIBRARY_KINDS.movie, ...LIBRARY_KINDS.series];
+          return kinds.includes(type);
+        }
+
+        function libraryOf(path) {
+          return path ? libraries.find(l => (l.Locations || []).includes(path)) || null : null;
+        }
+
+        function fillLibrarySelect(select, kind, path, defaultLabel) {
+          select.innerHTML = '';
+          const add = (value, label) => {
+            const o = document.createElement('option');
+            o.value = value;
+            o.textContent = label;
+            select.appendChild(o);
+          };
+          const current = libraryOf(path);
+          if (defaultLabel) add('', defaultLabel);
+          if (path && !current) add('path:' + path, 'In no library: ' + path);
+          if (!defaultLabel && !path) add('', '-- Select library --');
+          libraries.filter(l => l === current || libraryFits(l, kind)).forEach(l => add('lib:' + l.Id, l.Name));
+          select.value = current ? 'lib:' + current.Id : (path ? 'path:' + path : '');
+          showLibraryWarning(select);
+          if (!select.dataset.warns) {
+            select.dataset.warns = '1';
+            select.addEventListener('change', () => showLibraryWarning(select));
+          }
+        }
+
+        // A saved folder no Jellyfin library holds: Gelato has nowhere to put the items. Said under
+        // the select; in the catalog table, where there is no room, as the tooltip.
+        const NO_LIBRARY_WARNING = 'This folder is in no Jellyfin library, so Gelato cannot list these items. ' +
+          'Pick a library and save: Gelato adds a folder of its own to it.';
+
+        function showLibraryWarning(select) {
+          const missing = select.value.startsWith('path:');
+          select.title = missing ? NO_LIBRARY_WARNING : '';
+          const container = select.closest('.inputContainer');
+          if (!container) return;
+          let note = container.querySelector('.libraryWarning');
+          if (!note) {
+            note = document.createElement('div');
+            note.className = 'fieldDescription libraryWarning';
+            note.style.color = '#ff9800';
+            select.insertAdjacentElement('afterend', note);
+          }
+          note.textContent = missing ? NO_LIBRARY_WARNING : '';
+          note.style.display = missing ? '' : 'none';
+        }
+
+        // The folder to save for a pick: the one saved already when the library holds it, the library's
+        // Gelato folder, or a new one Gelato creates and adds to the library.
+        async function resolveLibraryPick(value, path) {
+          if (!value) return '';
+          if (value.startsWith('path:')) return value.slice(5);
+          const lib = libraries.find(l => 'lib:' + l.Id === value);
+          if (!lib) return path || '';
+          if (path && (lib.Locations || []).includes(path)) return path;
+          if (lib.GelatoPath) return lib.GelatoPath;
+          const base = txtBasePath.value.trim();
+          const res = await window.ApiClient.ajax({
+            type: 'POST',
+            url: window.ApiClient.getUrl('gelato/libraries/' + encodeURIComponent(lib.Id) + '/folder',
+              base ? { basePath: base } : {}),
+            dataType: 'json'
+          });
+          lib.GelatoPath = res.Path;
+          lib.Locations = [...(lib.Locations || []), res.Path];
+          return res.Path;
+        }
+
         async function loadCatalogs() {
           try {
             // Show loading spinner in list
@@ -370,6 +481,7 @@
             const savedCatalogs = cfg.Catalogs || [];
 
             const response = await window.ApiClient.getJSON(window.ApiClient.getUrl('gelato/catalogs'));
+            if (libraries.length === 0) await loadLibraries();
             
             // Merge server catalogs with saved user preferences
             allCatalogs = (response || []).map(serverCat => {
@@ -384,6 +496,7 @@
                 Enabled: savedCat ? savedCat.Enabled : (serverCat.Enabled || false),
                 MaxItems: savedCat ? savedCat.MaxItems : (serverCat.MaxItems || 0),
                 CreateCollection: savedCat ? savedCat.CreateCollection : (serverCat.CreateCollection || false),
+                Path: savedCat ? (savedCat.Path || '') : (serverCat.Path || ''),
                 Url: serverCat.Url || ''
               };
             });
@@ -429,6 +542,7 @@
                 <th style="padding: 10px;">Enabled</th>
                 <th style="padding: 10px;">Collection</th>
                 <th style="padding: 10px;">Max items</th>
+                <th style="padding: 10px;">Library</th>
                 <th style="padding: 10px;">Actions</th>
             `;
           table.appendChild(header);
@@ -496,6 +610,32 @@
             maxCell.appendChild(maxInput);
             row.appendChild(maxCell);
 
+            // Library of its own
+            const pathCell = document.createElement('td');
+            pathCell.style.padding = '10px';
+            // The class alone themes it; emby-select's own setup would add a label to the cell.
+            const pathInput = document.createElement('select');
+            pathInput.classList.add('emby-select');
+            fillLibrarySelect(pathInput, cat.Type, cat.Path || '', 'Default');
+            // An unsaved pick is shown again, unless its library is gone meanwhile: then the saved
+            // folder stays, instead of an empty select that would save as "Default".
+            if (cat._library !== undefined) {
+              if ([...pathInput.options].some(o => o.value === cat._library)) pathInput.value = cat._library;
+              else delete cat._library;
+            }
+            pathInput.disabled = !cat.Enabled;
+            pathInput.style.minWidth = '200px';
+            pathInput.style.opacity = cat.Enabled ? '1' : '0.45';
+            pathInput.style.padding = '4px';
+            pathInput.dataset.catalogId = cat.Id;
+            pathInput.dataset.catalogType = cat.Type;
+            pathInput.dataset.field = 'Path';
+            // Kept on the catalog right away: filtering the table renders it anew.
+            pathInput.addEventListener('change', () => { cat._library = pathInput.value; });
+
+            pathCell.appendChild(pathInput);
+            row.appendChild(pathCell);
+
             // Actions
             const actionCell = document.createElement('td');
             actionCell.style.padding = '10px';
@@ -519,6 +659,8 @@
               const on = enabledCheck.checked;
               maxInput.disabled = !on;
               maxInput.style.opacity = on ? '1' : '0.45';
+              pathInput.disabled = !on;
+              pathInput.style.opacity = on ? '1' : '0.45';
               collCheck.disabled = !on;
               collCheck.style.opacity = on ? '1' : '0.45';
               importBtn.disabled = !on;
@@ -557,6 +699,7 @@
             const enabledCheck = row.querySelector('input[data-field="Enabled"]');
             const collCheck = row.querySelector('input[data-field="CreateCollection"]');
             const maxInput = row.querySelector('input[data-field="MaxItems"]');
+            const pathInput = row.querySelector('select[data-field="Path"]');
             if (!enabledCheck || !collCheck || !maxInput) return;
 
             const catId = enabledCheck.dataset.catalogId;
@@ -567,6 +710,7 @@
             cat.Enabled = enabledCheck.checked;
             cat.CreateCollection = collCheck.checked;
             cat.MaxItems = parseInt(maxInput.value) || 0;
+            if (pathInput) cat._library = pathInput.value;
           });
         }
 
@@ -609,8 +753,10 @@
             currentConfig = cfg;
             // Populate fields
             if (txtUrl) txtUrl.value = cfg.Url || "";
-            if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
-            if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
+            if (txtBasePath) txtBasePath.value = cfg.BasePath || "";
+            await loadLibraries();
+            fillLibrarySelect(selMovieLibrary, 'movie', cfg.MoviePath || '');
+            fillLibrarySelect(selSeriesLibrary, 'series', cfg.SeriesPath || '');
             if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
             if (chkExtendLocalSeriesTrees) chkExtendLocalSeriesTrees.checked = cfg.ExtendLocalSeriesTrees ?? false;
@@ -642,8 +788,9 @@
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
             cfg.Url = txtUrl.value.trim();
-            cfg.MoviePath = txtMoviePath.value.trim();
-            cfg.SeriesPath = txtSeriesPath.value.trim();
+            cfg.BasePath = txtBasePath.value.trim();
+            cfg.MoviePath = await resolveLibraryPick(selMovieLibrary.value, cfg.MoviePath);
+            cfg.SeriesPath = await resolveLibraryPick(selSeriesLibrary.value, cfg.SeriesPath);
 
             
             // Stream TTL
@@ -666,7 +813,16 @@
             // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
             if (allCatalogs.length > 0) {
               collectCatalogStatesFromDOM();
-              cfg.Catalogs = allCatalogs;
+              for (const cat of allCatalogs) {
+                if (cat._library !== undefined) {
+                  cat.Path = await resolveLibraryPick(cat._library, cat.Path);
+                  delete cat._library;
+                }
+              }
+              // The list holds what the addon has now; a catalog it dropped keeps its settings.
+              const unlisted = (cfg.Catalogs || []).filter(c =>
+                !allCatalogs.some(a => a.Id === c.Id && a.Type === c.Type));
+              cfg.Catalogs = allCatalogs.concat(unlisted);
             } else {
               // If catalogs haven't been loaded, keep the existing catalog configuration
               // This prevents overwriting catalog settings when saving from other tabs
@@ -692,8 +848,15 @@
             currentConfig.UserConfigs = userConfigsArrayToObject(cfg.UserConfigs);
 
             Dashboard.processPluginConfigurationUpdateResult();
+
+            // New folders are in their libraries now: show the picks as saved.
+            await loadLibraries();
+            fillLibrarySelect(selMovieLibrary, 'movie', cfg.MoviePath || '');
+            fillLibrarySelect(selSeriesLibrary, 'series', cfg.SeriesPath || '');
+            renderCatalogs();
           } catch (e) {
             console.error(e);
+            Dashboard.alert('Error saving: ' + await errorText(e));
           } finally {
             Dashboard.hideLoadingMsg();
           }
@@ -779,14 +942,14 @@
           const override = currentConfig?.UserConfigs?.[userId];
           if (override) {
             txtUserUrl.value = override.Url || '';
-            txtUserMoviePath.value = override.MoviePath || '';
-            txtUserSeriesPath.value = override.SeriesPath || '';
+            fillLibrarySelect(selUserMovieLibrary, 'movie', override.MoviePath || '');
+            fillLibrarySelect(selUserSeriesLibrary, 'series', override.SeriesPath || '');
             chkUserDisableSearch.checked = override.DisableSearch || false;
           } else {
             // New
             txtUserUrl.value = currentConfig?.Url || '';
-            txtUserMoviePath.value = currentConfig?.MoviePath || '';
-            txtUserSeriesPath.value = currentConfig?.SeriesPath || '';
+            fillLibrarySelect(selUserMovieLibrary, 'movie', currentConfig?.MoviePath || '');
+            fillLibrarySelect(selUserSeriesLibrary, 'series', currentConfig?.SeriesPath || '');
             chkUserDisableSearch.checked = false;
           }
         }
@@ -796,15 +959,29 @@
           userOverrideContainer.style.display = 'none';
         });
 
-        page.querySelector('#btnAddOverride').addEventListener('click', () => {
+        page.querySelector('#btnAddOverride').addEventListener('click', async () => {
           const userId = selUserConfig.value;
           if (!userId) return;
           if (!currentConfig.UserConfigs) currentConfig.UserConfigs = {};
 
+          const previous = currentConfig.UserConfigs[userId] || currentConfig;
+          let moviePath, seriesPath;
+          Dashboard.showLoadingMsg();
+          try {
+            moviePath = await resolveLibraryPick(selUserMovieLibrary.value, previous.MoviePath);
+            seriesPath = await resolveLibraryPick(selUserSeriesLibrary.value, previous.SeriesPath);
+          } catch (e) {
+            console.error(e);
+            Dashboard.alert('Could not set up the library folder: ' + await errorText(e));
+            return;
+          } finally {
+            Dashboard.hideLoadingMsg();
+          }
+
           currentConfig.UserConfigs[userId] = {
             Url: txtUserUrl.value.trim(),
-            MoviePath: txtUserMoviePath.value.trim(),
-            SeriesPath: txtUserSeriesPath.value.trim(),
+            MoviePath: moviePath,
+            SeriesPath: seriesPath,
             DisableSearch: chkUserDisableSearch.checked
           };
 

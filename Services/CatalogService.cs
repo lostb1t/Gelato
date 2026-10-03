@@ -46,12 +46,20 @@ public class CatalogService(GelatoStremioProviderFactory stremioFactory)
             }
             catalogs.Add(existing);
         }
-        config.Catalogs = catalogs;
+        // A catalog the addon does not list right now keeps its settings: an addon that is being
+        // reconfigured, or a list that is gone for a while, must not cost the catalog its library,
+        // which is where its items are. It is not listed, and so neither shown nor imported, until
+        // the addon has it again. One without settings has nothing to keep.
+        var unlisted = config.Catalogs.Where(c =>
+            !catalogs.Any(m => m.Id == c.Id && m.Type == c.Type)
+            && (c.Enabled || c.CreateCollection || !string.IsNullOrWhiteSpace(c.Path))
+        );
+        config.Catalogs = [.. catalogs, .. unlisted];
 
         // Save if we added new ones (optional, but good for persistence)
         GelatoPlugin.Instance.SaveConfiguration();
 
-        return config.Catalogs;
+        return catalogs;
     }
 
     public void UpdateCatalogConfig(CatalogConfig updatedConfig)
@@ -66,9 +74,11 @@ public class CatalogService(GelatoStremioProviderFactory stremioFactory)
             existing.Enabled = updatedConfig.Enabled;
             existing.MaxItems = updatedConfig.MaxItems;
             existing.CreateCollection = updatedConfig.CreateCollection;
+            existing.Path = (updatedConfig.Path ?? "").Trim();
         }
         else
         {
+            updatedConfig.Path = (updatedConfig.Path ?? "").Trim();
             config.Catalogs.Add(updatedConfig);
         }
 

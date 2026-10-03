@@ -113,6 +113,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
             // GelatoManager memoizes the underlying lookup, so this stays cheap.
             cfg.MovieFolder = _manager.TryGetMovieFolder(cfg);
             cfg.SeriesFolder = _manager.TryGetSeriesFolder(cfg);
+            // Seeds the catalogs' folders too, so one can be added to a library right away.
+            _manager.GetCatalogFolders(cfg);
             return cfg;
         }
         catch (Exception ex)

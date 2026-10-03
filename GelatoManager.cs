@@ -149,7 +149,7 @@ public sealed class GelatoManager(
         _log.LogDebug("Cache cleared");
     }
 
-    private static void SeedFolder(string path)
+    public static void SeedFolder(string path)
     {
         Directory.CreateDirectory(path);
         var seed = Path.Combine(path, SeedFileName);
@@ -285,12 +285,282 @@ public sealed class GelatoManager(
         return TryGetFolder(cfg.SeriesPath);
     }
 
+    /// <summary>
+    /// The folder a catalog's items go into, or null when the catalog has none or its folder is
+    /// not in a library yet; the caller then uses the movie or series folder.
+    /// </summary>
+    public Folder? TryGetCatalogFolder(CatalogConfig catalog)
+    {
+        try
+        {
+            // A folder whose seed file cannot be written (read-only or full disk) is still the
+            // catalog's folder: its items are in the database, not in the folder.
+            return TryGetFolder(catalog.Path, seedRequired: false);
+        }
+        catch (Exception ex)
+        {
+            // A broken path must not take the other folders down with it.
+            _log.LogWarning(
+                ex,
+                "Could not look up the folder {Path} of catalog {Name}",
+                catalog.Path,
+                catalog.Name
+            );
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The folder item of a library location that is Gelato's without the configuration naming it:
+    /// a library that was picked once and has Gelato's folder, but no catalog on it right now.
+    /// </summary>
+    public Folder? TryGetLibraryFolder(string path) => TryGetFolder(path, seedRequired: false);
+
+    /// <summary>
+    /// Whether the library the folder is in lists items of this kind: a movies library movies, a
+    /// shows library series, a mixed one both.
+    /// </summary>
+    public bool LibraryTakes(Folder folder, BaseItemKind kind)
+    {
+        var type = libraryManager
+            .GetCollectionFolders(folder)
+            .OfType<ICollectionFolder>()
+            .FirstOrDefault()
+            ?.CollectionType;
+        return type switch
+        {
+            null => true,
+            CollectionType.movies => kind == BaseItemKind.Movie,
+            CollectionType.tvshows => kind == BaseItemKind.Series,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Whether a title of this kind goes into the folder: its library has to list the kind, and
+    /// a folder the configuration names as a movie folder only (the default one or a user's)
+    /// takes no series, nor the other way round, also in a mixed library.
+    /// </summary>
+    public bool FolderTakes(Folder folder, BaseItemKind kind)
+    {
+        if (!LibraryTakes(folder, kind))
+            return false;
+
+        var cfg = GelatoPlugin.Instance!.Configuration;
+        var movies = cfg
+            .UserConfigs.Select(u => u.MoviePath)
+            .Append(cfg.MoviePath)
+            .Any(p => SamePath(p, folder.Path));
+        var series = cfg
+            .UserConfigs.Select(u => u.SeriesPath)
+            .Append(cfg.SeriesPath)
+            .Any(p => SamePath(p, folder.Path));
+        return kind == BaseItemKind.Series ? series || !movies : movies || !series;
+    }
+
+    private static bool SamePath(string? a, string? b) =>
+        !string.IsNullOrWhiteSpace(a)
+        && string.Equals(
+            a,
+            b,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal
+        );
+
+    /// <summary>
+    /// The Gelato folder a search scoped to <paramref name="scope"/> answers for, for one kind: the
+    /// user's movie or series folder when the scope holds it, else a catalog's folder in a library
+    /// that takes the kind. Null when the scope holds none: the library answers alone then.
+    /// </summary>
+    public Folder? GetSearchFolder(Guid scope, Guid userId, BaseItemKind kind)
+    {
+        var own =
+            kind == BaseItemKind.Series ? TryGetSeriesFolder(userId) : TryGetMovieFolder(userId);
+        if (own is not null && IsWithinScope(scope, own))
+            return own;
+
+        if (scope.Equals(Guid.Empty))
+            return null;
+
+        return GetCatalogFolders(GelatoPlugin.Instance!.Configuration)
+            .FirstOrDefault(f => IsWithinScope(scope, f) && FolderTakes(f, kind));
+    }
+
+    /// <summary>
+    /// Remembers the folder a search result was found for, so opening it puts the title into the
+    /// library the user searched in. A later search that finds the title without that scope takes
+    /// it back: the last search a result came from decides.
+    /// </summary>
+    public void RememberSearchFolder(Guid userId, Guid searchId, Folder? folder)
+    {
+        var key = $"searchfolder:{userId}:{searchId}";
+        if (folder is null)
+            memoryCache.Remove(key);
+        else
+            memoryCache.Set(key, folder.Id, TimeSpan.FromMinutes(360));
+    }
+
+    /// <summary>The folder a search result was last found for, while it is still there.</summary>
+    public Folder? GetSearchFolder(Guid userId, Guid searchId) =>
+        memoryCache.TryGetValue($"searchfolder:{userId}:{searchId}", out Guid id)
+            ? libraryManager.GetItemById(id) as Folder
+            : null;
+
+    /// <summary>
+    /// Whether the folder is one of the movie or series folders of the configuration: the global
+    /// ones or a user's. Among these an item goes to the folder of whoever opens it, as it always
+    /// has. Any other folder an item is in, a catalog's or one a catalog had, is where it stays.
+    /// </summary>
+    public bool IsDefaultFolder(BaseItem? folder)
+    {
+        if (folder is not Folder || string.IsNullOrWhiteSpace(folder.Path))
+            return false;
+
+        var cfg = GelatoPlugin.Instance!.Configuration;
+        return cfg
+            .UserConfigs.SelectMany(u => new[] { u.MoviePath, u.SeriesPath })
+            .Append(cfg.MoviePath)
+            .Append(cfg.SeriesPath)
+            .Any(p => SamePath(p, folder.Path));
+    }
+
+    /// <summary>
+    /// Whether the folder is a catalog's and not the global movie or series folder. The settings
+    /// page hands out one Gelato folder per library, so a catalog and a user can share one: it is
+    /// the catalog's first then, and what is in it stays, whoever opens it.
+    /// </summary>
+    private bool IsCatalogFolder(BaseItem? folder)
+    {
+        if (folder is not Folder || string.IsNullOrWhiteSpace(folder.Path))
+            return false;
+
+        var cfg = GelatoPlugin.Instance!.Configuration;
+        return cfg.Catalogs.Any(c => SamePath(c.Path, folder.Path))
+            && !SamePath(cfg.MoviePath, folder.Path)
+            && !SamePath(cfg.SeriesPath, folder.Path);
+    }
+
+    /// <summary>
+    /// The placeholder Gelato has for this title in a folder that is not one of the default folders,
+    /// whether or not the asking user may open that library. Looked up by id, which is the hash of
+    /// the gelato:// path: inserting the title again would not add an item, it would overwrite this
+    /// one and take it out of its library.
+    /// </summary>
+    public BaseItem? FindOutsideDefaultFolders(BaseItem item)
+    {
+        if (item.Id == Guid.Empty || libraryManager.GetItemById(item.Id) is not { } existing)
+            return null;
+
+        var parent = existing.GetParent();
+        return existing.GetType() == item.GetType()
+            && !existing.HasStreamTag()
+            && (existing.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false)
+            && (!IsDefaultFolder(parent) || IsCatalogFolder(parent))
+            ? existing
+            : null;
+    }
+
+    /// <summary>The folders of the catalogs that have one set and in a library.</summary>
+    public IReadOnlyList<Folder> GetCatalogFolders(PluginConfiguration cfg) =>
+        cfg.Catalogs.Select(TryGetCatalogFolder).OfType<Folder>().DistinctBy(f => f.Id).ToList();
+
+    /// <summary>
+    /// Moves a Gelato movie or series into <paramref name="target"/>, with what has to stay in the
+    /// same library as it: a series' seasons, episodes and their stream rows, a movie's stream rows.
+    /// </summary>
+    /// <remarks>
+    /// Only the parent changes. The id is the hash of the gelato:// path, so the item keeps its id
+    /// and with it the watch state, favourites and collection membership. Jellyfin works out an
+    /// item's library (TopParentId, ancestors) from the parent chain when it is saved, so the
+    /// item is saved first and registered, then everything below it is saved again. A stream row
+    /// that stayed behind would be listed as a movie of its own: Jellyfin only hides a version
+    /// that is in the same library as its primary.
+    /// </remarks>
+    /// <returns>Whether the item was moved: false when it is in the folder already or is gone.</returns>
+    public async Task<bool> MoveToFolderAsync(BaseItem item, Folder target, CancellationToken ct)
+    {
+        var moved = false;
+
+        // Queued behind a stream sync or deletion of the same item, and working on the item as it
+        // is then: the copy the caller found may be older than what a sync has saved since.
+        await RunExclusiveAsync(
+                item.Id,
+                _ =>
+                {
+                    if (libraryManager.GetItemById(item.Id) is not { } current)
+                        return Task.CompletedTask;
+                    if (current.ParentId == target.Id)
+                        return Task.CompletedTask;
+
+                    // A move that has started is finished: a cancelled import (the task
+                    // started again while it ran) between the two saves would leave the
+                    // item in the new library and its seasons, episodes or stream rows in
+                    // the old one, and the check above would never look at it again.
+                    ct.ThrowIfCancellationRequested();
+
+                    if (current is Video video)
+                    {
+                        var rows = GetStreamRows(video);
+                        video.SetParent(target);
+                        persistence.SaveItems([video], CancellationToken.None);
+                        libraryManager.RegisterItem(video);
+                        foreach (var row in rows)
+                        {
+                            row.SetParent(target);
+                        }
+                        persistence.SaveItems(rows, CancellationToken.None);
+                        foreach (var row in rows)
+                        {
+                            libraryManager.RegisterItem(row);
+                        }
+                    }
+                    else
+                    {
+                        current.SetParent(target);
+                        persistence.SaveItems([current], CancellationToken.None);
+                        libraryManager.RegisterItem(current);
+
+                        var descendants = repo.GetItemList(
+                                new InternalItemsQuery
+                                {
+                                    AncestorIds = [current.Id],
+                                    Recursive = true,
+                                    IsDeadPerson = true,
+                                    // Stream rows are alternate versions, which queries leave
+                                    // out by default.
+                                    IncludeOwnedItems = true,
+                                }
+                            )
+                            .ToList();
+                        persistence.SaveItems(descendants, CancellationToken.None);
+                    }
+
+                    moved = true;
+                    return Task.CompletedTask;
+                },
+                ct
+            )
+            .ConfigureAwait(false);
+
+        if (moved)
+        {
+            _log.LogInformation(
+                "Moved {Kind} {Name} ({Id}) into {Folder}",
+                item.GetBaseItemKind(),
+                item.Name,
+                item.Id,
+                target.Path
+            );
+        }
+
+        return moved;
+    }
+
     // GetConfig asks for the root folders on every request, so the lookup is memoized.
     // The window is deliberately short: libraries can be added, moved or removed at any
     // time, and the answer must not be pinned for the lifetime of the process.
     private static readonly TimeSpan FolderCacheTtl = TimeSpan.FromSeconds(10);
 
-    private Folder? TryGetFolder(string path)
+    private Folder? TryGetFolder(string path, bool seedRequired = true)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -303,7 +573,21 @@ public sealed class GelatoManager(
             return cached;
         }
 
-        SeedFolder(path);
+        try
+        {
+            SeedFolder(path);
+        }
+        catch (Exception ex) when (!seedRequired)
+        {
+            // Said once in a while, not on every lookup: the lookup runs for every request.
+            var warned = $"seedfailed:{path}";
+            if (!memoryCache.TryGetValue(warned, out _))
+            {
+                memoryCache.Set(warned, true, TimeSpan.FromMinutes(10));
+                _log.LogWarning(ex, "Could not write the seed file into {Path}", path);
+            }
+        }
+
         var folder = repo.GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
             .OfType<Folder>()
             .FirstOrDefault();
@@ -318,7 +602,7 @@ public sealed class GelatoManager(
     {
         var item = IntoBaseItem(meta);
         if (item?.ProviderIds is { Count: > 0 })
-            return FindExistingItem(item, user);
+            return FindExistingItem(item, user) ?? FindOutsideDefaultFolders(item);
         _log.LogWarning("Gelato: Missing provider ids, skipping");
         return null;
     }
@@ -467,7 +751,8 @@ public sealed class GelatoManager(
         }
         else
         {
-            baseItem = await SyncSeriesTreesAsync(cfg, meta, ct).ConfigureAwait(false);
+            baseItem = await SyncSeriesTreesAsync(cfg, meta, ct, root: parent)
+                .ConfigureAwait(false);
         }
 
         if (baseItem is null)
@@ -595,6 +880,27 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
+    /// The Gelato series the tree sync works on: the one in <paramref name="root"/>, else the one a
+    /// catalog has or had in a folder of its own.
+    /// </summary>
+    /// <remarks>
+    /// The tree sync runs for the series folder, also for a series a catalog moved out of it.
+    /// Creating that series would not add one: the id is the hash of its path, so it would overwrite
+    /// the row, put the series back into the series folder and leave its seasons and episodes in the
+    /// library they were in. A catalog that is gone from the configuration still has its items in
+    /// its folder, so the series is looked up by id and not only in the folders of today's catalogs.
+    /// </remarks>
+    private BaseItem? FindGelatoSeries(Series series, Folder root)
+    {
+        return GetByProviderIds(series.ProviderIds, BaseItemKind.Series, root)
+            ?? FindOutsideDefaultFolders(series)
+            ?? GetCatalogFolders(GelatoPlugin.Instance!.Configuration)
+                .Where(f => f.Id != root.Id)
+                .Select(f => GetByProviderIds(series.ProviderIds, BaseItemKind.Series, f))
+                .FirstOrDefault(s => s is not null && s.IsGelato() && !s.IsFileProtocol);
+    }
+
+    /// <summary>
     /// One writer per movie/episode for its stream rows: a sync and a deletion of the same item
     /// must not interleave. A sync that finishes after the item was deleted would save the rows
     /// again and, when it links them, the item itself.
@@ -656,7 +962,12 @@ public sealed class GelatoManager(
         }
 
         var isEpisode = video is Episode;
-        var parent = isEpisode ? video.GetParent() as Folder : TryGetMovieFolder(userId);
+        // The rows go next to the movie or episode, whoever syncs them: Jellyfin hides a version
+        // only when it is in the same library as its primary. In the syncing user's own movie
+        // folder, as they used to go, the rows of a movie from another folder were listed and
+        // counted as movies of their own.
+        var parent =
+            video.GetParent() as Folder ?? (isEpisode ? null : TryGetMovieFolder(userId));
         if (parent is null)
         {
             _log.LogWarning("SyncStreams: no parent, skipping");
@@ -1414,10 +1725,12 @@ public sealed class GelatoManager(
         PluginConfiguration cfg,
         StremioMeta seriesMeta,
         CancellationToken ct,
-        Series? existingSeries = null
+        Series? existingSeries = null,
+        Folder? root = null
     )
     {
-        var seriesRootFolder = cfg.SeriesFolder;
+        // A catalog with a folder of its own creates its series there.
+        var seriesRootFolder = root ?? cfg.SeriesFolder;
 
         Series series;
 
@@ -1448,14 +1761,7 @@ public sealed class GelatoManager(
                 return null;
             }
 
-            if (
-                GetByProviderIds(
-                    tmpSeries.ProviderIds,
-                    tmpSeries.GetBaseItemKind(),
-                    seriesRootFolder
-                )
-                is not Series found
-            )
+            if (FindGelatoSeries(tmpSeries, seriesRootFolder) is not Series found)
             {
                 tmpSeries.Id = tmpSeries.Id == Guid.Empty ? Guid.NewGuid() : tmpSeries.Id;
 
