@@ -563,6 +563,11 @@ public sealed class MediaSourceManagerDecorator(
             return sources;
         }
 
+        // A row probed before is done ahead of playback: one whose probe found a file too short
+        // or without video still looks unprobed, and would be probed again on every visit.
+        if (preProbe && owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceProbe)
+            return sources;
+
         // A pre-probe of this source is under way: its result is what plays, not a second probe.
         if (!preProbe && _preProbing.TryGetValue(PreProbeKey(selected), out var running))
         {
