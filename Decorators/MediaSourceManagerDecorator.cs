@@ -337,7 +337,10 @@ public sealed class MediaSourceManagerDecorator(
         // item when the dropdown changes, so this is also the pick of a version.
         if (
             user is not null
-            && _http.ReadRequest(ctx => ctx.GetActionName() is "GetItem" or "GetItemLegacy", false)
+            && _http.ReadRequest(
+                ctx => ctx.GetActionName() is "GetItem" or "GetItemLegacy" && RequestsMediaSources(ctx),
+                false
+            )
         )
         {
             SchedulePreProbe(item, sources[0], user);
@@ -345,6 +348,19 @@ public sealed class MediaSourceManagerDecorator(
 
         return sources;
     }
+
+    /// <summary>
+    /// Whether an item request wants the item's sources, as a page does: Jellyfin Web's details
+    /// page sends no Fields and gets every field. A script that asks for some fields of the item
+    /// (KefinTweaks' home sections ask for People) has not opened its page.
+    /// </summary>
+    private static bool RequestsMediaSources(HttpContext ctx) =>
+        !ctx.Request.Query.TryGetValue("fields", out var fields)
+        || fields.Any(value =>
+            value
+                ?.Split(',', StringSplitOptions.TrimEntries)
+                .Contains("MediaSources", StringComparer.OrdinalIgnoreCase) ?? false
+        );
 
     private static string SyncCacheKey(BaseItem item, Guid userId)
     {
@@ -547,6 +563,11 @@ public sealed class MediaSourceManagerDecorator(
             return sources;
         }
 
+        // A row probed before is done ahead of playback: one whose probe found a file too short
+        // or without video still looks unprobed, and would be probed again on every visit.
+        if (preProbe && owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceProbe)
+            return sources;
+
         // A pre-probe of this source is under way: its result is what plays, not a second probe.
         if (!preProbe && _preProbing.TryGetValue(PreProbeKey(selected), out var running))
         {
@@ -567,7 +588,8 @@ public sealed class MediaSourceManagerDecorator(
             || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams));
 
         // A pre-probe that starts while this playback probes sees it and stays out.
-        using var claim = needsProbe && !preProbe ? ClaimProbe(PreProbeKey(selected)) : null;
+        var probeKey = PreProbeKey(selected);
+        using var claim = needsProbe && !preProbe ? ClaimProbe(probeKey) : null;
         if (needsProbe)
         {
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
@@ -605,6 +627,10 @@ public sealed class MediaSourceManagerDecorator(
 
             var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
             selected = SelectByIdOrFirst(refreshed, mediaSourceId);
+
+            // Still unprobed after its probe: a dead link, left alone for a while.
+            if (preProbe && (selected is null || NeedsProbe(selected)))
+                MarkPreProbeFailed(probeKey);
 
             if (selected is null)
                 return refreshed;
@@ -939,6 +965,44 @@ public sealed class MediaSourceManagerDecorator(
     /// <summary>How long a pre-probe may run. A probe takes 2 to 5 seconds.</summary>
     private static readonly TimeSpan PreProbeTimeout = TimeSpan.FromSeconds(60);
 
+    /// <summary>
+    /// How long a source whose pre-probe failed is left alone. A dead link would otherwise hold a
+    /// slot for <see cref="PreProbeTimeout"/> on every visit. Playback still probes it.
+    /// </summary>
+    private static readonly TimeSpan PreProbeRetry = TimeSpan.FromMinutes(30);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        DateTime
+    > _preProbeFailed = new();
+
+    private bool PreProbeFailedRecently(string key)
+    {
+        if (!_preProbeFailed.TryGetValue(key, out var failedAt))
+            return false;
+
+        if (DateTime.UtcNow - failedAt < PreProbeRetry)
+            return true;
+
+        _preProbeFailed.TryRemove(new KeyValuePair<string, DateTime>(key, failedAt));
+        return false;
+    }
+
+    private void MarkPreProbeFailed(string key)
+    {
+        // Sources nobody opens again are dropped once the map grows.
+        if (_preProbeFailed.Count > 1000)
+        {
+            foreach (var (staleKey, failedAt) in _preProbeFailed)
+            {
+                if (DateTime.UtcNow - failedAt >= PreProbeRetry)
+                    _preProbeFailed.TryRemove(staleKey, out _);
+            }
+        }
+
+        _preProbeFailed[key] = DateTime.UtcNow;
+    }
+
     // Pre-probes running at once. A playback is never held up by this: it probes on its own.
     private readonly SemaphoreSlim _preProbeSlots = new(2);
 
@@ -960,6 +1024,7 @@ public sealed class MediaSourceManagerDecorator(
             || !item.IsGelatoPlaybackItem()
             || IsPlaceholder(source)
             || _preProbing.ContainsKey(PreProbeKey(source))
+            || PreProbeFailedRecently(PreProbeKey(source))
         )
         {
             return;
@@ -1010,6 +1075,8 @@ public sealed class MediaSourceManagerDecorator(
     private async Task PreProbeAsync(BaseItem item, MediaSourceInfo source, User user)
     {
         var key = PreProbeKey(source);
+        if (PreProbeFailedRecently(key))
+            return;
 
         // Registered only once running: a playback waits for a pre-probe under way, not for one
         // queued behind the others.
@@ -1021,6 +1088,9 @@ public sealed class MediaSourceManagerDecorator(
             return;
         }
 
+        // A stream that takes the connection and never answers would hold its slot, and the
+        // playbacks waiting for it, for good.
+        using var timeout = new CancellationTokenSource(PreProbeTimeout);
         try
         {
             // Deleted while this waited: the instance at hand would be probed and saved back. An
@@ -1028,9 +1098,6 @@ public sealed class MediaSourceManagerDecorator(
             if (_libraryManager.GetItemById(item.Id) is not { } current)
                 return;
 
-            // A stream that takes the connection and never answers would hold its slot, and the
-            // playbacks waiting for it, for good.
-            using var timeout = new CancellationTokenSource(PreProbeTimeout);
             await GetPlaybackMediaSourcesCore(
                     current,
                     user,
@@ -1042,8 +1109,19 @@ public sealed class MediaSourceManagerDecorator(
                 )
                 .ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            MarkPreProbeFailed(key);
+            _log.LogWarning(
+                "Pre-probe of {Id} source {Source} gave up after {Seconds}s",
+                item.Id,
+                source.Id,
+                PreProbeTimeout.TotalSeconds
+            );
+        }
         catch (Exception ex)
         {
+            MarkPreProbeFailed(key);
             _log.LogWarning(ex, "Pre-probe failed for {Id} source {Source}", item.Id, source.Id);
         }
         finally
@@ -1276,6 +1354,12 @@ public sealed class MediaSourceManagerDecorator(
                 );
                 await owner.RefreshMetadata(options, ct).ConfigureAwait(false);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The playback went away or the pre-probe ran out of time: the caller decides what
+            // that is, and saving after it would fail on the same token anyway.
+            throw;
         }
         catch (Exception ex)
         {
