@@ -365,13 +365,13 @@ public class SearchActionFilter(
         // Awaited one by one now (they all run, the tasks are started above), so a failure only costs its own
         // catalog. A search where no catalog answered still fails the request: an empty or library-only list
         // would look like a successful search to the client, and clients cache it.
-        var results = new List<StremioMeta>();
+        var answers = new List<IReadOnlyList<StremioMeta>>();
         var failures = new List<Exception>();
         foreach (var (type, task) in tasks)
         {
             try
             {
-                results.AddRange(await task);
+                answers.Add(await task);
             }
             catch (Exception ex)
             {
@@ -391,12 +391,39 @@ public class SearchActionFilter(
         var filterUnreleased = cfg.FilterUnreleased;
         var bufferDays = cfg.FilterUnreleasedBufferDays;
 
+        // Unreleased titles go before the merge so the ranks pair up among the titles that are shown.
         if (filterUnreleased)
         {
-            results = results.Where(x => x.IsReleased(bufferDays)).ToList();
+            answers = answers
+                .Select(list =>
+                    (IReadOnlyList<StremioMeta>)list.Where(x => x.IsReleased(bufferDays)).ToList()
+                )
+                .ToList();
         }
 
-        return results;
+        // Each catalog's order is its own relevance. Concatenating them let one type push the other
+        // off the first page of a search for both (#252), so they alternate by rank instead.
+        return Interleave(answers);
+    }
+
+    /// <summary>
+    /// The lists merged round-robin by rank: every list's first item, then every list's second,
+    /// and so on. A list that runs out drops from the rotation and the others carry on.
+    /// </summary>
+    private static List<T> Interleave<T>(IReadOnlyList<IReadOnlyList<T>> lists)
+    {
+        var merged = new List<T>(lists.Sum(l => l.Count));
+        var longest = lists.Count == 0 ? 0 : lists.Max(l => l.Count);
+        for (var rank = 0; rank < longest; rank++)
+        {
+            foreach (var list in lists)
+            {
+                if (rank < list.Count)
+                    merged.Add(list[rank]);
+            }
+        }
+
+        return merged;
     }
 
     /// <summary>
@@ -452,7 +479,7 @@ public class SearchActionFilter(
 
         var dtos = new List<BaseItemDto>(metas.Count);
 
-        // The movie and series catalogs are searched separately and their results concatenated,
+        // The movie and series catalogs are searched separately and their results interleaved,
         // but an addon may return the same title under both — a series showing up in the movie
         // results, say. The ids are deterministic, so the same title yields the same id twice
         // and the client renders it twice. Keep the first occurrence and drop later repeats.
