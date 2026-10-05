@@ -452,13 +452,20 @@ public sealed class MediaSourceManagerDecorator(
     public IReadOnlyList<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query) =>
         _inner.GetMediaAttachments(query);
 
-    /// <summary>How long a source prepared for streaming answers the requests that follow it.</summary>
+    /// <summary>
+    /// How long a source prepared for streaming answers the requests that follow it, counted
+    /// from the end of its preparation.
+    /// </summary>
     private static readonly TimeSpan PreparedTtl = TimeSpan.FromSeconds(10);
 
+    // Done completes with the time the preparation ended, however it ended.
     private readonly System.Collections.Concurrent.ConcurrentDictionary<
         string,
-        (DateTime Until, Task<IReadOnlyList<MediaSourceInfo>> Sources)
+        (Task<IReadOnlyList<MediaSourceInfo>> Sources, Task<DateTime> Done)
     > _prepared = new();
+
+    private static bool PreparedExpired(Task<DateTime> done, DateTime now) =>
+        done.IsCompletedSuccessfully && done.Result + PreparedTtl <= now;
 
     /// <remarks>
     /// Starting a playback asks for its source several times within a second: PlaybackInfo, then
@@ -466,7 +473,9 @@ public sealed class MediaSourceManagerDecorator(
     /// segment (the pre-probe the player's reload of the item schedules stays out, see
     /// <see cref="PreparedForPlaybackWindow"/>). Each preparation reads the item's versions and
     /// streams and may look up segments, so the streaming requests share the first one's answer
-    /// for <see cref="PreparedTtl"/>. PlaybackInfo is prepared on its own: its answer is stubbed.
+    /// while it is prepared and for <see cref="PreparedTtl"/> after that: the first probe of a
+    /// remote stream can take up to a minute, and the requests that follow come only once it is
+    /// over. PlaybackInfo is prepared on its own: its answer is stubbed.
     /// </remarks>
     public async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSources(
         BaseItem item,
@@ -507,16 +516,19 @@ public sealed class MediaSourceManagerDecorator(
         );
 
         var now = DateTime.UtcNow;
-        if (_prepared.TryGetValue(key, out var prepared) && prepared.Until > now)
+        if (_prepared.TryGetValue(key, out var prepared) && !PreparedExpired(prepared.Done, now))
         {
             try
             {
                 var sources = await prepared.Sources.WaitAsync(ct).ConfigureAwait(false);
+                var done = await prepared.Done.ConfigureAwait(false);
+
+                // 0 for a request that waited for the preparation to end.
                 _log.LogDebug(
                     "GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}: prepared {Ago} ms ago",
                     item.Id,
                     sourceId,
-                    (int)(now - prepared.Until + PreparedTtl).TotalMilliseconds
+                    (int)Math.Max(0, (now - done).TotalMilliseconds)
                 );
                 return sources;
             }
@@ -528,7 +540,7 @@ public sealed class MediaSourceManagerDecorator(
 
         foreach (var (k, entry) in _prepared)
         {
-            if (entry.Until <= now)
+            if (PreparedExpired(entry.Done, now))
                 _prepared.TryRemove(k, out _);
         }
 
@@ -541,7 +553,15 @@ public sealed class MediaSourceManagerDecorator(
             false,
             ct
         );
-        _prepared[key] = (now + PreparedTtl, task);
+        _prepared[key] = (
+            task,
+            task.ContinueWith(
+                _ => DateTime.UtcNow,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            )
+        );
         return await task.ConfigureAwait(false);
     }
 
