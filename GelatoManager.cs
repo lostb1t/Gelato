@@ -63,11 +63,15 @@ public sealed class GelatoManager(
         return memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
     }
 
+    // Orders a stream sync and a reset. Not the wall clock: when it is set back between the two,
+    // a reset gets the older stamp and the sync before it counts as the newer one.
+    private static long _streamSyncSeq;
+
     public void SetStreamSync(string guid)
     {
         memoryCache.Set(
             $"streamsync:{guid}",
-            DateTime.UtcNow,
+            Interlocked.Increment(ref _streamSyncSeq),
             TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
         );
     }
@@ -78,10 +82,10 @@ public sealed class GelatoManager(
     /// </summary>
     public bool HasStreamSync(string guid, Guid itemId)
     {
-        if (!memoryCache.TryGetValue($"streamsync:{guid}", out DateTime syncedAt))
+        if (!memoryCache.TryGetValue($"streamsync:{guid}", out long syncedAt))
             return false;
 
-        return !memoryCache.TryGetValue($"streamsync-reset:{itemId}", out DateTime resetAt)
+        return !memoryCache.TryGetValue($"streamsync-reset:{itemId}", out long resetAt)
             || syncedAt > resetAt;
     }
 
@@ -93,7 +97,7 @@ public sealed class GelatoManager(
     {
         memoryCache.Set(
             $"streamsync-reset:{itemId}",
-            DateTime.UtcNow,
+            Interlocked.Increment(ref _streamSyncSeq),
             TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
         );
     }
