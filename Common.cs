@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -364,6 +365,20 @@ public static class ActionContextExtensions
         StringComparer.OrdinalIgnoreCase
     );
 
+    // The adds to a collection or a playlist, and the creation of one with items in it. They name
+    // their items in an id list, and a multi-select hands over several search results at once,
+    // none of them opened. Kept out of the insertable actions: those also let a media source
+    // lookup sync the item's streams, which an add to a group has no use for.
+    private static readonly HashSet<string> GroupAddActionNames = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        "AddToCollection",
+        "AddItemToPlaylist",
+        "CreateCollection",
+        "CreatePlaylist",
+    };
+
     // Jellyfin answers playback info under two actions: GET /Items/{id}/PlaybackInfo and
     // POST /Items/{id}/PlaybackInfo. The web client posts, several native clients use the GET.
     private static readonly HashSet<string> PlaybackInfoActionNames = new(
@@ -468,6 +483,60 @@ public static class ActionContextExtensions
 
     public static bool IsInsertableAction(this ActionExecutingContext ctx) =>
         ctx.HttpContext.IsInsertableAction();
+
+    public static bool IsGroupAddAction(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is { } actionName && GroupAddActionNames.Contains(actionName);
+
+    /// <summary>
+    /// The ids an action was given as a list, or none when it takes no such list.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin has three shapes for it: guids in the query (the adds, and CreatePlaylist's
+    /// obsolete query form), strings in the query (CreateCollection) and a list in the request
+    /// body (CreatePlaylist).
+    /// </remarks>
+    public static IReadOnlyList<Guid> GetIdList(this ActionExecutingContext ctx)
+    {
+        var all = new List<Guid>();
+        foreach (var (key, value) in ctx.ActionArguments)
+        {
+            switch (value)
+            {
+                case Guid[] ids when IdsGuidKeys.Contains(key):
+                    all.AddRange(ids);
+                    break;
+                case string[] ids when IdsGuidKeys.Contains(key):
+                    all.AddRange(ids.Where(s => Guid.TryParse(s, out _)).Select(Guid.Parse));
+                    break;
+                case not null when TryGetBodyIdList(value, out _, out var ids):
+                    all.AddRange(ids);
+                    break;
+            }
+        }
+
+        return all;
+    }
+
+    /// <summary>
+    /// The id list a request body carries, as the body of CreatePlaylist does. It is one of
+    /// Jellyfin's API models, which a plugin does not reference, so the list is found by name.
+    /// </summary>
+    private static bool TryGetBodyIdList(object body, out PropertyInfo property, out Guid[] ids)
+    {
+        property = null!;
+        ids = [];
+        if (
+            body is string or Array or ValueType
+            || body.GetType().GetProperty("Ids") is not { CanWrite: true } found
+            || !found.PropertyType.IsAssignableFrom(typeof(Guid[]))
+            || found.GetValue(body) is not IEnumerable<Guid> list
+        )
+            return false;
+
+        property = found;
+        ids = list.ToArray();
+        return true;
+    }
 
     /// <summary>
     /// Whether the request may be answered from the library item a search result is, without
@@ -596,6 +665,12 @@ public static class ActionContextExtensions
     /// Replaces every id in the route, the query-bound arguments and id lists that
     /// <paramref name="map"/> knows a replacement for. Returns whether anything changed.
     /// </summary>
+    /// <remarks>
+    /// An id list is not always a <c>Guid[]</c>: CreateCollection binds its ids as strings and
+    /// CreatePlaylist takes them in its body. Left as they were, a search result that had been
+    /// opened still reached Jellyfin under its stand-in id: the new collection answered 400, the
+    /// new playlist 200 and stayed empty.
+    /// </remarks>
     public static bool RedirectGuids(this ActionExecutingContext ctx, Func<Guid, Guid?> map)
     {
         var changed = false;
@@ -621,6 +696,22 @@ public static class ActionContextExtensions
                     break;
                 case Guid[] ids when ids.Any(g => map(g) is not null):
                     ctx.ActionArguments[key] = ids.Select(g => map(g) ?? g).Distinct().ToArray();
+                    changed = true;
+                    break;
+                case string[] ids
+                    when IdsGuidKeys.Contains(key)
+                        && ids.Any(s => Guid.TryParse(s, out var g) && map(g) is not null):
+                    ctx.ActionArguments[key] = ids.Select(s =>
+                            Guid.TryParse(s, out var g) && map(g) is { } to ? to.ToString("N") : s
+                        )
+                        .Distinct()
+                        .ToArray();
+                    changed = true;
+                    break;
+                case not null
+                    when TryGetBodyIdList(value, out var property, out var ids)
+                        && ids.Any(g => map(g) is not null):
+                    property.SetValue(value, ids.Select(g => map(g) ?? g).Distinct().ToArray());
                     changed = true;
                     break;
             }
