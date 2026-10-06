@@ -233,6 +233,15 @@ public sealed class MediaSourceManagerDecorator(
             .ToList();
         var streamRowIds = GetStreamRowIds(streamRows);
 
+        // A subtitle downloaded or uploaded on the movie/episode's own page is saved for the
+        // movie/episode, which no version plays, so it is offered with every one of its streams.
+        // It was picked by hand for the title, and a file saved under one row would go with the
+        // row when the addon's answer changes.
+        var titleSubtitles =
+            streamRows.Count > 0 && primary is not null && primary.IsGelatoPlaybackItem()
+                ? primary.GetGelatoSubtitleFiles().ToList()
+                : null;
+
         // Jellyfin lists the linked stream rows itself, named after the item; they are added
         // below with their stream names, and only the ones this user has. A stream row's own
         // Jellyfin source is the row itself. A Gelato movie/episode has no media of its own, so
@@ -257,7 +266,7 @@ public sealed class MediaSourceManagerDecorator(
             )
             .Select(row =>
             {
-                var source = GetVersionInfo(row, MediaSourceType.Grouping, user);
+                var source = GetVersionInfo(row, MediaSourceType.Grouping, user, titleSubtitles);
 
                 if (user is not null)
                 {
@@ -282,7 +291,7 @@ public sealed class MediaSourceManagerDecorator(
             // The requested version goes first: it becomes the Default source.
             var own =
                 sources.FirstOrDefault(s => s.Id == itemId)
-                ?? GetVersionInfo(item, MediaSourceType.Grouping, user);
+                ?? GetVersionInfo(item, MediaSourceType.Grouping, user, titleSubtitles);
             sources.Remove(own);
             sources.Insert(0, own);
         }
@@ -944,7 +953,8 @@ public sealed class MediaSourceManagerDecorator(
     private MediaSourceInfo GetVersionInfo(
         BaseItem item,
         MediaSourceType type,
-        User? user = null
+        User? user = null,
+        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null
     )
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -961,7 +971,7 @@ public sealed class MediaSourceManagerDecorator(
             Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
             ETag = item.Id.ToString("N", CultureInfo.InvariantCulture),
             Protocol = MediaProtocol.Http,
-            MediaStreams = GetMediaStreamsWithExternalSubs(item),
+            MediaStreams = GetMediaStreamsWithExternalSubs(item, titleSubtitles),
             MediaAttachments = _inner.GetMediaAttachments(item.Id),
             Name = richName,
             Path = item.Path,
@@ -1014,8 +1024,12 @@ public sealed class MediaSourceManagerDecorator(
     // (stream items have http:// paths). This means external subtitle files saved to the internal
     // metadata folder are never discovered during library refresh and never written to the DB.
     // We work around this by scanning the metadata folder ourselves at playback time and merging
-    // any matching subtitle files into the DB streams on the fly.
-    private IReadOnlyList<MediaStream> GetMediaStreamsWithExternalSubs(BaseItem item)
+    // any matching subtitle files into the DB streams on the fly. A stream row lists the files of
+    // its movie/episode after its own.
+    private IReadOnlyList<MediaStream> GetMediaStreamsWithExternalSubs(
+        BaseItem item,
+        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null
+    )
     {
         var streams = _inner.GetMediaStreams(item.Id).ToList();
 
@@ -1026,7 +1040,8 @@ public sealed class MediaSourceManagerDecorator(
 
         var nextIndex = streams.Count > 0 ? streams.Max(s => s.Index) + 1 : 0;
 
-        foreach (var (file, langCode, codec) in item.GetGelatoSubtitleFiles())
+        var files = item.GetGelatoSubtitleFiles().Concat(titleSubtitles ?? []);
+        foreach (var (file, langCode, codec) in files)
         {
             if (existingPaths.Contains(file))
                 continue;
