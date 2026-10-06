@@ -77,7 +77,11 @@ public class SearchActionFilter(
         // inside Live TV, where the client asks for TvChannel alone and the search never gets
         // this far (lostb1t/Gelato#162). Let Jellyfin answer for everything it holds and put its
         // results after the addon's.
-        var (executed, localItems, localTotal) = await SearchLibraryAsync(ctx, next, start + limit);
+        var (executed, localItems, localTotal, cut) = await SearchLibraryAsync(
+            ctx,
+            next,
+            start + limit
+        );
 
         // The addon's result for a title the library already has and the library's own item are
         // the same title twice. The addon's half answers with the library's item where there is
@@ -95,17 +99,30 @@ public class SearchActionFilter(
         var libraryItems = localItems.Where(i => !covered.Contains(i.Id)).ToArray();
         var paged = dtos.Concat(libraryItems).Skip(start).Take(limit).ToArray();
 
-        // An estimate, the way it was before: the library's total counts the items the addon's
-        // half already answers with, and only the page that was fetched shows which those are.
-        // Counting them all out keeps the number the same from page to page, which is what a
-        // client pages by.
-        var total = Math.Max(
-            dtos.Count + localTotal - covered.Count,
-            dtos.Count + libraryItems.Length
-        );
+        // What the library adds behind the addon's results. An answer that was not cut at the end
+        // of the page is all of it. One that was cut is counted through the query the list itself
+        // comes from, the owned titles left out, so every page of a search reports the total its
+        // last page ends at, which is what a client pages by. A client that asked for no total
+        // (the web client's search) pays for no count and gets the estimate from Jellyfin's own
+        // number, which grows with the page and counts owned titles the library's matches may
+        // not hold.
+        var library = libraryItems.Length;
+        if (cut)
+        {
+            ctx.TryGetActionArgument("enableTotalRecordCount", out var wantsTotal, true);
+            library = Math.Max(
+                library,
+                wantsTotal
+                    ? await CountLibraryMatchesAsync(ctx, covered)
+                    : localTotal - covered.Count
+            );
+        }
+
+        var total = dtos.Count + library;
 
         // addon: what the addon's half answers with, after invalid and duplicate results are
-        // dropped; owned: of those, titles the library already has.
+        // dropped; owned: of those, titles the library already has; library: what the library
+        // adds to them.
         log.LogInformation(
             "Intercepted /Items search \"{Query}\" types=[{Types}] start={Start} limit={Limit} addon={Addon} owned={Owned} library={Library} returned={Returned} total={Total}",
             searchTerm,
@@ -114,7 +131,7 @@ public class SearchActionFilter(
             limit,
             dtos.Count,
             covered.Count,
-            localTotal,
+            library,
             paged.Length,
             total
         );
@@ -133,14 +150,16 @@ public class SearchActionFilter(
 
     /// <summary>
     /// Runs the untouched Jellyfin search for the item types the request asked for and returns its
-    /// items and total. It answers for every type, movies and series included: the library's own
-    /// copy of a title the addon answered for is taken out of the concatenation afterwards, which
-    /// leaves the files the library holds that no catalog carries findable.
+    /// items, its total and whether the answer was cut at <paramref name="upTo"/>. It answers for
+    /// every type, movies and series included: the library's own copy of a title the addon
+    /// answered for is taken out of the concatenation afterwards, which leaves the files the
+    /// library holds that no catalog carries findable.
     /// </summary>
     private async Task<(
         ActionExecutedContext? Executed,
         IReadOnlyList<BaseItemDto> Items,
-        int Total
+        int Total,
+        bool Cut
     )> SearchLibraryAsync(ActionExecutingContext ctx, ActionExecutionDelegate next, int upTo)
     {
         // Jellyfin pages its own answer, so ask it for everything up to the end of the page that
@@ -156,7 +175,7 @@ public class SearchActionFilter(
         {
             log.LogWarning(ex, "The library search failed");
             executed.ExceptionHandled = true;
-            return (executed, [], 0);
+            return (executed, [], 0, false);
         }
 
         if (
@@ -164,28 +183,26 @@ public class SearchActionFilter(
             && local.Items is { } items
         )
         {
-            // A full answer is no total: Jellyfin 12.1 asks its search providers for three times
-            // the limit and counts what they returned, so the total grew with the page (30 for a
-            // first page of 10, 60 for the second) and the two pages of one search disagreed.
-            // A client that asked for no total (the web client's search) pays nothing for it.
-            ctx.TryGetActionArgument("enableTotalRecordCount", out var wantsTotal, true);
-            var total =
-                items.Count < upTo || !wantsTotal
-                    ? local.TotalRecordCount
-                    : Math.Max(local.TotalRecordCount, await CountLibraryMatchesAsync(ctx));
-            return (executed, items, total);
+            // The total of an answer that was cut is no total: Jellyfin 12.1 asks its search
+            // providers for three times the limit and counts what they returned, so it grew with
+            // the page (30 for a first page of 10, 60 for the second).
+            return (executed, items, local.TotalRecordCount, items.Count >= upTo);
         }
 
-        return (executed, [], 0);
+        return (executed, [], 0, false);
     }
 
     private const int MaxCountedLibraryMatches = 5000;
 
     /// <summary>
-    /// How many items the library search matches for this request, whatever the page: the
-    /// providers' hits without a limit, counted under the user and the scope the request has.
+    /// How many items the library search lists for this request behind the addon's results,
+    /// whatever the page: the providers' hits without a limit, under the user and the scope the
+    /// request has, without the items in <paramref name="covered"/>.
     /// </summary>
-    private async Task<int> CountLibraryMatchesAsync(ActionExecutingContext ctx)
+    private async Task<int> CountLibraryMatchesAsync(
+        ActionExecutingContext ctx,
+        IReadOnlyCollection<Guid> covered
+    )
     {
         ctx.TryGetUserId(out var userId);
         ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm);
@@ -216,17 +233,26 @@ public class SearchActionFilter(
         if (hits.Count == 0)
             return 0;
 
-        return libraryManager.GetCount(
-            new InternalItemsQuery(userManager.GetUserById(userId))
-            {
-                ItemIds = hits.Select(h => h.ItemId).ToArray(),
-                IncludeItemTypes = include,
-                ExcludeItemTypes = exclude,
-                MediaTypes = mediaTypes,
-                ParentId = parentId ?? Guid.Empty,
-                Recursive = true,
-            }
-        );
+        // Counted by the query Jellyfin's search lists with. GetCount is another one: it goes
+        // past the listing filters, so it counted the unreleased titles a list never shows, and a
+        // cut page reported more than the page that held the end of the list ("day": 46 on the
+        // first page of 10, 44 on the second).
+        return libraryManager
+            .GetItemsResult(
+                new InternalItemsQuery(userManager.GetUserById(userId))
+                {
+                    ItemIds = hits.Select(h => h.ItemId).ToArray(),
+                    ExcludeItemIds = [.. covered],
+                    IncludeItemTypes = include,
+                    ExcludeItemTypes = exclude,
+                    MediaTypes = mediaTypes,
+                    ParentId = parentId ?? Guid.Empty,
+                    Recursive = true,
+                    // The count alone, no rows.
+                    Limit = 0,
+                }
+            )
+            .TotalRecordCount;
     }
 
     /// <summary>
