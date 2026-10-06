@@ -837,6 +837,12 @@ public sealed class MediaSourceManagerDecorator(
             row.SetPrimaryVersionId(primaryId);
     }
 
+    /// <summary>
+    /// The source with the id, or the first one. A movie/episode's first stream is listed with
+    /// the movie's id and names its row in the ETag only, so a row id a client kept from an
+    /// earlier list is looked for there too. That source then answers under the row's id:
+    /// Jellyfin picks the source to play out of the answer by the id that was asked for.
+    /// </summary>
     private static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
     {
         if (!id.HasValue)
@@ -844,9 +850,17 @@ public sealed class MediaSourceManagerDecorator(
 
         var target = id.Value;
 
-        return list.FirstOrDefault(s =>
-                !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
-            ) ?? list.FirstOrDefault();
+        var byId = list.FirstOrDefault(s =>
+            !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
+        );
+        if (byId is not null)
+            return byId;
+
+        var byRow = list.FirstOrDefault(s => Guid.TryParse(s.ETag, out var g) && g == target);
+        if (byRow is not null)
+            byRow.Id = byRow.ETag;
+
+        return byRow ?? list.FirstOrDefault();
     }
 
     public Task<MediaSourceInfo> GetMediaSource(
