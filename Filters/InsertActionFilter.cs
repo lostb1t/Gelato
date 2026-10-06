@@ -145,6 +145,14 @@ public class InsertActionFilter(
         if (cfg.ExtendLocalSeriesTrees)
         {
             if (manager.HasExtendedTree(series))
+            {
+                manager.RemoveShadowedEpisodes(series, ct);
+                return;
+            }
+
+            // Extended on a later visit: the scan has not numbered the series' own episodes yet,
+            // and Gelato would fill the slots they are about to hold.
+            if (manager.IsBeingScanned(series))
                 return;
 
             if (cfg.Stremio is not { } stremio)
