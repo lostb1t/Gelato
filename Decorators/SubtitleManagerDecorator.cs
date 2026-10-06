@@ -2,6 +2,7 @@
 #pragma warning disable CS1591
 
 using System;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -10,8 +11,11 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Configuration;
+using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Providers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators
@@ -22,18 +26,27 @@ namespace Gelato.Decorators
         private readonly ILogger<SubtitleManagerDecorator> _log;
         private readonly Lazy<ILibraryManager> _libraryManager;
         private readonly ILocalizationManager _localization;
+        private readonly IMediaSourceManager _mediaSourceManager;
+        private readonly IUserManager _userManager;
+        private readonly IHttpContextAccessor _http;
 
         public SubtitleManagerDecorator(
             ISubtitleManager inner,
             ILogger<SubtitleManagerDecorator> log,
             Lazy<ILibraryManager> libraryManager,
-            ILocalizationManager localization
+            ILocalizationManager localization,
+            IMediaSourceManager mediaSourceManager,
+            IUserManager userManager,
+            IHttpContextAccessor http
         )
         {
             _inner = inner;
             _log = log;
             _libraryManager = libraryManager;
             _localization = localization;
+            _mediaSourceManager = mediaSourceManager;
+            _userManager = userManager;
+            _http = http;
         }
 
         public event EventHandler<SubtitleDownloadFailureEventArgs> SubtitleDownloadFailure
@@ -54,6 +67,13 @@ namespace Gelato.Decorators
             // guard cannot sit in the request overload alone.
             if (isAutomated && SkipAutomatedSearch(video.Path, language, video))
                 return Task.FromResult(Array.Empty<RemoteSubtitleInfo>());
+
+            // The subtitle dialog on a movie/episode's page only knows the item, and its path is
+            // the placeholder: the results were ranked against "tt0349047". Rank them against the
+            // release that page plays. Jellyfin builds the request from the item it is handed,
+            // and the row is the same movie/episode with the release's path and file name.
+            if (!isAutomated && PlayingRow(video) is { } row)
+                video = row;
 
             return _inner.SearchSubtitles(
                 video,
@@ -91,8 +111,8 @@ namespace Gelato.Decorators
             if (string.IsNullOrEmpty(path))
                 return false;
 
-            // Placeholders (gelato://stub/…) are not a release. Playback only offers subtitles
-            // saved for stream items, so anything downloaded for a placeholder is never used.
+            // Placeholders (gelato://stub/…) are not a release, and what is saved for one is
+            // offered with every version: only a subtitle picked by hand belongs there.
             if (path.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase))
             {
                 _log.LogDebug("Skipping automated subtitle search for placeholder {Path}", path);
@@ -206,16 +226,104 @@ namespace Gelato.Decorators
                 .ConfigureAwait(false);
         }
 
-        public Task UploadSubtitle(Video video, SubtitleResponse response) =>
-            _inner.UploadSubtitle(video, response);
+        public async Task UploadSubtitle(Video video, SubtitleResponse response)
+        {
+            if (!video.IsGelatoPlaybackItem())
+            {
+                await _inner.UploadSubtitle(video, response).ConfigureAwait(false);
+                return;
+            }
+
+            // As in a download, the file has to get the name GetGelatoSubtitleFiles looks for.
+            // Jellyfin reads the library options itself here, so the folder cannot be chosen
+            // through them: a path inside the item's metadata folder makes that folder the
+            // "media folder" as well.
+            var originalPath = video.Path;
+            video.Path = Path.Combine(
+                video.GetInternalMetadataPath(),
+                video.GelatoSubtitlePathName()
+            );
+            try
+            {
+                await _inner.UploadSubtitle(video, response).ConfigureAwait(false);
+            }
+            finally
+            {
+                video.Path = originalPath;
+            }
+        }
 
         public Task<SubtitleResponse> GetRemoteSubtitles(
             string id,
             CancellationToken cancellationToken
         ) => _inner.GetRemoteSubtitles(id, cancellationToken);
 
-        public Task DeleteSubtitles(BaseItem item, int index) =>
-            _inner.DeleteSubtitles(item, index);
+        public Task DeleteSubtitles(BaseItem item, int index)
+        {
+            // Jellyfin looks the stream up in the database under the item's id. The files Gelato
+            // lists from the metadata folders are not in it, and a movie/episode is listed with
+            // the streams of the row it plays.
+            if (item.IsGelatoPlaybackItem() && ListedSubtitleFile(item, index) is { } path)
+            {
+                _log.LogInformation("Deleting subtitle {Path}", path);
+                File.Delete(path);
+                return Task.CompletedTask;
+            }
+
+            return _inner.DeleteSubtitles(item, index);
+        }
+
+        /// <summary>
+        /// The source a movie/episode's page plays for the user of the request: the first of its
+        /// sources, the resumed version before the others. The item itself is listed with that
+        /// source's streams, in the subtitle dialog too.
+        /// </summary>
+        private MediaSourceInfo PlayingSource(BaseItem item)
+        {
+            var user = _http.ReadRequest(
+                ctx => ctx.TryGetUserId(out var id) ? _userManager.GetUserById(id) : null,
+                null
+            );
+            return _mediaSourceManager.GetStaticMediaSources(item, false, user).FirstOrDefault();
+        }
+
+        /// <summary>
+        /// The stream row behind <see cref="PlayingSource"/> of a placeholder, when it has one.
+        /// </summary>
+        private Video PlayingRow(Video video)
+        {
+            if (video.HasStreamTag() || !video.IsGelatoPlaybackItem())
+                return null;
+
+            // The first stream is listed under the movie's id and names its row in the ETag.
+            var row = Guid.TryParse(PlayingSource(video)?.ETag, out var rowId)
+                ? _libraryManager.Value.GetItemById(rowId) as Video
+                : null;
+            return row is not null && row.HasStreamTag() ? row : null;
+        }
+
+        /// <summary>
+        /// The file of the external subtitle an item is listed with under an index, when Gelato
+        /// saved it: for the row that plays or for its movie/episode.
+        /// </summary>
+        private string ListedSubtitleFile(BaseItem item, int index)
+        {
+            var source = PlayingSource(item);
+            var path = source
+                ?.MediaStreams?.FirstOrDefault(s =>
+                    s.Type == MediaStreamType.Subtitle && s.IsExternal && s.Index == index
+                )
+                ?.Path;
+            if (string.IsNullOrEmpty(path))
+                return null;
+
+            var library = _libraryManager.Value;
+            var row = Guid.TryParse(source.ETag, out var rowId) ? library.GetItemById(rowId) : null;
+            BaseItem[] savedFor = [item.PrimaryVersionOrSelf(library), row ?? item];
+            return savedFor.Any(owner => owner.GetGelatoSubtitleFiles().Any(f => f.Path == path))
+                ? path
+                : null;
+        }
 
         public SubtitleProviderInfo[] GetSupportedProviders(BaseItem item) =>
             _inner.GetSupportedProviders(item);
