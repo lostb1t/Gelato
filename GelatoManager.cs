@@ -1305,7 +1305,7 @@ public sealed class GelatoManager(
                     CancellationToken.None
                 );
                 _log.LogDebug(
-                    "Adopted the watch state of a legacy stream row for {Name} on {Id}",
+                    "Adopted the watch state of a replaced item for {Name} on {Id}",
                     user.Username,
                     primary.Id
                 );
@@ -1406,6 +1406,92 @@ public sealed class GelatoManager(
             .Any(s => s.IsGelato());
 
     /// <summary>
+    /// Whether Jellyfin is scanning the series, or a folder above it, right now.
+    /// </summary>
+    /// <remarks>
+    /// A scan saves what it finds before it refreshes it: a new series is listed while its
+    /// episodes are not created yet, and a new episode has no season and episode number until its
+    /// own refresh, seconds later. A tree extended in between takes every slot of the series for
+    /// empty and fills the ones the files are about to hold.
+    /// </remarks>
+    public bool IsBeingScanned(Series series) =>
+        provider.GetRefreshProgress(series.Id) is not null
+        || series.GetParents().Any(p => provider.GetRefreshProgress(p.Id) is not null);
+
+    /// <summary>
+    /// Takes back the episodes Gelato added to a local series for a slot one of the series' own
+    /// episodes holds, so the episode is listed once: as the file.
+    /// </summary>
+    /// <remarks>
+    /// Gelato fills the slots a local series has no file for, and a file can arrive afterwards:
+    /// the user adds the episode, or the tree was extended while the scan had not numbered the
+    /// file yet. Nothing removed Gelato's episode then, and the season listed both from then on.
+    /// What was watched on Gelato's episode moves to the file, unless the file's state is newer,
+    /// and so do playlist and collection entries.
+    /// </remarks>
+    public void RemoveShadowedEpisodes(Series series, CancellationToken ct)
+    {
+        var slots = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    AncestorIds = [series.Id],
+                    IncludeItemTypes = [BaseItemKind.Episode],
+                    Recursive = true,
+                    IsDeadPerson = true,
+                }
+            )
+            .OfType<Episode>()
+            .Where(e => !e.IsStream() && e.IndexNumber.HasValue && e.ParentIndexNumber.HasValue)
+            .GroupBy(e => (e.ParentIndexNumber, e.IndexNumber));
+
+        foreach (var slot in slots)
+        {
+            var shadowed = slot.Where(e => e.IsGelato() && !e.IsFileProtocol).ToList();
+            if (
+                shadowed.Count == 0
+                || slot.FirstOrDefault(e => e.IsFileProtocol && !e.IsGelato()) is not { } file
+            )
+                continue;
+
+            // The library manager's copy where it has one: these came fresh from the database,
+            // and watch state saved on another copy is not seen through the cached one.
+            var local = libraryManager.GetItemById(file.Id) as Episode ?? file;
+
+            foreach (var added in shadowed)
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    DeleteStreamRows(added, GetStreamRows(added), ct);
+                    AdoptWatchState(local, [added]);
+                    RerouteLinks([added], local.Id);
+                    libraryManager.DeleteItem(
+                        added,
+                        new DeleteOptions { DeleteFileLocation = false }
+                    );
+                    _log.LogDebug(
+                        "Removed S{Season:D2}E{Episode:D2} from {SeriesName}: the series has a file for it",
+                        added.ParentIndexNumber,
+                        added.IndexNumber,
+                        series.Name
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(
+                        ex,
+                        "Failed to remove episode {Name} ({Id}) a file of {SeriesName} replaces",
+                        added.Name,
+                        added.Id,
+                        series.Name
+                    );
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// The item the tree sync would overwrite by creating one at <paramref name="path"/>, if there
     /// is one: every Gelato item takes its id from the hash of its path
     /// (<see cref="ILibraryManager.GetNewItemId"/>), so two items at the same path are one row.
@@ -1429,6 +1515,7 @@ public sealed class GelatoManager(
         {
             // Local (non-gelato) series — use as-is, no creation needed
             series = existingSeries;
+            RemoveShadowedEpisodes(series, ct);
         }
         else
         {
@@ -2237,9 +2324,19 @@ public sealed class GelatoManager(
                     !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
                     || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
                 )
-                && !HasExtendedTree(s)
             )
             .ToList();
+
+        // A series that has its tree is not synced again, but a file can have arrived for a slot
+        // Gelato filled.
+        var extendedSeries = localSeries.Where(HasExtendedTree).ToList();
+        foreach (var series in extendedSeries)
+        {
+            ct.ThrowIfCancellationRequested();
+            RemoveShadowedEpisodes(series, ct);
+        }
+
+        localSeries = localSeries.Except(extendedSeries).ToList();
 
         // Not only new ones: a series whose tree is being rebuilt, or that only had episodes
         // filled in, is not marked yet and comes back on every run.
