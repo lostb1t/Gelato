@@ -69,7 +69,10 @@ public class SearchActionFilter(
         ctx.TryGetActionArgument("startIndex", out var start, 0);
         ctx.TryGetActionArgument("limit", out var limit, 25);
 
-        var metas = await SearchMetasAsync(searchTerm, requestedTypes, cfg, stremio, userId);
+        // The catalogs are asked first and awaited after Jellyfin's own search has run: neither
+        // half needs the other's answer, the library's takes 45 to 70 ms and the addon's 25 ms
+        // to two seconds, so one after the other a search waited for both.
+        var addon = SearchMetasAsync(searchTerm, requestedTypes, cfg, stremio, userId);
 
         // A client asks for every type it wants in one request: the web client's global search
         // sends Movie, Series, Episode, BoxSet, TvChannel and more together. Answering all of it
@@ -77,11 +80,32 @@ public class SearchActionFilter(
         // inside Live TV, where the client asks for TvChannel alone and the search never gets
         // this far (lostb1t/Gelato#162). Let Jellyfin answer for everything it holds and put its
         // results after the addon's.
-        var (executed, localItems, localTotal, cut) = await SearchLibraryAsync(
-            ctx,
-            next,
-            start + limit
-        );
+        ActionExecutedContext? executed;
+        IReadOnlyList<BaseItemDto> localItems;
+        int localTotal;
+        bool cut;
+        try
+        {
+            (executed, localItems, localTotal, cut) = await SearchLibraryAsync(
+                ctx,
+                next,
+                start + limit
+            );
+        }
+        catch
+        {
+            // Nobody awaits the addon's answer any more. Its failure was logged where it
+            // happened; looking at it here keeps it from surfacing as an unobserved exception.
+            _ = addon.ContinueWith(
+                static t => _ = t.Exception,
+                TaskContinuationOptions.OnlyOnFaulted
+            );
+            throw;
+        }
+
+        // Fails the request when no catalog answered, as before: after the library's half now,
+        // whose answer is dropped with it.
+        var metas = await addon;
 
         // The addon's result for a title the library already has and the library's own item are
         // the same title twice. The addon's half answers with the library's item where there is
