@@ -3,10 +3,12 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Entities;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
+using Microsoft.Net.Http.Headers;
 
 namespace Gelato.Filters;
 
@@ -107,15 +109,24 @@ public sealed class ImageResourceFilter(
             }
 
             var contentType = res.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
-            ctx.HttpContext.Response.ContentType = contentType;
+            var response = ctx.HttpContext.Response;
+            response.ContentType = contentType;
+
+            // With the length the client can tell a poster that was cut off from a whole one,
+            // which it has to before it keeps one. A handler that decompresses takes the header
+            // away, so what is here is the length of what is copied below.
+            if (res.Content.Headers.ContentLength is { } length)
+                response.ContentLength = length;
+
+            AllowCaching(ctx.HttpContext);
+
+            if (HttpMethods.IsHead(ctx.HttpContext.Request.Method))
+                return;
 
             await using var responseStream = await res.Content.ReadAsStreamAsync(
                 ctx.HttpContext.RequestAborted
             );
-            await responseStream.CopyToAsync(
-                ctx.HttpContext.Response.Body,
-                ctx.HttpContext.RequestAborted
-            );
+            await responseStream.CopyToAsync(response.Body, ctx.HttpContext.RequestAborted);
         }
         catch (OperationCanceledException)
             when (ctx.HttpContext.RequestAborted.IsCancellationRequested)
@@ -131,8 +142,44 @@ public sealed class ImageResourceFilter(
                 guid,
                 Redact.Url(url)
             );
+
+            // The answer is on its way, so there is nothing left to hand on: Jellyfin's action
+            // would write its own answer behind half a poster. Cutting the connection tells the
+            // client the poster is not whole, and it keeps none of it.
+            if (ctx.HttpContext.Response.HasStarted)
+            {
+                ctx.HttpContext.Abort();
+                return;
+            }
+
+            ctx.HttpContext.Response.Headers.Remove(HeaderNames.CacheControl);
+            ctx.HttpContext.Response.ContentLength = null;
             await next();
         }
+    }
+
+    /// <summary>
+    /// Lets the client keep a proxied poster for as long as the search result's meta is kept.
+    /// </summary>
+    /// <remarks>
+    /// The answer carried a content type and nothing else, so a client loaded every poster of a
+    /// search again on each view of it: 33 posters, 5.8 MB, on every back navigation and every
+    /// page of the same term. Only a request that names the tag is answered this way, as
+    /// Jellyfin does for its own images, and one that asks for no cache is left alone. Not for
+    /// a year like a library image: a search result's tag hashes its stub path and does not
+    /// follow the poster, so the lifetime is what tells the client to look again.
+    /// </remarks>
+    private static void AllowCaching(HttpContext http)
+    {
+        if (
+            !http.Request.Query.TryGetValue("tag", out var tag)
+            || string.IsNullOrEmpty(tag)
+            || http.Request.Headers.CacheControl.Contains("no-cache")
+        )
+            return;
+
+        http.Response.Headers.CacheControl =
+            $"public, max-age={(long)GelatoManager.StremioMetaTtl.TotalSeconds}";
     }
 
     /// <summary>

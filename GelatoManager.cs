@@ -102,9 +102,12 @@ public sealed class GelatoManager(
         );
     }
 
+    /// <summary>How long a search result's meta is kept, and with it the poster it names.</summary>
+    public static readonly TimeSpan StremioMetaTtl = TimeSpan.FromHours(6);
+
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
     {
-        memoryCache.Set($"meta:{guid}", meta, TimeSpan.FromMinutes(360));
+        memoryCache.Set($"meta:{guid}", meta, StremioMetaTtl);
     }
 
     public StremioMeta? GetStremioMeta(Guid guid)
