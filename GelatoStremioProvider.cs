@@ -522,8 +522,61 @@ public class GelatoStremioProvider(
         }
     }
 
+    /// <summary>
+    /// How long a stream answer asked for ahead waits to be taken. The addon's own timeout: an
+    /// answer that took longer than that is not coming.
+    /// </summary>
+    private static readonly TimeSpan StreamsAheadLifetime = TimeSpan.FromSeconds(30);
+
+    private AheadOfTime<List<StremioStream>>? _streamsAhead;
+
+    // A request that nobody took was one too many: it is logged, so that it can be counted.
+    private AheadOfTime<List<StremioStream>> StreamsAhead =>
+        LazyInitializer.EnsureInitialized(
+            ref _streamsAhead,
+            () =>
+                new AheadOfTime<List<StremioStream>>(
+                    StreamsAheadLifetime,
+                    key =>
+                        log.LogDebug(
+                            "StartStreamsAhead: nobody took the streams asked for ahead for {Key}",
+                            key
+                        )
+                )
+        );
+
+    private static string StreamsKey(StremioUri uri) => $"{uri.MediaType}:{uri.ExternalId}";
+
+    /// <summary>
+    /// Asks for a title's streams before anything needs them, for the next
+    /// <see cref="GetStreamsAsync(StremioUri)"/> of the same title to take. Whoever knows that a
+    /// stream sync is about to follow calls this: the answer is the addon's slowest (0.6 to
+    /// 1.5 s), and it does not depend on what the caller does in between.
+    /// </summary>
+    public void StartStreamsAhead(StremioUri uri) =>
+        StreamsAhead.Start(
+            StreamsKey(uri),
+            () =>
+            {
+                log.LogDebug(
+                    "StartStreamsAhead: asking for the streams of {Id} ahead of their sync",
+                    uri.ExternalId
+                );
+                return GetStreamsAsync(uri.ExternalId, uri.MediaType);
+            }
+        );
+
     public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
     {
+        if (StreamsAhead.TryTake(StreamsKey(uri)) is { } ahead)
+        {
+            log.LogDebug(
+                "GetStreamsAsync: taking the answer asked for ahead for {Id}",
+                uri.ExternalId
+            );
+            return await ahead.ConfigureAwait(false);
+        }
+
         return await GetStreamsAsync(uri.ExternalId, uri.MediaType);
     }
 

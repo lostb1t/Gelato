@@ -95,7 +95,8 @@ public class InsertActionFilter(
             stremioMeta,
             userId,
             user,
-            refreshItem: wantsPlayed is null
+            refreshItem: wantsPlayed is null,
+            streamSyncFollows: ctx.ListsMediaSources()
         );
         if (baseItem is not null)
             ctx.ReplaceGuid(baseItem.Id);
@@ -230,7 +231,8 @@ public class InsertActionFilter(
         StremioMeta stremioMeta,
         Guid userId,
         User user,
-        bool refreshItem = true
+        bool refreshItem = true,
+        bool streamSyncFollows = false
     )
     {
         // Get root folder
@@ -243,6 +245,11 @@ public class InsertActionFilter(
             log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
             return null;
         }
+
+        // The answer this request builds lists the item's sources, which syncs its streams:
+        // they are asked for now, next to the meta, instead of after it.
+        if (streamSyncFollows)
+            manager.StartStreamSyncAhead(stremioMeta, userId);
 
         // Fetch full metadata
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);

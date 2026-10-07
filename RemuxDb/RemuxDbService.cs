@@ -48,6 +48,15 @@ public sealed class RemuxDbService(
     }
 
     /// <summary>
+    /// Starts <see cref="LookupAsync"/> for a title whose stream sync is about to follow.
+    /// </summary>
+    public void LookupAhead(string? stremioId)
+    {
+        if (Enabled && RemuxDbTitle.FromStremioId(stremioId) is { } title)
+            client.StartLookupAhead(title);
+    }
+
+    /// <summary>
     /// Records the stream's file on the row and, when RemuxDB knows the file, sets the row's
     /// runtime, size, container and bitrate. The tracks are returned to be saved with
     /// <see cref="Save"/> once the row is in the database.

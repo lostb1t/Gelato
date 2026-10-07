@@ -210,15 +210,23 @@ public sealed class MediaSourceManagerDecorator(
 
         var itemId = item.Id.ToString("N", CultureInfo.InvariantCulture);
 
+        // A search result the library does not hold: no row has its id, so it has no versions,
+        // no rows to link, no media streams and no attachments, and the four queries asking for
+        // them, per result of a search, can only come back empty. Not when a sync was allowed:
+        // that one may just have written rows for it.
+        var notInLibrary = !allowSync && item.IsNotInLibrary();
+
         // A version, a stream row or a file merged in by hand, lists the versions of its movie.
         var primary = video?.PrimaryVersionId is { } primaryVersionId
             ? _libraryManager.GetItemById(primaryVersionId) as Video
             : video;
-        var linkedVersions = primary is null
-            ? []
-            : _libraryManager.GetLinkedAlternateVersions(primary).ToList();
+        var linkedVersions =
+            primary is null || notInLibrary
+                ? []
+                : _libraryManager.GetLinkedAlternateVersions(primary).ToList();
         if (
             linkedVersions.Count == 0
+            && !notInLibrary
             && primary is not null
             && !isStreamRow
             && primary.IsGelatoPlaybackItem()
@@ -312,7 +320,9 @@ public sealed class MediaSourceManagerDecorator(
         // failsafe. mediasources cannot be null
         if (sources.Count == 0)
         {
-            sources.Add(GetVersionInfo(item, MediaSourceType.Default, user));
+            sources.Add(
+                GetVersionInfo(item, MediaSourceType.Default, user, inLibrary: !notInLibrary)
+            );
         }
 
         // A Gelato movie/episode has no media of its own, so its first stream takes its id and the
@@ -954,7 +964,8 @@ public sealed class MediaSourceManagerDecorator(
         BaseItem item,
         MediaSourceType type,
         User? user = null,
-        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null
+        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null,
+        bool inLibrary = true
     )
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -971,8 +982,8 @@ public sealed class MediaSourceManagerDecorator(
             Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
             ETag = item.Id.ToString("N", CultureInfo.InvariantCulture),
             Protocol = MediaProtocol.Http,
-            MediaStreams = GetMediaStreamsWithExternalSubs(item, titleSubtitles),
-            MediaAttachments = _inner.GetMediaAttachments(item.Id),
+            MediaStreams = GetMediaStreamsWithExternalSubs(item, titleSubtitles, inLibrary),
+            MediaAttachments = inLibrary ? _inner.GetMediaAttachments(item.Id) : [],
             Name = richName,
             Path = item.Path,
             RunTimeTicks = item.RunTimeTicks,
@@ -1028,10 +1039,11 @@ public sealed class MediaSourceManagerDecorator(
     // its movie/episode after its own.
     private IReadOnlyList<MediaStream> GetMediaStreamsWithExternalSubs(
         BaseItem item,
-        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null
+        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null,
+        bool inLibrary = true
     )
     {
-        var streams = _inner.GetMediaStreams(item.Id).ToList();
+        var streams = inLibrary ? _inner.GetMediaStreams(item.Id).ToList() : [];
 
         var existingPaths = new HashSet<string>(
             streams.Where(s => s.Path != null).Select(s => s.Path!),
