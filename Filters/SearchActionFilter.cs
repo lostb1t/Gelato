@@ -460,6 +460,26 @@ public class SearchActionFilter(
         .ToArray();
 
     /// <summary>
+    /// The fields of a result whose id the library does not know (<see cref="FindUnknownIdsAsync"/>).
+    /// The four left out are read from the database by the item's id, so they can only come back
+    /// empty for it, and <see cref="GetUnknownItemDto"/> sets them to what the full build answers:
+    /// no people, no chapters, no trickplay (the manifest skips a remote source, and builds the
+    /// item's sources a second time to find that out) and no media source count (it is only
+    /// sent when it is not one). A search of 39 such results ran 274 queries, seven per result.
+    /// </summary>
+    private static readonly ItemFields[] UnknownItemFields = SearchResultFields
+        .Where(f =>
+            f
+                is not (
+                    ItemFields.People
+                    or ItemFields.Chapters
+                    or ItemFields.Trickplay
+                    or ItemFields.MediaSourceCount
+                )
+        )
+        .ToArray();
+
+    /// <summary>
     /// The addon's results as DTOs, and, per result, the library item it stands in for when the
     /// library has the title already.
     /// </summary>
@@ -491,6 +511,12 @@ public class SearchActionFilter(
             EnableImages = true,
             EnableUserData = true,
         };
+        var unknownOptions = new DtoOptions(false)
+        {
+            Fields = UnknownItemFields,
+            EnableImages = true,
+            EnableUserData = false,
+        };
         var user = userManager.GetUserById(userId);
 
         var results = metas
@@ -499,6 +525,7 @@ public class SearchActionFilter(
             .Select(r => (r.Meta, Item: r.Item!))
             .ToList();
         var libraryItems = await FindLibraryItemsAsync(results.Select(r => r.Item), user, ct);
+        var unknownIds = await FindUnknownIdsAsync(results.Select(r => r.Item.Id), ct);
 
         var dtos = new List<BaseItemDto>(metas.Count);
 
@@ -526,7 +553,8 @@ public class SearchActionFilter(
             var dto =
                 existing is not null && covered.Add(existing.Id)
                     ? dtoService.GetBaseItemDto(existing, libraryOptions, user)
-                    : dtoService.GetBaseItemDto(baseItem, options);
+                : unknownIds.Contains(baseItem.Id) ? GetUnknownItemDto(baseItem, unknownOptions)
+                : dtoService.GetBaseItemDto(baseItem, options);
 
             if (dto.Id != existing?.Id)
                 dto.Id = searchId;
@@ -587,6 +615,70 @@ public class SearchActionFilter(
                 IsDeadPerson = true, // skip filter marker
             }
         );
+    }
+
+    /// <summary>
+    /// The DTO of a result whose id the library does not know, as the full build answers it,
+    /// without the queries that can only come back empty. See <see cref="UnknownItemFields"/>.
+    /// </summary>
+    private BaseItemDto GetUnknownItemDto(BaseItem item, DtoOptions options)
+    {
+        item.MarkNotInLibrary();
+        var dto = dtoService.GetBaseItemDto(item, options);
+        dto.People = [];
+        dto.Chapters = [];
+        if (item is Video)
+            dto.Trickplay = new();
+        return dto;
+    }
+
+    /// <summary>
+    /// Of the ids the results' items are built with, those no item of the library has: neither
+    /// as its own id nor as the item it is a version or an extra of. One query for the whole
+    /// search. An id it does not return is known to some row, and that result is built in full:
+    /// a title the library holds but this user may not see has the id its result is built with,
+    /// and so can a row whose movie is gone.
+    /// </summary>
+    private async Task<HashSet<Guid>> FindUnknownIdsAsync(
+        IEnumerable<Guid> candidates,
+        CancellationToken ct
+    )
+    {
+        var unknown = candidates.ToHashSet();
+        if (unknown.Count == 0)
+            return unknown;
+
+        var ids = unknown.Select(id => (Guid?)id).ToArray();
+        var db = await dbFactory.CreateDbContextAsync(ct).ConfigureAwait(false);
+        await using (db.ConfigureAwait(false))
+        {
+            var known = await db
+                .BaseItems.AsNoTracking()
+                .Where(b =>
+                    ids.Contains(b.Id)
+                    || ids.Contains(b.PrimaryVersionId)
+                    || ids.Contains(b.OwnerId)
+                )
+                .Select(b => new
+                {
+                    b.Id,
+                    b.PrimaryVersionId,
+                    b.OwnerId,
+                })
+                .ToListAsync(ct)
+                .ConfigureAwait(false);
+
+            foreach (var row in known)
+            {
+                unknown.Remove(row.Id);
+                if (row.PrimaryVersionId is { } primary)
+                    unknown.Remove(primary);
+                if (row.OwnerId is { } owner)
+                    unknown.Remove(owner);
+            }
+        }
+
+        return unknown;
     }
 
     /// <summary>Same rule as <see cref="GelatoManager.FindExistingItem"/>, on loaded items.</summary>

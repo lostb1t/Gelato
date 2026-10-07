@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -826,6 +827,24 @@ public static class BaseItemExtensions
             item.EndDate = null;
         }
     }
+
+    private static readonly ConditionalWeakTable<BaseItem, object> ItemsNotInLibrary = new();
+    private static readonly object NotInLibraryMark = new();
+
+    /// <summary>
+    /// Marks an item built for a search result whose id no item of the library has, as its own
+    /// or as the owner of a version. What the database holds per item (linked versions, media
+    /// streams, attachments) can only be empty for it, so nobody has to ask.
+    /// </summary>
+    /// <remarks>
+    /// The mark is on the instance, not on the id: the item the result becomes when it is opened
+    /// is another instance with the same id, and that one is in the library.
+    /// </remarks>
+    public static void MarkNotInLibrary(this BaseItem item) =>
+        ItemsNotInLibrary.AddOrUpdate(item, NotInLibraryMark);
+
+    public static bool IsNotInLibrary(this BaseItem item) =>
+        ItemsNotInLibrary.TryGetValue(item, out _);
 
     public static bool HasStreamTag(this BaseItem item)
     {
