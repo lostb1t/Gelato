@@ -35,11 +35,10 @@ public sealed class UnreleasedListingFilter(IItemRepository itemRepository) : IA
         )
             return;
 
-        var unreleased = repository.GetUnreleasedIds(cfg.FilterUnreleasedBufferDays);
-        if (unreleased.Length == 0)
+        var hidden = repository.GetUnreleasedIds(cfg.FilterUnreleasedBufferDays);
+        if (hidden.Count == 0)
             return;
 
-        var hidden = new HashSet<Guid>(unreleased);
         switch (result.Value)
         {
             case QueryResult<BaseItemDto> query when query.Items.Count > 0:

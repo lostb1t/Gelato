@@ -150,6 +150,8 @@ public sealed class GelatoManager(
             cache.Compact(1.0);
         }
 
+        repo.ForgetUnreleasedIds();
+
         _log.LogDebug("Cache cleared");
     }
 

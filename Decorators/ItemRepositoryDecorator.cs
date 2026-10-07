@@ -12,8 +12,11 @@ using Microsoft.AspNetCore.Http;
 
 namespace Gelato.Decorators;
 
-public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAccessor http)
-    : IItemRepository
+public sealed class GelatoItemRepository(
+    IItemRepository inner,
+    IHttpContextAccessor http,
+    ItemWriteCounter writes
+) : IItemRepository
 {
     private static readonly BaseItemKind[] ListScopeMediaKinds =
     [
@@ -146,22 +149,42 @@ public sealed class GelatoItemRepository(IItemRepository inner, IHttpContextAcce
     /// so <see cref="Filters.UnreleasedListingFilter"/> needs the same set to finish the job on the
     /// response.
     /// </summary>
-    public Guid[] GetUnreleasedIds(int bufferDays) =>
-        GetUnreleasedGelatoIds(DateTime.Today.AddDays(-bufferDays));
+    public IReadOnlySet<Guid> GetUnreleasedIds(int bufferDays) =>
+        GetUnreleased(DateTime.Today.AddDays(-bufferDays)).Set;
 
-    // One request lists through the repository several times (a search: four times), and the set
-    // cannot change within it, so it is computed once per request.
-    private Guid[] GetUnreleasedGelatoIds(DateTime cutoff)
+    /// <summary>
+    /// Makes the next listing read the unreleased set again, whatever was written since.
+    /// </summary>
+    public void ForgetUnreleasedIds() => writes.Bump();
+
+    private Guid[] GetUnreleasedGelatoIds(DateTime cutoff) => GetUnreleased(cutoff).Ids;
+
+    private sealed record UnreleasedIds(long Cutoff, long Version, Guid[] Ids, HashSet<Guid> Set);
+
+    private volatile UnreleasedIds _unreleased;
+
+    // Every listing asks for the set, a home screen about twenty times, and reading it walks
+    // every movie, series, season and episode (15 to 17 ms on a library of 4.7k), for a set that
+    // changes a few times a day. It is kept until the next item write (ItemWriteCounter), the
+    // next day or another buffer (both move the cutoff), and a saved configuration or a purge
+    // (GelatoManager.ClearCache). The count is taken before the query: a write that lands while
+    // it runs leaves the answer stored under a count that is no longer current, so the next
+    // listing reads again. Neither the array nor the set is ever changed after it is stored.
+    // Nothing is kept while nobody counts the writes (the persistence service is not decorated,
+    // which should not happen): a set that is never thrown away would hide and show the wrong
+    // items for good.
+    private UnreleasedIds GetUnreleased(DateTime cutoff)
     {
-        var items = _http.HttpContext?.Items;
-        var key = "gelato:unreleased:" + cutoff.Ticks;
-        if (items?[key] is Guid[] cached)
-            return cached;
+        var version = writes.Version;
+        var kept = _unreleased;
+        if (kept is not null && kept.Cutoff == cutoff.Ticks && kept.Version == version)
+            return kept;
 
         var ids = QueryUnreleasedGelatoIds(cutoff);
-        if (items is not null)
-            items[key] = ids;
-        return ids;
+        var read = new UnreleasedIds(cutoff.Ticks, version, ids, [.. ids]);
+        if (writes.IsCounting)
+            _unreleased = read;
+        return read;
     }
 
     private Guid[] QueryUnreleasedGelatoIds(DateTime cutoff) =>
