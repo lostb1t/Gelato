@@ -154,6 +154,7 @@ public sealed class GelatoManager(
         }
 
         repo.ForgetUnreleasedIds();
+        RemuxDbClient.ForgetLookupsAhead();
 
         _log.LogDebug("Cache cleared");
     }
@@ -619,6 +620,39 @@ public sealed class GelatoManager(
         Func<CancellationToken, Task> action,
         CancellationToken ct
     ) => _itemWrites.RunQueuedAsync(itemId, action, ct);
+
+    /// <summary>
+    /// Asks for what the first stream sync of a movie waits for, the addon's streams and
+    /// RemuxDB's versions, while the movie is still a search result that is being put into the
+    /// library. <see cref="SyncStreams"/> then takes both answers instead of asking.
+    /// </summary>
+    /// <remarks>
+    /// Opening a movie from search asked the addon for the meta (2.0 to 2.5 s for a title's
+    /// first request) and, once the item was saved, for the streams (0.6 to 1.5 s), one after
+    /// the other. Only for a result that carries the id the sync will ask with: a movie is
+    /// synced under its IMDb id, and a result that has none (a <c>tmdb:</c> id alone) gets it
+    /// from the meta. A sync that asks with another id after all finds nothing to take and asks
+    /// for itself; the answer started here is dropped after 30 seconds.
+    /// </remarks>
+    public void StartStreamSyncAhead(StremioMeta result, Guid userId)
+    {
+        if (result.Type != StremioMediaType.Movie)
+            return;
+
+        // The id IntoBaseItem files as the movie's IMDb id, which StremioUri.FromBaseItem
+        // prefers.
+        var id = !string.IsNullOrWhiteSpace(result.ImdbId) ? result.ImdbId : result.Id;
+        if (
+            string.IsNullOrWhiteSpace(id)
+            || !id.StartsWith("tt", StringComparison.OrdinalIgnoreCase)
+            || GelatoPlugin.Instance!.GetConfig(userId).Stremio is not { } stremio
+        )
+            return;
+
+        var uri = new StremioUri(StremioMediaType.Movie, id);
+        stremio.StartStreamsAhead(uri);
+        remuxDb.LookupAhead(uri.ExternalId);
+    }
 
     /// <summary>
     /// Load streams and inserts them into the database keeping original

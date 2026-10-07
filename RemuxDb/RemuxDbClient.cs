@@ -52,6 +52,35 @@ public sealed class RemuxDbClient(HttpClient http, IMemoryCache cache, ILogger<R
         CancellationToken ct
     )
     {
+        if (Ahead.TryTake(title.CacheKey) is { } ahead)
+            return await ahead.WaitAsync(ct).ConfigureAwait(false);
+
+        return await LookupAsync(title, ct).ConfigureAwait(false);
+    }
+
+    // Static: the client is a typed HttpClient, so every service that takes one has its own.
+    private static readonly AheadOfTime<IReadOnlyList<RemuxDbVersion>> Ahead = new(
+        TimeSpan.FromSeconds(30)
+    );
+
+    /// <summary>
+    /// Starts a title's lookup before its stream sync asks for it, for that sync to take: it
+    /// then waits for neither the addon's streams nor this.
+    /// </summary>
+    public void StartLookupAhead(RemuxDbTitle title) =>
+        Ahead.Start(title.CacheKey, () => LookupAsync(title, CancellationToken.None));
+
+    /// <summary>
+    /// Drops the lookups nobody has taken yet: they were asked of the RemuxDB the configuration
+    /// named when they started.
+    /// </summary>
+    public static void ForgetLookupsAhead() => Ahead.Clear();
+
+    private async Task<IReadOnlyList<RemuxDbVersion>> LookupAsync(
+        RemuxDbTitle title,
+        CancellationToken ct
+    )
+    {
         var key = CacheKey(title);
         if (cache.TryGetValue(key, out IReadOnlyList<RemuxDbVersion>? cached) && cached is not null)
             return cached;
@@ -125,7 +154,11 @@ public sealed class RemuxDbClient(HttpClient http, IMemoryCache cache, ILogger<R
     }
 
     /// <summary>Forgets a title's lookup, so a file just submitted is found on the next sync.</summary>
-    public void Forget(RemuxDbTitle title) => cache.Remove(CacheKey(title));
+    public void Forget(RemuxDbTitle title)
+    {
+        cache.Remove(CacheKey(title));
+        _ = Ahead.TryTake(title.CacheKey);
+    }
 
     /// <summary>Submits a probed file. Returns whether RemuxDB took it.</summary>
     public async Task<bool> SubmitAsync(RemuxDbSubmission submission, CancellationToken ct)

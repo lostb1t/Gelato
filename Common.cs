@@ -204,6 +204,83 @@ public sealed class KeyLock
 }
 
 /// <summary>
+/// Answers asked for ahead of the request that needs them, handed over once.
+/// </summary>
+/// <remarks>
+/// An answer is taken by the first request that asks for its key within
+/// <paramref name="lifetime"/> of its start, still under way or finished, and by nobody after
+/// that: whoever comes later asks for himself. One that failed is dropped, so nobody is handed
+/// a failure he did not wait for; whoever took it while it was under way gets its failure, as
+/// he would have from a request of his own.
+/// </remarks>
+/// <param name="lifetime">How long an answer waits to be taken.</param>
+/// <param name="untaken">Told the key of an answer nobody took within the lifetime.</param>
+public sealed class AheadOfTime<T>(TimeSpan lifetime, Action<string>? untaken = null)
+{
+    private sealed record Entry(Task<T> Answer, long StartedAt);
+
+    private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
+
+    private bool IsFresh(Entry entry) =>
+        Environment.TickCount64 - entry.StartedAt < lifetime.TotalMilliseconds;
+
+    /// <summary>
+    /// Starts <paramref name="ask"/> for the key unless one started within the lifetime is
+    /// still waiting to be taken.
+    /// </summary>
+    public void Start(string key, Func<Task<T>> ask)
+    {
+        Entry entry;
+        lock (_entries)
+        {
+            if (_entries.TryGetValue(key, out var kept) && IsFresh(kept))
+                return;
+
+            entry = new Entry(ask(), Environment.TickCount64);
+            _entries[key] = entry;
+        }
+
+        var mine = new KeyValuePair<string, Entry>(key, entry);
+        _ = entry.Answer.ContinueWith(
+            t =>
+            {
+                // Looked at, so that it does not surface as an unobserved exception.
+                _ = t.Exception;
+                _entries.TryRemove(mine);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.NotOnRanToCompletion
+                | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
+        _ = Task.Delay(lifetime)
+            .ContinueWith(
+                _ =>
+                {
+                    if (_entries.TryRemove(mine))
+                        untaken?.Invoke(key);
+                },
+                TaskScheduler.Default
+            );
+    }
+
+    /// <summary>Drops every answer nobody has taken yet.</summary>
+    public void Clear() => _entries.Clear();
+
+    /// <summary>
+    /// The answer started for the key, or null when there is none to hand over. It is gone
+    /// from here either way.
+    /// </summary>
+    public Task<T>? TryTake(string key) =>
+        _entries.TryRemove(key, out var entry)
+        && IsFresh(entry)
+        && !entry.Answer.IsFaulted
+        && !entry.Answer.IsCanceled
+            ? entry.Answer
+            : null;
+}
+
+/// <summary>
 /// Makes URLs safe to write to Jellyfin's log. Stream URLs, addon URLs and the http paths of
 /// stream items carry the user's debrid API key or addon config in their path or query, and
 /// users paste their logs into public issues and chats.
@@ -470,6 +547,19 @@ public static class ActionContextExtensions
 
     public static bool IsPlaybackInfoAction(this HttpContext? ctx) =>
         ctx?.GetActionName() is { } actionName && PlaybackInfoActionNames.Contains(actionName);
+
+    /// <summary>
+    /// Whether the action answers with the item's media sources whatever the request asks for:
+    /// the item itself (Jellyfin builds it with every field) and its playback info. Listing
+    /// them is what syncs a movie's or an episode's streams.
+    /// </summary>
+    public static bool ListsMediaSources(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is { } actionName
+        && (
+            PlaybackInfoActionNames.Contains(actionName)
+            || actionName.Equals("GetItem", StringComparison.OrdinalIgnoreCase)
+            || actionName.Equals("GetItemLegacy", StringComparison.OrdinalIgnoreCase)
+        );
 
     public static bool IsInsertableAction(this HttpContext ctx)
     {
