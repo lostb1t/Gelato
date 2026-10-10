@@ -49,4 +49,72 @@ public sealed class ItemIdLookup(IDbContextFactory<JellyfinDbContext> dbFactory)
             .Select(p => p.ItemId)
             .ToArray();
     }
+
+    /// <summary>
+    /// Which of <paramref name="itemIds"/> have alternate versions: their stream rows, and whether
+    /// any version is something else (one merged in by hand, a second file).
+    /// </summary>
+    /// <remarks>
+    /// One query for a whole page. Jellyfin counts a title's versions by loading every one of them
+    /// and asking each for its own local versions: 2 N + 3 commands for a title with N stream rows,
+    /// about a thousand for a listing of a library in which 60 titles had been opened.
+    /// </remarks>
+    public IReadOnlyDictionary<Guid, VersionOwner> VersionOwners(IReadOnlyList<Guid> itemIds)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new Dictionary<Guid, VersionOwner>();
+        }
+
+        using var db = dbFactory.CreateDbContext();
+        var links = db
+            .LinkedChildren.AsNoTracking()
+            .Where(l =>
+                itemIds.Contains(l.ParentId)
+                && (
+                    l.ChildType == LinkedChildType.LinkedAlternateVersion
+                    || l.ChildType == LinkedChildType.LocalAlternateVersion
+                )
+            )
+            .Select(l => new
+            {
+                l.ParentId,
+                l.ChildId,
+                IsStream = l.ChildType == LinkedChildType.LinkedAlternateVersion
+                    && db.ItemValuesMap.Any(m =>
+                        m.ItemId == l.ChildId
+                        && m.ItemValue.Type == ItemValueType.Tags
+                        && m.ItemValue.CleanValue == StreamTagCleanValue
+                    ),
+            })
+            .ToArray();
+
+        var owners = new Dictionary<Guid, VersionOwner>();
+        foreach (var link in links)
+        {
+            if (!owners.TryGetValue(link.ParentId, out var owner))
+            {
+                owners[link.ParentId] = owner = new VersionOwner();
+            }
+
+            if (link.IsStream)
+            {
+                owner.StreamRows.Add(link.ChildId);
+            }
+            else
+            {
+                owner.HasOtherVersions = true;
+            }
+        }
+
+        return owners;
+    }
+
+    /// <summary>The versions of a movie/episode, as <see cref="VersionOwners"/> found them.</summary>
+    public sealed class VersionOwner
+    {
+        public List<Guid> StreamRows { get; } = [];
+
+        public bool HasOtherVersions { get; set; }
+    }
 }
