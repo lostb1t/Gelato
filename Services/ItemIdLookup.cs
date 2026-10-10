@@ -110,6 +110,23 @@ public sealed class ItemIdLookup(IDbContextFactory<JellyfinDbContext> dbFactory)
         return owners;
     }
 
+    /// <summary>Which of <paramref name="itemIds"/> hold user data of <paramref name="userId"/>.</summary>
+    public IReadOnlySet<Guid> WithUserData(Guid userId, IReadOnlyList<Guid> itemIds)
+    {
+        if (itemIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        using var db = dbFactory.CreateDbContext();
+        return db
+            .UserData.AsNoTracking()
+            .Where(u => u.UserId == userId && itemIds.Contains(u.ItemId))
+            .Select(u => u.ItemId)
+            .Distinct()
+            .ToHashSet();
+    }
+
     /// <summary>The versions of a movie/episode, as <see cref="VersionOwners"/> found them.</summary>
     public sealed class VersionOwner
     {

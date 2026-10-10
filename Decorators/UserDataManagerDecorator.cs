@@ -1,9 +1,11 @@
+using Gelato.Services;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators;
 
@@ -28,9 +30,30 @@ public sealed class UserDataManagerDecorator : IUserDataManager
     [ThreadStatic]
     private static int _quiet;
 
-    public UserDataManagerDecorator(IUserDataManager inner)
+    private const int Unchecked = 0;
+    private const int Checked = 1;
+    private const int Off = 2;
+
+    // Listings compared at most before the shortcut is trusted without one that had state in it.
+    private const int MaxResumeChecks = 20;
+
+    private readonly ItemIdLookup _idLookup;
+    private readonly Lazy<ILibraryManager> _libraryManager;
+    private readonly ILogger<UserDataManagerDecorator> _log;
+    private int _resumeShortcut = Unchecked;
+    private int _resumeChecks;
+
+    public UserDataManagerDecorator(
+        IUserDataManager inner,
+        ItemIdLookup idLookup,
+        Lazy<ILibraryManager> libraryManager,
+        ILogger<UserDataManagerDecorator> log
+    )
     {
         _inner = inner;
+        _idLookup = idLookup;
+        _libraryManager = libraryManager;
+        _log = log;
         _inner.UserDataSaved += OnInnerSaved;
     }
 
@@ -97,10 +120,143 @@ public sealed class UserDataManagerDecorator : IUserDataManager
     public VersionResumeData? GetResumeUserData(User user, BaseItem item) =>
         _inner.GetResumeUserData(user, item);
 
+    /// <summary>
+    /// The most recently played version of each item, which Jellyfin shows the item's state from.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin loads every version of every title on the page for it and asks each for its local
+    /// versions: 2 N + 2 commands for a title with N stream rows, 930 for a listing of 836 movies
+    /// of which 47 had been opened. Two queries say which titles have stream rows alone and which
+    /// of those rows hold any state of this user. Rows without state cannot be the answer, so only
+    /// the others are loaded; the pick among them is Jellyfin's. Everything else goes to Jellyfin.
+    /// <para>
+    /// Which versions Jellyfin compares, and in which order, is copied from it and can change with
+    /// a Jellyfin release. So after every start the first listings are answered both ways, until
+    /// one with watched stream rows in it agreed (or <see cref="MaxResumeChecks"/> did). A
+    /// difference turns the shortcut off until the next start and Jellyfin answers alone.
+    /// </para>
+    /// </remarks>
     public IReadOnlyDictionary<Guid, VersionResumeData> GetResumeUserDataBatch(
         IReadOnlyList<BaseItem> items,
         User user
-    ) => _inner.GetResumeUserDataBatch(items, user);
+    )
+    {
+        var state = Volatile.Read(ref _resumeShortcut);
+        if (state == Off)
+        {
+            return _inner.GetResumeUserDataBatch(items, user);
+        }
+
+        var result = ResumeWithShortcut(items, user, out var streamTitles);
+        if (state == Checked || streamTitles.Count == 0)
+        {
+            return result;
+        }
+
+        var expected = _inner.GetResumeUserDataBatch(items, user);
+        if (
+            expected.Count != result.Count
+            || expected.Any(e =>
+                !result.TryGetValue(e.Key, out var mine) || mine.VersionId != e.Value.VersionId
+            )
+        )
+        {
+            Volatile.Write(ref _resumeShortcut, Off);
+            _log.LogWarning(
+                "Resume state of {Count} items differs from Jellyfin's ({Mine} against {Expected} "
+                    + "with state): the shortcut is off until the next start. Please report this "
+                    + "with the Jellyfin version.",
+                items.Count,
+                result.Count,
+                expected.Count
+            );
+            return expected;
+        }
+
+        if (
+            expected.Keys.Any(streamTitles.Contains)
+            || Interlocked.Increment(ref _resumeChecks) >= MaxResumeChecks
+        )
+        {
+            Interlocked.CompareExchange(ref _resumeShortcut, Checked, Unchecked);
+            _log.LogDebug("Resume state shortcut agrees with Jellyfin");
+        }
+
+        return expected;
+    }
+
+    private IReadOnlyDictionary<Guid, VersionResumeData> ResumeWithShortcut(
+        IReadOnlyList<BaseItem> items,
+        User user,
+        out HashSet<Guid> streamTitles
+    )
+    {
+        streamTitles = [];
+        var candidates = items
+            .OfType<Video>()
+            .Where(v => !v.PrimaryVersionId.HasValue && v.LinkedAlternateVersions.Length > 0)
+            .DistinctBy(v => v.Id)
+            .ToList();
+        if (candidates.Count == 0)
+        {
+            return _inner.GetResumeUserDataBatch(items, user);
+        }
+
+        var owners = _idLookup.VersionOwners(candidates.Select(v => v.Id).ToList());
+        var mine = candidates
+            .Where(v =>
+                owners.TryGetValue(v.Id, out var owner)
+                && owner is { HasOtherVersions: false, StreamRows.Count: > 0 }
+            )
+            .ToList();
+        if (mine.Count == 0)
+        {
+            return _inner.GetResumeUserDataBatch(items, user);
+        }
+
+        var mineIds = streamTitles = mine.Select(v => v.Id).ToHashSet();
+        var result = new Dictionary<Guid, VersionResumeData>(
+            _inner.GetResumeUserDataBatch(items.Where(i => !mineIds.Contains(i.Id)).ToList(), user)
+        );
+
+        var withState = _idLookup.WithUserData(
+            user.Id,
+            mine.SelectMany(v => owners[v.Id].StreamRows).ToList()
+        );
+        var groups = new List<(Guid PrimaryId, List<BaseItem> Versions)>();
+        foreach (var video in mine)
+        {
+            // The order Jellyfin compares them in: the item, then its versions by sort name.
+            var versions = new List<BaseItem> { video };
+            versions.AddRange(
+                owners[video.Id]
+                    .StreamRows.Where(withState.Contains)
+                    .Select(id => _libraryManager.Value.GetItemById(id))
+                    .OfType<Video>()
+                    .OrderBy(v => v.SortName)
+            );
+            groups.Add((video.Id, versions));
+        }
+
+        var data = _inner.GetUserDataBatch(
+            groups.SelectMany(g => g.Versions).DistinctBy(i => i.Id).ToList(),
+            user
+        );
+        foreach (var (primaryId, versions) in groups)
+        {
+            var resume = VersionPlaybackSelector.SelectMostRecentlyPlayed(
+                versions,
+                version => data.GetValueOrDefault(version.Id),
+                d => d.PlaybackPositionTicks > 0 || d.Played
+            );
+            if (resume is not null)
+            {
+                result[primaryId] = new VersionResumeData(resume.Id, data[resume.Id]);
+            }
+        }
+
+        return result;
+    }
 
     public UserItemDataDto? GetUserDataDto(
         BaseItem item,
