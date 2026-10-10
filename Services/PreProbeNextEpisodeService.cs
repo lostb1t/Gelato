@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Gelato.Decorators;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -13,8 +14,10 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Services;
 
 /// <summary>
-/// Pre-probes the next episode while an episode nears its end, so autoplay does not wait for the
-/// probe (<see cref="PluginConfiguration.PreProbe"/>).
+/// Prepares the next episode while an episode plays. It follows the binge group of the stream
+/// that plays, so a series keeps its quality and release from one episode to the next, and is
+/// pre-probed while the episode nears its end, so autoplay does not wait for the probe
+/// (<see cref="PluginConfiguration.PreProbe"/>).
 /// </summary>
 public sealed class PreProbeNextEpisodeService(
     ISessionManager sessionManager,
@@ -51,6 +54,16 @@ public sealed class PreProbeNextEpisodeService(
 
         foreach (var user in users)
             _handled.TryRemove((user.Id, episode.Id), out _);
+
+        // From the start, not only near the end: skipping to the next episode follows the group
+        // too.
+        if (
+            mediaSourceManager is MediaSourceManagerDecorator decorator
+            && episode.IsGelatoPlaybackItem()
+        )
+        {
+            PrepareNext(decorator, e, episode, users, false);
+        }
     }
 
     /// <summary>The episode being played: the item itself or the owner of the stream row played.</summary>
@@ -86,20 +99,50 @@ public sealed class PreProbeNextEpisodeService(
             return;
         }
 
-        foreach (var user in users)
+        var due = users.Where(user => _handled.TryAdd((user.Id, episode.Id), 0)).ToList();
+        if (_handled.Count > 1000)
+            _handled.Clear();
+
+        if (due.Count > 0)
+            PrepareNext(decorator, e, episode, due, true);
+    }
+
+    /// <summary>
+    /// Makes the next episode follow the binge group of the stream that plays, then pre-probes
+    /// the stream it plays by default: with the group set first, that is the group's.
+    /// </summary>
+    private void PrepareNext(
+        MediaSourceManagerDecorator decorator,
+        PlaybackProgressEventArgs e,
+        Episode episode,
+        IReadOnlyList<User> users,
+        bool preProbe
+    )
+    {
+        var played = e.Item;
+        var mediaSourceId = e.MediaSourceId;
+        _ = Task.Run(async () =>
         {
-            if (!_handled.TryAdd((user.Id, episode.Id), 0))
-                continue;
-
-            if (_handled.Count > 1000)
-                _handled.Clear();
-
-            _ = Task.Run(async () =>
+            try
             {
-                try
+                if (FindNext(episode) is not { } next)
+                    return;
+
+                foreach (var user in users)
                 {
-                    if (FindNext(episode) is not { } next)
-                        return;
+                    // Not while the user plays the next episode elsewhere: its stream would
+                    // change under that playback.
+                    if (
+                        !sessionManager.Sessions.Any(s =>
+                            s.UserId == user.Id && s.NowPlayingItem?.Id == next.Id
+                        )
+                    )
+                    {
+                        decorator.FollowBingeGroup(played, mediaSourceId, next, user);
+                    }
+
+                    if (!preProbe)
+                        continue;
 
                     log.LogDebug(
                         "Pre-probing {Next} while {Episode} is nearing its end",
@@ -108,12 +151,12 @@ public sealed class PreProbeNextEpisodeService(
                     );
                     await decorator.PreProbeDefaultAsync(next, user).ConfigureAwait(false);
                 }
-                catch (Exception ex)
-                {
-                    log.LogWarning(ex, "Pre-probe of the episode after {Id} failed", episode.Id);
-                }
-            });
-        }
+            }
+            catch (Exception ex)
+            {
+                log.LogWarning(ex, "Preparing the episode after {Id} failed", episode.Id);
+            }
+        });
     }
 
     private Episode? FindNext(Episode episode)

@@ -285,6 +285,11 @@ public sealed class MediaSourceManagerDecorator(
             })
             .ToList();
 
+        // Before the first stream takes the episode's id below: the group's stream is the one
+        // that plays under it.
+        if (primary is not null)
+            MoveBingeGroupFirst(versions, primary, userId);
+
         _log.LogDebug(
             "Found {Count} streams. UserId={UserId} ItemId={ItemId}",
             versions.Count,
@@ -448,6 +453,84 @@ public sealed class MediaSourceManagerDecorator(
 
         sources.Remove(source);
         sources.Insert(0, source);
+    }
+
+    // The binge group an episode follows, per user: the group of the stream the episode before it
+    // is played with. Kept in memory only: it is for the episode that plays next, and playing the
+    // episode before it sets it again.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        (Guid User, Guid Item),
+        (string Group, DateTime SetAt)
+    > _bingeGroups = new();
+
+    /// <summary>
+    /// Makes <paramref name="next"/> follow the binge group of the stream <paramref name="played"/>
+    /// is played with: Stremio's hint that streams of different episodes belong together (same
+    /// addon, quality and release group). Its stream of that group becomes its first stream: the
+    /// one listed first and published under the episode's id, which is what clients preselect,
+    /// what autoplay asks for (Jellyfin Web names the episode's id as the source) and what is
+    /// pre-probed. A stream without a group, or a local file, leaves the next episode as it is.
+    /// </summary>
+    public void FollowBingeGroup(BaseItem played, string? mediaSourceId, BaseItem next, User user)
+    {
+        var key = (user.Id, next.Id);
+        var group = FindPlayedRow(played, mediaSourceId, user)?.GelatoData<string>("bingeGroup");
+        if (string.IsNullOrEmpty(group))
+        {
+            _bingeGroups.TryRemove(key, out _);
+            return;
+        }
+
+        // Not all at once: the stream under an episode's id must not change while it plays.
+        if (_bingeGroups.Count > 1000)
+        {
+            foreach (var (stale, _) in _bingeGroups.OrderBy(g => g.Value.SetAt).Take(500))
+                _bingeGroups.TryRemove(stale, out _);
+        }
+
+        _bingeGroups[key] = (group, DateTime.UtcNow);
+    }
+
+    /// <summary>The stream row a playback of the item plays, null for a file.</summary>
+    private Video? FindPlayedRow(BaseItem played, string? mediaSourceId, User user)
+    {
+        var item = Guid.TryParse(mediaSourceId, out var sourceId)
+            ? _libraryManager.GetItemById(sourceId) ?? played
+            : played;
+        if (item.HasStreamTag())
+            return item as Video;
+
+        // The source with the episode's id is its first stream, whichever row that is.
+        var itemId = item.Id.ToString("N", CultureInfo.InvariantCulture);
+        var source = GetStaticMediaSources(item, false, user).FirstOrDefault(s => s.Id == itemId);
+        return
+            Guid.TryParse(source?.ETag, out var rowId)
+            && _libraryManager.GetItemById(rowId) is Video row
+            && row.HasStreamTag()
+            ? row
+            : null;
+    }
+
+    /// <summary>
+    /// Puts the stream of the binge group the episode follows ahead of its other streams, which
+    /// keep the addon's order.
+    /// </summary>
+    private void MoveBingeGroupFirst(
+        List<(Video Row, MediaSourceInfo Source)> versions,
+        Video primary,
+        Guid userId
+    )
+    {
+        if (versions.Count < 2 || !_bingeGroups.TryGetValue((userId, primary.Id), out var follows))
+            return;
+
+        var at = versions.FindIndex(v => v.Row.GelatoData<string>("bingeGroup") == follows.Group);
+        if (at < 1)
+            return;
+
+        var version = versions[at];
+        versions.RemoveAt(at);
+        versions.Insert(0, version);
     }
 
     public void AddParts(IEnumerable<IMediaSourceProvider> providers)
