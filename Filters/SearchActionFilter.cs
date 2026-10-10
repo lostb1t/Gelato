@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using Gelato.Config;
+using Gelato.Services;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
@@ -23,6 +24,7 @@ public class SearchActionFilter(
     ISearchManager searchManager,
     IDbContextFactory<JellyfinDbContext> dbFactory,
     GelatoManager manager,
+    LibraryFolderService libraryFolders,
     ILogger<SearchActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -59,7 +61,8 @@ public class SearchActionFilter(
 
         // Handle Stremio search
         var requestedTypes = GetRequestedItemTypes(ctx);
-        LimitToScope(ctx, cfg, userId, requestedTypes);
+        ctx.TryGetActionArgument<Guid>("parentId", out var scope);
+        var folders = LimitToScope(scope, userId, requestedTypes);
         if (requestedTypes.Count == 0)
         {
             await next();
@@ -72,7 +75,7 @@ public class SearchActionFilter(
         // The catalogs are asked first and awaited after Jellyfin's own search has run: neither
         // half needs the other's answer, the library's takes 45 to 70 ms and the addon's 25 ms
         // to two seconds, so one after the other a search waited for both.
-        var addon = SearchMetasAsync(searchTerm, requestedTypes, cfg, stremio, userId);
+        var addon = SearchMetasAsync(searchTerm, requestedTypes, cfg, stremio, userId, folders);
 
         // A client asks for every type it wants in one request: the web client's global search
         // sends Movie, Series, Episode, BoxSet, TvChannel and more together. Answering all of it
@@ -118,6 +121,8 @@ public class SearchActionFilter(
             metas,
             userId,
             fields,
+            scope,
+            folders,
             ctx.HttpContext.RequestAborted
         );
         var libraryItems = localItems.Where(i => !covered.Contains(i.Id)).ToArray();
@@ -280,8 +285,12 @@ public class SearchActionFilter(
     }
 
     /// <summary>
-    /// Drops the types whose Gelato folder is not inside the library the request is scoped to, so
-    /// a search inside one library is not answered with another library's titles.
+    /// Drops the types no Gelato folder inside the library the request is scoped to takes, so a
+    /// search inside one library is not answered with another library's titles. Returns, per type
+    /// that stays, the folder a result opened from this search goes into when that is not the
+    /// user's own movie or series folder: Gelato's folder in the library that was searched,
+    /// whether a catalog's, another user's or the default one. A library the user cannot open is
+    /// left to Jellyfin altogether, or the user could fill it by searching inside it.
     /// </summary>
     /// <remarks>
     /// A client searching inside a library sends it as parentId: Jellyfin scopes its own half to
@@ -291,45 +300,71 @@ public class SearchActionFilter(
     /// types. topParentId is not a parameter of the endpoint (it is the web client's route, not
     /// its query), so it scopes nothing here either.
     /// </remarks>
-    private void LimitToScope(
-        ActionExecutingContext ctx,
-        PluginConfiguration cfg,
+    private Dictionary<BaseItemKind, Folder> LimitToScope(
+        Guid scope,
         Guid userId,
         HashSet<BaseItemKind> requestedTypes
     )
     {
-        if (
-            !ctx.TryGetActionArgument<Guid>("parentId", out var scope)
-            || scope.Equals(Guid.Empty)
-            || requestedTypes.Count == 0
-        )
+        var folders = new Dictionary<BaseItemKind, Folder>();
+        if (scope.Equals(Guid.Empty) || requestedTypes.Count == 0)
         {
-            return;
+            return folders;
         }
 
         if (
-            requestedTypes.Contains(BaseItemKind.Movie)
-            && !manager.IsWithinScope(scope, cfg.MovieFolder ?? manager.TryGetMovieFolder(userId))
+            userManager.GetUserById(userId) is { } user
+            && libraryManager.GetItemById(scope) is { } scoped
+            && !scoped.IsVisibleStandalone(user)
         )
         {
-            requestedTypes.Remove(BaseItemKind.Movie);
+            log.LogDebug(
+                "The search is scoped to {Scope}, which the user cannot open: the library answers it alone",
+                scope
+            );
+            requestedTypes.Clear();
+            return folders;
         }
 
-        if (
-            requestedTypes.Contains(BaseItemKind.Series)
-            && !manager.IsWithinScope(scope, cfg.SeriesFolder ?? manager.TryGetSeriesFolder(userId))
-        )
+        foreach (var kind in new[] { BaseItemKind.Movie, BaseItemKind.Series })
         {
-            requestedTypes.Remove(BaseItemKind.Series);
+            if (!requestedTypes.Contains(kind))
+                continue;
+
+            var own =
+                kind == BaseItemKind.Series
+                    ? manager.TryGetSeriesFolder(userId)
+                    : manager.TryGetMovieFolder(userId);
+            var folder =
+                manager.GetSearchFolder(scope, userId, kind) ?? GetLibraryFolder(scope, kind);
+            if (folder is null)
+                requestedTypes.Remove(kind);
+            else if (folder.Id != own?.Id)
+                folders[kind] = folder;
         }
 
         if (requestedTypes.Count == 0)
         {
             log.LogDebug(
-                "The search is scoped to {Scope}, which holds neither Gelato folder: the library answers it alone",
+                "The search is scoped to {Scope}, which holds no Gelato folder for what it asks: the library answers it alone",
                 scope
             );
         }
+
+        return folders;
+    }
+
+    /// <summary>
+    /// Gelato's folder in the library the search is scoped to, when it is neither the user's own
+    /// nor a catalog's: the default folder or another user's, or one nothing is configured on
+    /// any more. A library that was picked once keeps the folder, and a search inside it is
+    /// still answered and its results still go there.
+    /// </summary>
+    private Folder? GetLibraryFolder(Guid scope, BaseItemKind kind)
+    {
+        var path = libraryFolders.GetLibrary(scope)?.GelatoPath;
+        var folder = path is null ? null : manager.TryGetLibraryFolder(path);
+        return folder is not null && manager.FolderTakes(folder, kind) ? folder : null;
     }
 
     private HashSet<BaseItemKind> GetRequestedItemTypes(ActionExecutingContext ctx)
@@ -373,16 +408,23 @@ public class SearchActionFilter(
         HashSet<BaseItemKind> requestedTypes,
         PluginConfiguration cfg,
         GelatoStremioProvider stremio,
-        Guid userId
+        Guid userId,
+        Dictionary<BaseItemKind, Folder> folders
     )
     {
         var tasks = new List<(StremioMediaType Type, Task<IReadOnlyList<StremioMeta>> Task)>();
-        var movieFolder = cfg.MovieFolder ?? manager.TryGetMovieFolder(userId);
-        var seriesFolder = cfg.SeriesFolder ?? manager.TryGetSeriesFolder(userId);
 
-        // Keep hot config in sync for subsequent searches in this request window.
-        cfg.MovieFolder = movieFolder;
-        cfg.SeriesFolder = seriesFolder;
+        // Where a result of this search goes when it is opened: the folder of the library that
+        // was searched, else the user's movie or series folder. Without either there is nowhere
+        // to put it.
+        var movieFolder =
+            folders.GetValueOrDefault(BaseItemKind.Movie)
+            ?? cfg.MovieFolder
+            ?? manager.TryGetMovieFolder(userId);
+        var seriesFolder =
+            folders.GetValueOrDefault(BaseItemKind.Series)
+            ?? cfg.SeriesFolder
+            ?? manager.TryGetSeriesFolder(userId);
 
         if (requestedTypes.Contains(BaseItemKind.Movie) && movieFolder is not null)
         {
@@ -487,6 +529,8 @@ public class SearchActionFilter(
         List<StremioMeta> metas,
         Guid userId,
         ItemFields[] fields,
+        Guid scope,
+        Dictionary<BaseItemKind, Folder> folders,
         CancellationToken ct
     )
     {
@@ -550,6 +594,15 @@ public class SearchActionFilter(
             // one — resolve to the same item, and only the first takes it, so the answer holds no
             // id twice.
             var existing = FindMatch(libraryItems, baseItem);
+
+            // A title another library holds is not a result of a search inside this one: the
+            // item is not in the scope. A stand-in in its place would not put the title here
+            // either, opening it redirects to the item the library has. For a Gelato item that
+            // cannot be otherwise (its id is the title's, there is no second one); a second,
+            // Gelato copy of a title held as a file would be decided here and in the insert.
+            if (existing is not null && !manager.IsWithinScope(scope, existing))
+                continue;
+
             var dto =
                 existing is not null && covered.Add(existing.Id)
                     ? dtoService.GetBaseItemDto(existing, libraryOptions, user)
@@ -565,6 +618,14 @@ public class SearchActionFilter(
             // this title before the library had it holds that id in its page URL, and the reads
             // it issues with it are resolved through the meta saved here.
             manager.SaveStremioMeta(searchId, meta);
+
+            // Opening the result puts the title into the library that was searched; a search of
+            // everything, or of the library the user's own folder is in, clears it again.
+            manager.RememberSearchFolder(
+                userId,
+                searchId,
+                folders.GetValueOrDefault(baseItem.GetBaseItemKind())
+            );
         }
 
         return (dtos, covered);

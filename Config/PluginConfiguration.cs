@@ -10,6 +10,13 @@ public class PluginConfiguration : BasePluginConfiguration
 {
     public string MoviePath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "movies");
     public string SeriesPath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "series");
+
+    /// <summary>
+    /// Where Gelato creates the folder it adds to a library picked on the settings page. Empty means
+    /// the folder the movie path is in, so an install from before the library pickers keeps its folders
+    /// next to each other.
+    /// </summary>
+    public string BasePath { get; set; } = "";
     public int StreamTTL { get; set; } = 3600;
     public int CatalogMaxItems { get; set; } = 100;
     public string Url { get; set; } = "";
@@ -85,6 +92,27 @@ public class PluginConfiguration : BasePluginConfiguration
     [XmlIgnore]
     public Folder? SeriesFolder;
 
+    public string GetBasePath() =>
+        string.IsNullOrWhiteSpace(BasePath) ? GetDefaultBasePath() : BasePath.Trim();
+
+    /// <summary>
+    /// The base path when none is set: a "gelato" folder next to the movie path, or the folder the
+    /// movie path is in when that is one already (the default install: %TEMP%/gelato). A movie path
+    /// among real media, e.g. /media/gelato-movies, gets /media/gelato, not /media itself.
+    /// </summary>
+    public string GetDefaultBasePath()
+    {
+        var parent = string.IsNullOrWhiteSpace(MoviePath)
+            ? null
+            : Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(MoviePath.Trim()));
+        if (string.IsNullOrWhiteSpace(parent))
+            return Path.Combine(Path.GetTempPath(), "gelato");
+
+        return string.Equals(Path.GetFileName(parent), "gelato", StringComparison.OrdinalIgnoreCase)
+            ? parent
+            : Path.Combine(parent, "gelato");
+    }
+
     public PluginConfiguration GetEffectiveConfig(Guid userId)
     {
         var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
@@ -92,8 +120,9 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     /// <summary>
-    /// Every folder Gelato seeds a stub file into: the base movie and series paths plus each
-    /// per-user override. A path configured more than once is returned once.
+    /// Every folder Gelato seeds a stub file into: the base movie and series paths, each
+    /// per-user override and each catalog's own folder. A path configured more than once is
+    /// returned once.
     /// </summary>
     public IReadOnlyList<GelatoLibraryPath> GetLibraryPaths()
     {
@@ -127,6 +156,10 @@ public class PluginConfiguration : BasePluginConfiguration
         {
             Add("Movies (user override)", user.MoviePath);
             Add("Series (user override)", user.SeriesPath);
+        }
+        foreach (var catalog in Catalogs)
+        {
+            Add($"Catalog {catalog.Name}", catalog.Path);
         }
 
         return paths;
@@ -215,4 +248,15 @@ public class CatalogConfig
     public int MaxItems { get; set; } = 0;
     public bool CreateCollection { get; set; } = false;
     public string Url { get; set; } = "";
+
+    /// <summary>
+    /// The folder this catalog's items go into, instead of the movie or series folder. Empty means
+    /// the default folders. Added to a Jellyfin library, it gives the catalog a library of its own.
+    /// </summary>
+    public string Path { get; set; } = "";
+
+    public int GetMaxItems(int globalMaxItems) => MaxItems > 0 ? MaxItems : globalMaxItems;
+
+    /// <summary>What the catalog's items are marked with: an id alone is shared by its types.</summary>
+    public string GetKey() => $"{Type}:{Id}";
 }

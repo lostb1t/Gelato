@@ -9,6 +9,57 @@
 
 <body>
   <div data-role="page" id="gelatoConfigurationPage" class="page type-interior pluginConfigurationPage">
+    <!-- Jellyfin's select style takes the browser's arrow away and its component, which draws
+         another, is not what styles these selects: the page draws the arrow itself. -->
+    <style>
+      #gelatoConfigurationPage select.emby-select-withcolor {
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23999' d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right .3em center;
+        background-size: 1.6em;
+        padding-right: 2em;
+        text-overflow: ellipsis;
+      }
+
+      /* The tabs: text with a line under the open one, on the line that closes the row. */
+      #gelatoConfigurationPage .gelatoTabs {
+        display: flex;
+        gap: 2em;
+        margin: 1em 0 2em;
+        border-bottom: 1px solid rgba(128, 128, 128, .35);
+      }
+
+      #gelatoConfigurationPage .tab-button {
+        appearance: none;
+        margin: 0 0 -1px;
+        padding: .8em .1em;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        color: inherit;
+        font: inherit;
+        font-weight: 600;
+        opacity: .6;
+        cursor: pointer;
+        transition: opacity .15s, border-color .15s;
+      }
+
+      #gelatoConfigurationPage .tab-button:hover,
+      #gelatoConfigurationPage .tab-button:focus-visible {
+        opacity: 1;
+        outline: none;
+      }
+
+      #gelatoConfigurationPage .tab-button:focus-visible {
+        border-bottom-color: rgba(128, 128, 128, .7);
+      }
+
+      #gelatoConfigurationPage .tab-button.active {
+        opacity: 1;
+        border-bottom-color: #00a4dc;
+      }
+    </style>
     <div data-role="content">
       <div class="content-primary">
         <form id="gelatoForm">
@@ -20,16 +71,11 @@
 
           <!-- Tabs Navigation -->
           <div class="verticalSection">
-            <div class="padded-top padded-bottom"
-              style="display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 2em; gap: 2em;">
-              <button type="button" class="paper-icon-button-light tab-button active" data-tab="general"
-                style="padding: 0.5em 0; border-bottom: 2px solid #00a4dc; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 1;">General</button>
-              <button type="button" class="paper-icon-button-light tab-button" data-tab="catalogs"
-                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">Catalogs</button>
-              <button type="button" class="paper-icon-button-light tab-button" data-tab="userconfigs"
-                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">User Configs</button>
-              <button type="button" class="paper-icon-button-light tab-button" data-tab="advanced"
-                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">Advanced</button>
+            <div class="gelatoTabs">
+              <button type="button" class="tab-button active" data-tab="general">General</button>
+              <button type="button" class="tab-button" data-tab="catalogs">Catalogs</button>
+              <button type="button" class="tab-button" data-tab="userconfigs">User Configs</button>
+              <button type="button" class="tab-button" data-tab="advanced">Advanced</button>
             </div>
           </div>
 
@@ -39,21 +85,36 @@
 
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtUrl">AIOStreams URL (manifest or base):</label>
-              <input is="emby-input" type="text" id="txtUrl" required="required" class="emby-input" />
-              <div class="fieldDescription">Paste the manifest URL or base endpoint. <code>GetBaseUrl()</code> will
-                strip <code>/manifest.json</code> automatically.</div>
+              <input type="text" id="txtUrl" required="required" class="emby-input" />
+              <div class="fieldDescription">The manifest URL from AIOStreams, with or without
+                <code>/manifest.json</code>.</div>
             </div>
 
             <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtMoviePath">Movies path:</label>
-              <input is="emby-input" type="text" id="txtMoviePath" class="emby-input" />
-              <div class="fieldDescription">Filesystem path for movie items. Use this path as library folder.</div>
+              <label class="inputLabel inputLabelUnfocused" for="txtBasePath">Gelato folder:</label>
+              <input type="text" id="txtBasePath" class="emby-input" />
+              <div class="fieldDescription">Where Gelato creates the folders it adds to picked libraries. Empty uses
+                the default shown.</div>
             </div>
 
             <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtSeriesPath">Series path:</label>
-              <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
-              <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
+              <label class="inputLabel inputLabelUnfocused" for="selMovieLibrary">Default movies library:</label>
+              <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                <select is="emby-select" id="selMovieLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+              </div>
+              <div class="fieldDescription">Where movies go unless a catalog picks its own library. Pick one of your
+                libraries, also one with your own media in it, or <b>New library…</b> for a folder to create one with.</div>
+            </div>
+
+            <div class="inputContainer">
+              <label class="inputLabel inputLabelUnfocused" for="selSeriesLibrary">Default series library:</label>
+              <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                <select is="emby-select" id="selSeriesLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+              </div>
+              <div class="fieldDescription">Where series go unless a catalog picks its own library. Pick one of your
+                libraries, also one with your own media in it, or <b>New library…</b> for a folder to create one with.</div>
             </div>
             
 
@@ -116,7 +177,7 @@
 
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
-              <input is="emby-input" type="number" id="txtBufferDays" class="emby-input" />
+              <input type="number" id="txtBufferDays" class="emby-input" />
               <div class="fieldDescription">Items released within these many days will be hidden if filter is enabled.
               </div>
             </div>
@@ -132,22 +193,22 @@
                   <br />
                   <b>Sequential Import:</b> Series are processed one-by-one to respect rate limits.
                 </div>
+                <div class="fieldDescription" id="unreleasedHint" style="display: none;">
+                  Unreleased titles are imported but stay hidden while <b>Filter unreleased items</b> is on.
+                </div>
               </div>
 
               <div class="inputContainer" style="display: flex; gap: 1em; align-items: center; margin-bottom: 1em;">
                 <div style="flex-grow: 1;">
                   <!--suppress HtmlFormInputWithoutLabel -->
                     <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type..."
-                    is="emby-input" class="emby-input" />
+                    class="emby-input" />
                 </div>
                 <button type="button" is="emby-button" class="raised emby-button"
                   id="btnRefreshCatalogs">Refresh</button>
               </div>
 
               <div class="inputContainer">
-                
-                <h3 class="sectionTitle">Importer</h3>
-            
                 <div id="catalogsList"
                   style="max-height: 600px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(0,0,0,0.2);">
                   <!-- Catalogs rendered here -->
@@ -156,7 +217,7 @@
                 <div style="margin-top: 1.5em; display: flex; justify-content: flex-end;">
                   <button type="button" is="emby-button" class="raised emby-button" id="btnImportAll"
                     style="background: #00a4dc; color: #fff;">
-                    <span>Import</span>
+                    <span>Import all</span>
                   </button>
                 </div>
               </div>
@@ -169,19 +230,19 @@
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtFFmpegAnalyzeDuration">FFmpeg
                 analyzeduration:</label>
-              <input is="emby-input" type="text" id="txtFFmpegAnalyzeDuration" class="emby-input" />
+              <input type="text" id="txtFFmpegAnalyzeDuration" class="emby-input" />
               <div class="fieldDescription">Default: <code>5M</code>.</div>
             </div>
 
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtFFmpegProbeSize">FFmpeg probesize:</label>
-              <input is="emby-input" type="text" id="txtFFmpegProbeSize" class="emby-input" />
+              <input type="text" id="txtFFmpegProbeSize" class="emby-input" />
               <div class="fieldDescription">Default: <code>40M</code>.</div>
             </div>
 
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Stream TTL (seconds):</label>
-              <input is="emby-input" type="number" id="txtStreamTTL" class="emby-input" />
+              <input type="number" id="txtStreamTTL" class="emby-input" />
               <div class="fieldDescription">Cache duration for external stream URLs.</div>
             </div>
 
@@ -222,7 +283,7 @@
 
             <div class="inputContainer">
               <label class="inputLabel inputLabelUnfocused" for="selUserConfig">Add/Edit override for user:</label>
-              <select id="selUserConfig" is="emby-select" class="emby-select">
+              <select id="selUserConfig" is="emby-select" class="emby-select emby-select-withcolor">
                 <option value="">-- Select user --</option>
               </select>
             </div>
@@ -231,17 +292,25 @@
               style="display:none; margin-top:1em; padding: 1em; background: rgba(0,0,0,0.1); border-radius: 4px;">
               <div class="inputContainer">
                 <label class="inputLabel" for="txtUserUrl">AIOStreams URL:</label>
-                <input is="emby-input" type="text" id="txtUserUrl" class="emby-input" />
+                <input type="text" id="txtUserUrl" class="emby-input" />
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel" for="txtUserMoviePath">Movie path:</label>
-                <input is="emby-input" type="text" id="txtUserMoviePath" class="emby-input" />
+                <label class="inputLabel" for="selUserMovieLibrary">Default movies library:</label>
+                <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                  <select is="emby-select" id="selUserMovieLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                  <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+                </div>
+                <div class="fieldDescription">Where this user's movies go.</div>
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel" for="txtUserSeriesPath">Series path:</label>
-                <input is="emby-input" type="text" id="txtUserSeriesPath" class="emby-input" />
+                <label class="inputLabel" for="selUserSeriesLibrary">Default series library:</label>
+                <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                  <select is="emby-select" id="selUserSeriesLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                  <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+                </div>
+                <div class="fieldDescription">Where this user's series go.</div>
               </div>
 
               <div class="checkboxContainer">
@@ -284,18 +353,10 @@
 
         tabs.forEach(tab => {
           tab.addEventListener('click', () => {
-            // Deactivate all
-            tabs.forEach(t => {
-              t.classList.remove('active');
-              t.style.borderBottom = '2px solid transparent';
-              t.style.opacity = '0.6';
-            });
+            // The class alone marks the open tab: the page's style does the rest.
+            tabs.forEach(t => t.classList.remove('active'));
             tabContents.forEach(c => c.style.display = 'none');
-
-            // Activate clicked
             tab.classList.add('active');
-            tab.style.borderBottom = '2px solid #00a4dc'; // Jellyfin Blue
-            tab.style.opacity = '1';
 
             const targetId = 'tab-' + tab.dataset.tab;
             page.querySelector('#' + targetId).style.display = 'block';
@@ -311,8 +372,9 @@
 
         // Elements
         const txtUrl = page.querySelector('#txtUrl');
-        const txtMoviePath = page.querySelector('#txtMoviePath');
-        const txtSeriesPath = page.querySelector('#txtSeriesPath');
+        const txtBasePath = page.querySelector('#txtBasePath');
+        const selMovieLibrary = page.querySelector('#selMovieLibrary');
+        const selSeriesLibrary = page.querySelector('#selSeriesLibrary');
 
         const txtStreamTTL = page.querySelector('#txtStreamTTL');
         const chkEnableMixed = page.querySelector('#chkEnableMixed');
@@ -333,14 +395,16 @@
         const txtCatalogSearch = page.querySelector('#txtCatalogSearch');
         const btnRefreshCatalogs = page.querySelector('#btnRefreshCatalogs');
         let allCatalogs = [];
+        // Whether the addon's list was fetched: an empty table then means it lists none.
+        let catalogsLoaded = false;
 
         // Overrides
         const selUserConfig = page.querySelector('#selUserConfig');
         const userOverrideContainer = page.querySelector('#userOverrideContainer');
         const userOverridesList = page.querySelector('#userOverridesList');
         const txtUserUrl = page.querySelector('#txtUserUrl');
-        const txtUserMoviePath = page.querySelector('#txtUserMoviePath');
-        const txtUserSeriesPath = page.querySelector('#txtUserSeriesPath');
+        const selUserMovieLibrary = page.querySelector('#selUserMovieLibrary');
+        const selUserSeriesLibrary = page.querySelector('#selUserSeriesLibrary');
         const chkUserDisableSearch = page.querySelector('#chkUserDisableSearch');
 
         let currentConfig = null;
@@ -360,6 +424,425 @@
           });
           return obj;
         }
+        // Libraries: a pick is a library, what gets saved is Gelato's folder in it. A select's value is
+        // 'lib:<id>', 'path:<path>' for a folder no library holds (yet), '' for a catalog's default, or
+        // 'new:' while the folder for a new library is being asked for.
+        let libraries = [];
+        const LIBRARY_KINDS = { movie: ['movies', 'mixed'], series: ['tvshows', 'mixed'] };
+        const NEW_LIBRARY = 'new:';
+
+        // A dialog of this page: in the page only while it is open, and with a form of its own, so
+        // Enter answers the dialog and saves nothing. Plain elements, Jellyfin's classes theme them.
+        function openDialog(html) {
+          const dialog = document.createElement('dialog');
+          dialog.className = 'dialog';
+          dialog.style.cssText = 'margin: auto; border: 0; border-radius: .3em; padding: 1.5em; color: inherit; ' +
+            'width: 90%; max-width: 30em;';
+          dialog.innerHTML = html;
+          page.appendChild(dialog);
+          dialog.showModal();
+          return dialog;
+        }
+
+        // Asks before something is started; resolves to whether it was confirmed.
+        function askConfirm(title, text, okLabel) {
+          return new Promise(resolve => {
+            const dialog = openDialog(`
+              <form>
+                <h2 style="margin-top: 0;"></h2>
+                <div data-text></div>
+                <div style="display: flex; gap: 1em; justify-content: flex-end; margin-top: 1.5em;">
+                  <button type="button" class="raised emby-button">Cancel</button>
+                  <button type="submit" class="raised button-submit emby-button"></button>
+                </div>
+              </form>`);
+            // As text: a catalog's name comes from the addon.
+            dialog.querySelector('h2').textContent = title;
+            dialog.querySelector('[data-text]').textContent = text;
+            const btnOk = dialog.querySelector('button[type="submit"]');
+            btnOk.textContent = okLabel;
+
+            const done = ok => {
+              dialog.remove();
+              resolve(ok);
+            };
+            dialog.querySelector('form').onsubmit = e => {
+              e.preventDefault();
+              done(true);
+            };
+            dialog.querySelector('button[type="button"]').onclick = () => done(false);
+            // Escape
+            dialog.oncancel = e => {
+              e.preventDefault();
+              done(false);
+            };
+            btnOk.focus();
+          });
+        }
+
+        const NEW_LIBRARY_DIALOG = `
+          <form>
+            <h2 style="margin-top: 0;">New library</h2>
+            <div data-step="ask">
+              <label class="inputLabel" for="txtNewLibraryName">Library name:</label>
+              <input type="text" id="txtNewLibraryName" class="emby-input" />
+              <div class="fieldDescription">Jellyfin creates no library without a folder, so Gelato makes the
+                folder first. You create the library with it in the next step.</div>
+            </div>
+            <div data-step="ready" style="display: none;">
+              <label class="inputLabel" for="txtNewLibraryPath">Folder for the library:</label>
+              <div style="display: flex; gap: .5em; align-items: center;">
+                <input type="text" id="txtNewLibraryPath" class="emby-input" readonly style="flex: 1;" />
+                <button type="button" data-do="copy" class="raised emby-button">Copy</button>
+              </div>
+              <ol style="padding-left: 1.2em;">
+                <li><b>Save Configuration</b> here.</li>
+                <li>Under <b>Dashboard &gt; Libraries</b>, add a library and give it this folder.</li>
+              </ol>
+              <div class="fieldDescription">Once the library is there, it is shown here under its name.</div>
+            </div>
+            <div data-step="error" class="fieldDescription" style="color: #f44336; display: none;"></div>
+            <div style="display: flex; gap: 1em; justify-content: flex-end; margin-top: 1em;">
+              <button type="button" data-do="cancel" class="raised emby-button">Cancel</button>
+              <button type="submit" class="raised button-submit emby-button">Create folder</button>
+            </div>
+          </form>`;
+
+        // ApiClient rejects with the Response: its body holds the server's reason.
+        async function errorText(e) {
+          try {
+            if (e && typeof e.text === 'function') {
+              const text = await e.text();
+              // The reason comes as a JSON string, quotes included.
+              try {
+                const parsed = JSON.parse(text);
+                if (typeof parsed === 'string') return parsed;
+              } catch (_) { /* plain text */ }
+              return text || e.statusText || ('HTTP ' + e.status);
+            }
+          } catch (_) { /* fall through */ }
+          return e?.responseText || e?.message || e?.statusText || String(e);
+        }
+
+        async function showError(what, e) {
+          Dashboard.alert(what + ': ' + await errorText(e));
+        }
+
+        // The libraries as they are with this Gelato folder. The server refuses one that is not a
+        // full path, which is how a save finds out.
+        function fetchLibraries(base) {
+          return window.ApiClient.getJSON(
+            window.ApiClient.getUrl('gelato/libraries', base ? { basePath: base } : {}));
+        }
+
+        async function loadLibraries() {
+          try {
+            const base = txtBasePath.value.trim();
+            // A folder saved by an earlier version may be refused: list with the default then.
+            const res = await fetchLibraries(base).catch(e => base ? fetchLibraries('') : Promise.reject(e)) || {};
+            libraries = res.Libraries || [];
+            txtBasePath.placeholder = res.DefaultBasePath || '';
+          } catch (e) {
+            console.error('Error loading libraries:', e);
+            libraries = [];
+          }
+        }
+
+        function libraryFits(lib, kind) {
+          const type = (lib.CollectionType || 'mixed').toLowerCase();
+          const kinds = LIBRARY_KINDS[kind] || [...LIBRARY_KINDS.movie, ...LIBRARY_KINDS.series];
+          return kinds.includes(type);
+        }
+
+        function libraryOf(path) {
+          return path ? libraries.find(l => (l.Locations || []).includes(path)) || null : null;
+        }
+
+        // The library a folder lies inside without being one of its folders: a path typed before
+        // the pickers could be any folder below a library's, and Jellyfin lists what is in it.
+        function libraryAround(path) {
+          const norm = p => (p || '').replace(/\\/g, '/').replace(/\/+$/, '');
+          const p = norm(path);
+          if (!p) return null;
+          return libraries.find(l => (l.Locations || []).some(loc => norm(loc) && p.startsWith(norm(loc) + '/'))) || null;
+        }
+
+        // Said on the Catalogs tab: an import that seems to add nothing is the filter at work.
+        function showUnreleasedHint() {
+          page.querySelector('#unreleasedHint').style.display = chkFilterUnreleased.checked ? '' : 'none';
+        }
+
+        // A folder no library holds. A catalog's select is narrow, and the folder's own name is what
+        // tells two of them apart, whatever the Gelato folder is: it comes first there, the tooltip
+        // has the full path.
+        function noLibraryLabel(select, path) {
+          const around = libraryAround(path);
+          if (select.dataset.field !== 'Path') {
+            return around ? path + ' (in ' + around.Name + ')' : 'In no library: ' + path;
+          }
+          const name = path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path;
+          return name + (around ? ' (in ' + around.Name + ')' : ' (in no library)');
+        }
+
+        function fillLibrarySelect(select, kind, path, defaultLabel) {
+          select.innerHTML = '';
+          const add = (value, label) => {
+            const o = document.createElement('option');
+            o.value = value;
+            o.textContent = label;
+            select.appendChild(o);
+          };
+          const current = libraryOf(path);
+          if (defaultLabel) add('', defaultLabel);
+          if (path && !current) add('path:' + path, noLibraryLabel(select, path));
+          if (!defaultLabel && !path) add('', '-- Select library --');
+          libraries.filter(l => l === current || libraryFits(l, kind)).forEach(l => add('lib:' + l.Id, l.Name));
+          add(NEW_LIBRARY, 'New library…');
+          select.value = current ? 'lib:' + current.Id : (path ? 'path:' + path : '');
+          select.dataset.picked = select.value;
+          showLibraryWarning(select);
+          if (!select.dataset.warns) {
+            select.dataset.warns = '1';
+            select.addEventListener('change', () => {
+              if (select.value === NEW_LIBRARY) {
+                newLibraryFor(select);
+                return;
+              }
+              select.dataset.picked = select.value;
+              showLibraryWarning(select);
+            });
+          }
+        }
+
+        // Jellyfin's dialog takes no library without a folder, and only a folder that exists: Gelato
+        // creates the folder, the user the library with it. Resolves to the folder, or null when
+        // cancelled.
+        function prepareLibraryFolder() {
+          return new Promise(resolve => {
+            let path = null;
+            const dialog = openDialog(NEW_LIBRARY_DIALOG);
+
+            const step = name => dialog.querySelector('[data-step="' + name + '"]');
+            const txtName = dialog.querySelector('#txtNewLibraryName');
+            const txtPath = dialog.querySelector('#txtNewLibraryPath');
+            const btnOk = dialog.querySelector('button[type="submit"]');
+            const btnCancel = dialog.querySelector('[data-do="cancel"]');
+            const fail = text => {
+              step('error').textContent = text;
+              step('error').style.display = text ? '' : 'none';
+            };
+            const done = () => {
+              dialog.remove();
+              resolve(path);
+            };
+
+            dialog.querySelector('form').onsubmit = async e => {
+              e.preventDefault();
+              if (path) {
+                done();
+                return;
+              }
+              const name = txtName.value.trim();
+              if (!name) {
+                fail('Enter a name for the library.');
+                txtName.focus();
+                return;
+              }
+              try {
+                const base = txtBasePath.value.trim();
+                const res = await window.ApiClient.ajax({
+                  type: 'POST',
+                  url: window.ApiClient.getUrl('gelato/libraries/folder', base ? { name, basePath: base } : { name }),
+                  dataType: 'json'
+                });
+                path = res.Path;
+                txtPath.value = path;
+                step('ask').style.display = 'none';
+                step('ready').style.display = '';
+                btnCancel.style.display = 'none';
+                btnOk.textContent = 'Done';
+                fail('');
+                txtPath.select();
+              } catch (err) {
+                console.error(err);
+                // Said in the dialog: an alert would open behind it.
+                fail('Could not create the folder: ' + await errorText(err));
+              }
+            };
+            dialog.querySelector('[data-do="copy"]').onclick = async () => {
+              txtPath.select();
+              try {
+                // Only on https and localhost.
+                await navigator.clipboard.writeText(txtPath.value);
+              } catch (_) {
+                document.execCommand('copy');
+              }
+            };
+            btnCancel.onclick = done;
+            // Escape
+            dialog.oncancel = e => {
+              e.preventDefault();
+              done();
+            };
+            txtName.focus();
+          });
+        }
+
+        // "New library…" was picked: picks the folder made for it, or puts the pick back.
+        async function newLibraryFor(select) {
+          const path = await prepareLibraryFolder();
+          let value = select.dataset.picked || '';
+          if (path) {
+            value = 'path:' + path;
+            if (![...select.options].some(o => o.value === value)) {
+              const o = document.createElement('option');
+              o.value = value;
+              o.textContent = noLibraryLabel(select, path);
+              select.insertBefore(o, [...select.options].find(x => x.value === NEW_LIBRARY) || null);
+            }
+          }
+          select.value = value;
+          // The row keeps its pick through this event.
+          select.dispatchEvent(new Event('change'));
+        }
+
+        // A folder no Jellyfin library holds: Gelato has nowhere to put the items. Said under the
+        // select; in the catalog table, where there is no room, as the tooltip.
+        const NO_LIBRARY_WARNING = 'This folder is in no Jellyfin library yet, so Gelato cannot list these items. ' +
+          'Add a library under Dashboard > Libraries with this folder, or pick one of your libraries and save: ' +
+          'Gelato adds a folder of its own to it.';
+
+        function showLibraryWarning(select) {
+          // A folder inside a library's folder is in that library: nothing to add.
+          const missing = select.value.startsWith('path:') && !libraryAround(select.value.slice(5));
+          const folder = missing ? select.value.slice(5) : '';
+          select.title = missing ? folder + ': ' + NO_LIBRARY_WARNING : '';
+          // A catalog's select has its table cell to itself, the others their field.
+          const inTable = select.dataset.field === 'Path';
+          const container = inTable ? select.parentElement : select.closest('.inputContainer');
+          if (!container) return;
+
+          // The folder is what the library is created with in Jellyfin: one click copies it.
+          const copied = (control, label) => async e => {
+            e.preventDefault();
+            await copyText(select.value.slice(5));
+            control.textContent = 'Copied';
+            setTimeout(() => { control.textContent = label; }, 1500);
+          };
+          const pick = select.closest('.libraryPick');
+          const copy = pick?.querySelector('button');
+          if (copy) {
+            copy.style.display = missing ? '' : 'none';
+            copy.onclick = copied(copy, 'Copy folder');
+          }
+
+          let note = container.querySelector(':scope > .libraryWarning');
+          if (!note) {
+            note = document.createElement('div');
+            note.className = 'fieldDescription libraryWarning';
+            (pick || select).insertAdjacentElement('afterend', note);
+            const link = document.createElement('a');
+            link.href = '#/dashboard/libraries';
+            // A tab of its own: the folder is pasted there, and this page keeps what is picked.
+            link.target = '_blank';
+            link.className = 'button-link';
+            if (inTable) {
+              // One line, where the cell has no room for more: the select's tooltip says the rest.
+              // Not a fieldDescription: a skin may force those to wrap.
+              note.className = 'libraryWarning';
+              note.style.cssText = 'white-space: nowrap; font-size: .85em; margin: .3em 0 0;';
+              const copyLink = document.createElement('a');
+              copyLink.href = '#';
+              copyLink.className = 'button-link';
+              copyLink.textContent = 'Copy folder';
+              copyLink.onclick = copied(copyLink, 'Copy folder');
+              link.textContent = 'Libraries';
+              note.append('No library yet: ', copyLink, ' · ', link);
+            } else {
+              link.textContent = 'Dashboard > Libraries';
+              note.append('This folder is in no library yet. Copy it and add a library with it under ', link,
+                ', or pick one of your libraries here. Gelato finds the new library on its own.');
+            }
+          }
+          // On an install without any library of Gelato's this is the first step, not a fault.
+          note.style.color = libraries.some(l => l.GelatoPath) ? '#ff9800' : '';
+          // A catalog that is switched off imports nothing: its row says nothing either.
+          note.style.display = missing && !(inTable && select.disabled) ? '' : 'none';
+        }
+
+        async function copyText(text) {
+          try {
+            // Only on https and localhost.
+            await navigator.clipboard.writeText(text);
+          } catch (_) {
+            const area = document.createElement('textarea');
+            area.value = text;
+            area.style.cssText = 'position: fixed; opacity: 0;';
+            page.appendChild(area);
+            area.select();
+            document.execCommand('copy');
+            area.remove();
+          }
+        }
+
+        // A select filled anew keeps what was picked in it, also a folder made for a new library
+        // that is not saved yet; a folder that got its library meanwhile shows as that library.
+        function restorePick(select, picked) {
+          if (picked === undefined || picked === NEW_LIBRARY || picked === select.value) return true;
+          const has = value => [...select.options].some(o => o.value === value);
+          if (picked.startsWith('path:')) {
+            const lib = libraryOf(picked.slice(5));
+            if (lib) {
+              picked = 'lib:' + lib.Id;
+            } else if (!has(picked)) {
+              const o = document.createElement('option');
+              o.value = picked;
+              o.textContent = noLibraryLabel(select, picked.slice(5));
+              select.insertBefore(o, [...select.options].find(x => x.value === NEW_LIBRARY) || null);
+            }
+          }
+          if (!has(picked)) return false;
+          select.value = picked;
+          select.dataset.picked = picked;
+          showLibraryWarning(select);
+          return true;
+        }
+
+        // Back from the Libraries tab: what was created there shows without a reload.
+        async function refreshLibraries() {
+          if (!currentConfig || document.hidden || !page.isConnected || page.classList.contains('hide')
+            || page.querySelector('dialog')) return;
+          const movie = selMovieLibrary.value, series = selSeriesLibrary.value;
+          if (allCatalogs.length > 0) collectCatalogStatesFromDOM();
+          await loadLibraries();
+          fillLibrarySelect(selMovieLibrary, 'movie', currentConfig.MoviePath || '');
+          restorePick(selMovieLibrary, movie);
+          fillLibrarySelect(selSeriesLibrary, 'series', currentConfig.SeriesPath || '');
+          restorePick(selSeriesLibrary, series);
+          if (allCatalogs.length > 0) renderCatalogs();
+        }
+
+        // The folder to save for a pick: the one saved already when the library holds it, the library's
+        // Gelato folder, or a new one Gelato creates and adds to the library.
+        async function resolveLibraryPick(value, path) {
+          if (!value) return '';
+          if (value.startsWith('path:')) return value.slice(5);
+          const lib = libraries.find(l => 'lib:' + l.Id === value);
+          if (!lib) return path || '';
+          if (path && (lib.Locations || []).includes(path)) return path;
+          if (lib.GelatoPath) return lib.GelatoPath;
+          const base = txtBasePath.value.trim();
+          const res = await window.ApiClient.ajax({
+            type: 'POST',
+            url: window.ApiClient.getUrl('gelato/libraries/' + encodeURIComponent(lib.Id) + '/folder',
+              base ? { basePath: base } : {}),
+            dataType: 'json'
+          });
+          lib.GelatoPath = res.Path;
+          lib.Locations = [...(lib.Locations || []), res.Path];
+          return res.Path;
+        }
+
         async function loadCatalogs() {
           try {
             // Show loading spinner in list
@@ -369,7 +852,17 @@
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
             const savedCatalogs = cfg.Catalogs || [];
 
+            // The catalogs are the addon's: without one there is nothing to list yet.
+            catalogsLoaded = false;
+            if (!(cfg.Url || '').trim()) {
+              allCatalogs = [];
+              catalogsList.innerHTML = '<p style="padding: 1em; text-align: center; opacity: 0.7;">No catalogs yet. ' +
+                'Enter your AIOStreams URL on the General tab and save: the catalogs are the ones your addon lists.</p>';
+              return;
+            }
+
             const response = await window.ApiClient.getJSON(window.ApiClient.getUrl('gelato/catalogs'));
+            if (libraries.length === 0) await loadLibraries();
             
             // Merge server catalogs with saved user preferences
             allCatalogs = (response || []).map(serverCat => {
@@ -384,18 +877,44 @@
                 Enabled: savedCat ? savedCat.Enabled : (serverCat.Enabled || false),
                 MaxItems: savedCat ? savedCat.MaxItems : (serverCat.MaxItems || 0),
                 CreateCollection: savedCat ? savedCat.CreateCollection : (serverCat.CreateCollection || false),
+                Path: savedCat ? (savedCat.Path || '') : (serverCat.Path || ''),
                 Url: serverCat.Url || ''
               };
             });
-            
+            catalogsLoaded = true;
+
             renderCatalogs();
           } catch (e) {
             console.error('Error loading catalogs:', e);
-            catalogsList.innerHTML = '<p style="color:red; padding: 1em;">Error loading catalogs. Check logs.</p>';
+            const failed = document.createElement('p');
+            failed.style.cssText = 'color: red; padding: 1em;';
+            failed.textContent = 'Could not load the catalogs: ' + await errorText(e);
+            catalogsList.replaceChildren(failed);
           }
         }
 
+        // A checkbox of the table in the markup Jellyfin's own component builds around one, so it
+        // looks like those on the General tab. The classes alone style it.
+        function tableCheckbox(input) {
+          input.classList.add('emby-checkbox');
+          input.dataset.embycheckbox = 'true';
+          const label = document.createElement('label');
+          label.className = 'emby-checkbox-label';
+          label.style.cssText = 'display: inline-flex; min-height: 2.2em; margin: 0;';
+          const text = document.createElement('span');
+          text.className = 'checkboxLabel';
+          const outline = document.createElement('span');
+          outline.className = 'checkboxOutline';
+          outline.innerHTML = '<span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>' +
+            '<span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>';
+          label.append(input, text, outline);
+          return label;
+        }
+
         function renderCatalogs() {
+          // Not loaded: what the load put there (its spinner, a hint, an error) stays.
+          if (!catalogsLoaded) return;
+
           catalogsList.innerHTML = '';
           const searchTerm = (txtCatalogSearch.value || '').toLowerCase();
 
@@ -405,15 +924,11 @@
           );
 
           if (filtered.length === 0) {
-            if (allCatalogs.length === 0) {
-              // Not loaded yet or empty manifest
-            } else {
-              catalogsList.innerHTML = '<p style="padding: 1em; text-align: center; opacity: 0.7;">No matching catalogs found.</p>';
-              return;
-            }
+            catalogsList.innerHTML = '<p style="padding: 1em; text-align: center; opacity: 0.7;">' +
+              (allCatalogs.length === 0 ? 'Your addon lists no catalogs that can be imported.' : 'No matching catalogs found.') +
+              '</p>';
+            return;
           }
-
-          if (allCatalogs.length === 0) return; // Wait for load
 
           const table = document.createElement('table');
           table.classList.add('table', 'detailTable');
@@ -429,6 +944,7 @@
                 <th style="padding: 10px;">Enabled</th>
                 <th style="padding: 10px;">Collection</th>
                 <th style="padding: 10px;">Max items</th>
+                <th style="padding: 10px;">Library</th>
                 <th style="padding: 10px;">Actions</th>
             `;
           table.appendChild(header);
@@ -455,11 +971,10 @@
             const enabledCheck = document.createElement('input');
             enabledCheck.type = 'checkbox';
             enabledCheck.checked = cat.Enabled;
-            enabledCheck.is = 'emby-checkbox';
             enabledCheck.dataset.catalogId = cat.Id;
             enabledCheck.dataset.catalogType = cat.Type;
             enabledCheck.dataset.field = 'Enabled';
-            enabledCell.appendChild(enabledCheck);
+            enabledCell.appendChild(tableCheckbox(enabledCheck));
             row.appendChild(enabledCell);
 
             // Create Collection
@@ -469,12 +984,12 @@
             collCheck.type = 'checkbox';
             collCheck.checked = cat.CreateCollection;
             collCheck.disabled = !cat.Enabled;
-            collCheck.style.opacity = cat.Enabled ? '1' : '0.45';
-            collCheck.is = 'emby-checkbox';
             collCheck.dataset.catalogId = cat.Id;
             collCheck.dataset.catalogType = cat.Type;
             collCheck.dataset.field = 'CreateCollection';
-            collCell.appendChild(collCheck);
+            const collLabel = tableCheckbox(collCheck);
+            collLabel.style.opacity = cat.Enabled ? '1' : '0.45';
+            collCell.appendChild(collLabel);
             row.appendChild(collCell);
 
             // Items per catalog
@@ -495,6 +1010,33 @@
 
             maxCell.appendChild(maxInput);
             row.appendChild(maxCell);
+
+            // Library of its own
+            const pathCell = document.createElement('td');
+            pathCell.style.padding = '10px';
+            // The classes alone theme it; emby-select's own setup would add a label to the cell.
+            const pathInput = document.createElement('select');
+            pathInput.classList.add('emby-select', 'emby-select-withcolor');
+            // Before it is filled: the options are worded for the table.
+            pathInput.dataset.catalogId = cat.Id;
+            pathInput.dataset.catalogType = cat.Type;
+            pathInput.dataset.field = 'Path';
+            fillLibrarySelect(pathInput, cat.Type, cat.Path || '', 'Default');
+            // An unsaved pick is shown again, unless its library is gone meanwhile: then the saved
+            // folder stays, instead of an empty select that would save as "Default".
+            if (cat._library !== undefined && !restorePick(pathInput, cat._library)) delete cat._library;
+            pathInput.disabled = !cat.Enabled;
+            pathInput.style.minWidth = '200px';
+            pathInput.style.opacity = cat.Enabled ? '1' : '0.45';
+            // Room on the right for the arrow: a long folder would run under it.
+            pathInput.style.padding = '4px 2em 4px 4px';
+            // Kept on the catalog right away: filtering the table renders it anew.
+            pathInput.addEventListener('change', () => { cat._library = pathInput.value; });
+
+            pathCell.appendChild(pathInput);
+            // In its cell now: a folder in no library gets its line under the select.
+            showLibraryWarning(pathInput);
+            row.appendChild(pathCell);
 
             // Actions
             const actionCell = document.createElement('td');
@@ -519,8 +1061,11 @@
               const on = enabledCheck.checked;
               maxInput.disabled = !on;
               maxInput.style.opacity = on ? '1' : '0.45';
+              pathInput.disabled = !on;
+              pathInput.style.opacity = on ? '1' : '0.45';
+              showLibraryWarning(pathInput);
               collCheck.disabled = !on;
-              collCheck.style.opacity = on ? '1' : '0.45';
+              collLabel.style.opacity = on ? '1' : '0.45';
               importBtn.disabled = !on;
               importBtn.style.opacity = on ? '1' : '0.45';
             });
@@ -557,6 +1102,7 @@
             const enabledCheck = row.querySelector('input[data-field="Enabled"]');
             const collCheck = row.querySelector('input[data-field="CreateCollection"]');
             const maxInput = row.querySelector('input[data-field="MaxItems"]');
+            const pathInput = row.querySelector('select[data-field="Path"]');
             if (!enabledCheck || !collCheck || !maxInput) return;
 
             const catId = enabledCheck.dataset.catalogId;
@@ -567,35 +1113,80 @@
             cat.Enabled = enabledCheck.checked;
             cat.CreateCollection = collCheck.checked;
             cat.MaxItems = parseInt(maxInput.value) || 0;
+            if (pathInput) cat._library = pathInput.value;
           });
         }
 
         async function triggerImport(cat) {
-          if (!confirm('Start import for ' + cat.Name + '?')) return;
+          if (!await askConfirm('Import catalog', 'Start import for ' + cat.Name + '?', 'Start import')) return;
           Dashboard.showLoadingMsg();
           try {
-            // FIXED: Use string concatenation
-            const url = window.ApiClient.getUrl('gelato/catalogs/' + encodeURIComponent(cat.Id) + '/' + encodeURIComponent(cat.Type) + '/import');
-            await window.ApiClient.ajax({ type: "POST", url: url });
+            // The import reads the saved settings, so the row is saved as it is on the page first:
+            // a library or a limit picked a moment ago would not count otherwise.
+            collectCatalogStatesFromDOM();
+            if (cat._library !== undefined) {
+              cat.Path = await resolveLibraryPick(cat._library, cat.Path);
+              delete cat._library;
+            }
+            const url = 'gelato/catalogs/' + encodeURIComponent(cat.Id) + '/' + encodeURIComponent(cat.Type);
+            await window.ApiClient.ajax({
+              type: "POST",
+              url: window.ApiClient.getUrl(url + '/config'),
+              data: JSON.stringify(cat),
+              contentType: 'application/json'
+            });
+            await window.ApiClient.ajax({ type: "POST", url: window.ApiClient.getUrl(url + '/import') });
             Dashboard.alert("Import started.");
           } catch (e) {
             console.error(e);
-            Dashboard.alert("Error starting import.");
+            await showError('Error starting import', e);
           } finally {
             Dashboard.hideLoadingMsg();
           }
         }
 
+        // The catalog table as it is on the page, put into the configuration that gets saved. A
+        // table that was never loaded changes nothing: the saved settings stay.
+        async function applyCatalogRows(cfg) {
+          if (allCatalogs.length === 0) return;
+          collectCatalogStatesFromDOM();
+          for (const cat of allCatalogs) {
+            if (cat._library !== undefined) {
+              cat.Path = await resolveLibraryPick(cat._library, cat.Path);
+              delete cat._library;
+            }
+          }
+          // The list holds what the addon has now; a catalog it dropped keeps its settings.
+          const unlisted = (cfg.Catalogs || []).filter(c =>
+            !allCatalogs.some(a => a.Id === c.Id && a.Type === c.Type));
+          cfg.Catalogs = allCatalogs.concat(unlisted);
+        }
+
         async function triggerImportAll() {
-          if (!confirm('Start import?')) return;
+          collectCatalogStatesFromDOM();
+          const enabled = allCatalogs.filter(c => c.Enabled);
+          if (enabled.length === 0) {
+            Dashboard.alert('No catalog is enabled.');
+            return;
+          }
+          const which = enabled.length === 1 ? enabled[0].Name : 'the ' + enabled.length + ' enabled catalogs';
+          if (!await askConfirm('Import all catalogs', 'Start import for ' + which + '?', 'Start import')) return;
           Dashboard.showLoadingMsg();
           try {
+            // The import reads the saved settings, so the table is saved as it is on the page
+            // first, as a row's own Import button does for its row: a catalog enabled a moment
+            // ago would not be imported otherwise.
+            const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
+            await applyCatalogRows(cfg);
+            await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
+            renderCatalogs();
+
             const url = window.ApiClient.getUrl('gelato/catalogs/import-all');
             await window.ApiClient.ajax({ type: "POST", url: url });
             Dashboard.alert("Global import started in background.");
           } catch (e) {
             console.error(e);
-            Dashboard.alert("Error starting global import.");
+            await showError('Error starting global import', e);
           } finally {
             Dashboard.hideLoadingMsg();
           }
@@ -609,13 +1200,16 @@
             currentConfig = cfg;
             // Populate fields
             if (txtUrl) txtUrl.value = cfg.Url || "";
-            if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
-            if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
+            if (txtBasePath) txtBasePath.value = cfg.BasePath || "";
+            await loadLibraries();
+            fillLibrarySelect(selMovieLibrary, 'movie', cfg.MoviePath || '');
+            fillLibrarySelect(selSeriesLibrary, 'series', cfg.SeriesPath || '');
             if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
             if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
             if (chkExtendLocalSeriesTrees) chkExtendLocalSeriesTrees.checked = cfg.ExtendLocalSeriesTrees ?? false;
             if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
             if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
+            showUnreleasedHint();
             if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 0;
             if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
             if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
@@ -642,8 +1236,10 @@
           try {
             const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
             cfg.Url = txtUrl.value.trim();
-            cfg.MoviePath = txtMoviePath.value.trim();
-            cfg.SeriesPath = txtSeriesPath.value.trim();
+            cfg.BasePath = txtBasePath.value.trim();
+            if (cfg.BasePath) await fetchLibraries(cfg.BasePath);
+            cfg.MoviePath = await resolveLibraryPick(selMovieLibrary.value, cfg.MoviePath);
+            cfg.SeriesPath = await resolveLibraryPick(selSeriesLibrary.value, cfg.SeriesPath);
 
             
             // Stream TTL
@@ -664,14 +1260,8 @@
             cfg.RemuxDbContribute = chkRemuxDbContribute.checked;
 
             // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
-            if (allCatalogs.length > 0) {
-              collectCatalogStatesFromDOM();
-              cfg.Catalogs = allCatalogs;
-            } else {
-              // If catalogs haven't been loaded, keep the existing catalog configuration
-              // This prevents overwriting catalog settings when saving from other tabs
-              cfg.Catalogs = cfg.Catalogs || [];
-            }
+            await applyCatalogRows(cfg);
+            cfg.Catalogs = cfg.Catalogs || [];
 
             // Handle User Configs
             // Use currentConfig.UserConfigs which contains any unsaved user overrides
@@ -692,8 +1282,17 @@
             currentConfig.UserConfigs = userConfigsArrayToObject(cfg.UserConfigs);
 
             Dashboard.processPluginConfigurationUpdateResult();
+
+            // New folders are in their libraries now: show the picks as saved.
+            await loadLibraries();
+            fillLibrarySelect(selMovieLibrary, 'movie', cfg.MoviePath || '');
+            fillLibrarySelect(selSeriesLibrary, 'series', cfg.SeriesPath || '');
+            currentConfig.MoviePath = cfg.MoviePath;
+            currentConfig.SeriesPath = cfg.SeriesPath;
+            renderCatalogs();
           } catch (e) {
             console.error(e);
+            await showError('Error saving', e);
           } finally {
             Dashboard.hideLoadingMsg();
           }
@@ -779,14 +1378,14 @@
           const override = currentConfig?.UserConfigs?.[userId];
           if (override) {
             txtUserUrl.value = override.Url || '';
-            txtUserMoviePath.value = override.MoviePath || '';
-            txtUserSeriesPath.value = override.SeriesPath || '';
+            fillLibrarySelect(selUserMovieLibrary, 'movie', override.MoviePath || '');
+            fillLibrarySelect(selUserSeriesLibrary, 'series', override.SeriesPath || '');
             chkUserDisableSearch.checked = override.DisableSearch || false;
           } else {
             // New
             txtUserUrl.value = currentConfig?.Url || '';
-            txtUserMoviePath.value = currentConfig?.MoviePath || '';
-            txtUserSeriesPath.value = currentConfig?.SeriesPath || '';
+            fillLibrarySelect(selUserMovieLibrary, 'movie', currentConfig?.MoviePath || '');
+            fillLibrarySelect(selUserSeriesLibrary, 'series', currentConfig?.SeriesPath || '');
             chkUserDisableSearch.checked = false;
           }
         }
@@ -796,15 +1395,29 @@
           userOverrideContainer.style.display = 'none';
         });
 
-        page.querySelector('#btnAddOverride').addEventListener('click', () => {
+        page.querySelector('#btnAddOverride').addEventListener('click', async () => {
           const userId = selUserConfig.value;
           if (!userId) return;
           if (!currentConfig.UserConfigs) currentConfig.UserConfigs = {};
 
+          const previous = currentConfig.UserConfigs[userId] || currentConfig;
+          let moviePath, seriesPath;
+          Dashboard.showLoadingMsg();
+          try {
+            moviePath = await resolveLibraryPick(selUserMovieLibrary.value, previous.MoviePath);
+            seriesPath = await resolveLibraryPick(selUserSeriesLibrary.value, previous.SeriesPath);
+          } catch (e) {
+            console.error(e);
+            await showError('Could not set up the library folder', e);
+            return;
+          } finally {
+            Dashboard.hideLoadingMsg();
+          }
+
           currentConfig.UserConfigs[userId] = {
             Url: txtUserUrl.value.trim(),
-            MoviePath: txtUserMoviePath.value.trim(),
-            SeriesPath: txtUserSeriesPath.value.trim(),
+            MoviePath: moviePath,
+            SeriesPath: seriesPath,
             DisableSearch: chkUserDisableSearch.checked
           };
 
@@ -816,9 +1429,16 @@
         function init() {
           form.addEventListener("submit", saveConfig);
           txtCatalogSearch.addEventListener('input', renderCatalogs);
+          chkFilterUnreleased.addEventListener('change', showUnreleasedHint);
           btnRefreshCatalogs.addEventListener('click', loadCatalogs);
           page.querySelector('#btnImportAll').addEventListener('click', triggerImportAll);
           selUserConfig.addEventListener('change', onUserSelected);
+          // Once: the page is shown again and again, the document stays.
+          if (!page.dataset.watchesLibraries) {
+            page.dataset.watchesLibraries = '1';
+            document.addEventListener('visibilitychange', refreshLibraries);
+            window.addEventListener('focus', refreshLibraries);
+          }
 
           // Tab 1 active by default
           const startTab = page.querySelector('.tab-button[data-tab="general"]');
