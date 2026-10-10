@@ -23,6 +23,11 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CreateCollections { get; set; } = false;
     public int MaxCollectionItems { get; set; } = 100;
     public bool DisableSearch { get; set; } = false;
+
+    /// <summary>
+    /// List the search results the library already has before the ones it does not.
+    /// </summary>
+    public bool SearchLibraryFirst { get; set; } = false;
     public bool EnableJavaScriptInjection { get; set; } = false;
     public bool LazyImages { get; set; } = false;
     public List<CatalogConfig> Catalogs { get; set; } = [];
@@ -163,6 +168,7 @@ public class UserConfig
             EnableMixed = baseConfig.EnableMixed,
             ExtendLocalSeriesTrees = baseConfig.ExtendLocalSeriesTrees,
             FilterUnreleased = baseConfig.FilterUnreleased,
+            SearchLibraryFirst = baseConfig.SearchLibraryFirst,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
             DisableSourceCount = baseConfig.DisableSourceCount,
             FFmpegAnalyzeDuration = baseConfig.FFmpegAnalyzeDuration,
