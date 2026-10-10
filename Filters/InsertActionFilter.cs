@@ -212,9 +212,12 @@ public class InsertActionFilter(
     /// </summary>
     private BaseItem? FindExisting(Guid guid, StremioMeta stremioMeta, User user)
     {
+        // Also when it is in a library this user cannot open: inserting it again would take it
+        // out of that library.
         if (
             manager.IntoBaseItem(stremioMeta) is not { } item
-            || manager.FindExistingItem(item, user) is not { } existing
+            || (manager.FindExistingItem(item, user) ?? manager.FindOutsideDefaultFolders(item))
+                is not { } existing
         )
             return null;
 
@@ -237,9 +240,11 @@ public class InsertActionFilter(
     {
         // Get root folder
         var isSeries = stremioMeta.Type == StremioMediaType.Series;
-        var root = isSeries
-            ? manager.TryGetSeriesFolder(userId)
-            : manager.TryGetMovieFolder(userId);
+        // The library the result was searched in, when the search was scoped to one the user can
+        // open and that has a Gelato folder; else the user's movie or series folder.
+        var root =
+            manager.GetSearchFolder(userId, guid)
+            ?? (isSeries ? manager.TryGetSeriesFolder(userId) : manager.TryGetMovieFolder(userId));
         if (root is null)
         {
             log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
