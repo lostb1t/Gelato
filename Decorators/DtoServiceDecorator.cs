@@ -1,6 +1,7 @@
 using Jellyfin.Data.Enums;
 using MediaBrowser.Model.MediaInfo;
 using Jellyfin.Database.Implementations.Entities; // User
+using Gelato.Services;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -16,7 +17,8 @@ public sealed class DtoServiceDecorator(
     Lazy<GelatoManager> manager,
     IHttpContextAccessor http,
     ILibraryManager libraryManager,
-    IUserDataManager userDataManager
+    IUserDataManager userDataManager,
+    ItemIdLookup idLookup
 ) : IDtoService
 {
     private readonly Lazy<GelatoManager> _manager = manager;
@@ -32,9 +34,23 @@ public sealed class DtoServiceDecorator(
         BaseItem? owner = null
     )
     {
-        var dto = inner.GetBaseItemDto(item, options, user, owner);
+        var counted = WithoutSourceCount(options);
+        BaseItemDto dto;
+        try
+        {
+            dto = inner.GetBaseItemDto(item, options, user, owner);
+        }
+        finally
+        {
+            options.Fields = counted ?? options.Fields;
+        }
+
         AddPrimaryVersionFields(dto, item, options, user);
-        CountStreamsAsOneSource(dto, item);
+        if (counted is not null)
+        {
+            CountSources([dto], [item], user);
+        }
+
         Patch(dto, item, _http.ReadRequest(ctx => ctx.IsApiListing(), false), user);
         return dto;
     }
@@ -130,9 +146,84 @@ public sealed class DtoServiceDecorator(
     /// clients badge every movie card with the number of streams. Count them as the one source
     /// they stand in for, like before they were versions.
     /// </summary>
-    private void CountStreamsAsOneSource(BaseItemDto dto, BaseItem item)
+    /// <remarks>
+    /// Jellyfin is not asked for the count at all: it loads every version of a title and asks each
+    /// for its own local versions, 2 N + 3 commands for N stream rows, per title on the page.
+    /// One query says which titles have versions and whether any is not a stream row. Only those
+    /// (and a version shown itself) get Jellyfin's count, less the rows.
+    /// </remarks>
+    private void CountSources(
+        IReadOnlyList<BaseItemDto> dtos,
+        IReadOnlyDictionary<Guid, BaseItem> items,
+        User? user
+    )
     {
-        if (dto.MediaSourceCount is not > 1 || item is not Video video)
+        var videos = new List<(BaseItemDto Dto, Video Video)>();
+        foreach (var dto in dtos)
+        {
+            if (items.TryGetValue(dto.Id, out var item) && item is Video video)
+            {
+                videos.Add((dto, video));
+            }
+        }
+
+        if (videos.Count == 0)
+        {
+            return;
+        }
+
+        var owners = idLookup.VersionOwners(
+            videos.Where(v => !v.Video.PrimaryVersionId.HasValue).Select(v => v.Video.Id).ToList()
+        );
+        foreach (var (dto, video) in videos)
+        {
+            // No versions, or stream rows alone: the one source they stand in for.
+            if (
+                !video.PrimaryVersionId.HasValue
+                && (!owners.TryGetValue(video.Id, out var owner) || !owner.HasOtherVersions)
+            )
+            {
+                continue;
+            }
+
+            dto.MediaSourceCount = inner
+                .GetBaseItemDto(
+                    video,
+                    new DtoOptions(false)
+                    {
+                        Fields = [ItemFields.MediaSourceCount],
+                        EnableImages = false,
+                        EnableUserData = false,
+                    },
+                    user
+                )
+                .MediaSourceCount;
+            CountStreamsAsOneSource(dto, video);
+        }
+    }
+
+    private void CountSources(BaseItemDto[] dtos, BaseItem[] items, User? user) =>
+        CountSources(dtos, items.ToDictionary(i => i.Id), user);
+
+    /// <summary>
+    /// Takes <see cref="ItemFields.MediaSourceCount"/> out of the options for Jellyfin's part.
+    /// Returns the fields to put back, or null when the count was not asked for.
+    /// </summary>
+    private static IReadOnlyList<ItemFields>? WithoutSourceCount(DtoOptions options)
+    {
+        if (!options.ContainsField(ItemFields.MediaSourceCount))
+        {
+            return null;
+        }
+
+        var fields = options.Fields;
+        options.Fields = fields.Where(f => f != ItemFields.MediaSourceCount).ToArray();
+        return fields;
+    }
+
+    private void CountStreamsAsOneSource(BaseItemDto dto, Video video)
+    {
+        if (dto.MediaSourceCount is not > 1)
         {
             return;
         }
@@ -169,7 +260,17 @@ public sealed class DtoServiceDecorator(
             options.EnableUserData = false;
         }
 
-        var list = inner.GetBaseItemDtos(items, options, user, owner, skipVisibilityCheck);
+        var counted = WithoutSourceCount(options);
+        IReadOnlyList<BaseItemDto> list;
+        try
+        {
+            list = inner.GetBaseItemDtos(items, options, user, owner, skipVisibilityCheck);
+        }
+        finally
+        {
+            options.Fields = counted ?? options.Fields;
+        }
+
         foreach (var itemDto in list)
         {
             Patch(itemDto, item, true, user);
@@ -187,8 +288,13 @@ public sealed class DtoServiceDecorator(
                 continue;
 
             AddPrimaryVersionFields(itemDto, source, options, user);
-            CountStreamsAsOneSource(itemDto, source);
         }
+
+        if (counted is not null)
+        {
+            CountSources(list, byId, user);
+        }
+
         return list;
     }
 
