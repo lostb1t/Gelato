@@ -42,6 +42,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<VersionActionFilter>();
         services.AddSingleton<UnreleasedListingFilter>();
         services.AddSingleton<MediaSegmentFilter>();
+        services.AddSingleton<LibraryStructureFilter>();
         services.AddSingleton<ItemIdLookup>();
         services.AddSingleton<GelatoManager>();
         services.AddSingleton<ItemWriteCounter>();
@@ -64,6 +65,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<IHostedService, StreamUserDataSync>();
         services.AddSingleton<IHostedService, PreProbeNextEpisodeService>();
         services.AddSingleton<IHostedService, LegacyRowAdoptionService>();
+        services.AddSingleton<IHostedService, ParkedItemAdoption>();
         services.AddSingleton<SubtitleProvider>();
         services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
         services.AddSingleton(sp => new Lazy<SubtitleProvider>(
@@ -151,6 +153,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<VersionActionFilter>();
             o.Filters.AddService<UnreleasedListingFilter>();
             o.Filters.AddService<MediaSegmentFilter>();
+            o.Filters.AddService<LibraryStructureFilter>();
         });
     }
 

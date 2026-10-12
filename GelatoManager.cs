@@ -576,6 +576,9 @@ public sealed class GelatoManager(
                     // the old one, and the check above would never look at it again.
                     ct.ThrowIfCancellationRequested();
 
+                    // In a folder again, whoever put it there.
+                    current.ProviderIds?.Remove(ParkedProviderId);
+
                     if (current is Video video)
                     {
                         var rows = GetStreamRows(video);
@@ -632,6 +635,429 @@ public sealed class GelatoManager(
         }
 
         return moved;
+    }
+
+    /// <summary>
+    /// The provider id on a Gelato movie or series that is in no folder: the folder it was in
+    /// was removed and no other one takes it. <see cref="AdoptParkedAsync"/> finds it by this.
+    /// </summary>
+    public const string ParkedProviderId = "GelatoParked";
+
+    /// <summary>What a library is made of: the library itself and the folders it lists.</summary>
+    private static readonly BaseItemKind[] LibraryFolderKinds =
+    [
+        BaseItemKind.Folder,
+        BaseItemKind.CollectionFolder,
+        BaseItemKind.AggregateFolder,
+        BaseItemKind.UserRootFolder,
+    ];
+
+    /// <summary>
+    /// Takes Gelato's movies and series out of a deletion that removes the library folder they
+    /// are in, and returns the ids that are still to be deleted.
+    /// </summary>
+    /// <remarks>
+    /// The last moment to keep them, for a folder Jellyfin drops on its own: a scan that does not
+    /// find it in the library any more. Jellyfin has deleted the items' image folders by then
+    /// (<see cref="MoveOutOf"/> has them fetched again); a removal through the API is caught
+    /// before that, by <see cref="Filters.LibraryStructureFilter"/>. A deletion that names no
+    /// library folder is somebody deleting items, and is left alone.
+    /// </remarks>
+    public IReadOnlyList<Guid> RescueFromRemovedFolders(IReadOnlyList<Guid> ids)
+    {
+        var removed = repo.GetItemList(
+            new InternalItemsQuery
+            {
+                ItemIds = [.. ids],
+                IncludeItemTypes = LibraryFolderKinds,
+                IsDeadPerson = true,
+            }
+        );
+        if (removed.Count == 0)
+            return ids;
+
+        var kept = MoveOutOf(removed);
+        return kept.Count == 0 ? ids : [.. ids.Where(id => !kept.Contains(id))];
+    }
+
+    /// <summary>
+    /// The folder item of a library location, without making the folder Gelato's.
+    /// </summary>
+    public Folder? FindLibraryFolder(string path) =>
+        string.IsNullOrWhiteSpace(path)
+            ? null
+            : repo.GetItemList(new InternalItemsQuery { IsDeadPerson = true, Path = path })
+                .OfType<Folder>()
+                .FirstOrDefault(f => f.GetBaseItemKind() == BaseItemKind.Folder);
+
+    /// <summary>
+    /// Moves Gelato's movies and series out of libraries or library folders that are about to
+    /// go, with their seasons, episodes and stream rows.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin deletes a folder that is no longer in a library, or a library that is gone, with
+    /// everything below it: a scan finds the files again when the folder comes back. Gelato's
+    /// items have no files, so removing its folder from a library or renaming the library
+    /// deleted every one of them for good. They go to the configured movie or series
+    /// folder when that one stays, and are parked without a folder otherwise, until
+    /// <see cref="AdoptParkedAsync"/> finds a folder for them. The id is the hash of the
+    /// gelato:// path, so watch state, favourites and collections stay with the item.
+    /// </remarks>
+    /// <param name="delete">
+    /// Deletes them instead: somebody deleted the library, and means it. Jellyfin would do it
+    /// itself, but only gets to the library's folder in the scan after, where nothing tells
+    /// a deleted library's folder from one that was lost. The watch state is parked as
+    /// Jellyfin parks it, and comes back with the title.
+    /// </param>
+    /// <returns>The ids of everything that was moved out.</returns>
+    public HashSet<Guid> MoveOutOf(IReadOnlyList<BaseItem> folders, bool delete = false)
+    {
+        var kept = new HashSet<Guid>();
+        if (folders.Count == 0)
+            return kept;
+
+        try
+        {
+            var folderIds = folders.Select(f => f.Id).ToArray();
+            var below = repo.GetItemList(
+                new InternalItemsQuery
+                {
+                    AncestorIds = folderIds,
+                    IncludeItemTypes =
+                    [
+                        BaseItemKind.Movie,
+                        BaseItemKind.Series,
+                        BaseItemKind.Folder,
+                    ],
+                    Recursive = true,
+                    GroupByPresentationUniqueKey = false,
+                    CollapseBoxSetItems = false,
+                    IsDeadPerson = true,
+                    // Stream rows are alternate versions, which queries leave out by default.
+                    IncludeOwnedItems = true,
+                }
+            );
+
+            var roots = below
+                .Where(i =>
+                    i is Movie or Series
+                    && !i.HasStreamTag()
+                    && (i.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false)
+                )
+                .Select(i => libraryManager.GetItemById(i.Id) ?? i)
+                .ToList();
+            if (roots.Count == 0)
+                return kept;
+
+            // A folder below a removed one goes with it and takes nothing. Neither do the
+            // folders of a library that goes: those are not below it as the items are.
+            var gone = below.Where(i => i is not Video and not Series).Select(i => i.Id).ToHashSet();
+            gone.UnionWith(folderIds);
+            var gonePaths = folders
+                .OfType<CollectionFolder>()
+                .SelectMany(c => c.PhysicalLocations)
+                .ToList();
+
+            var rootIds = roots.Select(r => r.Id).ToHashSet();
+            var stremioIds = roots
+                .OfType<Movie>()
+                .Select(m => m.GetProviderId("Stremio"))
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .ToHashSet(StringComparer.Ordinal);
+            // A movie's stream rows are in its folder, not below the movie: the linked ones, and
+            // rows of its title that nothing has linked yet.
+            var rows = below
+                .OfType<Movie>()
+                .Where(v =>
+                    v.HasStreamTag()
+                    && (
+                        v.PrimaryVersionId is { } primary
+                            ? rootIds.Contains(primary)
+                            : stremioIds.Contains(v.GetProviderId("Stremio") ?? "")
+                    )
+                )
+                .ToList();
+
+            var seriesIds = roots.OfType<Series>().Select(s => s.Id).ToArray();
+            if (delete)
+            {
+                // What hangs off an item first: Jellyfin makes a version the movie when the
+                // movie goes before it.
+                var descendants =
+                    seriesIds.Length == 0
+                        ? []
+                        : repo.GetItemList(
+                            new InternalItemsQuery
+                            {
+                                AncestorIds = seriesIds,
+                                Recursive = true,
+                                IsDeadPerson = true,
+                                IncludeOwnedItems = true,
+                            }
+                        );
+                List<BaseItem> doomed =
+                [
+                    .. rows,
+                    .. descendants.OrderBy(d => d is Folder),
+                    .. roots,
+                ];
+                foreach (var batch in doomed.Chunk(250))
+                {
+                    libraryManager.DeleteItemsUnsafeFast(batch);
+                }
+
+                _log.LogWarning(
+                    "Library {Folder} is deleted: {Movies} movie(s) and {Series} series of Gelato go with it",
+                    string.Join(", ", folders.Select(f => f.Name)),
+                    roots.Count - seriesIds.Length,
+                    seriesIds.Length
+                );
+                return [.. doomed.Select(d => d.Id)];
+            }
+
+            var cfg = GelatoPlugin.Instance!.Configuration;
+            var movieFolder = RescueFolder(
+                () => TryGetMovieFolder(cfg),
+                BaseItemKind.Movie,
+                gone,
+                gonePaths
+            );
+            var seriesFolder = RescueFolder(
+                () => TryGetSeriesFolder(cfg),
+                BaseItemKind.Series,
+                gone,
+                gonePaths
+            );
+
+            foreach (var root in roots)
+            {
+                var target = root is Series ? seriesFolder : movieFolder;
+                root.SetParent(target);
+                if (target is null)
+                    root.SetProviderId(ParkedProviderId, "1");
+                else
+                    root.ProviderIds?.Remove(ParkedProviderId);
+            }
+
+            // Jellyfin works out an item's library from the parent chain when it is saved, so
+            // the movies and series are saved and registered first, then what hangs off them.
+            persistence.SaveItems(roots, CancellationToken.None);
+            foreach (var root in roots)
+            {
+                libraryManager.RegisterItem(root);
+            }
+            kept.UnionWith(rootIds);
+
+            foreach (var row in rows)
+            {
+                row.SetParent(movieFolder);
+            }
+            if (rows.Count > 0)
+            {
+                persistence.SaveItems(rows, CancellationToken.None);
+                foreach (var row in rows)
+                {
+                    libraryManager.RegisterItem(row);
+                }
+                kept.UnionWith(rows.Select(r => r.Id));
+            }
+
+            if (seriesIds.Length > 0)
+            {
+                var descendants = repo.GetItemList(
+                    new InternalItemsQuery
+                    {
+                        AncestorIds = seriesIds,
+                        Recursive = true,
+                        IsDeadPerson = true,
+                        IncludeOwnedItems = true,
+                    }
+                );
+                persistence.SaveItems(descendants, CancellationToken.None);
+                kept.UnionWith(descendants.Select(d => d.Id));
+            }
+
+            var parked = roots.Count(r => r.ParentId == Guid.Empty);
+            _log.LogWarning(
+                "{Folder} is leaving the library: kept {Movies} movie(s) and {Series} series of Gelato, {Moved} moved to the configured folder, {Parked} without a folder until Gelato has one in a library again",
+                string.Join(", ", folders.Select(f => f.Path ?? f.Name)),
+                roots.Count - seriesIds.Length,
+                seriesIds.Length,
+                roots.Count - parked,
+                parked
+            );
+
+            // Jellyfin deletes an item's image folder before it deletes the item. Where that
+            // has happened, the refresh drops the images that are gone and fetches them again.
+            var bare = roots
+                .Where(r => r.ImageInfos.Any(i => i.IsLocalFile && !File.Exists(i.Path)))
+                .ToList();
+            foreach (var root in bare)
+            {
+                provider.QueueRefresh(
+                    root.Id,
+                    new MetadataRefreshOptions(directoryService)
+                    {
+                        MetadataRefreshMode = MetadataRefreshMode.Default,
+                        ImageRefreshMode = MetadataRefreshMode.Default,
+                    },
+                    RefreshPriority.Low
+                );
+            }
+            if (bare.Count > 0)
+            {
+                _log.LogWarning(
+                    "The images of {Count} of them were deleted with the folder and are fetched again",
+                    bare.Count
+                );
+            }
+        }
+        catch (Exception ex)
+        {
+            // Never in the way of the removal: what was not saved elsewhere goes as before.
+            _log.LogError(ex, "Could not keep Gelato's items out of a library folder's removal");
+        }
+
+        return kept;
+    }
+
+    /// <summary>
+    /// The configured folder for a kind, when it is not among the removed ones and its library
+    /// takes the kind.
+    /// </summary>
+    private Folder? RescueFolder(
+        Func<Folder?> lookup,
+        BaseItemKind kind,
+        HashSet<Guid> gone,
+        IReadOnlyList<string> gonePaths
+    )
+    {
+        try
+        {
+            // The lookup is memoized: the folder has to be an item still. And a folder that
+            // was taken out of its library stays an item until the next scan deletes it.
+            return
+                lookup() is { } folder
+                && !gone.Contains(folder.Id)
+                && !gonePaths.Any(p => SamePath(p, folder.Path))
+                && libraryManager.GetItemById(folder.Id) is Folder current
+                && libraryManager
+                    .GetVirtualFolders()
+                    .Any(v => v.Locations.Any(l => SamePath(l, current.Path)))
+                && FolderTakes(current, kind)
+                ? current
+                : null;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not look up the {Kind} folder", kind);
+            return null;
+        }
+    }
+
+    private readonly SemaphoreSlim _adopting = new(1, 1);
+    private readonly Lock _adoptSoonLock = new();
+    private CancellationTokenSource? _adoptSoon;
+
+    /// <summary>
+    /// <see cref="AdoptParkedAsync"/> in a moment, once for everything that asks until then:
+    /// libraries and folders become items one after the other, and the one that takes the
+    /// items can be the last.
+    /// </summary>
+    public void AdoptParkedSoon()
+    {
+        CancellationTokenSource soon;
+        lock (_adoptSoonLock)
+        {
+            _adoptSoon?.Cancel();
+            _adoptSoon = soon = new CancellationTokenSource();
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), soon.Token).ConfigureAwait(false);
+                await AdoptParkedAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Could not put Gelato's items without a folder into one");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Puts the movies and series <see cref="RescueFromRemovedFolders"/> left without a folder
+    /// into the configured movie or series folder, once that is in a library.
+    /// </summary>
+    /// <returns>How many items got a folder.</returns>
+    public async Task<int> AdoptParkedAsync(CancellationToken ct)
+    {
+        // One at a time: a library scan, a new folder and a saved configuration can all ask.
+        await _adopting.WaitAsync(ct).ConfigureAwait(false);
+
+        var adopted = 0;
+        try
+        {
+            var parked = libraryManager.GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
+                    HasAnyProviderId = new Dictionary<string, string> { { ParkedProviderId, "1" } },
+                    Recursive = true,
+                    GroupByPresentationUniqueKey = false,
+                    CollapseBoxSetItems = false,
+                    // skip filter marker
+                    IsDeadPerson = true,
+                }
+            );
+            if (parked.Count == 0)
+                return 0;
+
+            var cfg = GelatoPlugin.Instance!.Configuration;
+            // The lookup is memoized, misses too, and the folder may be seconds old.
+            memoryCache.Remove($"rootfolder:{cfg.MoviePath}");
+            memoryCache.Remove($"rootfolder:{cfg.SeriesPath}");
+            var movieFolder = RescueFolder(
+                () => TryGetMovieFolder(cfg),
+                BaseItemKind.Movie,
+                [],
+                []
+            );
+            var seriesFolder = RescueFolder(
+                () => TryGetSeriesFolder(cfg),
+                BaseItemKind.Series,
+                [],
+                []
+            );
+
+            foreach (var item in parked)
+            {
+                var target = item is Series ? seriesFolder : movieFolder;
+                if (target is null)
+                    continue;
+
+                if (await MoveToFolderAsync(item, target, ct).ConfigureAwait(false))
+                    adopted++;
+            }
+
+            if (adopted > 0)
+            {
+                _log.LogInformation(
+                    "{Adopted} of {Parked} Gelato item(s) without a folder are in a library again",
+                    adopted,
+                    parked.Count
+                );
+            }
+        }
+        finally
+        {
+            _adopting.Release();
+        }
+
+        return adopted;
     }
 
     // GetConfig asks for the root folders on every request, so the lookup is memoized.
