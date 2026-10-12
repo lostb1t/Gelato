@@ -27,28 +27,30 @@ public sealed class DownloadFilter(
 
         // An API key authenticates without a user, and Jellyfin still puts a UserId claim on the
         // request: the empty guid. GetUserById throws on that, which turned every download made
-        // with an API key into a 400 — the library's own items as much as Gelato's
-        // (lostb1t/Gelato#187). TryGetUserId leaves the user null instead, and a download without
-        // a user goes to Jellyfin.
+        // with an API key into a 400 (lostb1t/Gelato#187). TryGetUserId leaves the user null
+        // instead, and Jellyfin's own GetDownload carries a null user through, so this does too:
+        // without a user the first of all the item's streams is served, not one user's.
         User? user = ctx.TryGetUserId(out var userId) ? userManager.GetUserById(userId) : null;
 
-        if (user is not null)
+        var mediaSourceIdStr = ctx.HttpContext.Items["MediaSourceId"] as string;
+        var hasMediaSourceId = Guid.TryParse(mediaSourceIdStr, out var mediaSourceId);
+
+        var item = library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
+
+        if (item != null && manager.IsStremio(item))
         {
-            var mediaSourceIdStr = ctx.HttpContext.Items["MediaSourceId"] as string;
-            var hasMediaSourceId = Guid.TryParse(mediaSourceIdStr, out var mediaSourceId);
+            var path = item.Path;
 
-            var item = library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
-
-            if (item != null && manager.IsStremio(item))
+            // some clients do not send mediasource id. the use the itemid in the query
+            if (!hasMediaSourceId || !item.IsStream())
             {
-                var path = item.Path;
+                path = mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
+            }
 
-                // some clients do not send mediasource id. the use the itemid in the query
-                if (!hasMediaSourceId || !item.IsStream())
-                {
-                    path = mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
-                }
-
+            // Streams are only synced for a user. A title nobody has opened yet has none without
+            // one, and its own gelato:// path is nothing to fetch: Jellyfin answers that.
+            if (Uri.TryCreate(path, UriKind.Absolute, out var streamUri) && IsHttp(streamUri))
+            {
                 var client = httpClientFactory.CreateClient();
 
                 var resp = await client.GetAsync(
@@ -69,8 +71,7 @@ public sealed class DownloadFilter(
                 var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
                 if (string.IsNullOrWhiteSpace(fileName))
                 {
-                    var uri = new Uri(path);
-                    fileName = Path.GetFileName(uri.AbsolutePath);
+                    fileName = Path.GetFileName(streamUri.AbsolutePath);
                     if (string.IsNullOrWhiteSpace(fileName))
                         fileName = "download";
                 }
@@ -91,4 +92,7 @@ public sealed class DownloadFilter(
 
         await next();
     }
+
+    private static bool IsHttp(Uri uri) =>
+        uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
 }
