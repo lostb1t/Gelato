@@ -76,10 +76,27 @@ public sealed class PreProbeNextEpisodeService(
         return played as Episode;
     }
 
+    // Jellyfin raises PlaybackProgress inside the progress report (PlaybackStart is queued): an
+    // exception here fails the client's report with a 500, and preparing the next episode is
+    // never worth that.
     private void OnProgress(object? sender, PlaybackProgressEventArgs e)
     {
+        try
+        {
+            HandleProgress(e);
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Handling the progress report for {Id} failed", e.Item?.Id);
+        }
+    }
+
+    private void HandleProgress(PlaybackProgressEventArgs e)
+    {
+        // No item: the reported one no longer exists, e.g. a stream row that a sync replaced.
         if (
             mediaSourceManager is not MediaSourceManagerDecorator decorator
+            || e.Item is null
             || e.PlaybackPositionTicks is not > 0
             || e.Users is not { Count: > 0 } users
         )
