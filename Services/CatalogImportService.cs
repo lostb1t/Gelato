@@ -555,9 +555,13 @@ public class CatalogImportService(
             var collection = await GetOrCreateBoxSetAsync(config).ConfigureAwait(false);
             if (collection != null)
             {
-                var currentChildren = libraryManager
-                    .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
-                    .Select(i => i.Id)
+                // A collection's members are links, not children: a query for its children
+                // finds none, and titles that left the catalog stayed in its collection.
+                var currentChildren = (
+                    libraryManager.GetItemById<BoxSet>(collection.Id) ?? collection
+                )
+                    .LinkedChildren.Select(c => c.ItemId)
+                    .OfType<Guid>()
                     .ToList();
 
                 if (currentChildren.Count != 0)
