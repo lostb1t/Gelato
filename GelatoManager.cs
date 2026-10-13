@@ -2224,9 +2224,26 @@ public sealed class GelatoManager(
     /// season remote, which the scan leaves alone, the way it leaves the episodes below it alone.
     /// </remarks>
     private static string VirtualSeasonPath(Series series, int seasonIndex) =>
-        !series.IsFileProtocol && !string.IsNullOrEmpty(series.Path)
-            ? $"{series.Path}:{seasonIndex}"
-            : $"gelato://season/{series.Id:N}:{seasonIndex}";
+        IsLocalSeries(series)
+            ? $"gelato://season/{series.Id:N}:{seasonIndex}"
+            : $"{series.Path}:{seasonIndex}";
+
+    /// <summary>
+    /// The path of an episode Gelato adds to a local series, null for a Gelato series, whose
+    /// episodes keep the path <see cref="IntoBaseItem"/> gives them.
+    /// </summary>
+    /// <remarks>
+    /// An item's id is the hash of its path, and that path only names the show and the slot. A
+    /// local series extended beside the addon's series of the same show built its tree out of the
+    /// same ids: saving them wrote over the rows of the other series' episodes, which left that
+    /// series without them, and removing the local tree deleted them. A path that names the
+    /// series gives the local tree rows of its own.
+    /// </remarks>
+    private static string? VirtualEpisodePath(Series series, StremioMeta episodeMeta) =>
+        IsLocalSeries(series) ? $"gelato://episode/{series.Id:N}/{episodeMeta.Id}" : null;
+
+    private static bool IsLocalSeries(Series series) =>
+        series.IsFileProtocol || string.IsNullOrEmpty(series.Path);
 
     /// <summary>
     /// Whether the series still carries the tree it was extended with: the mark the sync task
@@ -2492,6 +2509,10 @@ public sealed class GelatoManager(
         var repairedSeasons = new List<Season>();
         var allNewEpisodes = new List<Episode>();
         var updatedEpisodes = new List<Episode>();
+        // Episodes of this series that sat under a local series of the same show, and the
+        // episodes of the other series a new one of a local tree stands beside.
+        var takenBack = new List<(Episode Episode, Guid From)>();
+        var twins = new List<(Episode Episode, Episode Twin)>();
 
         var seriesStremioId = series.GetProviderId("Stremio");
         var seriesPresentationKey = series.GetPresentationUniqueKey();
@@ -2514,9 +2535,7 @@ public sealed class GelatoManager(
                 // id is the path's hash: saving the new season would land on that row and replace
                 // everything on it, the metadata lock included (lostb1t/Gelato#73). Keep the row
                 // and only put the number back, which a locked season does not get either. Only
-                // for a row of this series: a second copy of the same show (a local series beside
-                // the addon's) shares those paths, and taking its items over is how extending a
-                // local tree has always worked.
+                // for a row of this series: the path does not say which copy of a show it is.
                 season = collidingSeason;
                 if (season.IsLocked)
                 {
@@ -2638,7 +2657,8 @@ public sealed class GelatoManager(
                 );
 
                 epMeta.Type = StremioMediaType.Episode;
-                if (IntoBaseItem(epMeta) is not Episode episode)
+                var ownPath = VirtualEpisodePath(series, epMeta);
+                if (IntoBaseItem(epMeta, ownPath) is not Episode episode)
                 {
                     _log.LogWarning(
                         "Could not load base item as episode for: {EpisodeName}, skipping",
@@ -2678,6 +2698,21 @@ public sealed class GelatoManager(
                     continue;
                 }
 
+                // The row at this path hangs under another series: a local tree extended before
+                // its episodes had paths of their own was built out of this series' rows. Saving
+                // the episode puts the row back here, and it keeps its id and with it what was
+                // watched. The series it comes from is extended again, with episodes of its own.
+                if (ownPath is null && ExistingItemAt<Episode>(episode.Path) is { } taken)
+                    takenBack.Add((episode, taken.SeriesId));
+
+                // What was watched in the other copy of the show is watched here as well, from
+                // the start: until now both listed the same episode.
+                if (
+                    ownPath is not null
+                    && ExistingItemAt<Episode>($"gelato://stub/{epMeta.Id}") is { } twin
+                )
+                    twins.Add((episode, twin));
+
                 episode.IndexNumber = index;
                 episode.ParentIndexNumber = seasonIndex;
                 episode.SeasonId = season.Id;
@@ -2713,6 +2748,36 @@ public sealed class GelatoManager(
         {
             persistence.SaveItems(allNewEpisodes, ct);
             await ReattachWatchStateAsync(allNewEpisodes, ct).ConfigureAwait(false);
+        }
+
+        foreach (var (episode, twin) in twins)
+        {
+            AdoptWatchState(episode, [twin]);
+        }
+
+        if (takenBack.Count > 0)
+        {
+            // The library manager still has the copies that hang under the other series.
+            foreach (var (episode, _) in takenBack)
+            {
+                libraryManager.RegisterItem(episode);
+            }
+
+            foreach (var from in takenBack.GroupBy(t => t.From))
+            {
+                var other = libraryManager.GetItemById(from.Key) as Series;
+                _log.LogInformation(
+                    "{SeriesName}: took {Count} episode(s) back from {OtherName} ({OtherId}), which was extended with them",
+                    series.Name,
+                    from.Count(),
+                    other?.Name,
+                    from.Key
+                );
+
+                // Without the mark the sync task and the series page fill its slots again.
+                if (other is not null && IsLocalSeries(other))
+                    ClearTreeSyncedTag(other, ct);
+            }
         }
 
         if (updatedEpisodes.Count > 0)
@@ -3046,6 +3111,11 @@ public sealed class GelatoManager(
             { "stremio", string.Empty },
         };
 
+        // Before anything below extends or cleans a local tree: the clean-up deletes what it
+        // finds there.
+        await ReturnTakenEpisodesAsync(cfg, stremio, gelatoProviders, cancellationToken)
+            .ConfigureAwait(false);
+
         var continuingGelatoSeries = libraryManager
             .GetItemList(
                 new InternalItemsQuery
@@ -3144,6 +3214,89 @@ public sealed class GelatoManager(
         else
         {
             CleanVirtualTreeItems(cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Gives a Gelato series the episodes back that a local series of the same show was extended
+    /// with.
+    /// </summary>
+    /// <remarks>
+    /// Until the episodes of a local tree had paths of their own (see
+    /// <see cref="VirtualEpisodePath"/>), extending a local series beside the addon's series of the
+    /// same show moved that series' episodes under the local one. Syncing the Gelato series takes
+    /// them back, and the task only syncs a continuing series, so this does it for the others.
+    /// The local series loses its mark with them and is extended again by what follows.
+    /// </remarks>
+    private async Task ReturnTakenEpisodesAsync(
+        PluginConfiguration cfg,
+        GelatoStremioProvider stremio,
+        Dictionary<string, string> gelatoProviders,
+        CancellationToken ct
+    )
+    {
+        var allSeries = libraryManager
+            .GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Series] })
+            .OfType<Series>()
+            .ToList();
+        var gelatoSeries = allSeries.Where(s => s.IsGelato() && !IsLocalSeries(s)).ToList();
+        if (gelatoSeries.Count == 0)
+            return;
+
+        string[] showIds = ["Imdb", "Tmdb", "Tvdb"];
+        foreach (var local in allSeries.Where(s => !s.IsGelato() && IsLocalSeries(s)))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var twin = gelatoSeries.FirstOrDefault(g =>
+                showIds.Any(p =>
+                    local.GetProviderId(p) is { Length: > 0 } id
+                    && string.Equals(g.GetProviderId(p), id, StringComparison.OrdinalIgnoreCase)
+                )
+            );
+            if (twin is null)
+                continue;
+
+            var taken = libraryManager
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        AncestorIds = [local.Id],
+                        IncludeItemTypes = [BaseItemKind.Episode],
+                        HasAnyProviderId = gelatoProviders,
+                        Recursive = true,
+                        IsDeadPerson = true,
+                    }
+                )
+                .Any(e =>
+                    !e.IsStream()
+                    && (
+                        e.Path?.StartsWith("gelato://stub/", StringComparison.OrdinalIgnoreCase)
+                        ?? false
+                    )
+                );
+            if (!taken)
+                continue;
+
+            try
+            {
+                var meta = await stremio.GetMetaAsync(twin).ConfigureAwait(false);
+                if (meta is not null)
+                {
+                    await SyncSeriesTreesAsync(cfg, meta, ct, existingSeries: twin)
+                        .ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _log.LogError(
+                    ex,
+                    "SyncSeriesTrees: could not give {Name} ({Id}) its episodes back from {LocalId}",
+                    twin.Name,
+                    twin.Id,
+                    local.Id
+                );
+            }
         }
     }
 
@@ -3271,26 +3424,23 @@ public sealed class GelatoManager(
             .Where(ep => ep.IsGelato() && !ep.IsFileProtocol)
             .ToList();
 
-        if (virtualEpisodes.Count == 0)
-        {
-            // Nothing left to remove, but the mark has to go: it is what makes the sync task and
-            // the series page skip the series, and a series without added episodes is one whose
-            // tree is waiting to be rebuilt, not one that has it.
-            ClearTreeSyncedTag(series, ct);
-            return;
-        }
-
+        // With no episode to remove the rest still runs: a season Gelato added can be left empty,
+        // when its episodes went back to the Gelato series they were taken from, and the mark has
+        // to go, since it is what makes the sync task and the series page skip the series.
         var virtualEpIds = virtualEpisodes.Select(e => e.Id).ToHashSet();
         var seasonsWithRemainingEpisodes = allEpisodes
             .Where(ep => !virtualEpIds.Contains(ep.Id))
             .Select(ep => ep.SeasonId)
             .ToHashSet();
 
-        _log.LogDebug(
-            "CleanVirtualTreeItem: removing {EpCount} virtual episodes from {SeriesName}.",
-            virtualEpisodes.Count,
-            series.Name
-        );
+        if (virtualEpisodes.Count > 0)
+        {
+            _log.LogDebug(
+                "CleanVirtualTreeItem: removing {EpCount} virtual episodes from {SeriesName}.",
+                virtualEpisodes.Count,
+                series.Name
+            );
+        }
 
         foreach (var ep in virtualEpisodes)
         {
@@ -3579,7 +3729,7 @@ public sealed class GelatoManager(
         return baseItems;
     }
 
-    public BaseItem? IntoBaseItem(StremioMeta meta)
+    public BaseItem? IntoBaseItem(StremioMeta meta, string? path = null)
     {
         BaseItem item;
 
@@ -3627,7 +3777,7 @@ public sealed class GelatoManager(
         }
 
         item.ProductionYear = meta.GetYear();
-        item.Path = $"gelato://stub/{id}";
+        item.Path = path ?? $"gelato://stub/{id}";
 
         // Provider IDs — skip for episodes since the parent series IMDB id is used there
         if (meta.Type is not StremioMediaType.Episode && !string.IsNullOrWhiteSpace(id))
