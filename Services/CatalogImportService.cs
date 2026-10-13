@@ -297,8 +297,7 @@ public class CatalogImportService(
             if (catalogCfg.CreateCollection)
             {
                 var itemIds = importedIds.Values.Where(id => id != Guid.Empty).ToList();
-                await UpdateCollectionAsync(catalogCfg, itemIds.Take(100).ToList(), itemIds.Count)
-                    .ConfigureAwait(false);
+                await UpdateCollectionAsync(catalogCfg, itemIds).ConfigureAwait(false);
             }
 
             // Skipped: listed twice in the catalog, or a type without a library folder.
@@ -541,14 +540,13 @@ public class CatalogImportService(
             yield return $"{config.Name} ({type} {n})";
     }
 
-    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids, int available)
+    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids)
     {
-        // A collection holds at most 100 of the catalog's items.
+        // A collection holds what the catalog imports: the catalog's item limit is its size.
         logger.LogInformation(
-            "Updating collection {Name} with {Count} of {Available} items",
+            "Updating collection {Name} with {Count} items",
             config.Name,
-            ids.Count,
-            available
+            ids.Count
         );
         try
         {
