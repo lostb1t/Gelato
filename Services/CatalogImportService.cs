@@ -7,6 +7,8 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
 
 // For BoxSet
@@ -18,9 +20,12 @@ public class CatalogImportService(
     GelatoManager manager,
     CatalogService catalogService,
     ICollectionManager collectionManager,
-    ILibraryManager libraryManager
+    ILibraryManager libraryManager,
+    IFileSystem fileSystem
 )
 {
+    private static readonly SemaphoreSlim _collectionLock = new(1, 1);
+
     private static readonly TimeSpan FolderWait = TimeSpan.FromSeconds(60);
 
     /// <summary>
@@ -292,8 +297,7 @@ public class CatalogImportService(
             if (catalogCfg.CreateCollection)
             {
                 var itemIds = importedIds.Values.Where(id => id != Guid.Empty).ToList();
-                await UpdateCollectionAsync(catalogCfg, itemIds.Take(100).ToList(), itemIds.Count)
-                    .ConfigureAwait(false);
+                await UpdateCollectionAsync(catalogCfg, itemIds).ConfigureAwait(false);
             }
 
             // Skipped: listed twice in the catalog, or a type without a library folder.
@@ -449,29 +453,60 @@ public class CatalogImportService(
         }
     }
 
+    /// <summary>
+    /// The catalog's collection, found by the catalog's id on it. Jellyfin takes a collection's
+    /// id from its folder, "<name> [boxset]": creating one under a name that is taken does not
+    /// make a second collection, it takes the first one over, with its id written over and its
+    /// members replaced. A movie and a series catalog of one name ("TMDB Top Rated") passed one
+    /// collection back and forth that way, and a collection the user made was taken as well. So
+    /// a catalog whose name is taken gets a collection named apart: "TMDB Top Rated (series)".
+    /// </summary>
     private async Task<BoxSet?> GetOrCreateBoxSetAsync(CatalogConfig config)
     {
         var id = $"{config.Type}.{config.Id}";
-        var collection = libraryManager
-            .GetItemList(
-                new InternalItemsQuery
-                {
-                    IncludeItemTypes = [BaseItemKind.BoxSet],
-                    CollapseBoxSetItems = false,
-                    Recursive = true,
-                    HasAnyProviderId = new Dictionary<string, string> { { "Stremio", id } },
-                }
-            )
-            .OfType<BoxSet>()
-            .FirstOrDefault();
 
-        if (collection is null)
+        // One at a time: two imports of catalogs of one name would both find the name free.
+        await _collectionLock.WaitAsync().ConfigureAwait(false);
+        try
         {
+            var collections = libraryManager
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = [BaseItemKind.BoxSet],
+                        CollapseBoxSetItems = false,
+                        Recursive = true,
+                    }
+                )
+                .OfType<BoxSet>()
+                .ToList();
+
+            var collection = collections.FirstOrDefault(c =>
+                string.Equals(c.GetProviderId("Stremio"), id, StringComparison.Ordinal)
+            );
+            if (collection is not null)
+                return collection;
+
+            var taken = collections
+                .Select(c => Path.GetFileName(c.Path))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var name = CollectionNames(config)
+                .First(n => !taken.Contains(fileSystem.GetValidFilename(n) + " [boxset]"));
+            if (name != config.Name)
+            {
+                logger.LogInformation(
+                    "Catalog {Id}: a collection named {Name} exists, naming this one {NewName}",
+                    id,
+                    config.Name,
+                    name
+                );
+            }
+
             collection = await collectionManager
                 .CreateCollectionAsync(
                     new CollectionCreationOptions
                     {
-                        Name = config.Name,
+                        Name = name,
                         IsLocked = true,
                         ProviderIds = new Dictionary<string, string> { { "Stremio", id } },
                     }
@@ -482,27 +517,49 @@ public class CatalogImportService(
             await collection
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                 .ConfigureAwait(false);
+            return collection;
         }
-        return collection;
+        finally
+        {
+            _collectionLock.Release();
+        }
     }
 
-    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids, int available)
+    /// <summary>The catalog's name, then the name with its type, then that numbered.</summary>
+    private static IEnumerable<string> CollectionNames(CatalogConfig config)
     {
-        // A collection holds at most 100 of the catalog's items.
+        var type = config.Type.ToLowerInvariant() switch
+        {
+            "movie" => "movies",
+            var other => other,
+        };
+
+        yield return config.Name;
+        yield return $"{config.Name} ({type})";
+        for (var n = 2; ; n++)
+            yield return $"{config.Name} ({type} {n})";
+    }
+
+    private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids)
+    {
+        // A collection holds what the catalog imports: the catalog's item limit is its size.
         logger.LogInformation(
-            "Updating collection {Name} with {Count} of {Available} items",
+            "Updating collection {Name} with {Count} items",
             config.Name,
-            ids.Count,
-            available
+            ids.Count
         );
         try
         {
             var collection = await GetOrCreateBoxSetAsync(config).ConfigureAwait(false);
             if (collection != null)
             {
-                var currentChildren = libraryManager
-                    .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
-                    .Select(i => i.Id)
+                // A collection's members are links, not children: a query for its children
+                // finds none, and titles that left the catalog stayed in its collection.
+                var currentChildren = (
+                    libraryManager.GetItemById<BoxSet>(collection.Id) ?? collection
+                )
+                    .LinkedChildren.Select(c => c.ItemId)
+                    .OfType<Guid>()
                     .ToList();
 
                 if (currentChildren.Count != 0)
