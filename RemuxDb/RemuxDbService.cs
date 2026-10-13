@@ -75,6 +75,18 @@ public sealed class RemuxDbService(
         row.SetGelatoData("size", identity.Size);
 
         var source = row.GelatoData<string>("mediaInfo");
+
+        // The marker says the row has tracks. A row saved again after it was deleted keeps its
+        // Gelato data and has none: left marked, it is neither probed ahead of playback nor
+        // given RemuxDB's media info again.
+        if (source is not null && !isNewRow && !HasProbedStreams(row.Id))
+        {
+            log.LogDebug("{Row} is marked {Source} and has no tracks; unmarking it", row.Id, source);
+            source = null;
+            row.SetGelatoData<string?>("mediaInfo", null);
+            row.SetGelatoData<string?>("remuxDbHash", null);
+        }
+
         if (source == SourceProbe)
             return null;
 

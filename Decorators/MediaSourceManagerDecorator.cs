@@ -768,9 +768,16 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         // A row probed before is done ahead of playback: one whose probe found a file too short
-        // or without video still looks unprobed, and would be probed again on every visit.
-        if (preProbe && owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceProbe)
+        // still looks unprobed, and would be probed again on every visit. Not a row that lost
+        // the tracks its probe found: playback would probe that one at the click.
+        if (
+            preProbe
+            && owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceProbe
+            && HasVideo(selected)
+        )
+        {
             return sources;
+        }
 
         // A pre-probe of this source is under way: its result is what plays, not a second probe.
         if (!preProbe && _preProbing.TryGetValue(PreProbeKey(selected), out var running))
@@ -865,9 +872,11 @@ public sealed class MediaSourceManagerDecorator(
 
         return [selected];
 
+        static bool HasVideo(MediaSourceInfo s) =>
+            s.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) ?? false;
+
         static bool NeedsProbe(MediaSourceInfo s) =>
-            (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
-            || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
+            !HasVideo(s) || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
 
         // Gelato's sources name their item in the ETag (the first stream carries the movie's id).
         // Jellyfin's own, like a file merged in as a version, use the item's id.
