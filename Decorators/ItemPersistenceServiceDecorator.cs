@@ -1,5 +1,6 @@
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Persistence;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators;
 
@@ -35,21 +36,39 @@ public sealed class ItemWriteCounter
 /// reader that took the count before the write committed never has its answer taken for one of
 /// after it, and one that read while the write ran is thrown away by the second bump.
 /// Images and user data are left out. They change neither an item's dates, ids, tags nor type.
+/// A delete is also where Gelato's items are kept out of the removal of a library folder
+/// (<see cref="GelatoManager.RescueFromRemovedFolders"/>): Jellyfin has no step before it.
 /// </remarks>
 public sealed class ItemPersistenceServiceDecorator : IItemPersistenceService
 {
     private readonly IItemPersistenceService _inner;
     private readonly ItemWriteCounter _writes;
+    private readonly Lazy<GelatoManager> _manager;
+    private readonly ILogger<ItemPersistenceServiceDecorator> _log;
 
-    public ItemPersistenceServiceDecorator(IItemPersistenceService inner, ItemWriteCounter writes)
+    public ItemPersistenceServiceDecorator(
+        IItemPersistenceService inner,
+        ItemWriteCounter writes,
+        Lazy<GelatoManager> manager,
+        ILogger<ItemPersistenceServiceDecorator> log
+    )
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _writes = writes ?? throw new ArgumentNullException(nameof(writes));
+        _manager = manager ?? throw new ArgumentNullException(nameof(manager));
+        _log = log ?? throw new ArgumentNullException(nameof(log));
         _writes.StartCounting();
     }
 
     public void DeleteItem(params IReadOnlyList<Guid> ids)
     {
+        // Nothing left to delete once Gelato's items are out of it.
+        var rest = WithoutRescued(ids);
+        if (ids is { Count: > 0 } && rest.Count == 0)
+            return;
+
+        ids = rest;
+
         _writes.Bump();
         try
         {
@@ -58,6 +77,23 @@ public sealed class ItemPersistenceServiceDecorator : IItemPersistenceService
         finally
         {
             _writes.Bump();
+        }
+    }
+
+    private IReadOnlyList<Guid> WithoutRescued(IReadOnlyList<Guid> ids)
+    {
+        // Before the plugin is loaded there is no configuration to find a folder with.
+        if (ids is null || ids.Count == 0 || GelatoPlugin.Instance is null)
+            return ids!;
+
+        try
+        {
+            return _manager.Value.RescueFromRemovedFolders(ids);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "Could not check a deletion for Gelato's items");
+            return ids;
         }
     }
 

@@ -72,6 +72,9 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _stremioFactory.ClearCache();
         UserConfigs.Clear();
 
+        // A changed movie or series path can be the folder items without one were waiting for.
+        _manager.AdoptParkedSoon();
+
         // Notify subscribers that configuration changed
         try
         {
