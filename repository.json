@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.23.0] - 2026-10-13\n\n### 🚀 Features\n\n- Support catalog to library mapping (#253)\n- Support binge groups in episodes (#276)\n\n### 🐛 Bug Fixes\n\n- Serve a download that names no user (#278)\n- Keep gelato items when their library folder is removed (#279)\n\n### ⚡ Performance\n\n- Fewer queries for listings with stream rows (#277)\n",
+        "checksum": "5cc9b1825d05576412803ca89dadfd86",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.23.0/gelato_0.26.23.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-13T20:50:56Z",
+        "version": "0.26.23.0"
+      },
+      {
         "changelog": "## [0.26.22.1] - 2026-10-09\n\n### 🐛 Bug Fixes\n\n- Pre-probe only opened pages and probe a source once (#262)\n- Answer a movie/episode's segments with those of the stream it plays (#263)\n- Order stream sync and reset by a sequence (#268)\n- Share a prepared playback source from the end of its preparation (#267)\n- List a local episode once in an extended series tree (#270)\n- Take search results into the collection or playlist they are added to (#269)\n- Find the stream listed under the item's id by its own id too (#271)\n- Report one search total on every page (#272)\n- Offer a subtitle saved on a movie's or episode's page with its streams (#273)\n\n### ⚡ Performance\n\n- Cache playback source preperation once for its streaming requests (#264)\n- Faster listings, search and opening a movie from search (#274)\n",
         "checksum": "989d1c62fd788e71a4beb45a9a041ee1",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.22.1/gelato_0.26.22.1.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-12T06:31:19Z",
         "version": "0.26.13.6"
-      },
-      {
-        "changelog": "## [0.26.13.5] - 2026-04-11\n\n### 🚜 Refactor\n\n- Optimize imports and syncs (#151)\n",
-        "checksum": "3fbd3b7de4af382663e7c2a9d78860b5",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.5/gelato_0.26.13.5.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-11T16:51:49Z",
-        "version": "0.26.13.5"
       }
     ]
   }
