@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
@@ -79,7 +81,7 @@ namespace Gelato.Providers
             _cache.Set(listKey, (IReadOnlyList<StremioSubtitle>)subs, CacheTtl);
 
             foreach (var s in subs)
-                _cache.Set(SubCacheKey(s.Id), s, CacheTtl);
+                _cache.Set(SubCacheKey(PathSafeId(s.Id)), s, CacheTtl);
 
             return subs;
         }
@@ -233,7 +235,7 @@ namespace Gelato.Providers
 
             return scored.Select(x => new RemoteSubtitleInfo
             {
-                Id = x.Sub.Id,
+                Id = PathSafeId(x.Sub.Id),
                 Name = Uri.UnescapeDataString(x.Sub.Title ?? ""),
                 ProviderName = Name,
                 Format = GuessSubtitleCodec(x.Sub.Url),
@@ -337,5 +339,14 @@ namespace Gelato.Providers
             $"gelato:subtitles:{mediaType.ToString().ToLower()}/{id}";
 
         private static string SubCacheKey(string id) => $"gelato:subtitle:{id}";
+
+        /// <summary>
+        /// The id Jellyfin gets for a subtitle. AIOStreams builds its ids from release names, which
+        /// can hold a slash (<c>720p/1080p</c>) or a backslash. The subtitle dialog's download sends
+        /// the id as a route value, which ASP.NET Core leaves with <c>%2F</c> undecoded, so the
+        /// addon's id would no longer match. A hash of it is safe in a path.
+        /// </summary>
+        private static string PathSafeId(string? id) =>
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(id ?? "")))[..32];
     }
 }
