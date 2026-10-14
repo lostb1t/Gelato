@@ -98,7 +98,89 @@ public sealed class UserDataManagerDecorator : IUserDataManager
         UserItemData userData,
         UserDataSaveReason reason,
         CancellationToken cancellationToken
-    ) => _inner.SaveUserData(user, item, userData, reason, cancellationToken);
+    )
+    {
+        if (
+            item is Video row
+            && row.HasStreamTag()
+            && _libraryManager.Value.GetItemById(row.Id) is null
+        )
+        {
+            SaveForDeletedRow(user, row, userData, reason, cancellationToken);
+            return;
+        }
+
+        _inner.SaveUserData(user, item, userData, reason, cancellationToken);
+    }
+
+    /// <summary>
+    /// A playback report for a stream row that a sync deleted while it played. The session still
+    /// holds the row, and its save failed on the row's foreign key: every report answered 500 and
+    /// the position was lost. The movie/episode holds the shared state anyway
+    /// (<see cref="Services.StreamUserDataSync"/>), so the report goes there.
+    /// </summary>
+    private void SaveForDeletedRow(
+        User user,
+        Video row,
+        UserItemData source,
+        UserDataSaveReason reason,
+        CancellationToken cancellationToken
+    )
+    {
+        if (
+            reason
+                is not (
+                    UserDataSaveReason.PlaybackStart
+                    or UserDataSaveReason.PlaybackProgress
+                    or UserDataSaveReason.PlaybackFinished
+                )
+            || FindPrimary(row) is not { } primary
+            || _inner.GetUserData(user, primary) is not { } data
+        )
+        {
+            _log.LogDebug("Not saving {Reason} for deleted stream {Id}", reason, row.Id);
+            return;
+        }
+
+        data.LastPlayedDate = source.LastPlayedDate ?? data.LastPlayedDate;
+        if (reason is not UserDataSaveReason.PlaybackStart)
+        {
+            data.PlaybackPositionTicks = source.PlaybackPositionTicks;
+        }
+
+        if (source.Played && !data.Played)
+        {
+            data.Played = true;
+            data.PlayCount++;
+        }
+
+        _log.LogDebug(
+            "Saving {Reason} for deleted stream {Id} on {PrimaryId}",
+            reason,
+            row.Id,
+            primary.Id
+        );
+        _inner.SaveUserData(user, primary, data, reason, cancellationToken);
+    }
+
+    // A row deleted by a sync was unlinked first, so its owner is found by the title's id.
+    private Video? FindPrimary(Video row)
+    {
+        var library = _libraryManager.Value;
+        if (row.PrimaryVersionId is { } primaryId && library.GetItemById(primaryId) is Video owner)
+            return owner;
+
+        if (row.GetProviderId("Stremio") is not { Length: > 0 } stremioId)
+            return null;
+
+        var titles = _idLookup
+            .WithProviderId("Stremio", stremioId)
+            .Select(library.GetItemById)
+            .OfType<Video>()
+            .Where(v => !v.HasStreamTag() && v.GetBaseItemKind() == row.GetBaseItemKind())
+            .ToList();
+        return titles.FirstOrDefault(v => v.ParentId == row.ParentId) ?? titles.FirstOrDefault();
+    }
 
     public void SaveUserData(
         User user,
