@@ -341,6 +341,15 @@ namespace Gelato.Providers
         private static string SubCacheKey(string id) => $"gelato:subtitle:{id}";
 
         /// <summary>
+        /// The language a subtitle this provider listed is saved under, while it is cached.
+        /// </summary>
+        /// <param name="id">The id <see cref="Search"/> handed out.</param>
+        public static string? CachedLanguage(string id) =>
+            _cache.TryGetValue(SubCacheKey(id), out StremioSubtitle sub)
+                ? sub.LangCode ?? sub.Lang
+                : null;
+
+        /// <summary>
         /// The id Jellyfin gets for a subtitle. AIOStreams builds its ids from release names, which
         /// can hold a slash (<c>720p/1080p</c>) or a backslash. The subtitle dialog's download sends
         /// the id as a route value, which ASP.NET Core leaves with <c>%2F</c> undecoded, so the
