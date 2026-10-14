@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Gelato.Providers;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Subtitles;
@@ -29,6 +30,7 @@ namespace Gelato.Decorators
         private readonly IMediaSourceManager _mediaSourceManager;
         private readonly IUserManager _userManager;
         private readonly IHttpContextAccessor _http;
+        private readonly KeyLock _downloads = new();
 
         public SubtitleManagerDecorator(
             ISubtitleManager inner,
@@ -206,24 +208,81 @@ namespace Gelato.Decorators
 
                 // Jellyfin derives the file name from video.Path, which here is a URL or a
                 // gelato://stub path and would produce a name nothing looks for afterwards.
-                var originalPath = video.Path;
-                video.Path = video.GelatoSubtitlePathName();
-                try
-                {
-                    await _inner
-                        .DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                finally
-                {
-                    video.Path = originalPath;
-                }
+                // "Download missing subtitles" and a probe of the same row both check for a saved
+                // file before they search, and both downloaded one when they met: Jellyfin saved
+                // the second as .en.0.vtt and the row listed the subtitle twice. One download per
+                // row at a time, and an automated one checks again once it has its turn.
+                await _downloads
+                    .RunQueuedAsync(
+                        video.Id,
+                        async ct =>
+                        {
+                            if (AlreadySaved(video, subtitleId))
+                                return;
+
+                            var originalPath = video.Path;
+                            video.Path = video.GelatoSubtitlePathName();
+                            try
+                            {
+                                await _inner
+                                    .DownloadSubtitles(video, libraryOptions, subtitleId, ct)
+                                    .ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                video.Path = originalPath;
+                            }
+                        },
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
                 return;
             }
 
             await _inner
                 .DownloadSubtitles(video, libraryOptions, subtitleId, cancellationToken)
                 .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Whether an automated download would save a second file for a language the item has
+        /// one for. A subtitle picked in the dialog is always saved: the user may want another one.
+        /// </summary>
+        private bool AlreadySaved(Video video, string subtitleId)
+        {
+            if (
+                _http.ReadRequest(
+                    ctx => ctx.GetActionName() == "DownloadRemoteSubtitles",
+                    false
+                )
+            )
+                return false;
+
+            // Jellyfin's id is "{provider}_{id}"; only Gelato's own subtitles have a known language.
+            var parts = subtitleId.Split('_', 2);
+            var language = NormalizeLanguage(
+                parts.Length == 2 ? SubtitleProvider.CachedLanguage(parts[1]) : null
+            );
+            if (
+                string.IsNullOrEmpty(language)
+                || !video
+                    .GetGelatoSubtitleFiles()
+                    .Any(f =>
+                        string.Equals(
+                            NormalizeLanguage(f.Language),
+                            language,
+                            StringComparison.OrdinalIgnoreCase
+                        )
+                    )
+            )
+                return false;
+
+            _log.LogDebug(
+                "Skipping subtitle download for {Id}, a {Language} subtitle was saved meanwhile",
+                video.Id,
+                language
+            );
+            return true;
         }
 
         public async Task UploadSubtitle(Video video, SubtitleResponse response)
