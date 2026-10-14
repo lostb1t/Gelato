@@ -13,6 +13,7 @@ using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 
@@ -483,7 +484,9 @@ public static class ActionContextExtensions
     /// The accessor's context flows with the ExecutionContext, so work a request started, such as
     /// a scheduled task run from the dashboard, still sees that request after it has finished.
     /// Reading a finished request throws ObjectDisposedException, which failed the task on its
-    /// first repository query, so a finished request counts as no request.
+    /// first repository query, so a finished request counts as no request. While Kestrel resets
+    /// the context the request's feature collection is already gone and its properties throw
+    /// NullReferenceException instead, so that counts as finished too.
     /// </remarks>
     public static T ReadRequest<T>(
         this IHttpContextAccessor http,
@@ -496,9 +499,12 @@ public static class ActionContextExtensions
 
         try
         {
+            if (ctx.Features.Get<IHttpRequestFeature>() is null)
+                return none;
+
             return read(ctx);
         }
-        catch (ObjectDisposedException)
+        catch (Exception ex) when (ex is ObjectDisposedException or NullReferenceException)
         {
             return none;
         }
