@@ -464,9 +464,27 @@ public class GelatoStremioProvider(
                 meta.App_Extras.ReleaseDates = container;
             }
         }
-        // TMDB answering with an error is not transient: an addon that maps the movie to a TMDB id
-        // TMDB does not have leaves it without a digital release date on every run, so it stays
-        // unreleased for good.
+        // An addon can map the movie to a TMDB id TMDB does not have (deleted or merged there).
+        // Asking with that id again on every run would leave the movie without a digital release
+        // date, so unreleased for good: look the movie up by its imdb id instead.
+        catch (HttpRequestException ex)
+            when (ex.StatusCode == HttpStatusCode.NotFound
+                && providerIds.GetValueOrDefault(nameof(MetadataProvider.Imdb)) is { Length: > 0 } imdbId
+                // TMDB already said it has no movie under that imdb id either.
+                && !(_tmdbIdByImdbId.TryGetValue(imdbId, out var known) && known is null)
+            )
+        {
+            log.LogDebug(
+                "EnrichDigitalReleaseDate: TMDB has no tmdb:{TmdbId} ({Name}, {Id}), looking it up by {ImdbId}",
+                tmdbId,
+                meta.Name,
+                meta.Id,
+                imdbId
+            );
+            await EnrichByImdbIdAsync(meta, imdbId, apiKey, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        // Any other error from TMDB is not transient either.
         catch (HttpRequestException ex) when (ex.StatusCode is not null)
         {
             log.LogWarning(
