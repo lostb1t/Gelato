@@ -403,6 +403,9 @@ public class SearchActionFilter(
         return requested;
     }
 
+    /// <summary>How long a search waits for TMDB release lookups of its movie hits.</summary>
+    private static readonly TimeSpan ReleaseLookupBudget = TimeSpan.FromSeconds(3);
+
     private async Task<List<StremioMeta>> SearchMetasAsync(
         string searchTerm,
         HashSet<BaseItemKind> requestedTypes,
@@ -485,6 +488,40 @@ public class SearchActionFilter(
 
         if (filterUnreleased)
         {
+            // The addon's search hits carry no TMDB release dates, so a movie that premiered
+            // within the last year would be judged by its premiere alone and hidden. Those few are
+            // asked TMDB for (memoised), as the library's sync does. One that does not answer in
+            // time stays hidden, as before.
+            var lookups = results.Where(x => x.NeedsReleaseLookup()).ToList();
+            if (lookups.Count > 0)
+            {
+                using var cts = new CancellationTokenSource(ReleaseLookupBudget);
+                try
+                {
+                    await Parallel
+                        .ForEachAsync(
+                            lookups,
+                            new ParallelOptions
+                            {
+                                MaxDegreeOfParallelism = 4,
+                                CancellationToken = cts.Token,
+                            },
+                            async (meta, ct) =>
+                                await stremio
+                                    .EnrichDigitalReleaseDateAsync(meta, ct)
+                                    .ConfigureAwait(false)
+                        )
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    log.LogDebug(
+                        "Search \"{Query}\": TMDB release lookups ran out of time",
+                        searchTerm
+                    );
+                }
+            }
+
             results = results.Where(x => x.IsReleased(bufferDays)).ToList();
         }
 

@@ -412,7 +412,21 @@ public class GelatoStremioProvider(
     }
 
     /// <summary>
-    /// Fetches TMDB release dates for the given movie meta
+    /// How long a movie's TMDB release dates and watch providers are kept. Search asks for every
+    /// movie hit that premiered within the last year, and the same titles come up again and
+    /// again; both lists change at most daily.
+    /// </summary>
+    private static readonly TimeSpan ReleaseInfoTtl = TimeSpan.FromHours(12);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (TmdbReleaseDatesContainer Dates, bool HasWatchProviders, DateTime Expiry)
+    > _releaseInfo = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Fetches TMDB release dates and whether TMDB lists a watch provider for the given movie
+    /// meta, memoised per movie for <see cref="ReleaseInfoTtl"/>.
+    /// </summary>
     public async Task EnrichDigitalReleaseDateAsync(
         StremioMeta meta,
         CancellationToken cancellationToken
@@ -421,6 +435,29 @@ public class GelatoStremioProvider(
         if (meta.App_Extras?.ReleaseDates is not null)
             return;
 
+        if (_releaseInfo.TryGetValue(meta.Id, out var known) && known.Expiry > DateTime.UtcNow)
+        {
+            meta.App_Extras ??= new StremioAppExtras();
+            meta.App_Extras.ReleaseDates = known.Dates;
+            meta.App_Extras.HasWatchProviders = known.HasWatchProviders;
+            return;
+        }
+
+        await FetchReleaseInfoAsync(meta, cancellationToken).ConfigureAwait(false);
+
+        if (meta.App_Extras?.ReleaseDates is { } dates)
+        {
+            _releaseInfo[meta.Id] = (
+                dates,
+                meta.App_Extras.HasWatchProviders,
+                DateTime.UtcNow + ReleaseInfoTtl
+            );
+        }
+    }
+
+    private async Task FetchReleaseInfoAsync(StremioMeta meta, CancellationToken cancellationToken)
+    {
+        log.LogDebug("EnrichDigitalReleaseDate: asking TMDB for {Id} ({Name})", meta.Id, meta.Name);
         var providerIds = meta.GetProviderIds();
         var apiKey = GetTmdbApiKey();
         var tmdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Tmdb));
@@ -444,8 +481,10 @@ public class GelatoStremioProvider(
                 return;
         }
 
+        // The movie details with both lists appended, not /release_dates alone: the watch
+        // providers come along in the same request.
         var url =
-            $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(tmdbId)}/release_dates?api_key={apiKey}";
+            $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(tmdbId)}?api_key={apiKey}&append_to_response={TmdbAppend}";
 
         try
         {
@@ -454,15 +493,10 @@ public class GelatoStremioProvider(
             var response = await client
                 .GetStringAsync(url, cancellationToken)
                 .ConfigureAwait(false);
-            var container = JsonSerializer.Deserialize<TmdbReleaseDatesContainer>(
-                response,
-                JsonOpts
+            ApplyTmdbMovie(
+                meta,
+                JsonSerializer.Deserialize<TmdbMovieReleaseDates>(response, JsonOpts)
             );
-            if (container is not null)
-            {
-                meta.App_Extras ??= new StremioAppExtras();
-                meta.App_Extras.ReleaseDates = container;
-            }
         }
         // An addon can map the movie to a TMDB id TMDB does not have (deleted or merged there).
         // Asking with that id again on every run would leave the movie without a digital release
@@ -518,17 +552,13 @@ public class GelatoStremioProvider(
             using var client = http.CreateClient(nameof(GelatoStremioProvider));
             client.Timeout = TimeSpan.FromSeconds(10);
             var url =
-                $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&append_to_response=release_dates";
+                $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&append_to_response={TmdbAppend}";
             var response = await client
                 .GetStringAsync(url, cancellationToken)
                 .ConfigureAwait(false);
             var movie = JsonSerializer.Deserialize<TmdbMovieReleaseDates>(response, JsonOpts);
             _tmdbIdByImdbId[imdbId] = movie?.Id?.ToString(CultureInfo.InvariantCulture);
-            if (movie?.ReleaseDates is { } container)
-            {
-                meta.App_Extras ??= new StremioAppExtras();
-                meta.App_Extras.ReleaseDates = container;
-            }
+            ApplyTmdbMovie(meta, movie);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
@@ -583,6 +613,19 @@ public class GelatoStremioProvider(
                 return GetStreamsAsync(uri.ExternalId, uri.MediaType);
             }
         );
+
+    // TMDB's watch providers ride along with the release dates: one request for both.
+    private const string TmdbAppend = "release_dates,watch/providers";
+
+    private static void ApplyTmdbMovie(StremioMeta meta, TmdbMovieReleaseDates? movie)
+    {
+        if (movie?.ReleaseDates is not { } container)
+            return;
+
+        meta.App_Extras ??= new StremioAppExtras();
+        meta.App_Extras.ReleaseDates = container;
+        meta.App_Extras.HasWatchProviders = movie.WatchProviders?.Any() ?? false;
+    }
 
     public async Task<List<StremioStream>> GetStreamsAsync(StremioUri uri)
     {
@@ -988,6 +1031,45 @@ public class StremioMeta
         return earliest;
     }
 
+    /// <summary>
+    /// How old a premiere has to be before a watch provider counts as a release. A film still in
+    /// cinemas can list one: a pre-order to buy, or a single regional service.
+    /// </summary>
+    public const int WatchProviderMinAgeDays = 60;
+
+    /// <summary>
+    /// The date a movie counts as released from, the value its EndDate carries for the unreleased
+    /// filter, or null while it is not released. TMDB's digital release date decides when there is
+    /// one. Without it, TMDB often still lists where the film streams (regional films mostly have
+    /// no digital date), and failing that the film is taken as released once
+    /// <paramref name="premiere"/> is a year old.
+    /// </summary>
+    public DateTime? GetMovieReleaseDate(DateTime? premiere)
+    {
+        if (GetDigitalReleaseDate() is { } digital)
+            return digital;
+        if (premiere is not { } date)
+            return null;
+
+        var now = DateTime.UtcNow;
+        if (App_Extras?.HasWatchProviders == true && date < now.AddDays(-WatchProviderMinAgeDays))
+            return date;
+
+        return date < now.AddYears(-1) ? date : null;
+    }
+
+    /// <summary>
+    /// Whether the movie's release is still open to TMDB data the addon does not send: no digital
+    /// release date, and a premiere within the last year. Only for such a movie is TMDB asked.
+    /// </summary>
+    public bool NeedsReleaseLookup()
+    {
+        if (Type != StremioMediaType.Movie || App_Extras?.ReleaseDates is not null)
+            return false;
+        var now = DateTime.UtcNow;
+        return GetPremiereDate() is { } premiere && premiere <= now && premiere >= now.AddYears(-1);
+    }
+
     public bool IsValid()
     {
         return !Id.Contains("error");
@@ -1003,11 +1085,10 @@ public class StremioMeta
             if (digital.HasValue)
                 return digital.Value.AddDays(bufferDays) <= now;
 
-            // No digital release date: released only once the premiere is over a year old, the
-            // rule GelatoManager.IntoBaseItem writes into EndDate for the library listing filter.
-            // Falling through to the generic premiere check below made the addon search offer
-            // films that the library view hides.
-            return GetPremiereDate() is { } premiere && premiere < now.AddYears(-1);
+            // No digital release date: the rule GelatoManager.IntoBaseItem writes into EndDate for
+            // the library listing filter. Falling through to the generic premiere check below made
+            // the addon search offer films that the library view hides.
+            return GetMovieReleaseDate(GetPremiereDate()) is not null;
         }
 
         if (Released.HasValue)
@@ -1130,6 +1211,13 @@ public class StremioAppExtras
     [JsonPropertyName("releaseDates")]
     public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
 
+    /// <summary>
+    /// Whether TMDB lists a service the movie streams, rents or sells on, in any country. Set
+    /// together with <see cref="ReleaseDates"/> when those come from TMDB.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasWatchProviders { get; set; }
+
     /// <summary>The poster for a season, preferring a map keyed by season number over the list.</summary>
     public string? GetSeasonPoster(int seasonNumber, IEnumerable<StremioMeta>? videos) =>
         SeasonPosterByNumber?.ByNumber is not null
@@ -1251,6 +1339,23 @@ public class TmdbMovieReleaseDates
 
     [JsonPropertyName("release_dates")]
     public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
+
+    [JsonPropertyName("watch/providers")]
+    public TmdbWatchProvidersContainer? WatchProviders { get; set; }
+}
+
+public class TmdbWatchProvidersContainer
+{
+    /// <summary>
+    /// Per country: a "link" string and one provider list per kind (flatrate, rent, buy, free,
+    /// ads).
+    /// </summary>
+    public Dictionary<string, Dictionary<string, JsonElement>>? Results { get; set; }
+
+    public bool Any() =>
+        Results?.Values.Any(country =>
+            country.Values.Any(v => v.ValueKind == JsonValueKind.Array && v.GetArrayLength() > 0)
+        ) ?? false;
 }
 
 public class TmdbReleaseDatesContainer

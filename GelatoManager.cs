@@ -3019,16 +3019,8 @@ public sealed class GelatoManager(
                                         if (meta is null)
                                             break;
                                         await EnrichMetaAsync(meta, ct).ConfigureAwait(false);
-                                        var digital = meta.GetDigitalReleaseDate();
-                                        var oneYearAgo = DateTime.UtcNow.AddYears(-1);
                                         var endDate =
-                                            digital
-                                            ?? (
-                                                movie.PremiereDate.HasValue
-                                                && movie.PremiereDate.Value < oneYearAgo
-                                                    ? movie.PremiereDate.Value
-                                                    : sentinel
-                                            );
+                                            meta.GetMovieReleaseDate(movie.PremiereDate) ?? sentinel;
                                         if (movie.EndDate == endDate)
                                             break;
                                         movie.EndDate = endDate;
@@ -3758,21 +3750,16 @@ public sealed class GelatoManager(
         item.PremiereDate = meta.GetPremiereDate();
 
         // Always set EndDate so it's never NULL — NULL breaks MaxEndDate filtering (SQL NULL semantics).
-        // Movies: use digital release date (TMDB type-4); sentinel 9999 means no digital date yet.
-        // Exception: if PremiereDate is older than 1 year, use it as EndDate so old media without a
-        // digital release date is never hidden by the unreleased filter.
+        // Movies: use digital release date (TMDB type-4); sentinel 9999 means not released yet.
+        // Without a digital date the PremiereDate becomes the EndDate once TMDB lists a watch
+        // provider or the premiere is old enough (StremioMeta.GetMovieReleaseDate), so media
+        // without a digital release date is not hidden by the unreleased filter for good.
         // Series/Season/Episode: use premiere/firstAired date; sentinel 9999 means not yet known.
         {
             var sentinel = new DateTime(9999, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            var oneYearAgo = DateTime.UtcNow.AddYears(-1);
             item.EndDate =
                 meta.Type == StremioMediaType.Movie
-                    ? meta.GetDigitalReleaseDate()
-                        ?? (
-                            item.PremiereDate.HasValue && item.PremiereDate.Value < oneYearAgo
-                                ? item.PremiereDate.Value
-                                : sentinel
-                        )
+                    ? meta.GetMovieReleaseDate(item.PremiereDate) ?? sentinel
                     : meta.GetPremiereDate() ?? sentinel;
         }
 
