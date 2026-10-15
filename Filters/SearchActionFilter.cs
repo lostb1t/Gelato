@@ -592,15 +592,18 @@ public class SearchActionFilter(
             // would be built from. It answers in the result's place; the library half leaves it
             // out. Two results of one title — an addon that carries it under a tmdb: id and a tt
             // one — resolve to the same item, and only the first takes it, so the answer holds no
-            // id twice.
-            var existing = FindMatch(libraryItems, baseItem);
+            // id twice. Of a title held as a file and as a Gelato copy, the file answers a search
+            // of everything and the copy a search of its library.
+            var matches = FindMatches(libraryItems, baseItem);
+            var existing = matches.FirstOrDefault(m => manager.IsWithinScope(scope, m));
 
             // A title another library holds is not a result of a search inside this one: the
-            // item is not in the scope. A stand-in in its place would not put the title here
-            // either, opening it redirects to the item the library has. For a Gelato item that
-            // cannot be otherwise (its id is the title's, there is no second one); a second,
-            // Gelato copy of a title held as a file would be decided here and in the insert.
-            if (existing is not null && !manager.IsWithinScope(scope, existing))
+            // item is not in the scope. For a Gelato item that cannot be otherwise: its id is the
+            // title's, there is no second one, and opening a stand-in would redirect to it. A
+            // title held only as files elsewhere is a result here, and opening it adds a Gelato
+            // copy to this library (lostb1t/Gelato#261): the user's file library stays as it is.
+            var copy = existing is null && matches.Count > 0;
+            if (copy && matches.Any(m => m.IsGelato()))
                 continue;
 
             var dto =
@@ -620,12 +623,19 @@ public class SearchActionFilter(
             manager.SaveStremioMeta(searchId, meta);
 
             // Opening the result puts the title into the library that was searched; a search of
-            // everything, or of the library the user's own folder is in, clears it again.
-            manager.RememberSearchFolder(
-                userId,
-                searchId,
-                folders.GetValueOrDefault(baseItem.GetBaseItemKind())
-            );
+            // everything, or of the library the user's own folder is in, clears it again. Only a
+            // search that hands the result out decides: one that answers with the library's item
+            // leaves what a search inside a Gelato library remembered for a copy, and a client
+            // still holding that result opens the copy.
+            if (dto.Id == searchId)
+            {
+                manager.RememberSearchFolder(
+                    userId,
+                    searchId,
+                    folders.GetValueOrDefault(baseItem.GetBaseItemKind())
+                );
+                manager.RememberSearchCopy(userId, searchId, copy);
+            }
         }
 
         return (dtos, covered);
@@ -654,7 +664,7 @@ public class SearchActionFilter(
         await using (db.ConfigureAwait(false))
         {
             // Names and values are matched separately, so a pair from two different results
-            // can match too; FindMatch sorts that out on the loaded items.
+            // can match too; FindMatches sorts that out on the loaded items.
             itemIds = await db
                 .BaseItemProviders.AsNoTracking()
                 .Where(p => names.Contains(p.ProviderId) && values.Contains(p.ProviderValue))
@@ -742,20 +752,29 @@ public class SearchActionFilter(
         return unknown;
     }
 
-    /// <summary>Same rule as <see cref="GelatoManager.FindExistingItem"/>, on loaded items.</summary>
-    private static BaseItem? FindMatch(IReadOnlyList<BaseItem> libraryItems, BaseItem candidate)
+    /// <summary>
+    /// Same rule as <see cref="GelatoManager.FindExistingItem"/>, on loaded items: every item the
+    /// result stands for, files first.
+    /// </summary>
+    private static List<BaseItem> FindMatches(
+        IReadOnlyList<BaseItem> libraryItems,
+        BaseItem candidate
+    )
     {
         var kind = candidate.GetBaseItemKind();
-        return libraryItems.FirstOrDefault(item =>
-            item.GetBaseItemKind() == kind
-            && !(item is Video video && video.IsStream())
-            && candidate.ProviderIds.Any(id =>
-                string.Equals(
-                    item.GetProviderId(id.Key),
-                    id.Value,
-                    StringComparison.OrdinalIgnoreCase
+        return libraryItems
+            .Where(item =>
+                item.GetBaseItemKind() == kind
+                && !(item is Video video && video.IsStream())
+                && candidate.ProviderIds.Any(id =>
+                    string.Equals(
+                        item.GetProviderId(id.Key),
+                        id.Value,
+                        StringComparison.OrdinalIgnoreCase
+                    )
                 )
             )
-        );
+            .OrderBy(item => item.IsGelato() ? 1 : 0)
+            .ToList();
     }
 }

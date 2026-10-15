@@ -416,6 +416,46 @@ public sealed class GelatoManager(
             : null;
 
     /// <summary>
+    /// Remembers that a search result was found inside a Gelato library while the user has the
+    /// title as a file in another one, so opening it adds a Gelato copy there instead of opening
+    /// the file (lostb1t/Gelato#261). Like the folder, the last search a result came from decides.
+    /// </summary>
+    public void RememberSearchCopy(Guid userId, Guid searchId, bool copy)
+    {
+        var key = $"searchcopy:{userId}:{searchId}";
+        if (!copy)
+        {
+            memoryCache.Remove(key);
+            return;
+        }
+
+        memoryCache.Set(key, true, TimeSpan.FromMinutes(360));
+
+        // An open of the result before, while it was not a copy, went to the file and is
+        // remembered for the redirect, which runs before anything else: the copy would never
+        // be made.
+        if (
+            GetInsertedId(searchId) is { } inserted
+            && libraryManager.GetItemById(inserted) is { } item
+            && !item.IsGelato()
+        )
+            memoryCache.Remove($"inserted:{searchId}");
+    }
+
+    /// <summary>Whether opening the search result adds a copy of a title held as a file.</summary>
+    public bool IsSearchCopy(Guid userId, Guid searchId) =>
+        memoryCache.TryGetValue($"searchcopy:{userId}:{searchId}", out bool copy) && copy;
+
+    /// <summary>
+    /// Whether the item is in one of the libraries <paramref name="folder"/> is in.
+    /// </summary>
+    private bool SharesLibrary(Folder folder, BaseItem item)
+    {
+        var libraries = libraryManager.GetCollectionFolders(folder).Select(f => f.Id).ToHashSet();
+        return libraryManager.GetCollectionFolders(item).Any(f => libraries.Contains(f.Id));
+    }
+
+    /// <summary>
     /// Whether the folder is one of the movie or series folders of the configuration: the global
     /// ones or a user's. Among these an item goes to the folder of whoever opens it, as it always
     /// has. Any other folder an item is in, a catalog's or one a catalog had, is where it stays.
@@ -1103,16 +1143,24 @@ public sealed class GelatoManager(
         return folder;
     }
 
-    private BaseItem? Exist(StremioMeta meta, User? user = null)
+    private BaseItem? Exist(StremioMeta meta, User? user = null, Folder? copyInto = null)
     {
         var item = IntoBaseItem(meta);
         if (item?.ProviderIds is { Count: > 0 })
-            return FindExistingItem(item, user) ?? FindOutsideDefaultFolders(item);
+            return FindExistingItem(item, user, copyInto) ?? FindOutsideDefaultFolders(item);
         _log.LogWarning("Gelato: Missing provider ids, skipping");
         return null;
     }
 
-    public BaseItem? FindExistingItem(BaseItem item, User? user = null)
+    /// <summary>
+    /// The library item the title already is, which an insert answers with instead of adding it.
+    /// </summary>
+    /// <param name="copyInto">
+    /// The Gelato folder a copy of the title is asked for (a search inside its library found it):
+    /// a file the user has in another library does not count then. A Gelato item does, wherever it
+    /// is: its id is the title's, so there cannot be a second one.
+    /// </param>
+    public BaseItem? FindExistingItem(BaseItem item, User? user = null, Folder? copyInto = null)
     {
         var query = new InternalItemsQuery
         {
@@ -1131,6 +1179,8 @@ public sealed class GelatoManager(
                 return x switch
                 {
                     null => false,
+                    _ when copyInto is not null && !x.IsGelato() && !SharesLibrary(copyInto, x) =>
+                        false,
                     Video v => !v.IsStream(),
                     _ => true,
                 };
@@ -1140,6 +1190,10 @@ public sealed class GelatoManager(
     /// <summary>
     /// Inserts metadata into the library. Skip if it already exists.
     /// </summary>
+    /// <param name="copy">
+    /// The title goes into <paramref name="parent"/> even when the user has it as a file in another
+    /// library: a search inside the Gelato library asked for it there.
+    /// </param>
     public async Task<(BaseItem? Item, bool Created)> InsertMeta(
         Folder parent,
         StremioMeta meta,
@@ -1147,11 +1201,13 @@ public sealed class GelatoManager(
         bool allowRemoteRefresh,
         bool refreshItem,
         bool queueRefreshItem,
-        CancellationToken ct
+        CancellationToken ct,
+        bool copy = false
     )
     {
         var mediaType = meta.Type;
         BaseItem? existing;
+        var copyInto = copy ? parent : null;
 
         if (mediaType is not (StremioMediaType.Movie or StremioMediaType.Series))
         {
@@ -1175,7 +1231,7 @@ public sealed class GelatoManager(
         )
         {
             // do a precheck as loading metadata is expensive
-            existing = Exist(meta, user);
+            existing = Exist(meta, user, copyInto);
 
             if (existing is not null)
             {
@@ -1220,7 +1276,7 @@ public sealed class GelatoManager(
             return (null, false);
         }
 
-        existing = Exist(meta, user);
+        existing = Exist(meta, user, copyInto);
 
         if (existing is not null)
         {
