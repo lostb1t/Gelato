@@ -32,6 +32,13 @@ namespace Gelato.Decorators
         private readonly IHttpContextAccessor _http;
         private readonly KeyLock _downloads = new();
 
+        /// <summary>
+        /// Set while Gelato probes a stream. Jellyfin's probe downloads the library's subtitle
+        /// languages inside the probe, which the playback waits for; Gelato downloads them in the
+        /// background after the probe instead, so the automated searches made inside it find none.
+        /// </summary>
+        internal static readonly AsyncLocal<bool> Probing = new();
+
         public SubtitleManagerDecorator(
             ISubtitleManager inner,
             ILogger<SubtitleManagerDecorator> log,
@@ -67,7 +74,7 @@ namespace Gelato.Decorators
         {
             // Jellyfin builds the request inside its own implementation of this overload, so the
             // guard cannot sit in the request overload alone.
-            if (isAutomated && SkipAutomatedSearch(video.Path, language, video))
+            if (isAutomated && (InProbe(video.Path) || SkipAutomatedSearch(video.Path, language, video)))
                 return Task.FromResult(Array.Empty<RemoteSubtitleInfo>());
 
             // The subtitle dialog on a movie/episode's page only knows the item, and its path is
@@ -93,10 +100,21 @@ namespace Gelato.Decorators
         {
             // nasty hack to prevent some plugins chocking on remote files
             // request.MediaPath = request.MediaPath + ".strm";
-            if (request.IsAutomated && SkipAutomatedSearch(request.MediaPath, request.Language))
+            if (
+                request.IsAutomated
+                && (InProbe(request.MediaPath) || SkipAutomatedSearch(request.MediaPath, request.Language))
+            )
                 return Task.FromResult(Array.Empty<RemoteSubtitleInfo>());
 
             return _inner.SearchSubtitles(request, cancellationToken);
+        }
+
+        private bool InProbe(string path)
+        {
+            if (!Probing.Value)
+                return false;
+            _log.LogDebug("Skipping subtitle search inside the probe of {Path}, it runs afterwards", Redact.Url(path));
+            return true;
         }
 
         /// <summary>
@@ -121,8 +139,8 @@ namespace Gelato.Decorators
                 return true;
             }
 
-            // Stream items. Probing runs under a local /tmp/<release>.strm path, where Jellyfin
-            // finds the saved files itself.
+            // Stream items. Probing runs under a local /tmp/gelato-probe-<id>.strm path, and its
+            // searches are skipped above.
             if (!path.IsUrl())
                 return false;
 
