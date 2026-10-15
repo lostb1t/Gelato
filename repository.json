@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.24.0] - 2026-10-15\n\n### 🚀 Features\n\n- Add a gelato copy of a title held as a file from a search inside a gelato library (#289)\n\n### 🐛 Bug Fixes\n\n- Answer a progress report for an item that no longer exists (#280)\n- Give two catalogs of one name a collection each (#281)\n- Give a local series' added episodes ids of their own (#282)\n- Probe and fill in a stream row that lost its tracks (#283)\n- Look a movie up by its imdb id when tmdb has no movie under the addon's id (#284)\n- Count a request being torn down as no request in task reads (#285)\n- Hand jellyfin a path-safe id for an addon subtitle (#286)\n- Save playback reports for a deleted stream row on its movie (#287)\n- Download a stream row's missing subtitle once when two downloads meet (#288)\n- Release a movie without a digital date once tmdb lists a watch provider (#290)\n- Offer subtitles the addon sends with a three-letter b code (#291)\n- Download from the next stream when a title's first link is dead (#292)\n- Download a probed stream's subtitles after the probe, not inside the playback (#293)\n",
+        "checksum": "4ad66bcabe4e443b366c14720017e9ca",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.24.0/gelato_0.26.24.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-15T20:16:37Z",
+        "version": "0.26.24.0"
+      },
+      {
         "changelog": "## [0.26.23.0] - 2026-10-13\n\n### 🚀 Features\n\n- Support catalog to library mapping (#253)\n- Support binge groups in episodes (#276)\n\n### 🐛 Bug Fixes\n\n- Serve a download that names no user (#278)\n- Keep gelato items when their library folder is removed (#279)\n\n### ⚡ Performance\n\n- Fewer queries for listings with stream rows (#277)\n",
         "checksum": "5cc9b1825d05576412803ca89dadfd86",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.23.0/gelato_0.26.23.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-12T06:41:16Z",
         "version": "0.26.13.7"
-      },
-      {
-        "changelog": "## [0.26.13.6] - 2026-04-12\n\n### 🐛 Bug Fixes\n\n- Redownload images when missing and fix release dates for non gelato (#152)\n",
-        "checksum": "8055c2035941b5abe8ad53c717347e91",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.6/gelato_0.26.13.6.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-12T06:31:19Z",
-        "version": "0.26.13.6"
       }
     ]
   }
