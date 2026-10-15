@@ -15,6 +15,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Providers;
 using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
@@ -27,6 +28,7 @@ namespace Gelato.Providers
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
         private readonly ILibraryManager _library;
+        private readonly ILocalizationManager _localization;
 
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
@@ -37,12 +39,14 @@ namespace Gelato.Providers
         public SubtitleProvider(
             IHttpClientFactory http,
             ILogger<SubtitleProvider> log,
-            ILibraryManager library
+            ILibraryManager library,
+            ILocalizationManager localization
         )
         {
             _http = http;
             _log = log;
             _library = library;
+            _localization = localization;
         }
 
         public string Name => "Gelato Subtitles";
@@ -170,7 +174,7 @@ namespace Gelato.Providers
                     ? subs
                     : subs.Where(s =>
                         string.Equals(
-                            (s.TwoLetterISOLanguageName() ?? "").Trim().ToLower(),
+                            (s.TwoLetterISOLanguageName(_localization) ?? "").Trim().ToLower(),
                             lang,
                             StringComparison.OrdinalIgnoreCase
                         )
