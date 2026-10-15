@@ -1,0 +1,1251 @@
+/* Colours that work on every Jellyfin theme: a grey that is see-through on light and dark, and
+   Jellyfin's own blue for what is active. */
+#gelatoConfigurationPage,
+.gelatoSetup {
+  --g-accent: #00a4dc;
+  --g-accent-soft: color-mix(in srgb, var(--g-accent) 16%, transparent);
+  /* The accent as text or an icon: mixed with the text colour, so a dark accent stays readable on
+     a dark theme and a light one on a light theme. Computed where it is used (currentColor). */
+  --g-accent-text: color-mix(in srgb, var(--g-accent) 60%, currentColor);
+  --g-line: rgba(128, 128, 128, .28);
+  --g-card: rgba(128, 128, 128, .07);
+  --g-card-hover: rgba(128, 128, 128, .12);
+  --g-ok: #4caf50;
+  --g-warn: #ff9800;
+  --g-bad: #f44336;
+  --g-radius: .7em;
+}
+
+/* One height for every field and button, so a button next to a field lines up with it; Jellyfin's
+   own are 39 and 47 px. Jellyfin's button is a flex box that starts its content on the left: one
+   given a width of its own here keeps its text in the middle. */
+#gelatoConfigurationPage,
+.gelatoSetup {
+  --g-control: 2.75rem;
+}
+
+#gelatoConfigurationPage #catalogsList {
+  --g-control: 2.3rem;
+}
+
+#gelatoConfigurationPage .emby-input,
+#gelatoConfigurationPage .emby-select,
+.gelatoSetup .emby-input,
+.gelatoSetup .emby-select {
+  box-sizing: border-box;
+  height: var(--g-control);
+  /* Some skins pad fields with !important, which in a fixed height cuts the text off. */
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  line-height: normal;
+}
+
+#gelatoConfigurationPage button.emby-button,
+.gelatoSetup button.emby-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .45em;
+  height: var(--g-control);
+  min-height: 0;
+  padding: 0 1.2em;
+  text-align: center;
+  line-height: 1;
+}
+
+/* Jellyfin's select style takes the browser's arrow away and its component, which draws
+   another, is not what styles these selects: the page draws the arrow itself. */
+#gelatoConfigurationPage select.emby-select-withcolor,
+.gelatoSetup select.emby-select-withcolor {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23999' d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right .3em center;
+  background-size: 1.6em;
+  padding-right: 2em;
+  text-overflow: ellipsis;
+}
+
+#gelatoConfigurationPage .gelatoHeader {
+  display: flex;
+  align-items: center;
+  gap: .8em;
+  flex-wrap: wrap;
+}
+
+#gelatoConfigurationPage .gelatoHeader h2 {
+  margin: 0;
+  flex: 1;
+}
+
+#gelatoConfigurationPage .gelatoHeader button {
+  display: inline-flex;
+  align-items: center;
+  gap: .45em;
+  margin: 0;
+}
+
+#gelatoConfigurationPage .gelatoHeader .material-icons {
+  font-size: 1.2em;
+}
+
+/* The tabs: an icon and a word each, a line under the open one that slides to the next. On a
+   phone the row scrolls instead of wrapping. */
+#gelatoConfigurationPage .gelatoTabs {
+  position: relative;
+  display: flex;
+  gap: .3em;
+  margin: 1em 0 1.5em;
+  border-bottom: 1px solid var(--g-line);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+#gelatoConfigurationPage .gelatoTabs::-webkit-scrollbar {
+  display: none;
+}
+
+#gelatoConfigurationPage .tab-button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .45em;
+  flex: none;
+  margin: 0;
+  padding: .85em .9em;
+  border: 0;
+  border-radius: .5em .5em 0 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  opacity: .62;
+  cursor: pointer;
+  transition: opacity .15s, background-color .15s;
+}
+
+#gelatoConfigurationPage .tab-button .material-icons {
+  font-size: 1.25em;
+}
+
+#gelatoConfigurationPage .tab-button:hover,
+#gelatoConfigurationPage .tab-button:focus-visible {
+  opacity: 1;
+  background: var(--g-card);
+  outline: none;
+}
+
+#gelatoConfigurationPage .tab-button.active {
+  opacity: 1;
+}
+
+#gelatoConfigurationPage .tab-button.active .material-icons {
+  color: var(--g-accent-text);
+}
+
+#gelatoConfigurationPage .tabInk {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--g-accent);
+  transition: transform .3s cubic-bezier(.4, 0, .2, 1), width .3s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* The page uses the whole width: Jellyfin keeps a form to 54em, which on a wide screen leaves the
+   page in a strip on the left. Each tab lays its cards out in columns that fit; a card with a
+   table or several fields side by side takes the whole row. */
+#gelatoConfigurationPage #gelatoForm {
+  max-width: none;
+}
+
+/* The page is placed between the drawer and the right edge, and some skins give it a full width as
+   well, so it runs past the screen by the drawer's width: Jellyfin's 54em form hid that. */
+#gelatoConfigurationPage.mainAnimatedPage {
+  width: auto;
+}
+
+/* Some skins give the content a full width on top of its padding: it then runs past the screen. */
+#gelatoConfigurationPage .content-primary {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+#gelatoConfigurationPage .tab-content {
+  display: none;
+}
+
+#gelatoConfigurationPage .tab-content.shown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 32em), 1fr));
+  gap: 0 1.2em;
+  align-items: start;
+}
+
+#gelatoConfigurationPage .gelatoCard.wide {
+  grid-column: 1 / -1;
+}
+
+#gelatoConfigurationPage .tab-content.shown {
+  animation: gelatoTabIn .28s ease-out;
+}
+
+@keyframes gelatoTabIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* A group of settings: a card with a title that says what the group is for. */
+#gelatoConfigurationPage .gelatoCard {
+  margin: 0 0 1.2em;
+  padding: 1.1em 1.3em .4em;
+  border: 1px solid var(--g-line);
+  border-radius: var(--g-radius);
+  background: var(--g-card);
+}
+
+#gelatoConfigurationPage .gelatoCard > h3 {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  margin: 0 0 .3em;
+  font-size: 1.1em;
+}
+
+#gelatoConfigurationPage .gelatoCard > h3 .material-icons {
+  color: var(--g-accent-text);
+  font-size: 1.3em;
+}
+
+#gelatoConfigurationPage .gelatoCard > .cardLead {
+  margin: 0 0 1.2em;
+  opacity: .75;
+  font-size: .92em;
+}
+
+#gelatoConfigurationPage .gelatoRow {
+  display: flex;
+  gap: .6em;
+  align-items: center;
+}
+
+#gelatoConfigurationPage .gelatoRow > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+#gelatoConfigurationPage .gelatoRow > button {
+  margin: 0;
+  white-space: nowrap;
+}
+
+#gelatoConfigurationPage .twoCols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1.2em;
+}
+
+@media (max-width: 40em) {
+  #gelatoConfigurationPage .twoCols {
+    grid-template-columns: 1fr;
+  }
+
+  #gelatoConfigurationPage .gelatoCard {
+    padding: 1em 1em .3em;
+  }
+
+  #gelatoConfigurationPage .tab-button {
+    padding: .8em .7em;
+  }
+}
+
+/* What the addon said when it was asked: its name, how fast, what it offers. */
+.gelatoAddon {
+  display: flex;
+  gap: 1em;
+  align-items: center;
+  margin: .2em 0 1.2em;
+  padding: .9em 1em;
+  border-radius: var(--g-radius);
+  border: 1px solid var(--g-line);
+  animation: gelatoPop .35s cubic-bezier(.2, 1.4, .4, 1);
+}
+
+.gelatoAddon.ok {
+  border-color: rgba(76, 175, 80, .55);
+  background: rgba(76, 175, 80, .08);
+}
+
+.gelatoAddon.bad {
+  border-color: rgba(244, 67, 54, .55);
+  background: rgba(244, 67, 54, .08);
+  animation: gelatoShake .4s;
+}
+
+.gelatoAddon.warn {
+  border-color: rgba(255, 152, 0, .6);
+  background: rgba(255, 152, 0, .08);
+}
+
+.gelatoAddon.warn .addonLogo .material-icons {
+  color: var(--g-warn);
+}
+
+.gelatoAddon .addonLogo {
+  flex: none;
+  width: 3em;
+  height: 3em;
+  border-radius: .6em;
+  background: var(--g-card-hover) center / cover no-repeat;
+  display: grid;
+  place-items: center;
+}
+
+.gelatoAddon .addonLogo .material-icons {
+  font-size: 1.7em;
+}
+
+.gelatoAddon.ok .addonLogo .material-icons {
+  color: var(--g-ok);
+}
+
+.gelatoAddon.bad .addonLogo .material-icons {
+  color: var(--g-bad);
+}
+
+.gelatoAddon .addonText {
+  flex: 1;
+  min-width: 0;
+}
+
+.gelatoAddon .addonName {
+  font-weight: 600;
+}
+
+.gelatoAddon .addonMeta {
+  opacity: .7;
+  font-size: .88em;
+}
+
+.gelatoChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35em;
+  margin-top: .45em;
+}
+
+.gelatoChip {
+  display: inline-flex;
+  align-items: center;
+  gap: .25em;
+  padding: .15em .6em .15em .45em;
+  border-radius: 1em;
+  font-size: .8em;
+  background: var(--g-card-hover);
+}
+
+.gelatoChip .material-icons {
+  font-size: 1.15em;
+}
+
+.gelatoChip.yes .material-icons {
+  color: var(--g-ok);
+}
+
+.gelatoChip.no {
+  opacity: .6;
+}
+
+@keyframes gelatoPop {
+  from { opacity: 0; transform: scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes gelatoShake {
+  0%, 100% { transform: none; }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.gelatoSpin {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: gelatoSpin .7s linear infinite;
+  vertical-align: -.15em;
+}
+
+@keyframes gelatoSpin {
+  to { transform: rotate(360deg); }
+}
+
+#gelatoConfigurationPage #catalogsList {
+  max-height: 600px;
+  overflow: auto;
+  border: 1px solid var(--g-line);
+  border-radius: var(--g-radius);
+}
+
+#gelatoConfigurationPage #catalogsList th {
+  background: var(--g-card-hover);
+  position: sticky;
+  top: 0;
+  /* Above the rows' checkboxes and fields, which Jellyfin positions: a column's tooltip lies over
+     them. */
+  z-index: 4;
+  backdrop-filter: blur(8px);
+}
+
+/* On a phone the table becomes a card per catalog: its name and type on top, each setting a line
+   with its column's name, the Import button at the end. */
+@media (max-width: 40em) {
+  #gelatoConfigurationPage #catalogsList {
+    max-height: none;
+    border: 0;
+  }
+
+  #gelatoConfigurationPage #catalogsList table,
+  #gelatoConfigurationPage #catalogsList tbody,
+  #gelatoConfigurationPage #catalogsList tr,
+  #gelatoConfigurationPage #catalogsList td {
+    display: block;
+  }
+
+  #gelatoConfigurationPage #catalogsList tr:first-child {
+    display: none;
+  }
+
+  #gelatoConfigurationPage #catalogsList tr {
+    margin-bottom: .8em;
+    padding: .5em .9em;
+    border: 1px solid var(--g-line);
+    border-radius: var(--g-radius);
+  }
+
+  #gelatoConfigurationPage #catalogsList tr + tr {
+    border-top: 1px solid var(--g-line);
+  }
+
+  #gelatoConfigurationPage #catalogsList td {
+    padding: .35em 0 !important;
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="name"] {
+    display: inline-block;
+    font-weight: 600;
+    margin-right: .5em;
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="type"] {
+    display: inline-block;
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="Import"],
+  #gelatoConfigurationPage #catalogsList td[data-label="Collection"],
+  #gelatoConfigurationPage #catalogsList td[data-label="Max items"],
+  #gelatoConfigurationPage #catalogsList td[data-label="Library"] {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="Import"]::before,
+  #gelatoConfigurationPage #catalogsList td[data-label="Collection"]::before,
+  #gelatoConfigurationPage #catalogsList td[data-label="Max items"]::before,
+  #gelatoConfigurationPage #catalogsList td[data-label="Library"]::before {
+    content: attr(data-label);
+    flex: 0 0 6.5em;
+    opacity: .7;
+    font-size: .9em;
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="Library"] {
+    flex-wrap: wrap;
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="Library"] select {
+    flex: 1;
+    min-width: 0 !important;
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="action"] .rowImport {
+    width: 100%;
+    border-radius: var(--g-radius);
+  }
+
+  #gelatoConfigurationPage #catalogsList td[data-label="action"] .rowImport::after {
+    content: "Import now";
+  }
+}
+
+#gelatoConfigurationPage #catalogsList tr + tr {
+  border-top: 1px solid var(--g-line);
+}
+
+/* A column's ? and what it says, on hover and on focus (a tap on a phone). */
+#gelatoConfigurationPage .helpTip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 1.35em;
+  height: 1.35em;
+  margin-left: .35em;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: .72em;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: .15em;
+  opacity: .55;
+  cursor: help;
+  outline: none;
+}
+
+#gelatoConfigurationPage .helpTip:hover,
+#gelatoConfigurationPage .helpTip:focus-visible {
+  opacity: 1;
+}
+
+/* The tooltip floats on the page, outside the table: the table's scroll box would cut it off. */
+.gelatoTip {
+  position: fixed;
+  z-index: 2000;
+  max-width: min(18em, calc(100vw - 2em));
+  padding: .6em .8em;
+  border-radius: .5em;
+  background: rgba(24, 24, 28, .97);
+  color: #fff;
+  font-size: .85rem;
+  line-height: 1.4;
+  box-shadow: 0 .4em 1.2em rgba(0, 0, 0, .35);
+  pointer-events: none;
+  animation: gelatoTipIn .15s ease-out;
+}
+
+@keyframes gelatoTipIn {
+  from { opacity: 0; transform: translateY(-.3em); }
+  to { opacity: 1; transform: none; }
+}
+
+#gelatoConfigurationPage #catalogsList th {
+  white-space: nowrap;
+}
+
+#gelatoConfigurationPage #catalogsList .rowImport {
+  width: var(--g-control);
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+}
+
+#gelatoConfigurationPage #catalogsList {
+  scrollbar-width: thin;
+  scrollbar-color: var(--g-line) transparent;
+}
+
+/* The save bar: floats at the bottom of the window while something on the page is not saved, and
+   says "Saved" for a moment after a save; out of the way otherwise. Fixed, not sticky: Jellyfin's
+   page does not scroll the way sticky needs, and it ended up below the fold. Glass rather than a colour of its
+   own, so it sits on any theme. */
+#gelatoConfigurationPage .gelatoSaveBar {
+  position: fixed;
+  right: 1.5em;
+  bottom: calc(1.5em + env(safe-area-inset-bottom));
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  width: min(26em, calc(100vw - 3em));
+  box-sizing: border-box;
+  padding: .6em .6em .6em 1.1em;
+  border: 1px solid var(--g-line);
+  border-radius: 999px;
+  background: rgba(128, 128, 128, .16);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: 0 .6em 2em rgba(0, 0, 0, .3);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(1.5em) scale(.97);
+  transition: opacity .25s, transform .35s cubic-bezier(.2, 1.3, .4, 1), visibility 0s .35s;
+}
+
+#gelatoConfigurationPage .gelatoSaveBar.dirty,
+#gelatoConfigurationPage .gelatoSaveBar.saved {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity .25s, transform .35s cubic-bezier(.2, 1.3, .4, 1), visibility 0s;
+}
+
+#gelatoConfigurationPage .gelatoSaveBar .saveState {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: .55em;
+  font-size: .95em;
+  font-weight: 600;
+}
+
+#gelatoConfigurationPage .gelatoSaveBar .saveDot {
+  width: .6em;
+  height: .6em;
+  border-radius: 50%;
+  background: var(--g-ok);
+}
+
+#gelatoConfigurationPage .gelatoSaveBar.dirty .saveDot {
+  background: var(--g-warn);
+  animation: gelatoPulse 1.6s ease-in-out infinite;
+}
+
+#gelatoConfigurationPage .gelatoSaveBar button {
+  margin: 0;
+  min-width: 8em;
+  border-radius: 999px;
+}
+
+#gelatoConfigurationPage .gelatoSaveBar.saved button {
+  visibility: hidden;
+}
+
+/* The assistant's button sits at the end of the AIOStreams card's title. */
+#gelatoConfigurationPage .gelatoCard > h3 #btnOpenSetup {
+  margin-left: auto;
+  font-size: .85rem;
+}
+
+@media (max-width: 40em) {
+  #gelatoConfigurationPage .gelatoSaveBar {
+    left: 1em;
+    right: 1em;
+    width: auto;
+  }
+}
+
+@keyframes gelatoPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 152, 0, .55); }
+  50% { box-shadow: 0 0 0 .4em rgba(255, 152, 0, 0); }
+}
+
+/* ---------- The setup assistant ---------- */
+dialog.gelatoSetup {
+  width: min(44em, calc(100vw - 2em));
+  max-height: calc(100vh - 2em);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 1em;
+  color: inherit;
+  overflow: hidden;
+  box-shadow: 0 1.5em 4em rgba(0, 0, 0, .45);
+}
+
+/* The form holds the whole dialog: top, steps and the buttons at the bottom. */
+dialog.gelatoSetup > form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+dialog.gelatoSetup[open] {
+  display: flex;
+  flex-direction: column;
+  animation: gelatoRise .4s cubic-bezier(.2, .9, .3, 1.1);
+}
+
+dialog.gelatoSetup::backdrop {
+  background: rgba(0, 0, 0, .6);
+  backdrop-filter: blur(4px);
+}
+
+@keyframes gelatoRise {
+  from { opacity: 0; transform: translateY(2em) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 40em) {
+  dialog.gelatoSetup {
+    width: 100vw;
+    max-width: 100vw;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+}
+
+.gelatoSetup .setupTop {
+  display: flex;
+  align-items: center;
+  gap: .8em;
+  padding: 1em 1.3em .8em;
+}
+
+.gelatoSetup .setupTop .setupTitle {
+  flex: 1;
+  font-weight: 600;
+  opacity: .75;
+  font-size: .9em;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.gelatoSetup .setupClose {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  opacity: .6;
+  cursor: pointer;
+  padding: .2em;
+  border-radius: 50%;
+}
+
+.gelatoSetup .setupClose:hover {
+  opacity: 1;
+  background: var(--g-card-hover);
+}
+
+/* The steps as a rail: done ones filled, the open one wide. */
+.gelatoSetup .setupRail {
+  display: flex;
+  gap: .35em;
+  padding: 0 1.3em;
+}
+
+.gelatoSetup .setupRail span {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: var(--g-line);
+  overflow: hidden;
+  position: relative;
+}
+
+.gelatoSetup .setupRail span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--g-accent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .45s cubic-bezier(.4, 0, .2, 1);
+}
+
+.gelatoSetup .setupRail span.done::after {
+  transform: scaleX(1);
+}
+
+.gelatoSetup .setupBody {
+  position: relative;
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.4em 1.6em 1em;
+  min-height: 22em;
+}
+
+.gelatoSetup .setupStep {
+  display: none;
+}
+
+.gelatoSetup .setupStep.current {
+  display: block;
+  animation: gelatoStepIn .38s cubic-bezier(.2, .8, .3, 1);
+}
+
+.gelatoSetup .setupStep.current.back {
+  animation-name: gelatoStepBack;
+}
+
+@keyframes gelatoStepIn {
+  from { opacity: 0; transform: translateX(2.5em); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes gelatoStepBack {
+  from { opacity: 0; transform: translateX(-2.5em); }
+  to { opacity: 1; transform: none; }
+}
+
+.gelatoSetup h2 {
+  margin: 0 0 .3em;
+  font-size: 1.6em;
+}
+
+.gelatoSetup .stepLead {
+  margin: 0 0 1.4em;
+  opacity: .78;
+  line-height: 1.5;
+}
+
+.gelatoSetup .setupFoot {
+  display: flex;
+  align-items: center;
+  gap: .8em;
+  padding: 1em 1.6em 1.3em;
+  border-top: 1px solid var(--g-line);
+}
+
+.gelatoSetup .setupFoot .footInfo {
+  flex: 1;
+  font-size: .85em;
+  opacity: .6;
+}
+
+.gelatoSetup .setupFoot button {
+  margin: 0;
+  min-width: 7em;
+}
+
+.gelatoSetup button.button-submit[disabled] {
+  opacity: .45;
+  cursor: default;
+}
+
+/* Welcome: a scoop that floats. */
+.gelatoSetup .hero {
+  text-align: center;
+  padding: .5em 0 0;
+}
+
+.gelatoSetup .hero .gelatoLogo {
+  width: 9em;
+  height: 9em;
+}
+
+.gelatoSetup .hero h2 {
+  font-size: 2em;
+  margin-top: .4em;
+}
+
+.gelatoSetup .hero .stepLead {
+  max-width: 28em;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Gelato's logo, the cone of logo.png drawn as shapes so it can move: the scoop lands on the
+   cone, then the cone floats, the glow breathes and a drip falls now and then. */
+.gelatoLogo {
+  display: inline-block;
+  width: 2em;
+  height: 2em;
+}
+
+.gelatoLogo.small {
+  width: 1.75em;
+  height: 1.75em;
+}
+
+.gelatoLogo svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 .12em rgba(143, 227, 191, .55)) drop-shadow(0 .1em .2em rgba(240, 166, 74, .45));
+}
+
+.gelatoLogo.animated svg {
+  animation: gelatoFloat 3.6s ease-in-out .9s infinite, gelatoGlow 3.6s ease-in-out infinite;
+}
+
+.gelatoLogo.animated .logoScoop {
+  animation: gelatoLand .9s cubic-bezier(.3, 1.5, .5, 1) both;
+  transform-box: view-box;
+  transform-origin: 342px 485px;
+}
+
+.gelatoLogo .logoDrip {
+  opacity: 0;
+}
+
+.gelatoLogo.animated .logoDrip {
+  animation: gelatoDrip 3.6s ease-in 1.4s infinite;
+  transform-box: fill-box;
+  transform-origin: 50% 0;
+}
+
+@keyframes gelatoLand {
+  0% { transform: translateY(-420px) scale(.9, 1.1); opacity: 0; }
+  55% { transform: translateY(0) scale(1.08, .9); opacity: 1; }
+  75% { transform: translateY(-18px) scale(.97, 1.03); }
+  100% { transform: none; }
+}
+
+@keyframes gelatoGlow {
+  0%, 100% { filter: drop-shadow(0 0 .1em rgba(143, 227, 191, .35)) drop-shadow(0 .1em .2em rgba(240, 166, 74, .3)); }
+  50% { filter: drop-shadow(0 0 .35em rgba(143, 227, 191, .8)) drop-shadow(0 .15em .4em rgba(240, 166, 74, .6)); }
+}
+
+@keyframes gelatoDrip {
+  0% { transform: translateY(-30px) scale(.4); opacity: 0; }
+  15% { transform: translateY(-10px) scale(1); opacity: 1; }
+  35% { transform: translateY(10px) scale(.9, 1.15); opacity: 1; }
+  70% { transform: translateY(430px) scale(.8, 1.2); opacity: 0; }
+  100% { transform: translateY(430px); opacity: 0; }
+}
+
+@keyframes gelatoFloat {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-.6em) rotate(3deg); }
+}
+
+.gelatoSetup .heroPoints {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .8em;
+  margin: 1.6em 0 .5em;
+  text-align: left;
+}
+
+.gelatoSetup .heroPoints > div {
+  padding: .9em;
+  border-radius: var(--g-radius);
+  background: var(--g-card);
+  border: 1px solid var(--g-line);
+  font-size: .88em;
+  opacity: 0;
+  animation: gelatoTabIn .5s ease-out forwards;
+}
+
+.gelatoSetup .heroPoints > div:nth-child(2) { animation-delay: .12s; }
+.gelatoSetup .heroPoints > div:nth-child(3) { animation-delay: .24s; }
+
+.gelatoSetup .heroPoints .material-icons {
+  display: block;
+  color: var(--g-accent-text);
+  margin-bottom: .3em;
+}
+
+.gelatoSetup .heroPoints b {
+  display: block;
+  margin-bottom: .15em;
+}
+
+@media (max-width: 40em) {
+  .gelatoSetup .heroPoints {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Library and catalog picks: cards that light up when chosen. */
+.gelatoSetup .pickCard {
+  margin-bottom: 1em;
+  padding: 1em 1.1em .2em;
+  border: 1px solid var(--g-line);
+  border-radius: var(--g-radius);
+  background: var(--g-card);
+}
+
+.gelatoSetup .pickCard h3 {
+  display: flex;
+  align-items: center;
+  gap: .45em;
+  margin: 0 0 .8em;
+  font-size: 1.05em;
+}
+
+.gelatoSetup .pickCard h3 .material-icons {
+  color: var(--g-accent-text);
+}
+
+.gelatoSetup .catalogGroup {
+  margin-bottom: 1.2em;
+}
+
+.gelatoSetup .catalogGroup .groupHead {
+  display: flex;
+  align-items: baseline;
+  gap: .6em;
+  margin-bottom: .5em;
+}
+
+
+
+.gelatoSetup .catalogGroup .groupHead span {
+  flex: 1;
+  opacity: .6;
+  font-size: .85em;
+}
+
+.gelatoSetup .linkButton {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--g-accent-text);
+  font: inherit;
+  font-size: .85em;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gelatoSetup .catalogPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45em;
+}
+
+.gelatoSetup .catalogPill {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .3em;
+  padding: .45em .85em .45em .6em;
+  border: 1px solid var(--g-line);
+  border-radius: 2em;
+  background: var(--g-card);
+  color: inherit;
+  font: inherit;
+  font-size: .9em;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, transform .1s;
+}
+
+.gelatoSetup .catalogPill:active {
+  transform: scale(.96);
+}
+
+.gelatoSetup .catalogPill .material-icons {
+  font-size: 1.15em;
+  transition: transform .2s cubic-bezier(.2, 1.6, .4, 1);
+}
+
+.gelatoSetup .catalogPill .pillOff {
+  opacity: .5;
+}
+
+.gelatoSetup .catalogPill .pillOn,
+.gelatoSetup .catalogPill[aria-pressed="true"] .pillOff {
+  display: none;
+}
+
+/* Picked: a check, bold text and a stronger edge, not only the accent's colour. */
+.gelatoSetup .catalogPill[aria-pressed="true"] {
+  border-color: var(--g-accent-text);
+  box-shadow: inset 0 0 0 1px var(--g-accent-text);
+  background: color-mix(in srgb, var(--g-accent) 28%, transparent);
+  font-weight: 600;
+}
+
+.gelatoSetup .catalogPill[aria-pressed="true"] .pillOn {
+  display: inline;
+  color: var(--g-accent-text);
+  transform: scale(1.15);
+}
+
+.gelatoSetup .catalogPill[aria-pressed="false"] {
+  opacity: .8;
+}
+
+/* The choices as switches with a word on what each does. */
+/* The catalogs step's one switch, under the pills. */
+.gelatoSetup [data-collections] {
+  margin-top: .4em;
+  border-top: 1px solid var(--g-line);
+}
+
+.gelatoSetup .choice {
+  display: flex;
+  align-items: flex-start;
+  gap: .9em;
+  padding: .85em 0;
+  cursor: pointer;
+}
+
+.gelatoSetup .choice + .choice {
+  border-top: 1px solid var(--g-line);
+}
+
+.gelatoSetup .choice .choiceText {
+  flex: 1;
+}
+
+.gelatoSetup .choice .choiceText b {
+  display: block;
+  margin-bottom: .15em;
+}
+
+.gelatoSetup .choice .choiceText span {
+  font-size: .88em;
+  opacity: .7;
+}
+
+.gelatoSetup .switch {
+  position: relative;
+  flex: none;
+  width: 2.7em;
+  height: 1.5em;
+  margin-top: .1em;
+}
+
+.gelatoSetup .switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.gelatoSetup .switch i {
+  position: absolute;
+  inset: 0;
+  border-radius: 1em;
+  background: var(--g-line);
+  transition: background-color .2s;
+  pointer-events: none;
+}
+
+.gelatoSetup .switch i::after {
+  content: "";
+  position: absolute;
+  top: .18em;
+  left: .18em;
+  width: 1.14em;
+  height: 1.14em;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
+  transition: transform .25s cubic-bezier(.2, 1.4, .4, 1);
+}
+
+.gelatoSetup .switch input:checked + i {
+  background: var(--g-accent);
+}
+
+.gelatoSetup .switch input:checked + i::after {
+  transform: translateX(1.2em);
+}
+
+.gelatoSetup .switch input:focus-visible + i {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 2px;
+}
+
+/* The summary, then the work being done, line by line. */
+.gelatoSetup .summary {
+  list-style: none;
+  margin: 0 0 1.2em;
+  padding: 0;
+}
+
+.gelatoSetup .summary li {
+  display: flex;
+  gap: .7em;
+  align-items: flex-start;
+  padding: .6em 0;
+  border-bottom: 1px solid var(--g-line);
+}
+
+.gelatoSetup .summary li .material-icons {
+  color: var(--g-accent-text);
+  font-size: 1.3em;
+}
+
+.gelatoSetup .summary li > div {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.gelatoSetup .summary li small {
+  display: block;
+  opacity: .65;
+}
+
+.gelatoSetup .progressList {
+  list-style: none;
+  margin: 1em 0;
+  padding: 0;
+}
+
+.gelatoSetup .progressList li {
+  display: flex;
+  align-items: center;
+  gap: .7em;
+  padding: .45em 0;
+  opacity: .45;
+  transition: opacity .2s;
+}
+
+.gelatoSetup .progressList li.busy,
+.gelatoSetup .progressList li.done,
+.gelatoSetup .progressList li.failed {
+  opacity: 1;
+}
+
+.gelatoSetup .progressList .mark {
+  width: 1.4em;
+  height: 1.4em;
+  display: grid;
+  place-items: center;
+}
+
+.gelatoSetup .progressList li.done .mark .material-icons {
+  color: var(--g-ok);
+  animation: gelatoPop .3s cubic-bezier(.2, 1.6, .4, 1);
+}
+
+.gelatoSetup .progressList li.failed .mark .material-icons {
+  color: var(--g-bad);
+}
+
+.gelatoSetup .finale {
+  text-align: center;
+  padding-top: 1em;
+}
+
+.gelatoSetup .finale .bigCheck {
+  width: 5em;
+  height: 5em;
+  margin: 0 auto 1em;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(76, 175, 80, .15);
+  animation: gelatoPop .5s cubic-bezier(.2, 1.6, .4, 1);
+}
+
+.gelatoSetup .finale .bigCheck .material-icons {
+  font-size: 3em;
+  color: var(--g-ok);
+}
+
+/* Sprinkles for the end. */
+.gelatoSetup .sprinkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gelatoSetup .sprinkles i {
+  position: absolute;
+  top: -1em;
+  width: .35em;
+  height: .9em;
+  border-radius: .2em;
+  animation: gelatoSprinkle linear forwards;
+}
+
+@keyframes gelatoSprinkle {
+  to { transform: translateY(32em) rotate(720deg); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #gelatoConfigurationPage *,
+  .gelatoSetup,
+  .gelatoSetup * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .gelatoSetup .heroPoints > div {
+    opacity: 1;
+  }
+}
