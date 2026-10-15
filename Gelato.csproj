@@ -19,6 +19,8 @@
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Config\config.html" />
+    <EmbeddedResource Include="Config\*.css" />
+    <EmbeddedResource Include="Config\*.js" />
     <!-- Embed all frontend assets so they are delivered with the plugin -->
     <EmbeddedResource Include="Frontend\**\*" />
   </ItemGroup>

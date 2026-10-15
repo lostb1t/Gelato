@@ -50,6 +50,14 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Description =>
         "Gelato brings AIOStreams (Stremio addons) into Jellyfin. Search results and imported catalogs show up as regular movies and series, and streams are resolved when you press play and proxied through Jellyfin.";
 
+    private static readonly string[] PageFiles =
+    [
+        "gelato.css",
+        "gelato-common.js",
+        "gelato-settings.js",
+        "gelato-setup.js",
+    ];
+
     /// <inheritdoc />
     public IEnumerable<PluginPageInfo> GetPages()
     {
@@ -61,6 +69,16 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
             MenuIcon = "movie",
             EmbeddedResourcePath = prefix + ".Config.config.html",
         };
+
+        // The page's style and scripts, which config.html and its scripts load by these names.
+        foreach (var file in PageFiles)
+        {
+            yield return new PluginPageInfo
+            {
+                Name = file,
+                EmbeddedResourcePath = prefix + ".Config." + file,
+            };
+        }
     }
 
     public override void UpdateConfiguration(BasePluginConfiguration configuration)
