@@ -1,8 +1,10 @@
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.Logging;
 
 namespace Gelato.Filters;
 
@@ -11,9 +13,16 @@ public sealed class DownloadFilter(
     GelatoManager manager,
     IUserManager userManager,
     IMediaSourceManager mediaSourceManager,
-    IHttpClientFactory httpClientFactory
+    IHttpClientFactory httpClientFactory,
+    ILogger<DownloadFilter> log
 ) : IAsyncActionFilter
 {
+    // How long one stream gets to answer with its headers, and how many of the item's streams are
+    // tried. A dead debrid link used to hold the download for HttpClient's 100 s and end in a 500;
+    // the body itself streams without a limit.
+    private static readonly TimeSpan HeadersTimeout = TimeSpan.FromSeconds(10);
+    private const int MaxStreams = 3;
+
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
         ActionExecutionDelegate next
@@ -39,58 +48,112 @@ public sealed class DownloadFilter(
 
         if (item != null && manager.IsStremio(item))
         {
-            var path = item.Path;
-
-            // some clients do not send mediasource id. the use the itemid in the query
-            if (!hasMediaSourceId || !item.IsStream())
-            {
-                path = mediaSourceManager.GetStaticMediaSources(item, true, user)[0].Path;
-            }
+            // A client that named a stream row, as the item or as its media source, gets that
+            // stream or nothing. For the movie or episode its streams are tried in Gelato's order
+            // (a row named as the item used to get the first stream of its title).
+            var paths =
+                item.IsStream()
+                    ? [item.Path]
+                    : mediaSourceManager
+                        .GetStaticMediaSources(item, true, user)
+                        .Select(s => s.Path)
+                        .ToList();
 
             // Streams are only synced for a user. A title nobody has opened yet has none without
             // one, and its own gelato:// path is nothing to fetch: Jellyfin answers that.
-            if (Uri.TryCreate(path, UriKind.Absolute, out var streamUri) && IsHttp(streamUri))
+            var streamUris = paths
+                .Select(p => Uri.TryCreate(p, UriKind.Absolute, out var u) ? u : null)
+                .Where(u => u != null && IsHttp(u!))
+                .Take(MaxStreams)
+                .ToList();
+
+            if (streamUris.Count > 0)
             {
+                var aborted = ctx.HttpContext.RequestAborted;
                 var client = httpClientFactory.CreateClient();
 
-                var resp = await client.GetAsync(
-                    path,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    CancellationToken.None
-                );
-
-                resp.EnsureSuccessStatusCode();
-
-                ctx.HttpContext.Response.RegisterForDispose(resp);
-
-                var stream = await resp.Content.ReadAsStreamAsync(CancellationToken.None);
-
-                var contentType =
-                    resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-
-                var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
-                if (string.IsNullOrWhiteSpace(fileName))
+                for (var i = 0; i < streamUris.Count; i++)
                 {
-                    fileName = Path.GetFileName(streamUri.AbsolutePath);
+                    var streamUri = streamUris[i]!;
+                    var resp = await TryGetAsync(client, streamUri, aborted);
+                    if (resp is null || !resp.IsSuccessStatusCode)
+                    {
+                        // No URL in the log: stream links carry the debrid key.
+                        log.LogWarning(
+                            "Download of {Item}: stream {Index} of {Count} did not answer ({Reason})",
+                            item.Name,
+                            i + 1,
+                            streamUris.Count,
+                            resp is null ? "no response" : $"status {(int)resp.StatusCode}"
+                        );
+                        resp?.Dispose();
+                        continue;
+                    }
+
+                    ctx.HttpContext.Response.RegisterForDispose(resp);
+
+                    var stream = await resp.Content.ReadAsStreamAsync(aborted);
+
+                    var contentType =
+                        resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+
+                    var fileName = resp.Content.Headers.ContentDisposition?.FileName?.Trim('"');
                     if (string.IsNullOrWhiteSpace(fileName))
-                        fileName = "download";
+                    {
+                        fileName = Path.GetFileName(streamUri.AbsolutePath);
+                        if (string.IsNullOrWhiteSpace(fileName))
+                            fileName = "download";
+                    }
+
+                    if (resp.Content.Headers.ContentLength is { } len)
+                    {
+                        ctx.HttpContext.Response.ContentLength = len;
+                    }
+
+                    ctx.Result = new FileStreamResult(stream, contentType)
+                    {
+                        FileDownloadName = fileName,
+                        EnableRangeProcessing = true,
+                    };
+                    return;
                 }
 
-                if (resp.Content.Headers.ContentLength is { } len)
+                aborted.ThrowIfCancellationRequested();
+                ctx.Result = new ContentResult
                 {
-                    ctx.HttpContext.Response.ContentLength = len;
-                }
-
-                ctx.Result = new FileStreamResult(stream, contentType)
-                {
-                    FileDownloadName = fileName,
-                    EnableRangeProcessing = true,
+                    StatusCode = StatusCodes.Status502BadGateway,
+                    Content = "None of the title's streams answered. Try again later.",
+                    ContentType = "text/plain",
                 };
                 return;
             }
         }
 
         await next();
+    }
+
+    // Null when the stream gives no headers in time or cannot be reached; the request's own
+    // abort still throws.
+    private static async Task<HttpResponseMessage?> TryGetAsync(
+        HttpClient client,
+        Uri uri,
+        CancellationToken aborted
+    )
+    {
+        // Disposing the source when the headers are in stops its timer, so the body is not cut.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(aborted);
+        cts.CancelAfter(HeadersTimeout);
+        try
+        {
+            return await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cts.Token);
+        }
+        catch (Exception ex)
+            when (!aborted.IsCancellationRequested
+                && ex is HttpRequestException or OperationCanceledException
+            )
+        {
+            return null;
+        }
     }
 
     private static bool IsHttp(Uri uri) =>
