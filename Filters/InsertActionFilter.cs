@@ -69,7 +69,8 @@ public class InsertActionFilter(
             return;
         }
 
-        if (FindExisting(guid, stremioMeta, user) is { } existing)
+        var copy = manager.IsSearchCopy(userId, guid);
+        if (FindExisting(guid, stremioMeta, userId, user, copy) is { } existing)
         {
             ctx.ReplaceGuid(existing.Id);
             await next();
@@ -95,6 +96,7 @@ public class InsertActionFilter(
             stremioMeta,
             userId,
             user,
+            copy,
             refreshItem: wantsPlayed is null,
             streamSyncFollows: ctx.ListsMediaSources()
         );
@@ -155,7 +157,8 @@ public class InsertActionFilter(
         Folder root,
         StremioMeta meta,
         User user,
-        bool refreshItem = true
+        bool refreshItem = true,
+        bool copy = false
     )
     {
         BaseItem? baseItem = null;
@@ -173,7 +176,8 @@ public class InsertActionFilter(
                     false,
                     refreshItem,
                     meta.Type is StremioMediaType.Series,
-                    ct
+                    ct,
+                    copy
                 );
             }
         );
@@ -202,21 +206,37 @@ public class InsertActionFilter(
             )
                 continue;
 
-            if (FindExisting(guid, stremioMeta, user) is null)
-                await InsertAsync(guid, stremioMeta, userId, user);
+            var copy = manager.IsSearchCopy(userId, guid);
+            if (FindExisting(guid, stremioMeta, userId, user, copy) is null)
+                await InsertAsync(guid, stremioMeta, userId, user, copy);
         }
     }
 
     /// <summary>
-    /// The library item a search result already is, remembered for the redirect.
+    /// The library item a search result already is, remembered for the redirect. A result found
+    /// inside a Gelato library for a title the user has as a file elsewhere is not that file: it
+    /// becomes a copy in the library that was searched.
     /// </summary>
-    private BaseItem? FindExisting(Guid guid, StremioMeta stremioMeta, User user)
+    private BaseItem? FindExisting(
+        Guid guid,
+        StremioMeta stremioMeta,
+        Guid userId,
+        User user,
+        bool copy
+    )
     {
+        var copyInto = copy
+            ? GetRoot(guid, stremioMeta, userId)
+            : null;
+
         // Also when it is in a library this user cannot open: inserting it again would take it
         // out of that library.
         if (
             manager.IntoBaseItem(stremioMeta) is not { } item
-            || (manager.FindExistingItem(item, user) ?? manager.FindOutsideDefaultFolders(item))
+            || (
+                manager.FindExistingItem(item, user, copyInto)
+                ?? manager.FindOutsideDefaultFolders(item)
+            )
                 is not { } existing
         )
             return null;
@@ -234,17 +254,13 @@ public class InsertActionFilter(
         StremioMeta stremioMeta,
         Guid userId,
         User user,
+        bool copy,
         bool refreshItem = true,
         bool streamSyncFollows = false
     )
     {
-        // Get root folder
         var isSeries = stremioMeta.Type == StremioMediaType.Series;
-        // The library the result was searched in, when the search was scoped to one the user can
-        // open and that has a Gelato folder; else the user's movie or series folder.
-        var root =
-            manager.GetSearchFolder(userId, guid)
-            ?? (isSeries ? manager.TryGetSeriesFolder(userId) : manager.TryGetMovieFolder(userId));
+        var root = GetRoot(guid, stremioMeta, userId);
         if (root is null)
         {
             log.LogWarning("No {Type} folder configured", isSeries ? "Series" : "Movie");
@@ -269,7 +285,14 @@ public class InsertActionFilter(
             return null;
         }
 
-        var baseItem = await InsertMetaAsync(guid, root, meta, user, refreshItem);
+        var baseItem = await InsertMetaAsync(
+            guid,
+            root,
+            meta,
+            user,
+            refreshItem,
+            copy
+        );
         if (baseItem is not null)
         {
             manager.RememberInsertedId(guid, baseItem.Id);
@@ -278,4 +301,17 @@ public class InsertActionFilter(
 
         return baseItem;
     }
+
+    /// <summary>
+    /// The folder a search result goes into: the library it was searched in, when the search was
+    /// scoped to one the user can open and that has a Gelato folder; else the user's movie or
+    /// series folder.
+    /// </summary>
+    private Folder? GetRoot(Guid guid, StremioMeta stremioMeta, Guid userId) =>
+        manager.GetSearchFolder(userId, guid)
+        ?? (
+            stremioMeta.Type == StremioMediaType.Series
+                ? manager.TryGetSeriesFolder(userId)
+                : manager.TryGetMovieFolder(userId)
+        );
 }
