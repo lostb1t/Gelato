@@ -15,6 +15,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
@@ -41,7 +42,7 @@ public sealed class MediaSourceManagerDecorator(
     IUserDataManager userDataManager,
     IDirectoryService directoryService,
     IServerConfigurationManager config,
-    //Lazy<ISubtitleManager> subtitleManager,
+    Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
@@ -65,7 +66,7 @@ public sealed class MediaSourceManagerDecorator(
     private readonly Lazy<GelatoManager> _manager = manager;
     private readonly Lazy<SubtitleProvider> _subtitleProvider = subtitleProvider;
 
-    //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
+    private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager;
     // Lazy: ProviderManager depends on ISubtitleManager, which depends on
     // IMediaSourceManager - this decorator.
     private readonly Lazy<IProviderManager> _providerManager = providerManager;
@@ -1144,7 +1145,14 @@ public sealed class MediaSourceManagerDecorator(
 
         var nextIndex = streams.Count > 0 ? streams.Max(s => s.Index) + 1 : 0;
 
-        var files = item.GetGelatoSubtitleFiles().Concat(titleSubtitles ?? []);
+        // Oldest first, the row's and the title's together: a subtitle saved after a PlaybackInfo
+        // (the download after a probe) takes the next index, and the indexes a player already has
+        // keep their file. In the folder's order, or the row's files before the title's, a new file
+        // moved the others and the player's request got another subtitle or none.
+        var files = item.GetGelatoSubtitleFiles()
+            .Concat(titleSubtitles ?? [])
+            .OrderBy(f => File.GetLastWriteTimeUtc(f.Path))
+            .ThenBy(f => f.Path, StringComparer.Ordinal);
         foreach (var (file, langCode, codec) in files)
         {
             if (existingPaths.Contains(file))
@@ -1557,11 +1565,12 @@ public sealed class MediaSourceManagerDecorator(
 
     private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
     {
-        var gelatoFilename = owner.GelatoData<string>("filename");
-        var strmBaseName = !string.IsNullOrEmpty(gelatoFilename)
-            ? Path.GetFileNameWithoutExtension(gelatoFilename)
-            : $"{owner.Id:N}";
-        var tmpStrm = Path.Combine(Path.GetTempPath(), $"{strmBaseName}.strm");
+        // Named after the row, not the release: Jellyfin's probe takes subtitle files named like
+        // the release, which is how Gelato saves them, into the row's streams at index 0 and
+        // numbers the file's own after them. A file saved after a PlaybackInfo then moved every
+        // index the player had at the next probe. Saved files are listed after the file's
+        // streams instead (GetMediaStreamsWithExternalSubs).
+        var tmpStrm = Path.Combine(Path.GetTempPath(), $"gelato-probe-{owner.Id:N}.strm");
         await File.WriteAllTextAsync(tmpStrm, streamUrl, ct).ConfigureAwait(false);
 
         var origPath = owner.Path;
@@ -1570,6 +1579,12 @@ public sealed class MediaSourceManagerDecorator(
         owner.IsShortcut = true;
         owner.DateModified = new FileInfo(tmpStrm).LastWriteTimeUtc;
 
+        // The probe's full refresh also downloads the library's subtitle languages, before the
+        // playback that waits for the probe starts: a subtitle provider that took 20 to 60 s per
+        // file held the click that long. The searches inside the probe find nothing, and the
+        // download runs in the background once the probe is done.
+        SubtitleManagerDecorator.Probing.Value = true;
+        var probed = false;
         try
         {
             _log.LogInformation(
@@ -1619,6 +1634,7 @@ public sealed class MediaSourceManagerDecorator(
                 );
                 await owner.RefreshMetadata(options, ct).ConfigureAwait(false);
             }
+            probed = true;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -1632,6 +1648,7 @@ public sealed class MediaSourceManagerDecorator(
         }
         finally
         {
+            SubtitleManagerDecorator.Probing.Value = false;
             owner.Path = origPath;
             owner.IsShortcut = origShortcut;
             try
@@ -1641,6 +1658,126 @@ public sealed class MediaSourceManagerDecorator(
             catch
             { /* best effort */
             }
+        }
+
+        if (probed)
+            DownloadSubtitlesLater(owner.Id);
+    }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        Guid,
+        byte
+    > _downloadingSubtitles = new();
+
+    /// <summary>
+    /// Downloads the library's subtitle languages for a probed row, as the probe did inside the
+    /// playback before. One run per row at a time: a pre-probe and the click's probe that meet
+    /// start one. A subtitle that arrives is listed from its file on the next look at the row.
+    /// </summary>
+    private void DownloadSubtitlesLater(Guid rowId)
+    {
+        if (!_downloadingSubtitles.TryAdd(rowId, 0))
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                // A copy from the database, with the stream's own path: the cached instance may
+                // be probed again meanwhile, which points it at a temporary file.
+                if (
+                    _libraryManager.RetrieveItem(rowId) is not Video row
+                    || row is not (Movie or Episode)
+                    || string.IsNullOrEmpty(row.Path)
+                )
+                {
+                    return;
+                }
+
+                var options = _libraryManager.GetLibraryOptions(row);
+                if (options.SubtitleDownloadLanguages is not { Length: > 0 } languages)
+                    return;
+
+                // A dead link probes without a video stream: nothing to find subtitles for.
+                var streams = _inner.GetMediaStreams(rowId);
+                if (streams.All(s => s.Type != MediaStreamType.Video))
+                    return;
+
+                var subtitleManager = _subtitleManager.Value;
+                foreach (var language in languages)
+                {
+                    if (!WantsSubtitle(streams, language, options))
+                        continue;
+
+                    var request = new SubtitleSearchRequest
+                    {
+                        ContentType =
+                            row is Episode ? VideoContentType.Episode : VideoContentType.Movie,
+                        IndexNumber = row.IndexNumber,
+                        Language = language,
+                        MediaPath = row.Path,
+                        Name = row.Name,
+                        ParentIndexNumber = row.ParentIndexNumber,
+                        ProductionYear = row.ProductionYear,
+                        ProviderIds = row.ProviderIds,
+                        SearchAllProviders = false,
+                        IsPerfectMatch = options.RequirePerfectSubtitleMatch,
+                        DisabledSubtitleFetchers = options.DisabledSubtitleFetchers,
+                        SubtitleFetcherOrder = options.SubtitleFetcherOrder,
+                        IsAutomated = true,
+                    };
+                    if (row is Episode episode)
+                    {
+                        request.IndexNumberEnd = episode.IndexNumberEnd;
+                        request.SeriesName = episode.SeriesName;
+                    }
+
+                    var found = await subtitleManager
+                        .SearchSubtitles(request, CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (found.FirstOrDefault() is { } subtitle)
+                    {
+                        await subtitleManager
+                            .DownloadSubtitles(row, subtitle.Id, CancellationToken.None)
+                            .ConfigureAwait(false);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Subtitle download after the probe failed for {Id}", rowId);
+            }
+            finally
+            {
+                _downloadingSubtitles.TryRemove(rowId, out _);
+            }
+        });
+
+        // What Jellyfin's SubtitleDownloader skips: a text subtitle in the language, and with the
+        // library's options a default audio track or an embedded subtitle in it.
+        static bool WantsSubtitle(
+            IReadOnlyList<MediaStream> streams,
+            string language,
+            LibraryOptions options
+        )
+        {
+            bool Is(MediaStream s) =>
+                string.Equals(s.Language, language, StringComparison.OrdinalIgnoreCase);
+
+            if (streams.Any(s => s.Type == MediaStreamType.Subtitle && s.IsTextSubtitleStream && Is(s)))
+                return false;
+
+            var audio = streams.Where(s => s.Type == MediaStreamType.Audio).ToList();
+            var defaultAudio = audio.Where(s => s.IsDefault).ToList();
+            if (defaultAudio.Count == 0)
+                defaultAudio = audio.Take(1).ToList();
+            if (options.SkipSubtitlesIfAudioTrackMatches && defaultAudio.Any(Is))
+                return false;
+
+            return !(
+                options.SkipSubtitlesIfEmbeddedSubtitlesPresent
+                && streams.Any(s => s.Type == MediaStreamType.Subtitle && !s.IsExternal && Is(s))
+            );
         }
     }
 }
