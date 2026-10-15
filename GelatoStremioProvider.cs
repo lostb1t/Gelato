@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato;
@@ -790,31 +791,24 @@ public struct StremioSubtitle
     public string? Title { get; set; }
     public string? Moviehash { get; set; }
 
-    public string? TwoLetterISOLanguageName()
+    public string? TwoLetterISOLanguageName(ILocalizationManager localization)
     {
-        var lng = Lang ?? LangCode;
-        if (!string.IsNullOrWhiteSpace(lng))
+        // AIOStreams sends lang as the ISO 639-2/B code ("ger") and lang_code as the two-letter one ("de").
+        if (LangCode is { Length: 2 })
         {
-            // If the input is 3 characters, try to convert it to a 2-letter ISO code
-            if (lng.Length == 3)
-            {
-                try
-                {
-                    CultureInfo culture = CultureInfo.GetCultureInfoByIetfLanguageTag(
-                        lng.ToLower()
-                    );
-                    lng = culture.TwoLetterISOLanguageName;
-                }
-                catch (CultureNotFoundException)
-                {
-                    // If the 3-letter code is invalid, return null or handle as needed
-                    return null;
-                }
-            }
-            return lng.ToLower();
+            return LangCode.ToLowerInvariant();
         }
 
-        return null;
+        var lng = Lang ?? LangCode;
+        if (string.IsNullOrWhiteSpace(lng))
+        {
+            return null;
+        }
+
+        // CultureInfo only knows the T codes (deu), Jellyfin's list the B codes (ger) as well.
+        return lng.Length == 3
+            ? localization.FindLanguageInfo(lng)?.TwoLetterISOLanguageName?.ToLowerInvariant()
+            : lng.ToLowerInvariant();
     }
 }
 
