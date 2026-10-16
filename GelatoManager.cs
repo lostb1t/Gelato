@@ -2002,8 +2002,9 @@ public sealed class GelatoManager(
         if (primary.GetProviderId("Stremio") is not { Length: > 0 } stremioId)
             return false;
 
+        // Only the title itself: it has no rows (yet), as every episode of a series being inserted.
         var ids = idLookup.WithProviderId("Stremio", stremioId);
-        if (ids.Length == 0)
+        if (ids.All(id => id == primary.Id))
             return false;
 
         var owned = repo.GetItemList(

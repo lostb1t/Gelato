@@ -66,6 +66,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<IHostedService, PreProbeNextEpisodeService>();
         services.AddSingleton<IHostedService, LegacyRowAdoptionService>();
         services.AddSingleton<IHostedService, ParkedItemAdoption>();
+        services.AddSingleton<IHostedService, VersionLinkRepair>();
         services.AddSingleton<SubtitleProvider>();
         services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
         services.AddSingleton(sp => new Lazy<SubtitleProvider>(
