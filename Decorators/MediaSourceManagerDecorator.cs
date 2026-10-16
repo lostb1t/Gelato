@@ -1300,34 +1300,58 @@ public sealed class MediaSourceManagerDecorator(
         var files = item.GetGelatoSubtitleFiles()
             .Concat(titleSubtitles ?? [])
             .OrderBy(f => File.GetLastWriteTimeUtc(f.Path))
-            .ThenBy(f => f.Path, StringComparer.Ordinal);
-        foreach (var (file, langCode, codec) in files)
+            .ThenBy(f => f.Path, StringComparer.Ordinal)
+            .Where(f => !existingPaths.Contains(f.Path))
+            .ToList();
+        if (files.Count == 0)
+            return streams;
+
+        // A file keeps the index it was listed with, and a deleted file's index is not given to
+        // the next one: numbered by position, deleting a file moved every newer one down, and a
+        // player that had the list got another subtitle for the index it asked for.
+        var given = _subtitleIndexes.GetOrAdd(
+            item.Id,
+            _ => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        );
+        lock (given)
         {
-            if (existingPaths.Contains(file))
-                continue;
-
-            streams.Add(
-                new MediaStream
+            var next = given.Count > 0 ? Math.Max(nextIndex, given.Values.Max() + 1) : nextIndex;
+            foreach (var (file, langCode, codec) in files)
+            {
+                if (!given.TryGetValue(file, out var index) || index < nextIndex)
                 {
-                    Type = MediaStreamType.Subtitle,
-                    IsExternal = true,
-                    IsExternalUrl = false,
-                    SupportsExternalStream = true,
-                    Path = file,
-                    Language = langCode,
-                    Codec = codec,
-                    Index = nextIndex++,
-                    IsDefault = false,
-                    IsForced = false,
-                    IsHearingImpaired = false,
+                    index = next++;
+                    given[file] = index;
                 }
-            );
 
-            existingPaths.Add(file);
+                streams.Add(
+                    new MediaStream
+                    {
+                        Type = MediaStreamType.Subtitle,
+                        IsExternal = true,
+                        IsExternalUrl = false,
+                        SupportsExternalStream = true,
+                        Path = file,
+                        Language = langCode,
+                        Codec = codec,
+                        Index = index,
+                        IsDefault = false,
+                        IsForced = false,
+                        IsHearingImpaired = false,
+                    }
+                );
+            }
         }
 
         return streams;
     }
+
+    // The indexes GetMediaStreamsWithExternalSubs gave the subtitle files it lists from disk, by
+    // row, the files deleted since included.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        Guid,
+        Dictionary<string, int>
+    > _subtitleIndexes = new();
 
     // Sources being pre-probed, by the row they play: a playback of the same source waits for the
     // result instead of probing it a second time. The source's id is not the key: a movie's first
