@@ -632,7 +632,20 @@ public class SearchActionFilter(
             // id twice. Of a title held as a file and as a Gelato copy, the file answers a search
             // of everything and the copy a search of its library.
             var matches = FindMatches(libraryItems, baseItem);
-            var existing = matches.FirstOrDefault(m => manager.IsWithinScope(scope, m));
+
+            // The items are looked up by id, which Jellyfin does not limit to the libraries the
+            // user may open. A title held only where this user is not allowed answered with that
+            // item, and opening it answered 404: it is no result for them. Its meta is kept all the
+            // same, for a client that holds the result's id from before (see below).
+            var visible =
+                user is null ? matches : matches.Where(m => m.IsVisibleStandalone(user)).ToList();
+            if (visible.Count == 0 && matches.Count > 0)
+            {
+                manager.SaveStremioMeta(searchId, meta);
+                continue;
+            }
+
+            var existing = visible.FirstOrDefault(m => manager.IsWithinScope(scope, m));
 
             // A title another library holds is not a result of a search inside this one: the
             // item is not in the scope. For a Gelato item that cannot be otherwise: its id is the
