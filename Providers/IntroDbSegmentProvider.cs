@@ -15,6 +15,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaSegments;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model;
 using MediaBrowser.Model.Configuration;
@@ -26,8 +27,14 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Providers;
 
 /// <summary>
-/// IntroDB media segment provider.
+/// Gelato's media segment provider: the intro from IntroDB for episodes and, with RemuxDB on,
+/// segments from a stream row's named chapters (Intro, Recap, Credits, Preview).
 /// </summary>
+/// <remarks>
+/// One provider for both, so nothing new has to be enabled in a library. Its <see cref="Name"/>
+/// stays "Gelato IntroDB": Jellyfin keys the stored segments and a library's disabled and ordered
+/// providers by that name.
+/// </remarks>
 public class IntroDbSegmentProvider : IMediaSegmentProvider
 {
     private const long TicksPerSecond = TimeSpan.TicksPerSecond;
@@ -49,8 +56,36 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     /// </summary>
     private static readonly TimeSpan NoIntroTtl = TimeSpan.FromHours(6);
 
+    /// <summary>
+    /// Chapter titles that mark a segment, matched against the whole title, ignoring case.
+    /// </summary>
+    private static readonly (Regex Title, MediaSegmentType Type)[] ChapterTypes =
+    [
+        (
+            ChapterTitle(
+                @"intro|opening( credits| titles)?|op ?\d*|main titles?|title sequence|g[ée]n[ée]rique( de d[ée]but)?|vorspann|sigla( iniziale)?"
+            ),
+            MediaSegmentType.Intro
+        ),
+        (
+            ChapterTitle(@"recap|previously( on .*)?|r[ée]sum[ée]|r[üu]ckblick|riassunto"),
+            MediaSegmentType.Recap
+        ),
+        (
+            ChapterTitle(
+                @"(end |closing )?credits|outro|ending( credits)?|ed ?\d*|end titles|g[ée]n[ée]rique de fin|abspann|titoli di coda|cr[ée]ditos( finales)?"
+            ),
+            MediaSegmentType.Outro
+        ),
+        (
+            ChapterTitle(@"preview|next episode( preview)?|next time|vorschau|anteprima"),
+            MediaSegmentType.Preview
+        ),
+    ];
+
     private readonly ILibraryManager _libraryManager;
     private readonly IntroDbClient _introDbClient;
+    private readonly IChapterRepository _chapters;
     private readonly IMemoryCache _cache;
     private readonly ILogger<IntroDbSegmentProvider> _logger;
 
@@ -59,28 +94,35 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     /// </summary>
     /// <param name="libraryManager">Library manager.</param>
     /// <param name="introDbClient">IntroDB client.</param>
+    /// <param name="chapters">The rows' chapters, from RemuxDB or the probe of their file.</param>
     /// <param name="cache">Remembers the episodes IntroDB has no intro for.</param>
     /// <param name="logger">Logger.</param>
     public IntroDbSegmentProvider(
         ILibraryManager libraryManager,
         IntroDbClient introDbClient,
+        IChapterRepository chapters,
         IMemoryCache cache,
         ILogger<IntroDbSegmentProvider> logger
     )
     {
         ArgumentNullException.ThrowIfNull(libraryManager);
         ArgumentNullException.ThrowIfNull(introDbClient);
+        ArgumentNullException.ThrowIfNull(chapters);
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(logger);
 
         _libraryManager = libraryManager;
         _introDbClient = introDbClient;
+        _chapters = chapters;
         _cache = cache;
         _logger = logger;
     }
 
     /// <inheritdoc />
     public string Name => "Gelato IntroDB";
+
+    private static bool RemuxDbEnabled =>
+        GelatoPlugin.Instance?.Configuration.RemuxDbEnabled ?? false;
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MediaSegmentDto>> GetMediaSegments(
@@ -95,11 +137,25 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         );
 
         var item = _libraryManager.GetItemById(request.ItemId);
-        if (item is not Episode episode)
+        if (item is not Video video)
         {
             return Array.Empty<MediaSegmentDto>();
         }
 
+        var segments = video is Episode episode
+            ? await GetIntroDbSegmentsAsync(episode, request, cancellationToken)
+                .ConfigureAwait(false)
+            : Array.Empty<MediaSegmentDto>();
+
+        return UsesChapters(video) ? AddChapterSegments(video, segments) : segments;
+    }
+
+    private async Task<IReadOnlyList<MediaSegmentDto>> GetIntroDbSegmentsAsync(
+        Episode episode,
+        MediaSegmentGenerationRequest request,
+        CancellationToken cancellationToken
+    )
+    {
         if (!TryGetImdbId(episode, out var imdbId))
         {
             _logger.LogDebug(
@@ -204,7 +260,8 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     }
 
     /// <inheritdoc />
-    public ValueTask<bool> Supports(BaseItem item) => ValueTask.FromResult(item is Episode);
+    public ValueTask<bool> Supports(BaseItem item) =>
+        ValueTask.FromResult(item is Episode || (item is Video video && UsesChapters(video)));
 
     /// <inheritdoc />
     /// <remarks>
@@ -213,6 +270,83 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     /// </remarks>
     public Task CleanupExtractedData(Guid itemId, CancellationToken cancellationToken) =>
         Task.CompletedTask;
+
+    /// <summary>Gelato's stream rows, with RemuxDB on. A local file is left to other providers.</summary>
+    private static bool UsesChapters(Video video) => RemuxDbEnabled && video.HasStreamTag();
+
+    private static Regex ChapterTitle(string pattern) =>
+        new($"^(?:{pattern})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// Adds a segment for each named chapter of the row, from its start to the next chapter's (the
+    /// runtime for the last), for the types IntroDB gave none of: IntroDB's intro wins.
+    /// </summary>
+    private IReadOnlyList<MediaSegmentDto> AddChapterSegments(
+        Video row,
+        IReadOnlyList<MediaSegmentDto> segments
+    )
+    {
+        var chapters = _chapters.GetChapters(row.Id).OrderBy(c => c.StartPositionTicks).ToList();
+        if (chapters.Count < 2)
+        {
+            return segments;
+        }
+
+        var taken = segments.Select(s => s.Type).ToHashSet();
+        var result = new List<MediaSegmentDto>(segments);
+        var added = 0;
+        for (var i = 0; i < chapters.Count; i++)
+        {
+            var title = chapters[i].Name?.Trim();
+            if (string.IsNullOrEmpty(title))
+            {
+                continue;
+            }
+
+            var type = ChapterTypes.FirstOrDefault(t => t.Title.IsMatch(title));
+            if (type.Title is null || taken.Contains(type.Type))
+            {
+                continue;
+            }
+
+            var start = chapters[i].StartPositionTicks;
+            var end =
+                i + 1 < chapters.Count ? chapters[i + 1].StartPositionTicks : row.RunTimeTicks ?? 0;
+            if (end <= start)
+            {
+                continue;
+            }
+
+            // "Credits" followed by "End Credits": one segment.
+            if (
+                result.Count > segments.Count
+                && result[^1].Type == type.Type
+                && result[^1].EndTicks == start
+            )
+            {
+                result[^1].EndTicks = end;
+                continue;
+            }
+
+            result.Add(
+                new MediaSegmentDto
+                {
+                    ItemId = row.Id,
+                    StartTicks = start,
+                    EndTicks = end,
+                    Type = type.Type,
+                }
+            );
+            added++;
+        }
+
+        if (added > 0)
+        {
+            _logger.LogDebug("{Count} segments from the chapters of {ItemId}.", added, row.Id);
+        }
+
+        return result;
+    }
 
     private bool TryGetImdbId(Episode episode, out string imdbId)
     {
