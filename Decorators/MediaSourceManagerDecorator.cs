@@ -48,7 +48,8 @@ public sealed class MediaSourceManagerDecorator(
     IMediaSegmentManager mediaSegmentManager,
     Lazy<IProviderManager> providerManager,
     RemuxDbService remuxDb,
-    IHttpClientFactory httpClientFactory
+    IHttpClientFactory httpClientFactory,
+    SegmentLookups segmentLookups
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -786,6 +787,7 @@ public sealed class MediaSourceManagerDecorator(
             && HasVideo(selected)
         )
         {
+            await EnsureSegmentsAsync(owner, ct).ConfigureAwait(false);
             return sources;
         }
 
@@ -816,12 +818,9 @@ public sealed class MediaSourceManagerDecorator(
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
             var remuxDbStreams = fromRemuxDb ? remuxDb.GetStreams(owner.Id) : null;
 
-            var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(
-                owner,
-                libraryOptions,
-                false,
-                ct
-            );
+            var segmentTask = segmentLookups.IsDue(owner)
+                ? _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct)
+                : Task.CompletedTask;
             var metadataTask = ProbeStreamAsync((Video)owner, selected.Path, ct);
             //  var subtitleTask = DownloadSubtitles((Video)owner, ct);
 
@@ -845,6 +844,10 @@ public sealed class MediaSourceManagerDecorator(
                     ct
                 )
                 .ConfigureAwait(false);
+
+            // The probe saved the file's chapters, which the lookup before it could not see.
+            if (SegmentLookups.UsesChapters(owner))
+                await RunSegmentsAsync(owner, ct).ConfigureAwait(false);
 
             var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
             selected = Select(refreshed);
@@ -881,10 +884,12 @@ public sealed class MediaSourceManagerDecorator(
             if (selected is null)
                 return refreshed;
         }
-        else if (fromRemuxDb)
+        else
         {
+            // Also a row probed before: one IntroDB had nothing for is looked up again after a
+            // while, and one whose chapters were never read gets their segments.
             await EnsureSegmentsAsync(owner, ct).ConfigureAwait(false);
-            if (!preProbe)
+            if (fromRemuxDb && !preProbe)
                 ProbeLater(owner.Id);
         }
 
@@ -1674,33 +1679,50 @@ public sealed class MediaSourceManagerDecorator(
     private static readonly TimeSpan SegmentWait = TimeSpan.FromSeconds(1.5);
 
     /// <summary>
-    /// Fetches the row's segments (intro) before playback starts, so the client has them for its
-    /// skip button on the first play. Playback waits at most <see cref="SegmentWait"/>; a slower
-    /// provider finishes in the background.
+    /// Fetches the row's segments before playback starts, so the client has them for its skip
+    /// buttons on the first play, unless the provider has an answer for the row that still holds
+    /// (<see cref="SegmentLookups.IsDue"/>).
     /// </summary>
-    private async Task EnsureSegmentsAsync(BaseItem owner, CancellationToken ct)
-    {
-        if (_mediaSegmentManager.HasSegments(owner.Id))
-            return;
+    private Task EnsureSegmentsAsync(BaseItem owner, CancellationToken ct) =>
+        segmentLookups.IsDue(owner) ? RunSegmentsAsync(owner, ct) : Task.CompletedTask;
 
-        var run = Task.Run(async () =>
-        {
-            try
-            {
-                await _mediaSegmentManager
-                    .RunSegmentPluginProviders(
-                        owner,
-                        _libraryManager.GetLibraryOptions(owner),
-                        false,
-                        CancellationToken.None
-                    )
-                    .ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(ex, "Segment lookup failed for {Id}", owner.Id);
-            }
-        });
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        Guid,
+        Task
+    > _segmentRuns = new();
+
+    /// <summary>
+    /// Runs the segment providers for the row, once at a time. Playback waits at most
+    /// <see cref="SegmentWait"/>; a slower provider finishes in the background.
+    /// </summary>
+    private async Task RunSegmentsAsync(BaseItem owner, CancellationToken ct)
+    {
+        var run = _segmentRuns.GetOrAdd(
+            owner.Id,
+            id =>
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _mediaSegmentManager
+                            .RunSegmentPluginProviders(
+                                owner,
+                                _libraryManager.GetLibraryOptions(owner),
+                                false,
+                                CancellationToken.None
+                            )
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning(ex, "Segment lookup failed for {Id}", id);
+                    }
+                })
+        );
+        _ = run.ContinueWith(
+            done => _segmentRuns.TryRemove(new KeyValuePair<Guid, Task>(owner.Id, done)),
+            TaskScheduler.Default
+        );
 
         await Task.WhenAny(run, Task.Delay(SegmentWait, ct)).ConfigureAwait(false);
     }

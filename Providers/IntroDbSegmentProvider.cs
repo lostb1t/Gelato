@@ -27,13 +27,14 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Providers;
 
 /// <summary>
-/// Gelato's media segment provider: the intro from IntroDB for episodes and, with RemuxDB on,
-/// segments from a stream row's named chapters (Intro, Recap, Credits, Preview).
+/// Gelato's media segment provider: the intro, recap and outro from IntroDB for episodes and,
+/// with RemuxDB on, segments from a stream row's named chapters (Intro, Recap, Credits, Preview).
 /// </summary>
 /// <remarks>
 /// One provider for both, so nothing new has to be enabled in a library. Its <see cref="Name"/>
 /// stays "Gelato IntroDB": Jellyfin keys the stored segments and a library's disabled and ordered
-/// providers by that name.
+/// providers by that name. What it found for a row is kept (<see cref="SegmentLookups"/>), so
+/// IntroDB is asked once per row and again only after a miss or a failure.
 /// </remarks>
 public class IntroDbSegmentProvider : IMediaSegmentProvider
 {
@@ -51,8 +52,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     );
 
     /// <summary>
-    /// How long an episode IntroDB had no intro for is not asked again. The providers run for
-    /// every stream row that plays, and for a row without segments on every playback.
+    /// How long an episode IntroDB had nothing for is not asked again for another of its rows.
     /// </summary>
     private static readonly TimeSpan NoIntroTtl = TimeSpan.FromHours(6);
 
@@ -86,6 +86,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     private readonly ILibraryManager _libraryManager;
     private readonly IntroDbClient _introDbClient;
     private readonly IChapterRepository _chapters;
+    private readonly SegmentLookups _lookups;
     private readonly IMemoryCache _cache;
     private readonly ILogger<IntroDbSegmentProvider> _logger;
 
@@ -95,12 +96,14 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     /// <param name="libraryManager">Library manager.</param>
     /// <param name="introDbClient">IntroDB client.</param>
     /// <param name="chapters">The rows' chapters, from RemuxDB or the probe of their file.</param>
+    /// <param name="lookups">What was found for each row before.</param>
     /// <param name="cache">Remembers the episodes IntroDB has no intro for.</param>
     /// <param name="logger">Logger.</param>
     public IntroDbSegmentProvider(
         ILibraryManager libraryManager,
         IntroDbClient introDbClient,
         IChapterRepository chapters,
+        SegmentLookups lookups,
         IMemoryCache cache,
         ILogger<IntroDbSegmentProvider> logger
     )
@@ -108,21 +111,20 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         ArgumentNullException.ThrowIfNull(libraryManager);
         ArgumentNullException.ThrowIfNull(introDbClient);
         ArgumentNullException.ThrowIfNull(chapters);
+        ArgumentNullException.ThrowIfNull(lookups);
         ArgumentNullException.ThrowIfNull(cache);
         ArgumentNullException.ThrowIfNull(logger);
 
         _libraryManager = libraryManager;
         _introDbClient = introDbClient;
         _chapters = chapters;
+        _lookups = lookups;
         _cache = cache;
         _logger = logger;
     }
 
     /// <inheritdoc />
     public string Name => "Gelato IntroDB";
-
-    private static bool RemuxDbEnabled =>
-        GelatoPlugin.Instance?.Configuration.RemuxDbEnabled ?? false;
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MediaSegmentDto>> GetMediaSegments(
@@ -142,15 +144,62 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
             return Array.Empty<MediaSegmentDto>();
         }
 
-        var segments = video is Episode episode
-            ? await GetIntroDbSegmentsAsync(episode, request, cancellationToken)
-                .ConfigureAwait(false)
-            : Array.Empty<MediaSegmentDto>();
+        var before = _lookups.Get(video.Id);
+        var outcome = SegmentLookups.None;
+        IReadOnlyList<MediaSegmentDto> segments = Array.Empty<MediaSegmentDto>();
+        if (video is Episode episode)
+        {
+            if (before is not null)
+            {
+                // Asked lately: what IntroDB gave then is among the row's segments.
+                outcome = before.Outcome;
+                segments = request
+                    .ExistingSegments.Where(s => before.Types.Contains(s.Type))
+                    .ToList();
+                _logger.LogDebug(
+                    "IntroDB was asked for {ItemId} lately ({Outcome}), not asking again.",
+                    request.ItemId,
+                    outcome
+                );
+            }
+            else
+            {
+                (outcome, segments) = await GetIntroDbSegmentsAsync(
+                        episode,
+                        request,
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
 
-        return UsesChapters(video) ? AddChapterSegments(video, segments) : segments;
+                // Jellyfin replaces the row's segments with what this returns: what was found
+                // before stays until IntroDB answers.
+                if (outcome == SegmentLookups.Failed)
+                    segments = request.ExistingSegments.ToList();
+            }
+        }
+
+        var chapters = UsesChapters(video);
+        var result = chapters ? AddChapterSegments(video, segments) : segments;
+
+        if (before is null || (chapters && !before.Chapters))
+        {
+            _lookups.Set(
+                video.Id,
+                new SegmentLookups.Lookup(
+                    outcome,
+                    segments.Select(s => s.Type).Distinct().ToArray(),
+                    chapters || (before?.Chapters ?? false)
+                )
+            );
+        }
+
+        return result;
     }
 
-    private async Task<IReadOnlyList<MediaSegmentDto>> GetIntroDbSegmentsAsync(
+    private async Task<(
+        string Outcome,
+        IReadOnlyList<MediaSegmentDto> Segments
+    )> GetIntroDbSegmentsAsync(
         Episode episode,
         MediaSegmentGenerationRequest request,
         CancellationToken cancellationToken
@@ -162,7 +211,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
                 "Skipping IntroDB lookup for {ItemId}: IMDb id missing.",
                 request.ItemId
             );
-            return Array.Empty<MediaSegmentDto>();
+            return (SegmentLookups.Miss, Array.Empty<MediaSegmentDto>());
         }
 
         if (!TryGetSeasonEpisodeNumbers(episode, out var seasonNumber, out var episodeNumber))
@@ -171,92 +220,93 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
                 "Skipping IntroDB lookup for {ItemId}: invalid season/episode number.",
                 request.ItemId
             );
-            return Array.Empty<MediaSegmentDto>();
+            return (SegmentLookups.Miss, Array.Empty<MediaSegmentDto>());
         }
 
-        // Per episode: every stream row of it asks for the same intro.
+        // Per episode: every stream row of it asks for the same segments.
         var noIntroKey = $"gelato:introdb:none:{imdbId}:{seasonNumber}:{episodeNumber}";
         if (_cache.TryGetValue(noIntroKey, out _))
         {
             _logger.LogDebug(
-                "IntroDB had no intro for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}) lately, not asking again.",
+                "IntroDB had nothing for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}) lately, not asking again.",
                 request.ItemId,
                 imdbId,
                 seasonNumber,
                 episodeNumber
             );
-            return Array.Empty<MediaSegmentDto>();
+            return (SegmentLookups.Miss, Array.Empty<MediaSegmentDto>());
         }
 
-        IntroDbIntroResult? result;
+        IReadOnlyList<IntroDbSegment> found;
         try
         {
-            result = await _introDbClient
-                .GetIntroAsync(imdbId, seasonNumber, episodeNumber, cancellationToken)
+            found = await _introDbClient
+                .GetSegmentsAsync(imdbId, seasonNumber, episodeNumber, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception exception)
         {
+            // A timeout too: asked again in a few minutes.
             _logger.LogWarning(
-                exception,
-                "IntroDB lookup failed for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
+                "IntroDB lookup failed for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}): {Error}",
                 request.ItemId,
                 imdbId,
                 seasonNumber,
-                episodeNumber
+                episodeNumber,
+                exception.Message
             );
-            return Array.Empty<MediaSegmentDto>();
+            return (SegmentLookups.Failed, Array.Empty<MediaSegmentDto>());
         }
 
-        if (result is null)
+        var segments = new List<MediaSegmentDto>();
+        foreach (var segment in found)
+        {
+            var startTicks = (long)(segment.StartSeconds * TicksPerSecond);
+            var endTicks = (long)(segment.EndSeconds * TicksPerSecond);
+            if (episode.RunTimeTicks is > 0 && endTicks > episode.RunTimeTicks.Value)
+            {
+                _logger.LogWarning(
+                    "IntroDB returned {Kind} beyond duration for {ItemId}.",
+                    segment.Kind,
+                    request.ItemId
+                );
+                continue;
+            }
+
+            segments.Add(
+                new MediaSegmentDto
+                {
+                    ItemId = request.ItemId,
+                    StartTicks = startTicks,
+                    EndTicks = endTicks,
+                    Type = segment.Kind switch
+                    {
+                        IntroDbSegmentKind.Recap => MediaSegmentType.Recap,
+                        IntroDbSegmentKind.Outro => MediaSegmentType.Outro,
+                        _ => MediaSegmentType.Intro,
+                    },
+                }
+            );
+        }
+
+        if (segments.Count == 0)
         {
             _cache.Set(noIntroKey, true, NoIntroTtl);
-            // Also reached when IntroDB answered with an error, which the client logged already.
-            _logger.LogInformation(
-                "No intro from IntroDB for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
+            _logger.LogDebug(
+                "No segments from IntroDB for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
                 request.ItemId,
                 imdbId,
                 seasonNumber,
                 episodeNumber
             );
-            return Array.Empty<MediaSegmentDto>();
+            return (SegmentLookups.Miss, segments);
         }
 
-        var startTicks = (long)(result.StartSeconds * TicksPerSecond);
-        var endTicks = (long)(result.EndSeconds * TicksPerSecond);
-        if (endTicks <= startTicks)
-        {
-            _logger.LogWarning("IntroDB returned invalid segment for {ItemId}.", request.ItemId);
-            return Array.Empty<MediaSegmentDto>();
-        }
-
-        if (
-            episode.RunTimeTicks.HasValue
-            && episode.RunTimeTicks.Value > 0
-            && endTicks > episode.RunTimeTicks.Value
-        )
-        {
-            _logger.LogWarning(
-                "IntroDB returned segment beyond duration for {ItemId}.",
-                request.ItemId
-            );
-            return Array.Empty<MediaSegmentDto>();
-        }
-
-        return new List<MediaSegmentDto>
-        {
-            new()
-            {
-                ItemId = request.ItemId,
-                StartTicks = startTicks,
-                EndTicks = endTicks,
-                Type = MediaSegmentType.Intro,
-            },
-        };
+        return (SegmentLookups.Hit, segments);
     }
 
     /// <inheritdoc />
@@ -264,22 +314,22 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         ValueTask.FromResult(item is Episode || (item is Video video && UsesChapters(video)));
 
     /// <inheritdoc />
-    /// <remarks>
-    /// Segments are fetched from the IntroDB API on demand and nothing is cached locally,
-    /// so there is nothing to prune.
-    /// </remarks>
-    public Task CleanupExtractedData(Guid itemId, CancellationToken cancellationToken) =>
-        Task.CompletedTask;
+    /// <remarks>Forgets what was found for the row, so a row inserted again is looked up.</remarks>
+    public Task CleanupExtractedData(Guid itemId, CancellationToken cancellationToken)
+    {
+        _lookups.Forget(itemId);
+        return Task.CompletedTask;
+    }
 
     /// <summary>Gelato's stream rows, with RemuxDB on. A local file is left to other providers.</summary>
-    private static bool UsesChapters(Video video) => RemuxDbEnabled && video.HasStreamTag();
+    private static bool UsesChapters(Video video) => SegmentLookups.UsesChapters(video);
 
     private static Regex ChapterTitle(string pattern) =>
         new($"^(?:{pattern})$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     /// <summary>
     /// Adds a segment for each named chapter of the row, from its start to the next chapter's (the
-    /// runtime for the last), for the types IntroDB gave none of: IntroDB's intro wins.
+    /// runtime for the last), for the types IntroDB gave none of: IntroDB's segments win.
     /// </summary>
     private IReadOnlyList<MediaSegmentDto> AddChapterSegments(
         Video row,

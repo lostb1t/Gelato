@@ -60,6 +60,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<CatalogImportService>();
         services.AddSingleton<LibraryFolderService>();
         services.AddSingleton<PalcoCacheService>();
+        services.AddSingleton<SegmentLookups>();
         services.AddSingleton<IHostedService, GelatoJavaScriptRegistrationService>();
         services.AddSingleton<IHostedService, UpgradeRepairService>();
         services.AddSingleton<IHostedService, StreamUserDataSync>();
