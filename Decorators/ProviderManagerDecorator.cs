@@ -218,7 +218,48 @@ public sealed class ProviderManagerDecorator(
         inner.RefreshFullItem(item, options, cancellationToken);
 
     public Task<ItemUpdateType> RefreshSingleItem(BaseItem item, MetadataRefreshOptions options, CancellationToken cancellationToken) =>
-        inner.RefreshSingleItem(item, options, cancellationToken);
+        inner.RefreshSingleItem(SavedSince(item), options, cancellationToken);
+
+    /// <summary>
+    /// The item as it is saved now, when it was saved after <paramref name="item"/> was read;
+    /// else <paramref name="item"/> itself.
+    /// </summary>
+    /// <remarks>
+    /// A series refresh reads all its seasons and episodes first, then refreshes and saves them
+    /// one by one as it read them. An episode the user edits in between, as in the first seconds
+    /// after a series is added from search while its refresh runs, would get the copy from before
+    /// the edit saved over it, lock included. Refreshing the saved row keeps the edit. Only
+    /// Gelato's items: theirs is the refresh that calls the addon for every episode and takes
+    /// long enough to be caught.
+    /// </remarks>
+    private BaseItem SavedSince(BaseItem item)
+    {
+        if (!item.IsGelato())
+            return item;
+
+        try
+        {
+            if (
+                BaseItem.LibraryManager?.RetrieveItem(item.Id) is { } saved
+                && saved.GetType() == item.GetType()
+                && saved.DateLastSaved > item.DateLastSaved
+            )
+            {
+                log.LogDebug(
+                    "{Name} ({Id}) was saved after its refresh read it, refreshing the saved one",
+                    item.Name,
+                    item.Id
+                );
+                return saved;
+            }
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Could not read {Id} again before its refresh", item.Id);
+        }
+
+        return item;
+    }
 
     public void AddParts(
         IEnumerable<IImageProvider> imageProviders,
