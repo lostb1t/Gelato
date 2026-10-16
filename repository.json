@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.25.0] - 2026-10-16\n\n### 🚀 Features\n\n- Settings page in tabs, with a setup assistant for a new install (#294)\n- Play the next stream when the first one does not start (#206)\n\n### 🐛 Bug Fixes\n\n- Stop listing a stream's subtitle once its file is deleted (#295)\n- Leave a title in a library the user cannot open out of their search (#296)\n- Keep a library's movies when its folder is reported leaving twice (#297)\n- Keep a subtitle's index when an older subtitle file is deleted (#298)\n- Keep an inserted title's streams linked after its first refresh (#299)\n",
+        "checksum": "45f4755156b1409ce3abfa9bfc0c3bf9",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.25.0/gelato_0.26.25.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-16T21:38:46Z",
+        "version": "0.26.25.0"
+      },
+      {
         "changelog": "## [0.26.24.0] - 2026-10-15\n\n### 🚀 Features\n\n- Add a gelato copy of a title held as a file from a search inside a gelato library (#289)\n\n### 🐛 Bug Fixes\n\n- Answer a progress report for an item that no longer exists (#280)\n- Give two catalogs of one name a collection each (#281)\n- Give a local series' added episodes ids of their own (#282)\n- Probe and fill in a stream row that lost its tracks (#283)\n- Look a movie up by its imdb id when tmdb has no movie under the addon's id (#284)\n- Count a request being torn down as no request in task reads (#285)\n- Hand jellyfin a path-safe id for an addon subtitle (#286)\n- Save playback reports for a deleted stream row on its movie (#287)\n- Download a stream row's missing subtitle once when two downloads meet (#288)\n- Release a movie without a digital date once tmdb lists a watch provider (#290)\n- Offer subtitles the addon sends with a three-letter b code (#291)\n- Download from the next stream when a title's first link is dead (#292)\n- Download a probed stream's subtitles after the probe, not inside the playback (#293)\n",
         "checksum": "4ad66bcabe4e443b366c14720017e9ca",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.24.0/gelato_0.26.24.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-12T06:53:06Z",
         "version": "0.26.13.8"
-      },
-      {
-        "changelog": "## [0.26.13.7] - 2026-04-12\n\n### ⚡ Performance\n\n- Run release dat sync in parallel\n",
-        "checksum": "8d36baa41d561e81cb7b82e8ecf33e50",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.7/gelato_0.26.13.7.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-12T06:41:16Z",
-        "version": "0.26.13.7"
       }
     ]
   }
