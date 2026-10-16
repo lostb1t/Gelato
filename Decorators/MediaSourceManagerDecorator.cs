@@ -1145,6 +1145,16 @@ public sealed class MediaSourceManagerDecorator(
 
         var nextIndex = streams.Count > 0 ? streams.Max(s => s.Index) + 1 : 0;
 
+        // A probe records the subtitle files next to the row as streams, and a probed row is not
+        // probed again: a file deleted since stayed listed and its delivery answered 404. Left out
+        // after nextIndex is taken, so the files listed below keep their indexes.
+        streams.RemoveAll(s =>
+            s.IsExternal
+            && s.IsExternalUrl != true
+            && !string.IsNullOrEmpty(s.Path)
+            && !File.Exists(s.Path)
+        );
+
         // Oldest first, the row's and the title's together: a subtitle saved after a PlaybackInfo
         // (the download after a probe) takes the next index, and the indexes a player already has
         // keep their file. In the folder's order, or the row's files before the title's, a new file
