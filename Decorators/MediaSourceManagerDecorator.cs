@@ -47,7 +47,8 @@ public sealed class MediaSourceManagerDecorator(
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
     Lazy<IProviderManager> providerManager,
-    RemuxDbService remuxDb
+    RemuxDbService remuxDb,
+    IHttpClientFactory httpClientFactory
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -725,6 +726,14 @@ public sealed class MediaSourceManagerDecorator(
         if (selected is null)
             return sources;
 
+        var canMoveOn = false;
+        if (!preProbe)
+        {
+            selected = _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false)
+                ? FailOver(item, sources, selected, out canMoveOn)
+                : FailedOver(sources, selected);
+        }
+
         var owner = ResolveOwnerFor(selected, item);
         if (!owner.IsGelatoPlaybackItem())
         {
@@ -748,7 +757,7 @@ public sealed class MediaSourceManagerDecorator(
         if (owner.IsPrimaryVersion() && owner.Id != item.Id)
         {
             sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
-            selected = SelectByIdOrFirst(sources, mediaSourceId);
+            selected = Select(sources);
             if (selected is null)
                 return sources;
         }
@@ -789,7 +798,7 @@ public sealed class MediaSourceManagerDecorator(
                 enablePathSubstitution,
                 user
             );
-            selected = SelectByIdOrFirst(sources, mediaSourceId) ?? selected;
+            selected = Select(sources) ?? selected;
         }
 
         // RemuxDB's media info plays as it is and is probed afterwards, unless it lacks what the
@@ -838,11 +847,36 @@ public sealed class MediaSourceManagerDecorator(
                 .ConfigureAwait(false);
 
             var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
-            selected = SelectByIdOrFirst(refreshed, mediaSourceId);
+            selected = Select(refreshed);
 
             // Still unprobed after its probe: a dead link, left alone for a while.
             if (preProbe && (selected is null || NeedsProbe(selected)))
                 MarkPreProbeFailed(probeKey);
+
+            // No video at all: a dead stream, which a playback that may moves on from. One that
+            // is only short (a clip) plays.
+            if ((preProbe || canMoveOn) && (selected is null || !HasVideo(selected)))
+            {
+                MarkDead(probeKey);
+                if (canMoveOn)
+                {
+                    // No URL in the log: stream links carry the debrid key.
+                    _log.LogWarning(
+                        "A stream of {Item} did not start: its probe found no video",
+                        item.Name
+                    );
+                    return await GetPlaybackMediaSourcesCore(
+                            item,
+                            user,
+                            allowMediaProbe,
+                            enablePathSubstitution,
+                            requestedSourceId,
+                            false,
+                            ct
+                        )
+                        .ConfigureAwait(false);
+                }
+            }
 
             if (selected is null)
                 return refreshed;
@@ -873,11 +907,12 @@ public sealed class MediaSourceManagerDecorator(
 
         return [selected];
 
-        static bool HasVideo(MediaSourceInfo s) =>
-            s.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) ?? false;
-
-        static bool NeedsProbe(MediaSourceInfo s) =>
-            !HasVideo(s) || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
+        // The source asked for, or the stream a playback of it moved on to.
+        MediaSourceInfo? Select(IReadOnlyList<MediaSourceInfo> list)
+        {
+            var s = SelectByIdOrFirst(list, mediaSourceId);
+            return s is null || preProbe ? s : FailedOver(list, s);
+        }
 
         // Gelato's sources name their item in the ETag (the first stream carries the movie's id).
         // Jellyfin's own, like a file merged in as a version, use the item's id.
@@ -885,6 +920,109 @@ public sealed class MediaSourceManagerDecorator(
             (Guid.TryParse(s.ETag, out var etag) ? libraryManager.GetItemById(etag) : null)
             ?? (Guid.TryParse(s.Id, out var id) ? libraryManager.GetItemById(id) : null)
             ?? fallback;
+    }
+
+    private static bool HasVideo(MediaSourceInfo s) =>
+        s.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) ?? false;
+
+    private static bool NeedsProbe(MediaSourceInfo s) =>
+        !HasVideo(s) || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
+
+    /// <summary>How long one stream gets to answer, and then to deliver its first bytes.</summary>
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>How long a playback that moved on from a dead stream keeps to its replacement.</summary>
+    private static readonly TimeSpan FailoverTtl = TimeSpan.FromHours(12);
+
+    // The stream a playback moved on to, by the dead stream's row. The source keeps the id the
+    // client asked for: Jellyfin picks the source out of the answer by that id, in PlaybackInfo
+    // and in every streaming request after it.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (string Row, DateTime At)
+    > _failover = new();
+
+    /// <summary>
+    /// At the start of a playback: the stream the title plays by default, or the next of its
+    /// streams (<see cref="StreamLinks.MaxStreams"/> in all) when it is known not to start: its
+    /// pre-probe or its playback's probe found it dead lately (<see cref="MarkDead"/>). Nothing is fetched for that, so a stream
+    /// that works starts as fast as before. A version picked by hand (one that is not the first)
+    /// and a stream row's own page play as they are. <paramref name="canMoveOn"/> says whether
+    /// the playback moves on again when the probe of the stream returned finds no video; when
+    /// every stream is known dead, the first plays as it did before.
+    /// </summary>
+    private MediaSourceInfo FailOver(
+        BaseItem item,
+        IReadOnlyList<MediaSourceInfo> sources,
+        MediaSourceInfo selected,
+        out bool canMoveOn
+    )
+    {
+        canMoveOn = false;
+        var key = PreProbeKey(selected);
+        _failover.TryRemove(key, out _);
+        if (
+            !GelatoPlugin.Instance!.Configuration.PlaybackFailover
+            || item.IsStream()
+            || !ReferenceEquals(selected, sources[0])
+            || StreamLinks.AsHttpUri(selected.Path) is null
+        )
+        {
+            return selected;
+        }
+
+        var candidates = sources
+            .Where(s => StreamLinks.AsHttpUri(s.Path) is not null)
+            .Take(StreamLinks.MaxStreams)
+            .ToList();
+        var index = candidates.FindIndex(s => !DeadRecently(PreProbeKey(s)));
+        if (index < 0)
+        {
+            _log.LogWarning(
+                "None of the first {Count} streams of {Item} started lately; playing the first",
+                candidates.Count,
+                item.Name
+            );
+            return selected;
+        }
+
+        canMoveOn = true;
+        if (index == 0)
+            return selected;
+
+        var candidate = candidates[index];
+        _failover[key] = (PreProbeKey(candidate), DateTime.UtcNow);
+        candidate.Id = selected.Id;
+        _log.LogInformation(
+            "Playing stream {Index} of {Item}: the streams before it did not start",
+            index + 1,
+            item.Name
+        );
+        return candidate;
+    }
+
+    /// <summary>
+    /// The stream a playback of <paramref name="selected"/> moved on to, under the id that was
+    /// asked for; <paramref name="selected"/> itself when it did not.
+    /// </summary>
+    private MediaSourceInfo FailedOver(IReadOnlyList<MediaSourceInfo> list, MediaSourceInfo selected)
+    {
+        var key = PreProbeKey(selected);
+        if (!_failover.TryGetValue(key, out var entry))
+            return selected;
+
+        var now = DateTime.UtcNow;
+        if (now - entry.At >= FailoverTtl)
+        {
+            _failover.TryRemove(key, out _);
+            return selected;
+        }
+
+        if (list.FirstOrDefault(s => PreProbeKey(s) == entry.Row) is not { } replacement)
+            return selected;
+
+        replacement.Id = selected.Id;
+        return replacement;
     }
 
     /// <summary>
@@ -1271,6 +1409,26 @@ public sealed class MediaSourceManagerDecorator(
         _preparedForPlayback.TryGetValue(key, out var preparedAt)
         && DateTime.UtcNow - preparedAt < PreparedForPlaybackWindow;
 
+    // Sources found dead lately: no answer, an error, a body cut short or no video at all. A
+    // playback of the title's default source moves on from them (FailOver).
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _dead =
+        new();
+
+    private void MarkDead(string key)
+    {
+        MarkPreProbeFailed(key);
+        foreach (var (staleKey, deadAt) in _dead)
+        {
+            if (DateTime.UtcNow - deadAt >= PreProbeRetry)
+                _dead.TryRemove(staleKey, out _);
+        }
+
+        _dead[key] = DateTime.UtcNow;
+    }
+
+    private bool DeadRecently(string key) =>
+        _dead.TryGetValue(key, out var deadAt) && DateTime.UtcNow - deadAt < PreProbeRetry;
+
     private void MarkPreProbeFailed(string key)
     {
         // Sources nobody opens again are dropped once the map grows.
@@ -1380,6 +1538,32 @@ public sealed class MediaSourceManagerDecorator(
             // item inserted again since has the same id, so the library's instance is the one.
             if (_libraryManager.GetItemById(item.Id) is not { } current)
                 return;
+
+            // A source with its media info is not probed, so its link is checked here: a dead one
+            // is passed over by the playback that follows (FailOver). Unprobed ones are checked by
+            // their probe.
+            if (
+                GelatoPlugin.Instance!.Configuration.PlaybackFailover
+                && !NeedsProbe(source)
+                && StreamLinks.AsHttpUri(source.Path) is { } uri
+            )
+            {
+                var reason = await StreamLinks
+                    .CheckAsync(httpClientFactory.CreateClient(), uri, StartTimeout, timeout.Token)
+                    .ConfigureAwait(false);
+                if (reason is not null)
+                {
+                    MarkDead(key);
+                    // No URL in the log: stream links carry the debrid key.
+                    _log.LogWarning(
+                        "Pre-probe of {Id} source {Source}: the stream did not start ({Reason})",
+                        item.Id,
+                        source.Id,
+                        reason
+                    );
+                    return;
+                }
+            }
 
             await GetPlaybackMediaSourcesCore(
                     current,

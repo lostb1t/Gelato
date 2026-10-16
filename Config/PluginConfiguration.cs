@@ -49,6 +49,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool PreProbe { get; set; } = true;
 
     /// <summary>
+    /// When the stream a title plays by default does not start (a dead or truncated debrid
+    /// link), play the next of its streams instead. A version picked by hand is played as it is.
+    /// </summary>
+    public bool PlaybackFailover { get; set; }
+
+    /// <summary>
     /// Submit a stream's probe to RemuxDB when it played a file RemuxDB did not know. Anonymous,
     /// and only for streams whose torrent is known.
     /// </summary>
@@ -204,6 +210,7 @@ public class UserConfig
             MaxCollectionItems = baseConfig.MaxCollectionItems,
             RemuxDbEnabled = baseConfig.RemuxDbEnabled,
             PreProbe = baseConfig.PreProbe,
+            PlaybackFailover = baseConfig.PlaybackFailover,
             RemuxDbContribute = baseConfig.RemuxDbContribute,
             RemuxDbUrl = baseConfig.RemuxDbUrl,
             RemuxDbClientId = baseConfig.RemuxDbClientId,

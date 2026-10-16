@@ -68,6 +68,7 @@ export default function (view) {
   const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
   const chkLazyImages = page.querySelector('#chkLazyImages');
   const chkPreProbe = page.querySelector('#chkPreProbe');
+  const chkPlaybackFailover = page.querySelector('#chkPlaybackFailover');
   const chkRemuxDbEnabled = page.querySelector('#chkRemuxDbEnabled');
   const chkRemuxDbContribute = page.querySelector('#chkRemuxDbContribute');
 
@@ -953,6 +954,7 @@ export default function (view) {
       if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
       if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? false;
       if (chkPreProbe) chkPreProbe.checked = cfg.PreProbe ?? true;
+      if (chkPlaybackFailover) chkPlaybackFailover.checked = cfg.PlaybackFailover ?? false;
       if (chkRemuxDbEnabled) chkRemuxDbEnabled.checked = cfg.RemuxDbEnabled ?? true;
       if (chkRemuxDbContribute) chkRemuxDbContribute.checked = cfg.RemuxDbContribute ?? true;
 
@@ -995,6 +997,7 @@ export default function (view) {
       cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
       cfg.LazyImages = chkLazyImages.checked;
       cfg.PreProbe = chkPreProbe.checked;
+      cfg.PlaybackFailover = chkPlaybackFailover.checked;
       cfg.RemuxDbEnabled = chkRemuxDbEnabled.checked;
       cfg.RemuxDbContribute = chkRemuxDbContribute.checked;
 

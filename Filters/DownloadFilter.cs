@@ -1,6 +1,7 @@
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using Gelato.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -17,11 +18,9 @@ public sealed class DownloadFilter(
     ILogger<DownloadFilter> log
 ) : IAsyncActionFilter
 {
-    // How long one stream gets to answer with its headers, and how many of the item's streams are
-    // tried. A dead debrid link used to hold the download for HttpClient's 100 s and end in a 500;
-    // the body itself streams without a limit.
+    // How long one stream gets to answer with its headers. A dead debrid link used to hold the
+    // download for HttpClient's 100 s and end in a 500; the body itself streams without a limit.
     private static readonly TimeSpan HeadersTimeout = TimeSpan.FromSeconds(10);
-    private const int MaxStreams = 3;
 
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
@@ -62,9 +61,9 @@ public sealed class DownloadFilter(
             // Streams are only synced for a user. A title nobody has opened yet has none without
             // one, and its own gelato:// path is nothing to fetch: Jellyfin answers that.
             var streamUris = paths
-                .Select(p => Uri.TryCreate(p, UriKind.Absolute, out var u) ? u : null)
-                .Where(u => u != null && IsHttp(u!))
-                .Take(MaxStreams)
+                .Select(StreamLinks.AsHttpUri)
+                .Where(u => u != null)
+                .Take(StreamLinks.MaxStreams)
                 .ToList();
 
             if (streamUris.Count > 0)
@@ -75,7 +74,7 @@ public sealed class DownloadFilter(
                 for (var i = 0; i < streamUris.Count; i++)
                 {
                     var streamUri = streamUris[i]!;
-                    var resp = await TryGetAsync(client, streamUri, aborted);
+                    var resp = await StreamLinks.TryGetAsync(client, streamUri, HeadersTimeout, aborted);
                     if (resp is null || !resp.IsSuccessStatusCode)
                     {
                         // No URL in the log: stream links carry the debrid key.
@@ -131,31 +130,4 @@ public sealed class DownloadFilter(
 
         await next();
     }
-
-    // Null when the stream gives no headers in time or cannot be reached; the request's own
-    // abort still throws.
-    private static async Task<HttpResponseMessage?> TryGetAsync(
-        HttpClient client,
-        Uri uri,
-        CancellationToken aborted
-    )
-    {
-        // Disposing the source when the headers are in stops its timer, so the body is not cut.
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(aborted);
-        cts.CancelAfter(HeadersTimeout);
-        try
-        {
-            return await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-        }
-        catch (Exception ex)
-            when (!aborted.IsCancellationRequested
-                && ex is HttpRequestException or OperationCanceledException
-            )
-        {
-            return null;
-        }
-    }
-
-    private static bool IsHttp(Uri uri) =>
-        uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
 }
