@@ -756,6 +756,10 @@ public sealed class GelatoManager(
         if (folders.Count == 0)
             return kept;
 
+        // One pass at a time, this one or an adoption: Jellyfin can report a folder leaving
+        // twice, and a pass that runs while the adoption moves the items back parks some of
+        // them again after it, or works on items the other one is changing.
+        _folderPasses.Wait();
         try
         {
             var folderIds = folders.Select(f => f.Id).ToArray();
@@ -957,6 +961,10 @@ public sealed class GelatoManager(
             // Never in the way of the removal: what was not saved elsewhere goes as before.
             _log.LogError(ex, "Could not keep Gelato's items out of a library folder's removal");
         }
+        finally
+        {
+            _folderPasses.Release();
+        }
 
         return kept;
     }
@@ -995,7 +1003,8 @@ public sealed class GelatoManager(
         }
     }
 
-    private readonly SemaphoreSlim _adopting = new(1, 1);
+    /// <summary>Taken by <see cref="MoveOutOf"/> and <see cref="AdoptParkedAsync"/>.</summary>
+    private readonly SemaphoreSlim _folderPasses = new(1, 1);
     private readonly Lock _adoptSoonLock = new();
     private CancellationTokenSource? _adoptSoon;
 
@@ -1035,8 +1044,9 @@ public sealed class GelatoManager(
     /// <returns>How many items got a folder.</returns>
     public async Task<int> AdoptParkedAsync(CancellationToken ct)
     {
-        // One at a time: a library scan, a new folder and a saved configuration can all ask.
-        await _adopting.WaitAsync(ct).ConfigureAwait(false);
+        // One at a time, and not while a folder leaves: a library scan, a new folder and a saved
+        // configuration can all ask.
+        await _folderPasses.WaitAsync(ct).ConfigureAwait(false);
 
         var adopted = 0;
         try
@@ -1094,7 +1104,7 @@ public sealed class GelatoManager(
         }
         finally
         {
-            _adopting.Release();
+            _folderPasses.Release();
         }
 
         return adopted;
