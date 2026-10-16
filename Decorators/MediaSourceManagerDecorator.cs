@@ -240,7 +240,8 @@ public sealed class MediaSourceManagerDecorator(
         }
         var streamRows = linkedVersions
             .Where(v => v.HasStreamTag())
-            .OrderBy(v => v.GelatoData<int?>("index") ?? int.MaxValue)
+            .OrderBy(v => IsShortClip(v, primary))
+            .ThenBy(v => v.GelatoData<int?>("index") ?? int.MaxValue)
             .ToList();
         var streamRowIds = GetStreamRowIds(streamRows);
 
@@ -528,13 +529,30 @@ public sealed class MediaSourceManagerDecorator(
             return;
 
         var at = versions.FindIndex(v => v.Row.GelatoData<string>("bingeGroup") == follows.Group);
-        if (at < 1)
+        if (at < 1 || IsShortClip(versions[at].Row, primary))
             return;
 
         var version = versions[at];
         versions.RemoveAt(at);
         versions.Insert(0, version);
     }
+
+    private static readonly TimeSpan ShortClip = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ShortClipTitle = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Whether a row's probe found a clip of under a minute for a title of over 15 minutes: the
+    /// video a debrid service serves for a file it does not have (8 or 30 s; 17 of 117 probed
+    /// movie rows on a production library). Such a row is listed after the others, so it is
+    /// neither the default nor what playback moves on to before them. Its name stays as the addon
+    /// sent it, and it is not hidden: the title may have nothing else.
+    /// </summary>
+    private static bool IsShortClip(BaseItem row, BaseItem? primary) =>
+        primary?.RunTimeTicks > ShortClipTitle.Ticks
+        && row.RunTimeTicks is long ticks
+        && ticks > 0
+        && ticks < ShortClip.Ticks
+        && row.GelatoData<string>("mediaInfo") == RemuxDbService.SourceProbe;
 
     public void AddParts(IEnumerable<IMediaSourceProvider> providers)
     {
