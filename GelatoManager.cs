@@ -3400,6 +3400,7 @@ public sealed class GelatoManager(
         );
         var extended = 0;
         var failed = 0;
+        var scanned = 0;
 
         var total = progressTotal + localSeries.Count;
         var i = progressOffset;
@@ -3409,6 +3410,15 @@ public sealed class GelatoManager(
             ct.ThrowIfCancellationRequested();
             try
             {
+                // Left to the next run, as the series page does. The scan saves its own copy of
+                // the series after its metadata refresh, which writes over the mark set here: the
+                // series kept its tree but was synced again on every run and page open.
+                if (IsBeingScanned(series))
+                {
+                    scanned++;
+                    continue;
+                }
+
                 var meta = await stremio.GetMetaAsync(series).ConfigureAwait(false);
                 if (meta is not null)
                 {
@@ -3454,10 +3464,11 @@ public sealed class GelatoManager(
 
         if (localSeries.Count > 0)
             _log.LogInformation(
-                "SyncSeriesTrees: local series extended: {Extended}, no meta: {NoMeta}, failed: {Failed}.",
+                "SyncSeriesTrees: local series extended: {Extended}, no meta: {NoMeta}, failed: {Failed}, being scanned: {Scanned}.",
                 extended,
-                localSeries.Count - extended - failed,
-                failed
+                localSeries.Count - extended - failed - scanned,
+                failed,
+                scanned
             );
     }
 
