@@ -537,6 +537,40 @@ public class GelatoStremioProvider(
     }
 
     /// <summary>
+    /// The IMDb id TMDB lists for a movie or series, or null when it lists none or cannot be
+    /// asked. For a meta provider that serves <c>tt</c> ids only (Cinemeta) and a caller that has
+    /// a TMDB id alone.
+    /// </summary>
+    public async Task<string?> GetImdbIdFromTmdbAsync(
+        string tmdbId,
+        StremioMediaType mediaType,
+        CancellationToken cancellationToken
+    )
+    {
+        var kind = mediaType is StremioMediaType.Series ? "tv" : "movie";
+        var url =
+            $"https://api.themoviedb.org/3/{kind}/{Uri.EscapeDataString(tmdbId)}/external_ids?api_key={GetTmdbApiKey()}";
+        try
+        {
+            using var client = http.CreateClient(nameof(GelatoStremioProvider));
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var response = await client
+                .GetStringAsync(url, cancellationToken)
+                .ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(response);
+            return doc.RootElement.TryGetProperty("imdb_id", out var id)
+                && id.GetString() is { Length: > 0 } imdbId
+                ? imdbId
+                : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            log.LogDebug(ex, "GetImdbIdFromTmdb: no answer for {Kind} {TmdbId}", kind, tmdbId);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Sets the release dates of the movie TMDB knows under <paramref name="imdbId"/>, and
     /// memoises its TMDB id. A movie TMDB does not know (404) is memoised as null, so a library
     /// full of movies without a digital release date does not ask for the same id over and over.
