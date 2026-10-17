@@ -823,10 +823,15 @@ public sealed class MediaSourceManagerDecorator(
 
         // RemuxDB's media info plays as it is and is probed afterwards, unless it lacks what the
         // playback decides on.
+        // A title without streams plays its placeholder, whose gelato:// path Jellyfin's probe
+        // refuses: probing it only cost the click, twice.
         var fromRemuxDb = owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb;
         var needsProbe =
-            NeedsProbe(selected)
-            || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams));
+            !IsPlaceholder(selected)
+            && (
+                NeedsProbe(selected, owner)
+                || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams))
+            );
 
         // A pre-probe that starts while this playback probes sees it and stays out.
         var probeKey = PreProbeKey(selected);
@@ -871,7 +876,7 @@ public sealed class MediaSourceManagerDecorator(
             selected = Select(refreshed);
 
             // Still unprobed after its probe: a dead link, left alone for a while.
-            if (preProbe && (selected is null || NeedsProbe(selected)))
+            if (preProbe && (selected is null || NeedsProbe(selected, owner)))
                 MarkPreProbeFailed(probeKey);
 
             // No video at all: a dead stream, which a playback that may moves on from. One that
@@ -950,6 +955,20 @@ public sealed class MediaSourceManagerDecorator(
 
     private static bool NeedsProbe(MediaSourceInfo s) =>
         !HasVideo(s) || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
+
+    /// <summary>
+    /// <see cref="NeedsProbe(MediaSourceInfo)"/>, except for a short row its probe found to be
+    /// short: a trailer the addon listed first, or a debrid's clip for a file it does not have
+    /// yet. Probing it again found the same clip, 0.7 s at PlaybackInfo and again at the master
+    /// playlist of every play. The debrid's clip stays one at later plays and is listed last
+    /// (<see cref="IsShortClip"/>).
+    /// </summary>
+    private static bool NeedsProbe(MediaSourceInfo s, BaseItem owner) =>
+        !HasVideo(s)
+        || (
+            (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks
+            && owner.GelatoData<string>("mediaInfo") != RemuxDbService.SourceProbe
+        );
 
     /// <summary>How long one stream gets to answer, and then to deliver its first bytes.</summary>
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
