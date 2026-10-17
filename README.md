@@ -25,6 +25,7 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 - **Act as a proxy** - Streams are proxied through Jellyfin, so debrid sees everything as a single IP.
 - **Per user settings** - Users can have their own manifest, perfect for age restricted accounts.
 - **More Content, Less Hassle** – Expand Jellyfin with community-driven Stremio catalogs
+- **Seerr requests** – A request approved in Seerr (Jellyseerr, Overseerr) is added to the library
 
 ## Usage
 
@@ -49,6 +50,17 @@ Bring the power of Stremio addons directly into Jellyfin. This plugin replaces J
 5. Profit! Now search for your favorite movie and start streaming. Or run the catalog import task to populate your db.
 
 For a more in depth guide see [starter guide](https://github.com/lostb1t/Gelato/discussions/40)
+
+## Seerr requests
+
+Gelato can add titles requested in Seerr (Jellyseerr, Overseerr). The Gelato settings show the fields below on the **Libraries** tab, with Copy buttons. In Seerr, open **Settings > Notifications > Webhook**:
+
+- **Webhook URL:** `http://<your-jellyfin>:8096/gelato/seerr`
+- **Authorization Header:** `MediaBrowser Token="<API key>"`, with a key from Jellyfin's **Dashboard > API Keys**
+- **JSON Payload:** leave the default
+- **Notification Types:** Request Approved and Request Automatically Approved
+
+An approved request then adds the movie or series to the Gelato library, and Seerr marks it available at its next Jellyfin scan. When the requester is a Jellyfin user with their own Gelato folders, the title goes there. A series request adds the whole series, also when it named only some seasons.
 
 ## Notes
 
