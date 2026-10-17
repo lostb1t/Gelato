@@ -128,6 +128,36 @@
                 <div class="fieldDescription">Download images on first access instead of at import time saving a lot of storage.</div>
               </div>
             </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons playlist_add" aria-hidden="true"></span>Requests from Seerr</h3>
+              <p class="cardLead">A request approved in Seerr (Jellyseerr, Overseerr) can add the title here. Set up a
+                webhook in Seerr under <b>Settings &gt; Notifications &gt; Webhook</b> with these fields.</p>
+
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtSeerrUrl">Webhook URL:</label>
+                <div style="display: flex; gap: .5em; align-items: center;">
+                  <input type="text" id="txtSeerrUrl" class="emby-input" readonly style="flex: 1;" />
+                  <button type="button" class="raised emby-button" data-copy="txtSeerrUrl" style="margin: 0; white-space: nowrap;">Copy</button>
+                </div>
+                <div class="fieldDescription">This server's address as your browser reaches it. If Seerr reaches Jellyfin
+                  under another one (another container, another host), use that instead.</div>
+              </div>
+
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtSeerrAuth">Authorization Header:</label>
+                <div style="display: flex; gap: .5em; align-items: center;">
+                  <input type="text" id="txtSeerrAuth" class="emby-input" readonly style="flex: 1;" value='MediaBrowser Token="API key"' />
+                  <button type="button" class="raised emby-button" data-copy="txtSeerrAuth" style="margin: 0; white-space: nowrap;">Copy</button>
+                </div>
+                <div class="fieldDescription">Put a key from <a href="#/dashboard/keys" target="_blank" class="button-link">Dashboard
+                  &gt; API Keys</a> in place of <b>API key</b>.</div>
+              </div>
+
+              <div class="fieldDescription" style="margin-bottom: 1.2em;">Leave the <b>JSON Payload</b> as it is and tick the
+                notification types <b>Request Approved</b> and <b>Request Automatically Approved</b>. A series request adds the
+                whole series. When the requester is a Jellyfin user with their own libraries, the title goes there.</div>
+            </div>
           </div>
 
           <!-- Catalogs -->

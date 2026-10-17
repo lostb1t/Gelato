@@ -1183,6 +1183,16 @@ export default function (view) {
     page.querySelector('#btnCheckAddon').addEventListener('click', testAddonUrl);
     page.querySelector('#btnOpenSetup').addEventListener('click', startSetup);
     selUserConfig.addEventListener('change', onUserSelected);
+    // Seerr's webhook (SeerrController): the address this page reaches the server at, one click to copy.
+    page.querySelector('#txtSeerrUrl').value = window.ApiClient.serverAddress().replace(/\/+$/, '') + '/gelato/seerr';
+    page.querySelectorAll('[data-copy]').forEach(btn => {
+      btn.onclick = async e => {
+        e.preventDefault();
+        await copyText(page.querySelector('#' + btn.dataset.copy).value);
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      };
+    });
     // What changes on the page and is not saved yet; the catalog search filters only.
     const changed = e => {
       if (e.target === txtCatalogSearch || e.target === selUserConfig) return;
