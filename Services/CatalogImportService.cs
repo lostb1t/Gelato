@@ -28,6 +28,10 @@ public class CatalogImportService(
 
     private static readonly TimeSpan FolderWait = TimeSpan.FromSeconds(60);
 
+    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
+
     /// <summary>
     /// The catalog's folder. A library that was picked a moment ago has the folder among its
     /// locations before the scan has made it an item: the import waits for that scan, up to a
@@ -43,16 +47,13 @@ public class CatalogImportService(
         if (folder is not null || string.IsNullOrWhiteSpace(catalog.Path))
             return folder;
 
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
         var waited = Stopwatch.StartNew();
         while (
             folder is null
             && waited.Elapsed < FolderWait
             && libraryManager
                 .GetVirtualFolders()
-                .Any(v => v.Locations.Any(l => string.Equals(l, catalog.Path, comparison)))
+                .Any(v => v.Locations.Any(l => string.Equals(l, catalog.Path, PathComparison)))
         )
         {
             await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
@@ -70,6 +71,33 @@ public class CatalogImportService(
         }
 
         return folder;
+    }
+
+    /// <summary>
+    /// Makes the library of a catalog's folder take the folder in. A library lists what is in the
+    /// folders it knows, and it learns a new location only when a scan refreshes it, early in the
+    /// scan but after the folder became an item. With that scan stopped, or not that far yet, the
+    /// library listed none of the movies the import moved into the folder until the next scan. The
+    /// refresh is the one a scan starts with.
+    /// </summary>
+    private async Task AddToLibraryAsync(Folder folder, CancellationToken ct)
+    {
+        var libraries = libraryManager
+            .GetVirtualFolders()
+            .Where(v => v.Locations.Any(l => string.Equals(l, folder.Path, PathComparison)))
+            .Select(v => Guid.TryParse(v.ItemId, out var id) ? libraryManager.GetItemById(id) : null)
+            .OfType<CollectionFolder>()
+            .Where(l => !l.PhysicalFolderIds.Contains(folder.Id))
+            .ToList();
+        foreach (var library in libraries)
+        {
+            await library.RefreshMetadata(ct).ConfigureAwait(false);
+            logger.LogInformation(
+                "Library {Library} did not know its folder {Path} yet, refreshed it",
+                library.Name,
+                folder.Path
+            );
+        }
     }
 
     public async Task ImportCatalogAsync(
@@ -95,6 +123,8 @@ public class CatalogImportService(
         var stremio = cfg.Stremio;
 
         var catalogFolder = await WaitForCatalogFolderAsync(catalogCfg, ct).ConfigureAwait(false);
+        if (catalogFolder is not null)
+            await AddToLibraryAsync(catalogFolder, ct).ConfigureAwait(false);
 
         // The catalog names a folder that is not there: in no library, or not reachable. New
         // items go to the movie and series folders, and nothing is moved: without this, a folder
