@@ -39,6 +39,9 @@ public sealed class DeleteResourceFilter(
             return;
         }
 
+        // A title deleted right after it was put in: its refresh would save it back.
+        await manager.StopInsertRefreshAsync(item.Id).ConfigureAwait(false);
+
         // Handle deletion and return 204 No Content
         await DeleteItemAsync(item).ConfigureAwait(false);
         ctx.Result = new NoContentResult();

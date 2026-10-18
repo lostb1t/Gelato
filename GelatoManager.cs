@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using Gelato.Config;
@@ -1349,11 +1350,75 @@ public sealed class GelatoManager(
             }
             else
             {
-                _ = provider.RefreshFullItem(baseItem, options, ct);
+                StartInsertRefresh(baseItem, options, ct);
             }
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
         return (baseItem, true);
+    }
+
+    /// <summary>
+    /// The metadata refreshes of titles just put into the library, by item. The answer goes out
+    /// before the refresh ends, and the refresh saves the item (a series its tree) again: a
+    /// deletion that landed in between was undone, the movie written back without its stream rows
+    /// or folder, a series half-built.
+    /// </summary>
+    private readonly ConcurrentDictionary<
+        Guid,
+        (Task Task, CancellationTokenSource Cts)
+    > _insertRefreshes = new();
+
+    private void StartInsertRefresh(
+        BaseItem item,
+        MetadataRefreshOptions options,
+        CancellationToken ct
+    )
+    {
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var task = Task.Run(
+            () => provider.RefreshFullItem(item, options, cts.Token),
+            CancellationToken.None
+        );
+        var entry = (task, cts);
+        _insertRefreshes[item.Id] = entry;
+        _ = task.ContinueWith(
+            t =>
+            {
+                _insertRefreshes.TryRemove(KeyValuePair.Create(item.Id, entry));
+                cts.Dispose();
+                if (t.Exception is { } ex && !cts.IsCancellationRequested)
+                    _log.LogWarning(ex.GetBaseException(), "refresh of {Name} failed", item.Name);
+            },
+            TaskScheduler.Default
+        );
+    }
+
+    /// <summary>
+    /// Ends the refresh the insert of <paramref name="itemId"/> started, if it still runs, and
+    /// waits for it: the item is then deleted after its last save, not before.
+    /// </summary>
+    public async Task StopInsertRefreshAsync(Guid itemId)
+    {
+        if (!_insertRefreshes.TryGetValue(itemId, out var refresh))
+            return;
+
+        try
+        {
+            refresh.Cts.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ended in the meantime.
+        }
+
+        try
+        {
+            await refresh.Task.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Cancelled, or failed and logged by StartInsertRefresh.
+        }
     }
 
     /// <summary>
