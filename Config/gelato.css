@@ -1249,3 +1249,51 @@ dialog.gelatoSetup::backdrop {
     opacity: 1;
   }
 }
+
+/* A setting that only applies while the one above it allows it. */
+.gelatoNested {
+  margin-left: 2.2em;
+}
+
+.gelatoNested.gelatoNested-off {
+  opacity: .5;
+}
+
+/* Users tab: the overrides, one row each, and the form that edits one. */
+.gelatoOverrideList {
+  margin-bottom: 1em;
+}
+
+.gelatoOverrideRow {
+  display: flex;
+  align-items: center;
+  gap: .5em;
+  padding: .75em;
+  margin-bottom: .5em;
+  border: 1px solid var(--g-line);
+  border-radius: var(--g-radius);
+}
+
+.gelatoOverrideRow .gelatoOverrideInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.gelatoOverrideRow .gelatoOverrideSummary {
+  font-size: .85em;
+  opacity: .7;
+  margin-top: .2em;
+}
+
+.gelatoOverrideForm {
+  margin: 1em 0;
+  padding: 1em;
+  border: 1px solid var(--g-line);
+  border-radius: var(--g-radius);
+}
+
+.gelatoOverrideActions {
+  display: flex;
+  gap: .5em;
+  margin-top: 1em;
+}
