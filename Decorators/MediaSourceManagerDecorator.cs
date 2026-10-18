@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -88,10 +89,53 @@ public sealed class MediaSourceManagerDecorator(
             .OfType<ICustomMetadataProvider<Video>>()
             .FirstOrDefault(p => p.Name == "Probe Provider");
 
+    /// <summary>
+    /// The key under which a search request holds the sources it built, per item (see
+    /// <see cref="BeginSearchSources"/>).
+    /// </summary>
+    private const string SearchSourcesKey = "GelatoSearchSources";
+
+    /// <summary>
+    /// Makes the sources built for an item during this request be built once. A search builds a
+    /// title the library holds twice: Jellyfin's own search answers with the item, and Gelato's
+    /// half answers with it again in the addon result's place, which drops Jellyfin's DTO. In
+    /// the Infuse shape, which asks for media sources, that built each owned title's sources
+    /// twice, with the queries for its versions each time. No sync runs in a search, so both
+    /// builds give the same sources.
+    /// </summary>
+    public static void BeginSearchSources(HttpContext ctx) =>
+        ctx.Items[SearchSourcesKey] =
+            new ConcurrentDictionary<(Guid, bool, Guid?), IReadOnlyList<MediaSourceInfo>>();
+
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
         bool enablePathSubstitution,
         User? user = null
+    )
+    {
+        var memo = _http.ReadRequest(
+            ctx =>
+                ctx.Items.TryGetValue(SearchSourcesKey, out var m)
+                    ? m as ConcurrentDictionary<
+                        (Guid, bool, Guid?),
+                        IReadOnlyList<MediaSourceInfo>
+                    >
+                    : null,
+            null
+        );
+        if (memo is null)
+            return BuildStaticMediaSources(item, enablePathSubstitution, user);
+
+        return memo.GetOrAdd(
+            (item.Id, enablePathSubstitution, user?.Id),
+            _ => BuildStaticMediaSources(item, enablePathSubstitution, user)
+        );
+    }
+
+    private IReadOnlyList<MediaSourceInfo> BuildStaticMediaSources(
+        BaseItem item,
+        bool enablePathSubstitution,
+        User? user
     )
     {
         var manager = _manager.Value;
