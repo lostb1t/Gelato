@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Controller.Trickplay;
 using MediaBrowser.Model.Providers;
@@ -43,6 +44,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<UnreleasedListingFilter>();
         services.AddSingleton<MediaSegmentFilter>();
         services.AddSingleton<LibraryStructureFilter>();
+        services.AddSingleton<SyncPlayFilter>();
+        services.AddSingleton<SyncPlaySources>();
         services.AddSingleton<ItemIdLookup>();
         services.AddSingleton<GelatoManager>();
         services.AddSingleton<ItemWriteCounter>();
@@ -142,6 +145,10 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton(sp => new Lazy<ISubtitleManager>(
             sp.GetRequiredService<ISubtitleManager>
         ));
+        // Lazy: SessionManager depends on IMediaSourceManager, whose decorator uses SyncPlaySources.
+        services.AddSingleton(sp => new Lazy<ISessionManager>(
+            sp.GetRequiredService<ISessionManager>
+        ));
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
         {
@@ -156,6 +163,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<UnreleasedListingFilter>();
             o.Filters.AddService<MediaSegmentFilter>();
             o.Filters.AddService<LibraryStructureFilter>();
+            o.Filters.AddService<SyncPlayFilter>();
         });
     }
 

@@ -49,7 +49,8 @@ public sealed class MediaSourceManagerDecorator(
     Lazy<IProviderManager> providerManager,
     RemuxDbService remuxDb,
     IHttpClientFactory httpClientFactory,
-    SegmentLookups segmentLookups
+    SegmentLookups segmentLookups,
+    SyncPlaySources syncPlaySources
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -741,6 +742,29 @@ public sealed class MediaSourceManagerDecorator(
             preProbe
         );
 
+        // SyncPlay starts its members on the item without a version: they get the group's.
+        var syncPlayGroup =
+            !preProbe && item.IsGelatoPlaybackItem() && !item.HasStreamTag()
+                ? _http.ReadRequest(ctx => syncPlaySources.GroupOf(ctx), null)
+                : null;
+        var picked =
+            Guid.TryParse(requestedSourceId, out var requestedId) && requestedId != item.Id;
+        if (
+            syncPlayGroup is not null
+            && !picked
+            && _http.ReadRequest(ctx => syncPlaySources.SourceFor(ctx, item.Id), null)
+                is { } groupSource
+            && Guid.TryParse(groupSource, out var groupSourceId)
+        )
+        {
+            _log.LogDebug(
+                "GetPlaybackMediaSources {ItemId}: SyncPlay group plays {SourceId}",
+                item.Id,
+                groupSourceId
+            );
+            mediaSourceId = groupSourceId;
+        }
+
         var selected = SelectByIdOrFirst(sources, mediaSourceId);
         if (selected is null)
             return sources;
@@ -751,6 +775,17 @@ public sealed class MediaSourceManagerDecorator(
             selected = _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false)
                 ? FailOver(item, sources, selected, out canMoveOn)
                 : FailedOver(sources, selected);
+        }
+
+        // A version picked by a member is the group's from now on.
+        if (
+            syncPlayGroup is { } group
+            && picked
+            && Guid.TryParse(selected.Id, out var selectedId)
+            && selectedId != item.Id
+        )
+        {
+            syncPlaySources.Choose(group, item.Id, selected.Id);
         }
 
         var owner = ResolveOwnerFor(selected, item);
