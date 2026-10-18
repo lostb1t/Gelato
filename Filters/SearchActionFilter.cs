@@ -1,5 +1,6 @@
 using System.Runtime.ExceptionServices;
 using Gelato.Config;
+using Gelato.Decorators;
 using Gelato.Services;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations;
@@ -68,6 +69,8 @@ public class SearchActionFilter(
             await next();
             return;
         }
+
+        MediaSourceManagerDecorator.BeginSearchSources(ctx.HttpContext);
 
         ctx.TryGetActionArgument("startIndex", out var start, 0);
         ctx.TryGetActionArgument("limit", out var limit, 25);
