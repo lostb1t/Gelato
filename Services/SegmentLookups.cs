@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 
 namespace Gelato.Services;
@@ -83,7 +84,7 @@ public sealed class SegmentLookups(PalcoCacheService cache)
     public bool IsDue(BaseItem row)
     {
         var chapters = UsesChapters(row);
-        if (row is not Episode && !chapters)
+        if (row is not (Episode or Movie) && !chapters)
             return false;
 
         return Get(row.Id) is not { } lookup || (chapters && !lookup.Chapters);
