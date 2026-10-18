@@ -35,6 +35,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
     {
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
+        services.AddSingleton<PersonActionFilter>();
         services.AddSingleton<PlaybackInfoFilter>();
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
@@ -154,6 +155,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         {
             o.Filters.AddService<InsertActionFilter>(order: 1);
             o.Filters.AddService<SearchActionFilter>(order: 2);
+            o.Filters.AddService<PersonActionFilter>(order: 2);
             o.Filters.AddService<PlaybackInfoFilter>(order: 3);
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();

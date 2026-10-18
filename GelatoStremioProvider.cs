@@ -362,6 +362,18 @@ public class GelatoStremioProvider(
     }
 
     /// <summary>
+    /// Whether the addon's meta resource takes <c>tmdb:</c> ids for this type: it declares that
+    /// prefix, or none at all. One that declares only <c>tt</c> (Cinemeta) cannot open a title
+    /// known by its TMDB id alone.
+    /// </summary>
+    public async Task<bool> ServesTmdbMetaAsync(StremioMediaType mediaType)
+    {
+        var prefixes = await MetaIdPrefixesAsync(mediaType).ConfigureAwait(false);
+        return prefixes.Count == 0
+            || prefixes.Any(p => p.StartsWith("tmdb", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// The id prefixes the addon's meta resource declares for this type. Empty when the manifest
     /// is unreachable or says nothing about them - the ids are then all tried in order.
     /// </summary>
@@ -566,6 +578,92 @@ public class GelatoStremioProvider(
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
             log.LogDebug(ex, "GetImdbIdFromTmdb: no answer for {Kind} {TmdbId}", kind, tmdbId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// TMDB's imdb ids by kind and TMDB id, as <see cref="GetImdbIdFromTmdbAsync"/> answered
+    /// them: a title's imdb id does not change, so it is asked for once.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        string?
+    > ImdbIdByTmdbId = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <see cref="GetImdbIdFromTmdbAsync"/>, remembered. A failed request is not remembered.
+    /// </summary>
+    public async Task<string?> GetCachedImdbIdFromTmdbAsync(
+        string tmdbId,
+        StremioMediaType mediaType,
+        CancellationToken cancellationToken
+    )
+    {
+        var key = $"{mediaType}:{tmdbId}";
+        if (ImdbIdByTmdbId.TryGetValue(key, out var known))
+            return known;
+
+        var imdbId = await GetImdbIdFromTmdbAsync(tmdbId, mediaType, cancellationToken)
+            .ConfigureAwait(false);
+        if (imdbId is not null)
+            ImdbIdByTmdbId[key] = imdbId;
+        return imdbId;
+    }
+
+    /// <summary>
+    /// How long a person's TMDB credits are kept. A filmography changes rarely, and a person's
+    /// page asks for them once per section.
+    /// </summary>
+    private static readonly TimeSpan PersonCreditsTtl = TimeSpan.FromHours(12);
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (TmdbPersonCredits Credits, DateTime Expiry)
+    > PersonCredits = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A person's movie and series credits from TMDB (<c>person/{id}/combined_credits</c>),
+    /// in <paramref name="language"/> (titles and overviews; TMDB falls back to the original),
+    /// memoised per person and language for <see cref="PersonCreditsTtl"/>, or null when TMDB
+    /// does not answer.
+    /// </summary>
+    public async Task<TmdbPersonCredits?> GetPersonCreditsAsync(
+        string tmdbPersonId,
+        string? language,
+        CancellationToken cancellationToken
+    )
+    {
+        var key = $"{tmdbPersonId}|{language}";
+        if (
+            PersonCredits.TryGetValue(key, out var known)
+            && known.Expiry > DateTime.UtcNow
+        )
+            return known.Credits;
+
+        var url =
+            $"https://api.themoviedb.org/3/person/{Uri.EscapeDataString(tmdbPersonId)}/combined_credits?api_key={GetTmdbApiKey()}"
+            + (string.IsNullOrWhiteSpace(language) ? "" : $"&language={Uri.EscapeDataString(language)}");
+        try
+        {
+            using var client = http.CreateClient(nameof(GelatoStremioProvider));
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var response = await client
+                .GetStringAsync(url, cancellationToken)
+                .ConfigureAwait(false);
+            var credits =
+                JsonSerializer.Deserialize<TmdbPersonCredits>(response, JsonOpts)
+                ?? new TmdbPersonCredits();
+            PersonCredits[key] = (credits, DateTime.UtcNow + PersonCreditsTtl);
+            return credits;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            log.LogWarning(
+                "GetPersonCredits: TMDB did not answer for person {TmdbId}: {Error}",
+                tmdbPersonId,
+                ex.Message
+            );
             return null;
         }
     }
@@ -1359,6 +1457,52 @@ public sealed class SeasonPostersConverter : JsonConverter<StremioSeasonPosters?
         else
             w.WriteNullValue();
     }
+}
+
+public class TmdbPersonCredits
+{
+    public List<TmdbPersonCredit> Cast { get; set; } = [];
+    public List<TmdbPersonCredit> Crew { get; set; } = [];
+}
+
+public class TmdbPersonCredit
+{
+    public int Id { get; set; }
+
+    [JsonPropertyName("media_type")]
+    public string? MediaType { get; set; }
+
+    public string? Title { get; set; }
+    public string? Name { get; set; }
+    public string? Overview { get; set; }
+
+    [JsonPropertyName("poster_path")]
+    public string? PosterPath { get; set; }
+
+    [JsonPropertyName("backdrop_path")]
+    public string? BackdropPath { get; set; }
+
+    [JsonPropertyName("release_date")]
+    public string? ReleaseDate { get; set; }
+
+    [JsonPropertyName("first_air_date")]
+    public string? FirstAirDate { get; set; }
+
+    public double Popularity { get; set; }
+
+    [JsonPropertyName("vote_average")]
+    public float VoteAverage { get; set; }
+
+    [JsonPropertyName("vote_count")]
+    public int VoteCount { get; set; }
+
+    [JsonPropertyName("genre_ids")]
+    public List<int>? GenreIds { get; set; }
+
+    public bool Adult { get; set; }
+    public string? Character { get; set; }
+    public string? Job { get; set; }
+    public string? Department { get; set; }
 }
 
 public class TmdbMovieReleaseDates

@@ -32,6 +32,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool DisableSearch { get; set; } = false;
     public bool EnableJavaScriptInjection { get; set; } = false;
     public bool LazyImages { get; set; } = false;
+
+    /// <summary>
+    /// A person's page also lists the person's films and series the library does not hold, from
+    /// TMDB, as results that open like a search's.
+    /// </summary>
+    public bool PersonRemoteTitles { get; set; } = false;
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
@@ -203,6 +209,7 @@ public class UserConfig
             ExtendLocalSeriesTrees = baseConfig.ExtendLocalSeriesTrees,
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
+            PersonRemoteTitles = baseConfig.PersonRemoteTitles,
             DisableSourceCount = baseConfig.DisableSourceCount,
             FFmpegAnalyzeDuration = baseConfig.FFmpegAnalyzeDuration,
             FFmpegProbeSize = baseConfig.FFmpegProbeSize,

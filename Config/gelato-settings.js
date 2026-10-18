@@ -67,6 +67,7 @@ export default function (view) {
   const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
   const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
   const chkLazyImages = page.querySelector('#chkLazyImages');
+  const chkPersonRemoteTitles = page.querySelector('#chkPersonRemoteTitles');
   const chkPreProbe = page.querySelector('#chkPreProbe');
   const chkPlaybackFailover = page.querySelector('#chkPlaybackFailover');
   const chkRemuxDbEnabled = page.querySelector('#chkRemuxDbEnabled');
@@ -953,6 +954,7 @@ export default function (view) {
       if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
       if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
       if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? false;
+      if (chkPersonRemoteTitles) chkPersonRemoteTitles.checked = cfg.PersonRemoteTitles ?? false;
       if (chkPreProbe) chkPreProbe.checked = cfg.PreProbe ?? true;
       if (chkPlaybackFailover) chkPlaybackFailover.checked = cfg.PlaybackFailover ?? false;
       if (chkRemuxDbEnabled) chkRemuxDbEnabled.checked = cfg.RemuxDbEnabled ?? true;
@@ -996,6 +998,7 @@ export default function (view) {
       cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
       cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
       cfg.LazyImages = chkLazyImages.checked;
+      cfg.PersonRemoteTitles = chkPersonRemoteTitles.checked;
       cfg.PreProbe = chkPreProbe.checked;
       cfg.PlaybackFailover = chkPlaybackFailover.checked;
       cfg.RemuxDbEnabled = chkRemuxDbEnabled.checked;

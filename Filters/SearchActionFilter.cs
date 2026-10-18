@@ -560,7 +560,7 @@ public class SearchActionFilter(
     /// went into counting trailers and special features, which a placeholder item never has and
     /// a search result never shows.
     /// </summary>
-    private static readonly ItemFields[] SearchResultFields = Enum.GetValues<ItemFields>()
+    internal static readonly ItemFields[] SearchResultFields = Enum.GetValues<ItemFields>()
         .Where(f => f is not (ItemFields.LocalTrailerCount or ItemFields.SpecialFeatureCount))
         .ToArray();
 
@@ -572,7 +572,7 @@ public class SearchActionFilter(
     /// item's sources a second time to find that out) and no media source count (it is only
     /// sent when it is not one). A search of 39 such results ran 274 queries, seven per result.
     /// </summary>
-    private static readonly ItemFields[] UnknownItemFields = SearchResultFields
+    internal static readonly ItemFields[] UnknownItemFields = SearchResultFields
         .Where(f =>
             f
                 is not (
@@ -723,7 +723,7 @@ public class SearchActionFilter(
     /// <see cref="GelatoManager.FindExistingItem"/> per result cost a query each, about 16 ms, and
     /// most results are not in the library, so the miss has to be the cheap case.
     /// </summary>
-    private async Task<IReadOnlyList<BaseItem>> FindLibraryItemsAsync(
+    internal async Task<IReadOnlyList<BaseItem>> FindLibraryItemsAsync(
         IEnumerable<BaseItem> candidates,
         User? user,
         CancellationToken ct
@@ -768,7 +768,7 @@ public class SearchActionFilter(
     /// The DTO of a result whose id the library does not know, as the full build answers it,
     /// without the queries that can only come back empty. See <see cref="UnknownItemFields"/>.
     /// </summary>
-    private BaseItemDto GetUnknownItemDto(BaseItem item, DtoOptions options)
+    internal BaseItemDto GetUnknownItemDto(BaseItem item, DtoOptions options)
     {
         item.MarkNotInLibrary();
         var dto = dtoService.GetBaseItemDto(item, options);
@@ -786,7 +786,7 @@ public class SearchActionFilter(
     /// a title the library holds but this user may not see has the id its result is built with,
     /// and so can a row whose movie is gone.
     /// </summary>
-    private async Task<HashSet<Guid>> FindUnknownIdsAsync(
+    internal async Task<HashSet<Guid>> FindUnknownIdsAsync(
         IEnumerable<Guid> candidates,
         CancellationToken ct
     )
@@ -832,7 +832,7 @@ public class SearchActionFilter(
     /// Same rule as <see cref="GelatoManager.FindExistingItem"/>, on loaded items: every item the
     /// result stands for, files first.
     /// </summary>
-    private static List<BaseItem> FindMatches(
+    internal static List<BaseItem> FindMatches(
         IReadOnlyList<BaseItem> libraryItems,
         BaseItem candidate
     )
