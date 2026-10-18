@@ -767,6 +767,7 @@ public sealed class MediaSourceManagerDecorator(
             ctx => ctx.Items.TryGetValue("MediaSourceId", out var idObj) ? idObj as string : null,
             null
         );
+        var named = requestedSourceId is not null;
         Guid? mediaSourceId =
             Guid.TryParse(requestedSourceId, out var fromCtx)
                 ? fromCtx
@@ -953,6 +954,7 @@ public sealed class MediaSourceManagerDecorator(
 
             var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
             selected = Select(refreshed);
+            sources = refreshed;
 
             // Still unprobed after its probe: a dead link, left alone for a while.
             if (preProbe && (selected is null || NeedsProbe(selected, owner)))
@@ -1007,9 +1009,37 @@ public sealed class MediaSourceManagerDecorator(
         // Stub path after probing is done so the real URL is never sent to clients.
         // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
         // Both playback info actions, not the POST alone: native clients use the GET.
-        if (!preProbe && _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false))
+        var playbackInfo =
+            !preProbe && _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false);
+        if (playbackInfo)
         {
             selected.Stub();
+        }
+
+        // A client that named no version picks among the ones the answer offers: JellyCon's and
+        // Kodi's dialog list them. All of them then, the default first and the only one prepared;
+        // another is probed when it is played. Only while the default is the item's own source:
+        // Web and Android TV play the source with the item's id when there is one, so a resumed
+        // version, the binge group's stream or the SyncPlay group's would lose to it.
+        if (
+            playbackInfo
+            && !named
+            && !IsPlaceholder(selected)
+            && Guid.TryParse(selected.Id, out var defaultId)
+            && defaultId == item.Id
+        )
+        {
+            var others = sources
+                .Where(s =>
+                    !ReferenceEquals(s, selected)
+                    && s.Id != selected.Id
+                    && PreProbeKey(s) != PreProbeKey(selected)
+                    && !IsPlaceholder(s)
+                )
+                .ToList();
+            foreach (var other in others)
+                other.Stub();
+            return [selected, .. others];
         }
 
         return [selected];
