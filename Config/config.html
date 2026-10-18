@@ -205,21 +205,17 @@
                 straight away. Who searches only the library can be set per user on the Users tab.</p>
               <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
-                  <input is="emby-checkbox" type="checkbox" id="chkDisableSearch" />
-                  <span>Internal database search only (No remote requests)</span>
+                  <input is="emby-checkbox" type="checkbox" id="chkAddonSearch" />
+                  <span>Search AIOStreams from Jellyfin</span>
                 </label>
-                <div class="fieldDescription">Searches find only what is in your libraries already, for every user.</div>
+                <div class="fieldDescription">A Jellyfin search also finds what is not in your libraries yet. Off: searches find only what is in your libraries already, for every user, and nothing is asked of AIOStreams or TMDB.</div>
               </div>
-            </div>
-
-            <div class="gelatoCard">
-              <h3><span class="material-icons person_search" aria-hidden="true"></span>Person pages</h3>
-              <div class="checkboxContainer checkboxContainer-withDescription">
+              <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="personRemoteTitlesSetting">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkPersonRemoteTitles" />
                   <span>Show a person's titles that are not in the library</span>
                 </label>
-                <div class="fieldDescription">An actor's or director's page also lists their other films and series from TMDB, and they open like search results.</div>
+                <div class="fieldDescription">An actor's or director's page also lists their other films and series from TMDB, and they open like search results. Only while the search above is on.</div>
               </div>
             </div>
 
@@ -329,7 +325,7 @@
               <p class="cardLead">Override settings for specific users: their own addon, their own libraries, or search
                 in the library only.</p>
 
-              <div id="userOverridesList" style="margin-bottom: 1em;"></div>
+              <div id="userOverridesList" class="gelatoOverrideList"></div>
 
               <div class="inputContainer">
                 <label class="inputLabel inputLabelUnfocused" for="selUserConfig">Add/Edit override for user:</label>
@@ -338,8 +334,7 @@
                 </select>
               </div>
 
-              <div id="userOverrideContainer"
-                style="display:none; margin: 1em 0; padding: 1em; border: 1px solid var(--g-line); border-radius: var(--g-radius);">
+              <div id="userOverrideContainer" class="gelatoOverrideForm" style="display:none;">
                 <div class="inputContainer">
                   <label class="inputLabel" for="txtUserUrl">AIOStreams URL:</label>
                   <input type="text" id="txtUserUrl" class="emby-input" />
@@ -363,18 +358,25 @@
                   <div class="fieldDescription">Where this user's series go.</div>
                 </div>
 
-                <div class="checkboxContainer">
+                <div class="checkboxContainer checkboxContainer-withDescription">
                   <label>
-                    <input is="emby-checkbox" type="checkbox" id="chkUserDisableSearch" />
-                    <span>Local search only</span>
+                    <input is="emby-checkbox" type="checkbox" id="chkUserAddonSearch" />
+                    <span>Search AIOStreams from Jellyfin</span>
                   </label>
+                  <div class="fieldDescription">Off: this user's searches find only what is in the libraries already.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="userPersonRemoteTitlesSetting">
+                  <label>
+                    <input is="emby-checkbox" type="checkbox" id="chkUserPersonRemoteTitles" />
+                    <span>Show a person's titles that are not in the library</span>
+                  </label>
+                  <div class="fieldDescription">Only while this user's search above is on.</div>
                 </div>
 
-                <div style="margin-top: 1em;">
+                <div class="gelatoOverrideActions">
                   <button type="button" id="btnAddOverride" is="emby-button" class="raised emby-button">Save
                     Override</button>
-                  <button type="button" id="btnCancelOverride" is="emby-button" class="emby-button"
-                    style="margin-left: 0.5em;">Cancel</button>
+                  <button type="button" id="btnCancelOverride" is="emby-button" class="emby-button">Cancel</button>
                 </div>
               </div>
             </div>

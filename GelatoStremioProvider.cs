@@ -639,8 +639,12 @@ public class GelatoStremioProvider(
             PersonCredits.TryGetValue(key, out var known)
             && known.Expiry > DateTime.UtcNow
         )
+        {
+            log.LogDebug("GetPersonCredits: person {TmdbId} from the cache", tmdbPersonId);
             return known.Credits;
+        }
 
+        log.LogDebug("GetPersonCredits: asking TMDB for person {TmdbId}", tmdbPersonId);
         var url =
             $"https://api.themoviedb.org/3/person/{Uri.EscapeDataString(tmdbPersonId)}/combined_credits?api_key={GetTmdbApiKey()}"
             + (string.IsNullOrWhiteSpace(language) ? "" : $"&language={Uri.EscapeDataString(language)}");

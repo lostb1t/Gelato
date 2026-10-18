@@ -60,7 +60,7 @@ export default function (view) {
   const txtStreamTTL = page.querySelector('#txtStreamTTL');
   const chkEnableMixed = page.querySelector('#chkEnableMixed');
   const chkExtendLocalSeriesTrees = page.querySelector('#chkExtendLocalSeriesTrees');
-  const chkDisableSearch = page.querySelector('#chkDisableSearch');
+  const chkAddonSearch = page.querySelector('#chkAddonSearch');
   const chkFilterUnreleased = page.querySelector('#chkFilterUnreleased');
   const txtBufferDays = page.querySelector('#txtBufferDays');
   const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
@@ -88,7 +88,8 @@ export default function (view) {
   const txtUserUrl = page.querySelector('#txtUserUrl');
   const selUserMovieLibrary = page.querySelector('#selUserMovieLibrary');
   const selUserSeriesLibrary = page.querySelector('#selUserSeriesLibrary');
-  const chkUserDisableSearch = page.querySelector('#chkUserDisableSearch');
+  const chkUserAddonSearch = page.querySelector('#chkUserAddonSearch');
+  const chkUserPersonRemoteTitles = page.querySelector('#chkUserPersonRemoteTitles');
 
   // The save bar
   const saveBar = page.querySelector('.gelatoSaveBar');
@@ -116,6 +117,7 @@ export default function (view) {
           MoviePath: uc.MoviePath,
           SeriesPath: uc.SeriesPath,
           DisableSearch: uc.DisableSearch,
+          PersonRemoteTitles: uc.PersonRemoteTitles ?? true,
         };
       }
     });
@@ -246,6 +248,19 @@ export default function (view) {
     const p = norm(path);
     if (!p) return null;
     return libraries.find(l => (l.Locations || []).some(loc => norm(loc) && p.startsWith(norm(loc) + '/'))) || null;
+  }
+
+  // A person's titles outside the library are remote requests too: none while searches stay local.
+  function showPersonRemoteTitles() {
+    const off = !chkAddonSearch.checked;
+    chkPersonRemoteTitles.disabled = off;
+    page.querySelector('#personRemoteTitlesSetting').classList.toggle('gelatoNested-off', off);
+  }
+
+  function showUserPersonRemoteTitles() {
+    const off = !chkUserAddonSearch.checked;
+    chkUserPersonRemoteTitles.disabled = off;
+    page.querySelector('#userPersonRemoteTitlesSetting').classList.toggle('gelatoNested-off', off);
   }
 
   // Said on the Catalogs tab: an import that seems to add nothing is the filter at work.
@@ -946,7 +961,8 @@ export default function (view) {
       if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
       if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
       if (chkExtendLocalSeriesTrees) chkExtendLocalSeriesTrees.checked = cfg.ExtendLocalSeriesTrees ?? false;
-      if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
+      // The setting says the opposite of the switch, as in the setup assistant.
+      if (chkAddonSearch) chkAddonSearch.checked = !cfg.DisableSearch;
       if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
       showUnreleasedHint();
       if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays ?? 0;
@@ -954,7 +970,8 @@ export default function (view) {
       if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
       if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
       if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? false;
-      if (chkPersonRemoteTitles) chkPersonRemoteTitles.checked = cfg.PersonRemoteTitles ?? false;
+      if (chkPersonRemoteTitles) chkPersonRemoteTitles.checked = cfg.PersonRemoteTitles ?? true;
+      showPersonRemoteTitles();
       if (chkPreProbe) chkPreProbe.checked = cfg.PreProbe ?? true;
       if (chkPlaybackFailover) chkPlaybackFailover.checked = cfg.PlaybackFailover ?? false;
       if (chkRemuxDbEnabled) chkRemuxDbEnabled.checked = cfg.RemuxDbEnabled ?? true;
@@ -990,7 +1007,7 @@ export default function (view) {
       cfg.EnableMixed = chkEnableMixed.checked;
       cfg.ExtendLocalSeriesTrees = chkExtendLocalSeriesTrees.checked;
 
-      cfg.DisableSearch = chkDisableSearch.checked;
+      cfg.DisableSearch = !chkAddonSearch.checked;
       cfg.FilterUnreleased = chkFilterUnreleased.checked;
       cfg.FilterUnreleasedBufferDays = txtBufferDays.value !== '' ? parseInt(txtBufferDays.value) : 0;
 
@@ -1016,7 +1033,8 @@ export default function (view) {
         Url: override.Url,
         MoviePath: override.MoviePath,
         SeriesPath: override.SeriesPath,
-        DisableSearch: override.DisableSearch
+        DisableSearch: override.DisableSearch,
+        PersonRemoteTitles: override.PersonRemoteTitles ?? true
       }));
 
       await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
@@ -1071,13 +1089,21 @@ export default function (view) {
       const userName = users.find(u => u.Id === userId)?.Name || userId;
 
       const container = document.createElement('div');
-      container.style.cssText = 'display: flex; align-items: center; padding: 0.75em; margin-bottom: 0.5em; border: 1px solid var(--g-line); border-radius: var(--g-radius);';
+      container.className = 'gelatoOverrideRow';
 
       const infoDiv = document.createElement('div');
-      infoDiv.style.flex = '1';
+      infoDiv.className = 'gelatoOverrideInfo';
       const strong = document.createElement('strong');
       strong.textContent = userName;
       infoDiv.appendChild(strong);
+      const summary = document.createElement('div');
+      summary.className = 'gelatoOverrideSummary';
+      summary.textContent = override.DisableSearch
+        ? 'Searches the library only'
+        : (override.PersonRemoteTitles ?? true)
+          ? 'Searches AIOStreams; person pages show titles outside the library'
+          : 'Searches AIOStreams; person pages show the library only';
+      infoDiv.appendChild(summary);
       container.appendChild(infoDiv);
 
       const editBtn = document.createElement('button');
@@ -1094,7 +1120,6 @@ export default function (view) {
       delBtn.is = 'emby-button';
       delBtn.innerHTML = 'Delete';
       delBtn.onclick = () => deleteOverride(userId);
-      delBtn.style.marginLeft = '0.5em';
       container.appendChild(delBtn);
 
       userOverridesList.appendChild(container);
@@ -1127,14 +1152,18 @@ export default function (view) {
       txtUserUrl.value = override.Url || '';
       fillLibrarySelect(selUserMovieLibrary, 'movie', override.MoviePath || '');
       fillLibrarySelect(selUserSeriesLibrary, 'series', override.SeriesPath || '');
-      chkUserDisableSearch.checked = override.DisableSearch || false;
+      chkUserAddonSearch.checked = !override.DisableSearch;
+      chkUserPersonRemoteTitles.checked = override.PersonRemoteTitles ?? true;
     } else {
       // New
       txtUserUrl.value = currentConfig?.Url || '';
       fillLibrarySelect(selUserMovieLibrary, 'movie', currentConfig?.MoviePath || '');
       fillLibrarySelect(selUserSeriesLibrary, 'series', currentConfig?.SeriesPath || '');
-      chkUserDisableSearch.checked = false;
+      // A new override starts from the settings everyone has.
+      chkUserAddonSearch.checked = chkAddonSearch.checked;
+      chkUserPersonRemoteTitles.checked = chkPersonRemoteTitles.checked;
     }
+    showUserPersonRemoteTitles();
   }
 
   page.querySelector('#btnCancelOverride').addEventListener('click', () => {
@@ -1165,7 +1194,8 @@ export default function (view) {
       Url: txtUserUrl.value.trim(),
       MoviePath: moviePath,
       SeriesPath: seriesPath,
-      DisableSearch: chkUserDisableSearch.checked
+      DisableSearch: !chkUserAddonSearch.checked,
+      PersonRemoteTitles: chkUserPersonRemoteTitles.checked
     };
 
     renderOverridesList();
@@ -1181,6 +1211,8 @@ export default function (view) {
     form.addEventListener("submit", saveConfig);
     txtCatalogSearch.addEventListener('input', renderCatalogs);
     chkFilterUnreleased.addEventListener('change', showUnreleasedHint);
+    chkAddonSearch.addEventListener('change', showPersonRemoteTitles);
+    chkUserAddonSearch.addEventListener('change', showUserPersonRemoteTitles);
     btnRefreshCatalogs.addEventListener('click', refreshCatalogs);
     page.querySelector('#btnImportAll').addEventListener('click', triggerImportAll);
     page.querySelector('#btnCheckAddon').addEventListener('click', testAddonUrl);

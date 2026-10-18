@@ -35,9 +35,10 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>
     /// A person's page also lists the person's films and series the library does not hold, from
-    /// TMDB, as results that open like a search's.
+    /// TMDB, as results that open like a search's. Not while <see cref="DisableSearch"/> keeps
+    /// searches to the library: no remote requests then.
     /// </summary>
-    public bool PersonRemoteTitles { get; set; } = false;
+    public bool PersonRemoteTitles { get; set; } = true;
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
@@ -190,6 +191,12 @@ public class UserConfig
     public bool DisableSearch { get; set; } = false;
 
     /// <summary>
+    /// The user's own <see cref="PluginConfiguration.PersonRemoteTitles"/>. On for an override saved
+    /// before it existed, as the global default.
+    /// </summary>
+    public bool PersonRemoteTitles { get; set; } = true;
+
+    /// <summary>
     /// Apply user overrides to base configuration - replaces all overridable fields
     /// </summary>
     public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig)
@@ -201,6 +208,7 @@ public class UserConfig
             MoviePath = MoviePath,
             SeriesPath = SeriesPath,
             DisableSearch = DisableSearch,
+            PersonRemoteTitles = PersonRemoteTitles,
 
             // All other fields from base config
             StreamTTL = baseConfig.StreamTTL,
@@ -209,7 +217,6 @@ public class UserConfig
             ExtendLocalSeriesTrees = baseConfig.ExtendLocalSeriesTrees,
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
-            PersonRemoteTitles = baseConfig.PersonRemoteTitles,
             DisableSourceCount = baseConfig.DisableSourceCount,
             FFmpegAnalyzeDuration = baseConfig.FFmpegAnalyzeDuration,
             FFmpegProbeSize = baseConfig.FFmpegProbeSize,
