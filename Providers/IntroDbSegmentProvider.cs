@@ -12,6 +12,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaSegments;
@@ -27,8 +28,9 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Providers;
 
 /// <summary>
-/// Gelato's media segment provider: the intro, recap and outro from IntroDB for episodes and,
-/// with RemuxDB on, segments from a stream row's named chapters (Intro, Recap, Credits, Preview).
+/// Gelato's media segment provider: the intro, recap and outro from IntroDB for episodes, the end
+/// credits from IntroDB for movies and, with RemuxDB on, segments from a stream row's named
+/// chapters (Intro, Recap, Credits, Preview).
 /// </summary>
 /// <remarks>
 /// One provider for both, so nothing new has to be enabled in a library. Its <see cref="Name"/>
@@ -52,7 +54,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     );
 
     /// <summary>
-    /// How long an episode IntroDB had nothing for is not asked again for another of its rows.
+    /// How long an episode or movie IntroDB had nothing for is not asked again for another of its rows.
     /// </summary>
     private static readonly TimeSpan NoIntroTtl = TimeSpan.FromHours(6);
 
@@ -147,7 +149,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         var before = _lookups.Get(video.Id);
         var outcome = SegmentLookups.None;
         IReadOnlyList<MediaSegmentDto> segments = Array.Empty<MediaSegmentDto>();
-        if (video is Episode episode)
+        if (video is Episode or Movie)
         {
             if (before is not null)
             {
@@ -165,7 +167,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
             else
             {
                 (outcome, segments) = await GetIntroDbSegmentsAsync(
-                        episode,
+                        video,
                         request,
                         cancellationToken
                     )
@@ -200,12 +202,12 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         string Outcome,
         IReadOnlyList<MediaSegmentDto> Segments
     )> GetIntroDbSegmentsAsync(
-        Episode episode,
+        Video video,
         MediaSegmentGenerationRequest request,
         CancellationToken cancellationToken
     )
     {
-        if (!TryGetImdbId(episode, out var imdbId))
+        if (!TryGetImdbId(video, out var imdbId))
         {
             _logger.LogDebug(
                 "Skipping IntroDB lookup for {ItemId}: IMDb id missing.",
@@ -214,7 +216,12 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
             return (SegmentLookups.Miss, Array.Empty<MediaSegmentDto>());
         }
 
-        if (!TryGetSeasonEpisodeNumbers(episode, out var seasonNumber, out var episodeNumber))
+        var seasonNumber = 0;
+        var episodeNumber = 0;
+        if (
+            video is Episode episode
+            && !TryGetSeasonEpisodeNumbers(episode, out seasonNumber, out episodeNumber)
+        )
         {
             _logger.LogDebug(
                 "Skipping IntroDB lookup for {ItemId}: invalid season/episode number.",
@@ -223,16 +230,18 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
             return (SegmentLookups.Miss, Array.Empty<MediaSegmentDto>());
         }
 
-        // Per episode: every stream row of it asks for the same segments.
-        var noIntroKey = $"gelato:introdb:none:{imdbId}:{seasonNumber}:{episodeNumber}";
+        // Per episode or movie: every stream row of it asks for the same segments.
+        var isMovie = video is Movie;
+        var title = isMovie ? imdbId : $"{imdbId} S{seasonNumber}E{episodeNumber}";
+        var noIntroKey = isMovie
+            ? $"gelato:introdb:none:{imdbId}:movie"
+            : $"gelato:introdb:none:{imdbId}:{seasonNumber}:{episodeNumber}";
         if (_cache.TryGetValue(noIntroKey, out _))
         {
             _logger.LogDebug(
-                "IntroDB had nothing for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}) lately, not asking again.",
+                "IntroDB had nothing for {ItemId} (IMDb {Title}) lately, not asking again.",
                 request.ItemId,
-                imdbId,
-                seasonNumber,
-                episodeNumber
+                title
             );
             return (SegmentLookups.Miss, Array.Empty<MediaSegmentDto>());
         }
@@ -240,9 +249,16 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         IReadOnlyList<IntroDbSegment> found;
         try
         {
-            found = await _introDbClient
-                .GetSegmentsAsync(imdbId, seasonNumber, episodeNumber, cancellationToken)
-                .ConfigureAwait(false);
+            found = await (
+                isMovie
+                    ? _introDbClient.GetMovieSegmentsAsync(imdbId, cancellationToken)
+                    : _introDbClient.GetSegmentsAsync(
+                        imdbId,
+                        seasonNumber,
+                        episodeNumber,
+                        cancellationToken
+                    )
+            ).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -252,22 +268,35 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         {
             // A timeout too: asked again in a few minutes.
             _logger.LogWarning(
-                "IntroDB lookup failed for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}): {Error}",
+                "IntroDB lookup failed for {ItemId} (IMDb {Title}): {Error}",
                 request.ItemId,
-                imdbId,
-                seasonNumber,
-                episodeNumber,
+                title,
                 exception.Message
             );
             return (SegmentLookups.Failed, Array.Empty<MediaSegmentDto>());
         }
 
+        // A post-credits scene is content: no segment of its own, and the outro stops at it.
+        var scenes = found.Where(s => s.Kind == IntroDbSegmentKind.PostCredits).ToList();
         var segments = new List<MediaSegmentDto>();
-        foreach (var segment in found)
+        foreach (var each in found)
         {
+            if (each.Kind == IntroDbSegmentKind.PostCredits)
+            {
+                continue;
+            }
+
+            if (
+                (each.Kind == IntroDbSegmentKind.Outro ? OutsideScenes(each, scenes) : each)
+                is not { } segment
+            )
+            {
+                continue;
+            }
+
             var startTicks = (long)(segment.StartSeconds * TicksPerSecond);
             var endTicks = (long)(segment.EndSeconds * TicksPerSecond);
-            if (episode.RunTimeTicks is > 0 && endTicks > episode.RunTimeTicks.Value)
+            if (video.RunTimeTicks is > 0 && endTicks > video.RunTimeTicks.Value)
             {
                 _logger.LogWarning(
                     "IntroDB returned {Kind} beyond duration for {ItemId}.",
@@ -297,11 +326,9 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         {
             _cache.Set(noIntroKey, true, NoIntroTtl);
             _logger.LogDebug(
-                "No segments from IntroDB for {ItemId} (IMDb {ImdbId} S{Season}E{Episode}).",
+                "No segments from IntroDB for {ItemId} (IMDb {Title}).",
                 request.ItemId,
-                imdbId,
-                seasonNumber,
-                episodeNumber
+                title
             );
             return (SegmentLookups.Miss, segments);
         }
@@ -309,9 +336,42 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         return (SegmentLookups.Hit, segments);
     }
 
+    /// <summary>
+    /// The outro without the post-credits scenes it overlaps: it ends where a scene in it starts,
+    /// or starts where a scene at its start ends. Nothing when no credits are left.
+    /// </summary>
+    private static IntroDbSegment? OutsideScenes(
+        IntroDbSegment outro,
+        IReadOnlyList<IntroDbSegment> scenes
+    )
+    {
+        var start = outro.StartSeconds;
+        var end = outro.EndSeconds;
+        foreach (var scene in scenes)
+        {
+            if (scene.EndSeconds <= start || scene.StartSeconds >= end)
+            {
+                continue;
+            }
+
+            if (scene.StartSeconds > start)
+            {
+                end = scene.StartSeconds;
+            }
+            else
+            {
+                start = scene.EndSeconds;
+            }
+        }
+
+        return end > start ? outro with { StartSeconds = start, EndSeconds = end } : null;
+    }
+
     /// <inheritdoc />
     public ValueTask<bool> Supports(BaseItem item) =>
-        ValueTask.FromResult(item is Episode || (item is Video video && UsesChapters(video)));
+        ValueTask.FromResult(
+            item is Episode or Movie || (item is Video video && UsesChapters(video))
+        );
 
     /// <inheritdoc />
     /// <remarks>Forgets what was found for the row, so a row inserted again is looked up.</remarks>
@@ -398,10 +458,11 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         return result;
     }
 
-    private bool TryGetImdbId(Episode episode, out string imdbId)
+    private bool TryGetImdbId(Video video, out string imdbId)
     {
         if (
-            episode.SeriesId != Guid.Empty
+            video is Episode episode
+            && episode.SeriesId != Guid.Empty
             && _libraryManager.GetItemById(episode.SeriesId) is Series series
         )
         {
@@ -418,7 +479,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         }
 
         if (
-            episode.ProviderIds.TryGetValue(
+            video.ProviderIds.TryGetValue(
                 MetadataProvider.Imdb.ToString(),
                 out var providerImdbId
             ) && !string.IsNullOrWhiteSpace(providerImdbId)
@@ -428,9 +489,9 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
             return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(episode.Path))
+        if (!string.IsNullOrWhiteSpace(video.Path))
         {
-            var match = ImdbIdRegex.Match(episode.Path);
+            var match = ImdbIdRegex.Match(video.Path);
             if (match.Success)
             {
                 imdbId = match.Value;
