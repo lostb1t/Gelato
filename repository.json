@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.26.0] - 2026-10-18\n\n### 🚀 Features\n\n- Skip segments from a stream's named chapters with RemuxDB on (#300)\n- Look segments up again and read chapters of rows probed before (#303)\n- List a stream that probed to a short clip after the others (#304)\n- Add a title to the library when its request is approved in Seerr (#306)\n- Show how to set up the seerr webhook on the settings page and in the readme (#307)\n\n### 🐛 Bug Fixes\n\n- Keep an episode edit made while its series refresh runs (#301)\n- Leave a local series that is being scanned to the next tree sync run (#302)\n- Keep a title deleted right after it was added from coming back (#308)\n- List a catalog's moved movies in its library at once (#309)\n\n### ⚡ Performance\n\n- Leave a probed short stream and a placeholder unprobed at play (#305)\n",
+        "checksum": "02d8f65ae173ec6ad013cd11549822d6",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.26.0/gelato_0.26.26.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-18T11:26:58Z",
+        "version": "0.26.26.0"
+      },
+      {
         "changelog": "## [0.26.25.0] - 2026-10-16\n\n### 🚀 Features\n\n- Settings page in tabs, with a setup assistant for a new install (#294)\n- Play the next stream when the first one does not start (#206)\n\n### 🐛 Bug Fixes\n\n- Stop listing a stream's subtitle once its file is deleted (#295)\n- Leave a title in a library the user cannot open out of their search (#296)\n- Keep a library's movies when its folder is reported leaving twice (#297)\n- Keep a subtitle's index when an older subtitle file is deleted (#298)\n- Keep an inserted title's streams linked after its first refresh (#299)\n",
         "checksum": "45f4755156b1409ce3abfa9bfc0c3bf9",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.25.0/gelato_0.26.25.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-14T14:48:43Z",
         "version": "0.26.13.9"
-      },
-      {
-        "changelog": "## [0.26.13.8] - 2026-04-12\n\n### 🐛 Bug Fixes\n\n- Only apply enddate to selected types\n",
-        "checksum": "cedb8ea60663359e3a63b86f53b96c59",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.8/gelato_0.26.13.8.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-12T06:53:06Z",
-        "version": "0.26.13.8"
       }
     ]
   }
