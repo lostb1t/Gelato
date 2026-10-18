@@ -1,0 +1,323 @@
+using Jellyfin.Data.Events;
+using MediaBrowser.Common.Configuration;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Configuration;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Providers;
+using Microsoft.Extensions.Logging;
+
+namespace Gelato.Decorators;
+
+public sealed class ProviderManagerDecorator(
+    IProviderManager inner,
+    IApplicationPaths appPaths,
+    ILogger<ProviderManagerDecorator> log
+) : IProviderManager
+{
+    /// <summary>
+    /// Intercept all HTTP image saves. Creates a zero-byte placeholder at a fake
+    /// local path so IsLocalFile=true and ValidateImages passes. Writes the real URL
+    /// to a {fakePath}.url sidecar file so ImageResourceFilter can proxy it.
+    /// Width/Height/DateModified are set so ImageNeedsRefresh returns false.
+    /// </summary>
+    public Task SaveImage(
+        BaseItem item,
+        string url,
+        ImageType type,
+        int? imageIndex,
+        CancellationToken cancellationToken
+    )
+    {
+        if (url.IsUrl())
+        {
+            log.LogDebug(
+                "SaveImage intercepted: item={Id} name={Name} type={ImageType} index={Index} url={Url}",
+                item.Id,
+                item.Name,
+                type,
+                imageIndex,
+                Redact.Url(url)
+            );
+
+            // Always persist the URL at the gelato fake path so it can be resolved on demand
+            // regardless of LazyImages mode — this is the permanent source-of-truth for the URL.
+            var info = BuildImageInfo(appPaths, item.Id, type, imageIndex);
+            WriteUrlSidecar(info.Path + ".url", url);
+
+            if (GelatoPlugin.Instance?.Configuration.LazyImages == true)
+            {
+                // Lazy mode: point the item at the zero-byte placeholder; ImageProcessorDecorator
+                // will download on first render.
+                item.SetImage(info, imageIndex ?? 0);
+                return Task.CompletedTask;
+            }
+
+            // Eager mode: let Jellyfin download the image immediately.
+            // The .url sidecar above ensures ImageProcessorDecorator can recover the image
+            // on demand if the file is later missing (e.g. user deleted it, or mode switched).
+        }
+
+        return inner.SaveImage(item, url, type, imageIndex, cancellationToken);
+    }
+
+    /// <summary>
+    /// Bypasses the decorator and calls Jellyfin's real SaveImage directly.
+    /// Used by ImageProcessorDecorator to eagerly download a missing image on demand.
+    /// </summary>
+    public Task SaveImageDirect(
+        BaseItem item,
+        string url,
+        ImageType type,
+        int? imageIndex,
+        CancellationToken cancellationToken
+    ) => inner.SaveImage(item, url, type, imageIndex, cancellationToken);
+
+    public static void SetRemoteImage(
+        IApplicationPaths appPaths,
+        BaseItem item,
+        ImageType type,
+        int? imageIndex,
+        string url
+    )
+    {
+        var info = BuildImageInfo(appPaths, item.Id, type, imageIndex);
+        // Store the remote URL in a sidecar file next to the placeholder.
+        // ImageResourceFilter reads this file to proxy the image.
+        WriteUrlSidecar(info.Path + ".url", url);
+        item.SetImage(info, imageIndex ?? 0);
+    }
+
+    // Clients fan a search out over item types, and two of those requests can reach the same title at the same
+    // moment. Both write the same bytes, but the second one used to hit a sharing violation ("being used by
+    // another process" on Windows; on Unix .NET only locks exclusively for FileShare.None, so it does not happen
+    // there) and that exception failed the whole /Items request. Serialise the writes per path and let a concurrent
+    // writer win.
+    private static readonly object[] FileLocks = Enumerable
+        .Range(0, 32)
+        .Select(_ => new object())
+        .ToArray();
+
+    private static object LockFor(string path) =>
+        FileLocks[(uint)StringComparer.OrdinalIgnoreCase.GetHashCode(path) % FileLocks.Length];
+
+    private static void WriteUrlSidecar(string path, string url)
+    {
+        lock (LockFor(path))
+        {
+            try
+            {
+                if (
+                    File.Exists(path)
+                    && string.Equals(File.ReadAllText(path), url, StringComparison.Ordinal)
+                )
+                    return;
+
+                File.WriteAllText(path, url);
+            }
+            catch (IOException)
+            {
+                // Someone else is writing the same URL to it.
+            }
+        }
+    }
+
+    private static void CreatePlaceholder(string path)
+    {
+        lock (LockFor(path))
+        {
+            try
+            {
+                if (!File.Exists(path))
+                    File.WriteAllBytes(path, Array.Empty<byte>());
+            }
+            catch (IOException)
+            {
+                // Someone else created it first, and one empty file is as good as another.
+            }
+        }
+    }
+
+    public static ItemImageInfo BuildImageInfo(
+        IApplicationPaths appPaths,
+        Guid itemId,
+        ImageType type,
+        int? imageIndex
+    )
+    {
+        var fileName = imageIndex is > 0 ? $"{type}_{imageIndex}.jpg" : $"{type}.jpg";
+        var fakePath = Path.Combine(
+            appPaths.DataPath,
+            "gelato",
+            "images",
+            itemId.ToString("N"),
+            fileName
+        );
+
+        Directory.CreateDirectory(Path.GetDirectoryName(fakePath)!);
+        CreatePlaceholder(fakePath);
+
+        return new ItemImageInfo
+        {
+            Type = type,
+            Path = fakePath,
+            Width = 2,
+            Height = 3,
+            BlurHash = "L00000fQfQ00fQfQfQfQ~qj[j[fQ",
+            DateModified = new FileInfo(fakePath).LastWriteTimeUtc,
+        };
+    }
+
+    // — pass-through for everything else —
+
+    public event EventHandler<GenericEventArgs<BaseItem>> RefreshStarted
+    {
+        add => inner.RefreshStarted += value;
+        remove => inner.RefreshStarted -= value;
+    }
+
+    public event EventHandler<GenericEventArgs<BaseItem>> RefreshCompleted
+    {
+        add => inner.RefreshCompleted += value;
+        remove => inner.RefreshCompleted -= value;
+    }
+
+    public event EventHandler<GenericEventArgs<Tuple<BaseItem, double>>> RefreshProgress
+    {
+        add => inner.RefreshProgress += value;
+        remove => inner.RefreshProgress -= value;
+    }
+
+    public Task SaveImage(
+        BaseItem item,
+        Stream source,
+        string mimeType,
+        ImageType type,
+        int? imageIndex,
+        CancellationToken cancellationToken
+    ) => inner.SaveImage(item, source, mimeType, type, imageIndex, cancellationToken);
+
+    public Task SaveImage(
+        BaseItem item,
+        string source,
+        string mimeType,
+        ImageType type,
+        int? imageIndex,
+        bool? saveLocallyWithMedia,
+        CancellationToken cancellationToken
+    ) => inner.SaveImage(item, source, mimeType, type, imageIndex, saveLocallyWithMedia, cancellationToken);
+
+    public Task SaveImage(Stream source, string mimeType, string path) =>
+        inner.SaveImage(source, mimeType, path);
+
+    public void QueueRefresh(Guid itemId, MetadataRefreshOptions options, RefreshPriority priority) =>
+        inner.QueueRefresh(itemId, options, priority);
+
+    public Task RefreshFullItem(BaseItem item, MetadataRefreshOptions options, CancellationToken cancellationToken) =>
+        inner.RefreshFullItem(item, options, cancellationToken);
+
+    public Task<ItemUpdateType> RefreshSingleItem(BaseItem item, MetadataRefreshOptions options, CancellationToken cancellationToken) =>
+        inner.RefreshSingleItem(SavedSince(item), options, cancellationToken);
+
+    /// <summary>
+    /// The item as it is saved now, when it was saved after <paramref name="item"/> was read;
+    /// else <paramref name="item"/> itself.
+    /// </summary>
+    /// <remarks>
+    /// A series refresh reads all its seasons and episodes first, then refreshes and saves them
+    /// one by one as it read them. An episode the user edits in between, as in the first seconds
+    /// after a series is added from search while its refresh runs, would get the copy from before
+    /// the edit saved over it, lock included. Refreshing the saved row keeps the edit. Only
+    /// Gelato's items: theirs is the refresh that calls the addon for every episode and takes
+    /// long enough to be caught.
+    /// </remarks>
+    private BaseItem SavedSince(BaseItem item)
+    {
+        if (!item.IsGelato())
+            return item;
+
+        try
+        {
+            if (
+                BaseItem.LibraryManager?.RetrieveItem(item.Id) is { } saved
+                && saved.GetType() == item.GetType()
+                && saved.DateLastSaved > item.DateLastSaved
+            )
+            {
+                log.LogDebug(
+                    "{Name} ({Id}) was saved after its refresh read it, refreshing the saved one",
+                    item.Name,
+                    item.Id
+                );
+                return saved;
+            }
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Could not read {Id} again before its refresh", item.Id);
+        }
+
+        return item;
+    }
+
+    public void AddParts(
+        IEnumerable<IImageProvider> imageProviders,
+        IEnumerable<IMetadataService> metadataServices,
+        IEnumerable<IMetadataProvider> metadataProviders,
+        IEnumerable<IMetadataSaver> metadataSavers,
+        IEnumerable<IExternalId> externalIds,
+        IEnumerable<IExternalUrlProvider> externalUrlProviders
+    ) => inner.AddParts(imageProviders, metadataServices, metadataProviders, metadataSavers, externalIds, externalUrlProviders);
+
+    public Task<IEnumerable<RemoteImageInfo>> GetAvailableRemoteImages(BaseItem item, RemoteImageQuery query, CancellationToken cancellationToken) =>
+        inner.GetAvailableRemoteImages(item, query, cancellationToken);
+
+    public IEnumerable<ImageProviderInfo> GetRemoteImageProviderInfo(BaseItem item) =>
+        inner.GetRemoteImageProviderInfo(item);
+
+    public IEnumerable<IImageProvider> GetImageProviders(BaseItem item, ImageRefreshOptions refreshOptions) =>
+        inner.GetImageProviders(item, refreshOptions);
+
+    public IEnumerable<IMetadataProvider<T>> GetMetadataProviders<T>(BaseItem item, LibraryOptions libraryOptions)
+        where T : BaseItem => inner.GetMetadataProviders<T>(item, libraryOptions);
+
+    public IEnumerable<IMetadataProvider<T>> GetMetadataProviders<T>(BaseItem item, LibraryOptions libraryOptions, bool includeDisabled)
+        where T : BaseItem => inner.GetMetadataProviders<T>(item, libraryOptions, includeDisabled);
+
+    public IEnumerable<IMetadataSaver> GetMetadataSavers(BaseItem item, LibraryOptions libraryOptions) =>
+        inner.GetMetadataSavers(item, libraryOptions);
+
+    public MetadataPluginSummary[] GetAllMetadataPlugins() => inner.GetAllMetadataPlugins();
+
+    public IEnumerable<ExternalUrl> GetExternalUrls(BaseItem item) => inner.GetExternalUrls(item);
+
+    public IEnumerable<ExternalIdInfo> GetExternalIdInfos(IHasProviderIds item) =>
+        inner.GetExternalIdInfos(item);
+
+    public Task SaveMetadataAsync(BaseItem item, ItemUpdateType updateType) =>
+        inner.SaveMetadataAsync(item, updateType);
+
+    public Task SaveMetadataAsync(BaseItem item, ItemUpdateType updateType, IEnumerable<string> savers) =>
+        inner.SaveMetadataAsync(item, updateType, savers);
+
+    public MetadataOptions GetMetadataOptions(BaseItem item) => inner.GetMetadataOptions(item);
+
+    public Task<IEnumerable<RemoteSearchResult>> GetRemoteSearchResults<TItemType, TLookupType>(
+        RemoteSearchQuery<TLookupType> searchInfo,
+        CancellationToken cancellationToken
+    )
+        where TItemType : BaseItem, new()
+        where TLookupType : ItemLookupInfo =>
+        inner.GetRemoteSearchResults<TItemType, TLookupType>(searchInfo, cancellationToken);
+
+    public HashSet<Guid> GetRefreshQueue() => inner.GetRefreshQueue();
+
+    public void OnRefreshStart(BaseItem item) => inner.OnRefreshStart(item);
+
+    public void OnRefreshProgress(BaseItem item, double progress) => inner.OnRefreshProgress(item, progress);
+
+    public void OnRefreshComplete(BaseItem item) => inner.OnRefreshComplete(item);
+
+    public double? GetRefreshProgress(Guid id) => inner.GetRefreshProgress(id);
+}

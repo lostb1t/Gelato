@@ -1,4 +1,3 @@
-using System.Globalization;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
@@ -32,8 +31,22 @@ public sealed class CollectionManagerDecorator(
         remove => inner.ItemsRemovedFromCollection -= value;
     }
 
-    public Task<BoxSet> CreateCollectionAsync(CollectionCreationOptions options) =>
-        inner.CreateCollectionAsync(options);
+    /// <summary>
+    /// A new collection made from a version's page holds the movie/episode, like an existing one
+    /// it is added to.
+    /// </summary>
+    public Task<BoxSet> CreateCollectionAsync(CollectionCreationOptions options)
+    {
+        options.ItemIdList = options
+            .ItemIdList.Select(id =>
+                Guid.TryParse(id, out var guid) && libraryManager.GetItemById(guid) is { } item
+                    ? item.PrimaryVersionOrSelf(libraryManager).Id.ToString("N")
+                    : id
+            )
+            .Distinct()
+            .ToList();
+        return inner.CreateCollectionAsync(options);
+    }
 
     public async Task AddToCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds)
     {
@@ -46,11 +59,14 @@ public sealed class CollectionManagerDecorator(
         var linkedChildrenList = collection.GetLinkedChildren();
         var currentLinkedChildrenIds = linkedChildrenList.Select(i => i.Id).ToList();
 
-        foreach (var id in itemIds)
+        foreach (var requestedId in itemIds)
         {
-            var item =
-                libraryManager.GetItemById(id)
-                ?? throw new ArgumentException("No item exists with the supplied Id " + id);
+            // A version's page adds the movie/episode it is a version of.
+            var item = (
+                libraryManager.GetItemById(requestedId)
+                ?? throw new ArgumentException("No item exists with the supplied Id " + requestedId)
+            ).PrimaryVersionOrSelf(libraryManager);
+            var id = item.Id;
 
             if (!currentLinkedChildrenIds.Contains(id) && !item.IsStream())
             {
@@ -69,13 +85,7 @@ public sealed class CollectionManagerDecorator(
         for (var i = 0; i < itemList.Count; i++)
         {
             var item = itemList[i];
-            newChildren[originalLen + i] = item.IsGelato()
-                ? new LinkedChild
-                {
-                    LibraryItemId = item.Id.ToString("N", CultureInfo.InvariantCulture),
-                    Type = LinkedChildType.Manual,
-                }
-                : LinkedChild.Create(item);
+            newChildren[originalLen + i] = LinkedChild.Create(item);
 
             log.LogDebug(
                 "Adding item {Id} (Gelato={IsGelato}) to collection {Name}",
@@ -111,4 +121,16 @@ public sealed class CollectionManagerDecorator(
 
     public Task<Folder?> GetCollectionsFolder(bool createIfNeeded) =>
         inner.GetCollectionsFolder(createIfNeeded);
+
+    /// <summary>
+    /// Collections contain the movie/episode, never its stream rows. Jellyfin 12 clients show a
+    /// picked version as the page item, so look its collections up on the movie.
+    /// </summary>
+    public IEnumerable<BoxSet> GetCollectionsContainingItem(User user, Guid itemId) =>
+        inner.GetCollectionsContainingItem(
+            user,
+            libraryManager.GetItemById(itemId) is { } item
+                ? item.PrimaryVersionOrSelf(libraryManager).Id
+                : itemId
+        );
 }

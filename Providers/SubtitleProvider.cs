@@ -6,12 +6,18 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Providers;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -21,6 +27,8 @@ namespace Gelato.Providers
     {
         private readonly IHttpClientFactory _http;
         private readonly ILogger<SubtitleProvider> _log;
+        private readonly ILibraryManager _library;
+        private readonly ILocalizationManager _localization;
 
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
@@ -28,10 +36,17 @@ namespace Gelato.Providers
         // provider instances via its own assembly scanning, separate from the DI container.
         private static readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
 
-        public SubtitleProvider(IHttpClientFactory http, ILogger<SubtitleProvider> log)
+        public SubtitleProvider(
+            IHttpClientFactory http,
+            ILogger<SubtitleProvider> log,
+            ILibraryManager library,
+            ILocalizationManager localization
+        )
         {
             _http = http;
             _log = log;
+            _library = library;
+            _localization = localization;
         }
 
         public string Name => "Gelato Subtitles";
@@ -70,7 +85,7 @@ namespace Gelato.Providers
             _cache.Set(listKey, (IReadOnlyList<StremioSubtitle>)subs, CacheTtl);
 
             foreach (var s in subs)
-                _cache.Set(SubCacheKey(s.Id), s, CacheTtl);
+                _cache.Set(SubCacheKey(PathSafeId(s.Id)), s, CacheTtl);
 
             return subs;
         }
@@ -84,7 +99,26 @@ namespace Gelato.Providers
             string filename = string.Empty;
             try
             {
-                if (
+                // Prefer the filename stored in GelatoData (set from BehaviorHints.Filename during stream
+                // insertion), since the stream URL often doesn't contain a meaningful filename.
+                // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
+                var streamItem = _library
+                    .GetItemList(
+                        new InternalItemsQuery
+                        {
+                            Path = request.MediaPath,
+                            IncludeOwnedItems = true,
+                        }
+                    )
+                    .FirstOrDefault();
+                var gelatoFilename = streamItem?.GelatoData<string>("filename");
+
+                if (!string.IsNullOrEmpty(gelatoFilename))
+                {
+                    filename = gelatoFilename;
+                    _log.LogDebug("Using GelatoData filename: {Filename}", filename);
+                }
+                else if (
                     Uri.TryCreate(request.MediaPath, UriKind.Absolute, out var uri)
                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
                 )
@@ -95,28 +129,41 @@ namespace Gelato.Providers
                 {
                     filename = Path.GetFileName(request.MediaPath);
                 }
-
-                var stremioId = request.GetProviderId("Stremio");
-                if (string.IsNullOrEmpty(stremioId))
-                {
-                    _log.LogDebug(
-                        "No Stremio ID, skipping subtitle search for {Path}",
-                        request.MediaPath
-                    );
-                    return Array.Empty<RemoteSubtitleInfo>();
-                }
-
                 var mediaType =
                     request.ContentType == VideoContentType.Episode
                         ? StremioMediaType.Series
                         : StremioMediaType.Movie;
+
+                var stremioId = request.GetProviderId("Stremio");
+                var imdbId = request.GetProviderId("ImdbId");
+
+                if (imdbId != null)
+                {
+                    stremioId =
+                        request.ContentType == VideoContentType.Episode
+                            ? $"{imdbId}:{request.ParentIndexNumber}:{request.IndexNumber}"
+                            : imdbId;
+                }
+
+                if (string.IsNullOrEmpty(stremioId))
+                {
+                    _log.LogDebug(
+                        "No Stremio ID, skipping subtitle search for {Path}",
+                        Redact.Url(request.MediaPath)
+                    );
+                    return Array.Empty<RemoteSubtitleInfo>();
+                }
 
                 subs = await GetSubtitlesAsync(stremioId, mediaType, cancellationToken)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Subtitle search failed for {Path}", request.MediaPath);
+                _log.LogError(
+                    ex,
+                    "Subtitle search failed for {Path}",
+                    Redact.Url(request.MediaPath)
+                );
                 return Array.Empty<RemoteSubtitleInfo>();
             }
 
@@ -127,7 +174,7 @@ namespace Gelato.Providers
                     ? subs
                     : subs.Where(s =>
                         string.Equals(
-                            (s.LangCode ?? "").Trim().ToLower(),
+                            (s.TwoLetterISOLanguageName(_localization) ?? "").Trim().ToLower(),
                             lang,
                             StringComparison.OrdinalIgnoreCase
                         )
@@ -148,10 +195,7 @@ namespace Gelato.Providers
                 rawFilename = rawFilename[..^5];
             var releaseName = Path.GetFileNameWithoutExtension(rawFilename);
 
-            _log.LogInformation(
-                "Matching subtitles against release name: {ReleaseName}",
-                releaseName
-            );
+            _log.LogDebug("Matching subtitles against release name: {ReleaseName}", releaseName);
 
             var scored = filtered
                 .Select(s =>
@@ -180,28 +224,23 @@ namespace Gelato.Providers
                     s.Title ?? "(no title)"
                 );
 
-            var bestIdx = scored.FindIndex(x => x.Score > 0.4);
-            if (bestIdx >= 0)
+            // Nothing is picked here: Jellyfin gets the whole list in this order.
+            if (scored.Count > 0)
             {
-                var best = scored[bestIdx];
+                var top = scored[0];
                 _log.LogInformation(
-                    "Best subtitle match: '{Title}' (score={Score:F2} title={TitleScore:F2} bonus={Bonus:F2})",
-                    best.Sub.Title ?? "(no title)",
-                    best.Score,
-                    best.TitleScore,
-                    best.Bonus
+                    "Top ranked subtitle: '{Title}' (score={Score:F2} title={TitleScore:F2} bonus={Bonus:F2})",
+                    top.Sub.Title ?? "(no title)",
+                    top.Score,
+                    top.TitleScore,
+                    top.Bonus
                 );
             }
-            else if (scored.Count > 0)
-                _log.LogInformation(
-                    "No title match above threshold, using first: '{Title}'",
-                    scored[0].Sub.Title ?? "(no title)"
-                );
 
             return scored.Select(x => new RemoteSubtitleInfo
             {
-                Id = x.Sub.Id,
-                Name = x.Sub.Title,
+                Id = PathSafeId(x.Sub.Id),
+                Name = Uri.UnescapeDataString(x.Sub.Title ?? ""),
                 ProviderName = Name,
                 Format = GuessSubtitleCodec(x.Sub.Url),
                 ThreeLetterISOLanguageName = request.Language,
@@ -230,7 +269,7 @@ namespace Gelato.Providers
                 _log.LogError(
                     "Failed to download subtitle id={Id} from {Url}. Status={Status}",
                     id,
-                    sub.Url,
+                    Redact.Url(sub.Url),
                     resp.StatusCode
                 );
                 throw new IOException($"Failed to download subtitles: {resp.StatusCode}");
@@ -269,7 +308,10 @@ namespace Gelato.Providers
             if (s.Contains("subs") && s.Contains(".strem.io"))
                 return "srt"; // Stremio proxies are always normalized to .srt
 
-            _log.LogWarning("unkown subtitle format for {Path}, defaulting to srt", s);
+            _log.LogWarning(
+                "unkown subtitle format for {Path}, defaulting to srt",
+                Redact.Url(urlOrPath)
+            );
             return "srt";
         }
 
@@ -301,5 +343,23 @@ namespace Gelato.Providers
             $"gelato:subtitles:{mediaType.ToString().ToLower()}/{id}";
 
         private static string SubCacheKey(string id) => $"gelato:subtitle:{id}";
+
+        /// <summary>
+        /// The language a subtitle this provider listed is saved under, while it is cached.
+        /// </summary>
+        /// <param name="id">The id <see cref="Search"/> handed out.</param>
+        public static string? CachedLanguage(string id) =>
+            _cache.TryGetValue(SubCacheKey(id), out StremioSubtitle sub)
+                ? sub.LangCode ?? sub.Lang
+                : null;
+
+        /// <summary>
+        /// The id Jellyfin gets for a subtitle. AIOStreams builds its ids from release names, which
+        /// can hold a slash (<c>720p/1080p</c>) or a backslash. The subtitle dialog's download sends
+        /// the id as a route value, which ASP.NET Core leaves with <c>%2F</c> undecoded, so the
+        /// addon's id would no longer match. A hash of it is safe in a path.
+        /// </summary>
+        private static string PathSafeId(string? id) =>
+            Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(id ?? "")))[..32];
     }
 }

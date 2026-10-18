@@ -1,20 +1,26 @@
 using Gelato.Config;
 using Gelato.Decorators;
 using Gelato.Filters;
+using System.Net;
 using Gelato.Providers;
+using Gelato.RemuxDb;
+using Gelato.ScheduledTasks;
 using Gelato.Services;
 //using IntroDbPlugin.Services;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Collections;
+using MediaBrowser.Controller.Drawing;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Subtitles;
-using MediaBrowser.Controller.SyncPlay;
+using MediaBrowser.Controller.Trickplay;
 using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -33,20 +39,67 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
-        services.AddSingleton<SyncPlayGroupFilter>();
+        services.AddSingleton<StreamUserDataFilter>();
+        services.AddSingleton<VersionActionFilter>();
+        services.AddSingleton<UnreleasedListingFilter>();
+        services.AddSingleton<MediaSegmentFilter>();
+        services.AddSingleton<LibraryStructureFilter>();
+        services.AddSingleton<SyncPlayFilter>();
+        services.AddSingleton<SyncPlaySources>();
+        services.AddSingleton<ItemIdLookup>();
         services.AddSingleton<GelatoManager>();
+        services.AddSingleton<ItemWriteCounter>();
+        services.DecorateSingle<IItemPersistenceService, ItemPersistenceServiceDecorator>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
+        services.DecorateSingle<IUserDataManager, UserDataManagerDecorator>();
+        services.AddSingleton(sp =>
+            (UserDataManagerDecorator)sp.GetRequiredService<IUserDataManager>()
+        );
+        services.DecorateSingle<IItemCountService, ItemCountServiceDecorator>();
         services.AddSingleton<GelatoStremioProviderFactory>();
         services.AddSingleton(sp => new Lazy<GelatoManager>(sp.GetRequiredService<GelatoManager>));
         services.AddSingleton<CatalogService>();
         services.AddSingleton<CatalogImportService>();
+        services.AddSingleton<LibraryFolderService>();
         services.AddSingleton<PalcoCacheService>();
+        services.AddSingleton<SegmentLookups>();
+        services.AddSingleton<IHostedService, GelatoJavaScriptRegistrationService>();
+        services.AddSingleton<IHostedService, UpgradeRepairService>();
+        services.AddSingleton<IHostedService, StreamUserDataSync>();
+        services.AddSingleton<IHostedService, PreProbeNextEpisodeService>();
+        services.AddSingleton<IHostedService, LegacyRowAdoptionService>();
+        services.AddSingleton<IHostedService, ParkedItemAdoption>();
+        services.AddSingleton<IHostedService, VersionLinkRepair>();
         services.AddSingleton<SubtitleProvider>();
         services.AddSingleton<ISubtitleProvider>(sp => sp.GetRequiredService<SubtitleProvider>());
         services.AddSingleton(sp => new Lazy<SubtitleProvider>(
             sp.GetRequiredService<SubtitleProvider>
         ));
+
+        // Metadata providers
+        services.AddSingleton<GelatoSeriesProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoSeriesProvider>()
+        );
+        services.AddSingleton<GelatoMovieMetadataProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoMovieMetadataProvider>()
+        );
+        services.AddSingleton<GelatoEpisodeMetadataProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoEpisodeMetadataProvider>()
+        );
+        services.AddSingleton<GelatoSeasonMetadataProvider>();
+        services.AddSingleton<IRemoteMetadataProvider>(sp =>
+            sp.GetRequiredService<GelatoSeasonMetadataProvider>()
+        );
+
+        // Image provider
+        services.AddSingleton<GelatoImageProvider>();
+        services.AddSingleton<IRemoteImageProvider>(sp =>
+            sp.GetRequiredService<GelatoImageProvider>()
+        );
 
         // Register HttpClient for IntroDbClient
         services.AddHttpClient<IntroDbClient>(client =>
@@ -56,22 +109,45 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         });
         services.AddSingleton<IMediaSegmentProvider, IntroDbSegmentProvider>();
 
-        services.AddSingleton(sp => new Lazy<ISyncPlayManager>(
-            sp.GetRequiredService<ISyncPlayManager>
-        ));
-        services.AddSingleton(sp => new Lazy<ISessionManager>(
-            sp.GetRequiredService<ISessionManager>
-        ));
+        services
+            .AddHttpClient<RemuxDbClient>(client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+                client.DefaultRequestHeaders.UserAgent.TryParseAdd(GelatoPlugin.UserAgent);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() =>
+                new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All }
+            );
+        services.AddSingleton<RemuxDbContributor>();
+        services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<RemuxDbContributor>());
+        services.AddSingleton<RemuxDbService>();
 
         services.AddHostedService<GelatoService>();
         services
             .DecorateSingle<IDtoService, DtoServiceDecorator>()
             .DecorateSingle<IMediaSourceManager, MediaSourceManagerDecorator>()
+            .DecorateSingle<ISimilarItemsManager, SimilarItemsManagerDecorator>()
             .DecorateSingle<ICollectionManager, CollectionManagerDecorator>()
             .DecorateSingle<IPlaylistManager, PlaylistManagerDecorator>()
-            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>();
+            .DecorateSingle<ISubtitleManager, SubtitleManagerDecorator>()
+            .DecorateSingle<IProviderManager, ProviderManagerDecorator>()
+            .DecorateSingle<IImageProcessor, ImageProcessorDecorator>()
+            .DecorateSingle<ITrickplayManager, TrickplayManagerDecorator>()
+            .DecorateSingle<IChapterManager, ChapterManagerDecorator>();
+        // Expose the concrete decorator as Lazy so ImageProcessorDecorator can call SaveImageDirect
+        // without introducing a circular dependency at construction time.
+        services.AddSingleton(sp => new Lazy<ProviderManagerDecorator>(
+            () => (ProviderManagerDecorator)sp.GetRequiredService<IProviderManager>()));
+        services.AddSingleton(sp => new Lazy<ILibraryManager>(
+            sp.GetRequiredService<ILibraryManager>));
+        services.AddSingleton(sp => new Lazy<IProviderManager>(
+            sp.GetRequiredService<IProviderManager>));
         services.AddSingleton(sp => new Lazy<ISubtitleManager>(
             sp.GetRequiredService<ISubtitleManager>
+        ));
+        // Lazy: SessionManager depends on IMediaSourceManager, whose decorator uses SyncPlaySources.
+        services.AddSingleton(sp => new Lazy<ISessionManager>(
+            sp.GetRequiredService<ISessionManager>
         ));
 
         services.PostConfigure<Microsoft.AspNetCore.Mvc.MvcOptions>(o =>
@@ -82,7 +158,12 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
             o.Filters.AddService<DownloadFilter>();
-            o.Filters.AddService<SyncPlayGroupFilter>();
+            o.Filters.AddService<StreamUserDataFilter>();
+            o.Filters.AddService<VersionActionFilter>();
+            o.Filters.AddService<UnreleasedListingFilter>();
+            o.Filters.AddService<MediaSegmentFilter>();
+            o.Filters.AddService<LibraryStructureFilter>();
+            o.Filters.AddService<SyncPlayFilter>();
         });
     }
 
@@ -104,7 +185,48 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             return Task.CompletedTask;
         }
 
-        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        /// <summary>
+        /// Leaves the seeded Gelato library folders empty on shutdown so an upgrade to
+        /// Jellyfin 12 cannot destroy the library.
+        /// </summary>
+        /// <remarks>
+        /// Jellyfin 12's MigrateLinkedChildren migration deletes every non-folder item whose
+        /// path does not sit under a library location. Gelato's items are addressed by
+        /// gelato:// and https:// URLs, so all of them qualify and are removed on the first
+        /// Jellyfin 12 start. That cleanup is skipped entirely when any library location is
+        /// missing or empty, and the only file Gelato puts in its folders is the seed stub —
+        /// so removing it here disarms the migration. GelatoManager.SeedFolder recreates the
+        /// stub on the next start, so a normal restart is unaffected.
+        ///
+        /// Every seeded folder is covered, per-user overrides included, and only a stub with
+        /// Gelato's own content is removed: a "stub.txt" someone else put in a shared folder is
+        /// not ours to delete.
+        /// </remarks>
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            var cfg = GelatoPlugin.Instance?.Configuration;
+            if (cfg is null)
+                return Task.CompletedTask;
+
+            foreach (var folder in cfg.GetLibraryPaths())
+            {
+                try
+                {
+                    GelatoManager.RemoveSeedFile(folder.Path, log);
+                }
+                catch (Exception ex)
+                {
+                    // Never block shutdown over this.
+                    log.LogWarning(
+                        ex,
+                        "Gelato: could not remove the seed file in {Path}; a Jellyfin 12 upgrade may prune Gelato items.",
+                        folder.Path
+                    );
+                }
+            }
+
+            return Task.CompletedTask;
+        }
     }
 }
 

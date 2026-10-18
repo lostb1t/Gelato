@@ -1,7 +1,10 @@
-using System.Collections.Concurrent;
+using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using Gelato.Providers;
+using Gelato.RemuxDb;
 using Gelato.Services;
 using Jellyfin.Data;
 using Jellyfin.Data.Enums;
@@ -12,6 +15,7 @@ using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Chapters;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.LiveTv;
@@ -19,15 +23,12 @@ using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Subtitles;
-using MediaBrowser.Controller.Session;
-using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Dlna;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using MediaBrowser.Model.Providers;
-using MediaBrowser.Model.Session;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -38,16 +39,18 @@ public sealed class MediaSourceManagerDecorator(
     ILibraryManager libraryManager,
     ILogger<MediaSourceManagerDecorator> log,
     IHttpContextAccessor http,
-    GelatoItemRepository repo,
+    IUserDataManager userDataManager,
     IDirectoryService directoryService,
     IServerConfigurationManager config,
-    //Lazy<ISubtitleManager> subtitleManager,
+    Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
     Lazy<SubtitleProvider> subtitleProvider,
     IMediaSegmentManager mediaSegmentManager,
-    IEnumerable<ICustomMetadataProvider<Video>> videoProbeProviders,
-    Lazy<ISyncPlayManager> syncPlayManager,
-    Lazy<ISessionManager> sessionManager
+    Lazy<IProviderManager> providerManager,
+    RemuxDbService remuxDb,
+    IHttpClientFactory httpClientFactory,
+    SegmentLookups segmentLookups,
+    SyncPlaySources syncPlaySources
 ) : IMediaSourceManager
 {
     private readonly IMediaSourceManager _inner =
@@ -66,14 +69,24 @@ public sealed class MediaSourceManagerDecorator(
     private readonly Lazy<GelatoManager> _manager = manager;
     private readonly Lazy<SubtitleProvider> _subtitleProvider = subtitleProvider;
 
-    //  private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager ?? throw new ArgumentNullException(nameof(subtitleManager));
-    private readonly Lazy<ISyncPlayManager> _syncPlayManager = syncPlayManager;
-    private readonly Lazy<ISessionManager> _sessionManager = sessionManager;
-    private readonly ICustomMetadataProvider<Video>? _probeProvider =
-        videoProbeProviders.FirstOrDefault(p => p.Name == "Probe Provider");
+    private readonly Lazy<ISubtitleManager> _subtitleManager = subtitleManager;
+    // Lazy: ProviderManager depends on ISubtitleManager, which depends on
+    // IMediaSourceManager - this decorator.
+    private readonly Lazy<IProviderManager> _providerManager = providerManager;
 
-    private static readonly ConcurrentDictionary<string, (string SourceId, DateTime Expiry)> _syncPlaySourceCache = new();
-    private static readonly TimeSpan _syncPlayCacheTtl = TimeSpan.FromMinutes(10);
+    // Jellyfin builds its metadata providers by type scanning and hands them to
+    // IProviderManager; none are registered in the container. So the probe
+    // provider has to be looked up there - injecting
+    // IEnumerable<ICustomMetadataProvider<Video>> always resolves to an empty list.
+    private ICustomMetadataProvider<Video>? FindProbeProvider(Video owner) =>
+        _providerManager
+            .Value.GetMetadataProviders<Video>(
+                owner,
+                _libraryManager.GetLibraryOptions(owner),
+                includeDisabled: true
+            )
+            .OfType<ICustomMetadataProvider<Video>>()
+            .FirstOrDefault(p => p.Name == "Probe Provider");
 
     public IReadOnlyList<MediaSourceInfo> GetStaticMediaSources(
         BaseItem item,
@@ -83,58 +96,49 @@ public sealed class MediaSourceManagerDecorator(
     {
         var manager = _manager.Value;
         _log.LogDebug("GetStaticMediaSources {Id}", item.Id);
-        var ctx = _http.HttpContext;
-        Guid userId;
-        if (user != null)
-        {
-            userId = user.Id;
-        }
-        else
-        {
-            ctx.TryGetUserId(out userId);
-        }
+        var userId =
+            user?.Id
+            ?? _http.ReadRequest(ctx => ctx.TryGetUserId(out var id) ? id : Guid.Empty, Guid.Empty);
 
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
-            (!cfg.EnableMixed && !item.IsGelato())
+            (!cfg.EnableMixed && !item.IsGelatoPlaybackItem())
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
         )
         {
-            return _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
-        }
+            var own = _inner.GetStaticMediaSources(item, enablePathSubstitution, user);
 
-        var uri = StremioUri.FromBaseItem(item);
-        var actionName =
-            ctx?.Items.TryGetValue("actionName", out var ao) == true ? ao as string : null;
-
-        var allowSync = ctx.IsInsertableAction() && userId != Guid.Empty;
-        var video = item as Video;
-        var itemCacheKey = Guid.TryParse(video?.PrimaryVersionId, out var id)
-            ? id.ToString()
-            : item.Id.ToString();
-
-        var cacheKey = userId != Guid.Empty
-            ? $"{userId.ToString()}:{itemCacheKey}"
-            : itemCacheKey;
-
-        // SyncPlay users can reuse streams fetched by any group member,
-        // so check a shared (user-agnostic) key first.
-        var isSyncPlayCacheHit = false;
-        if (allowSync && userId != Guid.Empty)
-        {
-            try
+            // A local movie keeps the stream rows linked while mixed mode was on. Jellyfin would
+            // list them with their stream URLs and without the per-user filter.
+            if (item is Video { LinkedAlternateVersions.Length: > 0 } localVideo)
             {
-                if (_syncPlayManager.Value.IsUserActive(userId)
-                    && manager.HasStreamSync(itemCacheKey))
+                var linkedStreams = GetStreamRowIds(GetStreamRows(localVideo));
+                if (linkedStreams.Count > 0)
                 {
-                    isSyncPlayCacheHit = true;
+                    return own.Where(s => !linkedStreams.Contains(s.Id)).ToList();
                 }
             }
-            catch
-            {
-                // Not critical — fall through to normal per-user check.
-            }
+
+            return own;
         }
+
+        // A stream row is one version of its movie/episode. Jellyfin 12's web client loads it as
+        // an item when the version dropdown changes and rebuilds the dropdown from its sources.
+        var isStreamRow = item.HasStreamTag();
+
+        var uri = StremioUri.FromBaseItem(item);
+        var actionName = _http.ReadRequest(
+            ctx => ctx.Items.TryGetValue("actionName", out var ao) ? ao as string : null,
+            null
+        );
+
+        var allowSync =
+            _http.ReadRequest(ctx => ctx.IsInsertableAction(), false) && userId != Guid.Empty;
+        var video = item as Video;
+        var syncItemId = video?.PrimaryVersionId ?? item.Id;
+        // With the creation date: an item deleted and inserted again gets the same id (its path
+        // is hashed), but its rows went with it, so it must sync anew within StreamTTL.
+        var cacheKey = SyncCacheKey(item, userId);
 
         if (!allowSync)
         {
@@ -144,13 +148,7 @@ public sealed class MediaSourceManagerDecorator(
                 uri?.ToString()
             );
         }
-        else if (isSyncPlayCacheHit)
-        {
-            _log.LogDebug(
-                "GetStaticMediaSources: SyncPlay shared cache hit for {ItemId}, skipping SyncStreams",
-                item.Id);
-        }
-        else if (uri is not null && !manager.HasStreamSync(cacheKey))
+        else if (uri is not null && !isStreamRow && !manager.HasStreamSync(cacheKey, syncItemId))
         {
             // Bug in web UI that calls the detail page twice. So that's why there's a lock.
             _lock
@@ -199,12 +197,11 @@ public sealed class MediaSourceManagerDecorator(
                             if (count > 0)
                             {
                                 manager.SetStreamSync(cacheKey);
-                                manager.SetStreamSync(itemCacheKey);
                             }
                         }
                         catch (Exception ex)
                         {
-                            _log.LogError(ex, "Failed to sync streams");
+                            _log.LogError(ex, "Failed to sync streams for {Id}", item.Id);
                         }
                     }
                 )
@@ -215,114 +212,348 @@ public sealed class MediaSourceManagerDecorator(
             libraryManager.GetItemById(item.Id);
         }
 
-        var sources = _inner.GetStaticMediaSources(item, enablePathSubstitution, user).ToList();
+        var itemId = item.Id.ToString("N", CultureInfo.InvariantCulture);
 
-        // we dont use jellyfins alternate versions crap. So we have to load it ourselves
+        // A search result the library does not hold: no row has its id, so it has no versions,
+        // no rows to link, no media streams and no attachments, and the four queries asking for
+        // them, per result of a search, can only come back empty. Not when a sync was allowed:
+        // that one may just have written rows for it.
+        var notInLibrary = !allowSync && item.IsNotInLibrary();
 
-        InternalItemsQuery query;
-
-        if (item.GetBaseItemKind() == BaseItemKind.Episode)
+        // A version, a stream row or a file merged in by hand, lists the versions of its movie.
+        var primary = video?.PrimaryVersionId is { } primaryVersionId
+            ? _libraryManager.GetItemById(primaryVersionId) as Video
+            : video;
+        var linkedVersions =
+            primary is null || notInLibrary
+                ? []
+                : _libraryManager.GetLinkedAlternateVersions(primary).ToList();
+        if (
+            linkedVersions.Count == 0
+            && !notInLibrary
+            && primary is not null
+            && !isStreamRow
+            && primary.IsGelatoPlaybackItem()
+            && manager.RelinkOwnedRows(primary)
+        )
         {
-            var episode = (Episode)item;
-            query = new InternalItemsQuery
-            {
-                IncludeItemTypes = [item.GetBaseItemKind()],
-                ParentId = episode.SeasonId,
-                Recursive = false,
-                GroupByPresentationUniqueKey = false,
-                GroupBySeriesPresentationUniqueKey = false,
-                CollapseBoxSetItems = false,
-                IsDeadPerson = true,
-                Tags = [GelatoManager.StreamTag],
-                IndexNumber = episode.IndexNumber,
-            };
+            linkedVersions = _libraryManager.GetLinkedAlternateVersions(primary).ToList();
         }
-        else
-        {
-            query = new InternalItemsQuery
-            {
-                IncludeItemTypes = [item.GetBaseItemKind()],
-                HasAnyProviderId = new Dictionary<string, string>
-                {
-                    { "Stremio", item.GetProviderId("Stremio") },
-                },
-                Recursive = false,
-                GroupByPresentationUniqueKey = false,
-                GroupBySeriesPresentationUniqueKey = false,
-                CollapseBoxSetItems = false,
-                IsDeadPerson = true,
-                Tags = [GelatoManager.StreamTag],
-            };
-        }
+        var streamRows = linkedVersions
+            .Where(v => v.HasStreamTag())
+            .OrderBy(v => IsShortClip(v, primary))
+            .ThenBy(v => v.GelatoData<int?>("index") ?? int.MaxValue)
+            .ToList();
+        var streamRowIds = GetStreamRowIds(streamRows);
 
-        // SyncPlay members must see ALL sources so group members can
-        // resolve the same source ID regardless of catalog sync state.
-        var isSyncPlayUser = false;
-        try
-        {
-            isSyncPlayUser = userId != Guid.Empty
-                             && _syncPlayManager.Value.IsUserActive(userId);
-        }
-        catch
-        {
-            // Not critical — fall back to normal per-user filtering.
-        }
+        // A subtitle downloaded or uploaded on the movie/episode's own page is saved for the
+        // movie/episode, which no version plays, so it is offered with every one of its streams.
+        // It was picked by hand for the title, and a file saved under one row would go with the
+        // row when the addon's answer changes.
+        var titleSubtitles =
+            streamRows.Count > 0 && primary is not null && primary.IsGelatoPlaybackItem()
+                ? primary.GetGelatoSubtitleFiles().ToList()
+                : null;
 
-        var gelatoSources = repo.GetItemList(query)
-            .OfType<Video>()
+        // Jellyfin lists the linked stream rows itself, named after the item; they are added
+        // below with their stream names, and only the ones this user has. A stream row's own
+        // Jellyfin source is the row itself. A Gelato movie/episode has no media of its own, so
+        // unless versions were merged in by hand, Jellyfin's list is skipped: building it costs
+        // several queries per stream.
+        // A stream row of a local movie lists the movie's own file too.
+        var mediaOwner = isStreamRow ? primary : item;
+        var hasOwnMedia =
+            mediaOwner is not null
+            && (!mediaOwner.IsGelatoPlaybackItem() || linkedVersions.Any(v => !v.HasStreamTag()));
+        var sources = !hasOwnMedia
+            ? []
+            : _inner
+                .GetStaticMediaSources(mediaOwner!, enablePathSubstitution, user)
+                .Where(s => !streamRowIds.Contains(s.Id))
+                .ToList();
+
+        var versions = streamRows
             .Where(x =>
-                x.IsGelato()
-                && (
-                    userId == Guid.Empty
-                    || isSyncPlayUser
-                    || (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
-                )
+                userId == Guid.Empty
+                || (x.GelatoData<List<Guid>>("userIds")?.Contains(userId) ?? false)
             )
-            .OrderBy(x => x.GelatoData<int?>("index") ?? int.MaxValue)
-            .Select(s =>
+            .Select(row =>
             {
-                var k = GetVersionInfo(s, MediaSourceType.Grouping, ctx, user);
+                var source = GetVersionInfo(row, MediaSourceType.Grouping, user, titleSubtitles);
 
                 if (user is not null)
                 {
-                    _inner.SetDefaultAudioAndSubtitleStreamIndices(item, k, user);
+                    _inner.SetDefaultAudioAndSubtitleStreamIndices(item, source, user);
                 }
 
-                return k;
+                return (Row: row, Source: source);
             })
             .ToList();
 
+        // Before the first stream takes the episode's id below: the group's stream is the one
+        // that plays under it.
+        if (primary is not null)
+            MoveBingeGroupFirst(versions, primary, userId);
+
         _log.LogDebug(
-            "Found {s} streams. UserId={Action} GelatoId={Uri}",
-            gelatoSources.Count,
+            "Found {Count} streams. UserId={UserId} ItemId={ItemId}",
+            versions.Count,
             userId,
-            item.GetProviderId("Stremio")
+            item.Id
         );
 
-        sources.AddRange(gelatoSources);
+        sources.AddRange(versions.Select(v => v.Source));
+
+        if (isStreamRow)
+        {
+            // The requested version goes first: it becomes the Default source.
+            var own =
+                sources.FirstOrDefault(s => s.Id == itemId)
+                ?? GetVersionInfo(item, MediaSourceType.Grouping, user, titleSubtitles);
+            sources.Remove(own);
+            sources.Insert(0, own);
+        }
 
         if (sources.Count > 1)
         {
             // remove primary from list when there are streams
             sources = sources
-                .Where(k => !(k.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) ?? false))
-                .Where(k => !(k.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) ?? false))
+                .Where(k =>
+                    !(k.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) ?? false)
+                )
+                .Where(k =>
+                    !(k.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) ?? false)
+                )
                 .ToList();
         }
 
         // failsafe. mediasources cannot be null
         if (sources.Count == 0)
         {
-            sources.Add(GetVersionInfo(item, MediaSourceType.Default, ctx, user));
+            sources.Add(
+                GetVersionInfo(item, MediaSourceType.Default, user, inLibrary: !notInLibrary)
+            );
         }
 
-        if (sources.Count > 0)
-            sources[0].Type = MediaSourceType.Default;
+        // A Gelato movie/episode has no media of its own, so its first stream takes its id and the
+        // movie is one of its versions: clients that play the source with the item's id get the
+        // first stream, and its watch state stays on the movie. Version pages list it with the
+        // same id, the first stream's own page included, so picking it there opens the movie and
+        // playing it there reports progress on the movie.
+        var primaryId = primary?.Id.ToString("N", CultureInfo.InvariantCulture);
+        if (
+            primaryId is not null
+            && sources.All(s => s.Id != primaryId)
+            && versions.FirstOrDefault().Source is { } first
+        )
+        {
+            first.Id = primaryId;
+        }
 
-        sources[0].Id = item.Id.ToString("N");
+        if (!isStreamRow && primary is not null && user is not null)
+        {
+            MoveResumedVersionFirst(sources, primary, versions, user);
+        }
+
+        foreach (var source in sources)
+        {
+            if (source.Type == MediaSourceType.Default)
+                source.Type = MediaSourceType.Grouping;
+        }
+        sources[0].Type = MediaSourceType.Default;
+
+        // A page opened or another version picked: the web client loads the version's row as an
+        // item when the dropdown changes, so this is also the pick of a version.
+        if (
+            user is not null
+            && _http.ReadRequest(
+                ctx => ctx.GetActionName() is "GetItem" or "GetItemLegacy" && RequestsMediaSources(ctx),
+                false
+            )
+        )
+        {
+            SchedulePreProbe(item, sources[0], user);
+        }
 
         return sources;
     }
+
+    /// <summary>
+    /// Whether an item request wants the item's sources, as a page does: Jellyfin Web's details
+    /// page sends no Fields and gets every field. A script that asks for some fields of the item
+    /// (KefinTweaks' home sections ask for People) has not opened its page.
+    /// </summary>
+    private static bool RequestsMediaSources(HttpContext ctx) =>
+        !ctx.Request.Query.TryGetValue("fields", out var fields)
+        || fields.Any(value =>
+            value
+                ?.Split(',', StringSplitOptions.TrimEntries)
+                .Contains("MediaSources", StringComparer.OrdinalIgnoreCase) ?? false
+        );
+
+    private static string SyncCacheKey(BaseItem item, Guid userId)
+    {
+        var syncItemId = (item as Video)?.PrimaryVersionId ?? item.Id;
+        var key = $"{syncItemId}:{item.DateCreated.Ticks}";
+        return userId != Guid.Empty ? $"{userId}:{key}" : key;
+    }
+
+    /// <summary>
+    /// The stream rows linked to a movie/episode as its versions. Read from the database: the
+    /// instance at hand may be a copy whose links are out of date.
+    /// </summary>
+    private List<Video> GetStreamRows(Video? primary) =>
+        primary is null
+            ? []
+            : _libraryManager
+                .GetLinkedAlternateVersions(primary)
+                .Where(v => v.HasStreamTag())
+                .ToList();
+
+    private static HashSet<string> GetStreamRowIds(IEnumerable<Video> rows) =>
+        rows.Select(r => r.Id.ToString("N", CultureInfo.InvariantCulture)).ToHashSet();
+
+    /// <summary>
+    /// Puts the stream the user is part way through first, so clients preselect it. The resume
+    /// point itself is shared: StreamUserDataSync copies it to the movie.
+    /// </summary>
+    private void MoveResumedVersionFirst(
+        List<MediaSourceInfo> sources,
+        Video primary,
+        List<(Video Row, MediaSourceInfo Source)> versions,
+        User user
+    )
+    {
+        if (sources.Count < 2 || versions.Count == 0)
+            return;
+
+        // The source with the movie's id plays with the movie's own watch state.
+        var primaryId = primary.Id.ToString("N", CultureInfo.InvariantCulture);
+        var streams = versions.Where(v => v.Source.Id != primaryId).ToList();
+        var userData = userDataManager.GetUserDataBatch(
+            [primary, .. streams.Select(v => v.Row)],
+            user
+        );
+        if (userData.GetValueOrDefault(primary.Id) is not { PlaybackPositionTicks: > 0 } movieData)
+            return;
+
+        var resumed = VersionPlaybackSelector.SelectMostRecentlyPlayed(
+            streams,
+            v => userData.GetValueOrDefault(v.Row.Id),
+            data => data.PlaybackPositionTicks > 0
+        );
+
+        // The movie holds a copy of the stream's state, dated CopyOffset after the stream; it is
+        // newer only when the stream with the movie's id was played since.
+        if (
+            resumed.Source is not { } source
+            || (userData[resumed.Row.Id].LastPlayedDate ?? DateTime.MinValue)
+                + StreamUserDataSync.CopyOffset
+                < (movieData.LastPlayedDate ?? DateTime.MinValue)
+            || ReferenceEquals(sources[0], source)
+        )
+        {
+            return;
+        }
+
+        sources.Remove(source);
+        sources.Insert(0, source);
+    }
+
+    // The binge group an episode follows, per user: the group of the stream the episode before it
+    // is played with. Kept in memory only: it is for the episode that plays next, and playing the
+    // episode before it sets it again.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        (Guid User, Guid Item),
+        (string Group, DateTime SetAt)
+    > _bingeGroups = new();
+
+    /// <summary>
+    /// Makes <paramref name="next"/> follow the binge group of the stream <paramref name="played"/>
+    /// is played with: Stremio's hint that streams of different episodes belong together (same
+    /// addon, quality and release group). Its stream of that group becomes its first stream: the
+    /// one listed first and published under the episode's id, which is what clients preselect,
+    /// what autoplay asks for (Jellyfin Web names the episode's id as the source) and what is
+    /// pre-probed. A stream without a group, or a local file, leaves the next episode as it is.
+    /// </summary>
+    public void FollowBingeGroup(BaseItem played, string? mediaSourceId, BaseItem next, User user)
+    {
+        var key = (user.Id, next.Id);
+        var group = FindPlayedRow(played, mediaSourceId, user)?.GelatoData<string>("bingeGroup");
+        if (string.IsNullOrEmpty(group))
+        {
+            _bingeGroups.TryRemove(key, out _);
+            return;
+        }
+
+        // Not all at once: the stream under an episode's id must not change while it plays.
+        if (_bingeGroups.Count > 1000)
+        {
+            foreach (var (stale, _) in _bingeGroups.OrderBy(g => g.Value.SetAt).Take(500))
+                _bingeGroups.TryRemove(stale, out _);
+        }
+
+        _bingeGroups[key] = (group, DateTime.UtcNow);
+    }
+
+    /// <summary>The stream row a playback of the item plays, null for a file.</summary>
+    private Video? FindPlayedRow(BaseItem played, string? mediaSourceId, User user)
+    {
+        var item = Guid.TryParse(mediaSourceId, out var sourceId)
+            ? _libraryManager.GetItemById(sourceId) ?? played
+            : played;
+        if (item.HasStreamTag())
+            return item as Video;
+
+        // The source with the episode's id is its first stream, whichever row that is.
+        var itemId = item.Id.ToString("N", CultureInfo.InvariantCulture);
+        var source = GetStaticMediaSources(item, false, user).FirstOrDefault(s => s.Id == itemId);
+        return
+            Guid.TryParse(source?.ETag, out var rowId)
+            && _libraryManager.GetItemById(rowId) is Video row
+            && row.HasStreamTag()
+            ? row
+            : null;
+    }
+
+    /// <summary>
+    /// Puts the stream of the binge group the episode follows ahead of its other streams, which
+    /// keep the addon's order.
+    /// </summary>
+    private void MoveBingeGroupFirst(
+        List<(Video Row, MediaSourceInfo Source)> versions,
+        Video primary,
+        Guid userId
+    )
+    {
+        if (versions.Count < 2 || !_bingeGroups.TryGetValue((userId, primary.Id), out var follows))
+            return;
+
+        var at = versions.FindIndex(v => v.Row.GelatoData<string>("bingeGroup") == follows.Group);
+        if (at < 1 || IsShortClip(versions[at].Row, primary))
+            return;
+
+        var version = versions[at];
+        versions.RemoveAt(at);
+        versions.Insert(0, version);
+    }
+
+    private static readonly TimeSpan ShortClip = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ShortClipTitle = TimeSpan.FromMinutes(15);
+
+    /// <summary>
+    /// Whether a row's probe found a clip of under a minute for a title of over 15 minutes: the
+    /// video a debrid service serves for a file it does not have (8 or 30 s; 17 of 117 probed
+    /// movie rows on a production library). Such a row is listed after the others, so it is
+    /// neither the default nor what playback moves on to before them. Its name stays as the addon
+    /// sent it, and it is not hidden: the title may have nothing else.
+    /// </summary>
+    private static bool IsShortClip(BaseItem row, BaseItem? primary) =>
+        primary?.RunTimeTicks > ShortClipTitle.Ticks
+        && row.RunTimeTicks is long ticks
+        && ticks > 0
+        && ticks < ShortClip.Ticks
+        && row.GelatoData<string>("mediaInfo") == RemuxDbService.SourceProbe;
 
     public void AddParts(IEnumerable<IMediaSourceProvider> providers)
     {
@@ -345,11 +576,136 @@ public sealed class MediaSourceManagerDecorator(
     public IReadOnlyList<MediaAttachment> GetMediaAttachments(MediaAttachmentQuery query) =>
         _inner.GetMediaAttachments(query);
 
+    /// <summary>
+    /// How long a source prepared for streaming answers the requests that follow it, counted
+    /// from the end of its preparation.
+    /// </summary>
+    private static readonly TimeSpan PreparedTtl = TimeSpan.FromSeconds(10);
+
+    // Done completes with the time the preparation ended, however it ended.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (Task<IReadOnlyList<MediaSourceInfo>> Sources, Task<DateTime> Done)
+    > _prepared = new();
+
+    private static bool PreparedExpired(Task<DateTime> done, DateTime now) =>
+        done.IsCompletedSuccessfully && done.Result + PreparedTtl <= now;
+
+    /// <remarks>
+    /// Starting a playback asks for its source several times within a second: PlaybackInfo, then
+    /// Jellyfin's HLS controller for the master playlist, the variant playlist and the first
+    /// segment (the pre-probe the player's reload of the item schedules stays out, see
+    /// <see cref="PreparedForPlaybackWindow"/>). Each preparation reads the item's versions and
+    /// streams and may look up segments, so the streaming requests share the first one's answer
+    /// while it is prepared and for <see cref="PreparedTtl"/> after that: the first probe of a
+    /// remote stream can take up to a minute, and the requests that follow come only once it is
+    /// over. PlaybackInfo is prepared on its own: its answer is stubbed.
+    /// </remarks>
     public async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSources(
         BaseItem item,
         User user,
         bool allowMediaProbe,
         bool enablePathSubstitution,
+        CancellationToken ct
+    )
+    {
+        if (
+            item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
+            || _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false)
+        )
+        {
+            return await GetPlaybackMediaSourcesCore(
+                    item,
+                    user,
+                    allowMediaProbe,
+                    enablePathSubstitution,
+                    null,
+                    false,
+                    ct
+                )
+                .ConfigureAwait(false);
+        }
+
+        var sourceId = _http.ReadRequest(
+            ctx => ctx.Items.TryGetValue("MediaSourceId", out var idObj) ? idObj as string : null,
+            null
+        );
+        var key = string.Join(
+            ':',
+            item.Id.ToString("N", CultureInfo.InvariantCulture),
+            UserKey(user),
+            sourceId?.ToLowerInvariant(),
+            allowMediaProbe,
+            enablePathSubstitution
+        );
+
+        var now = DateTime.UtcNow;
+        if (_prepared.TryGetValue(key, out var prepared) && !PreparedExpired(prepared.Done, now))
+        {
+            try
+            {
+                var sources = await prepared.Sources.WaitAsync(ct).ConfigureAwait(false);
+                var done = await prepared.Done.ConfigureAwait(false);
+
+                // 0 for a request that waited for the preparation to end.
+                _log.LogDebug(
+                    "GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}: prepared {Ago} ms ago",
+                    item.Id,
+                    sourceId,
+                    (int)Math.Max(0, (now - done).TotalMilliseconds)
+                );
+                return sources;
+            }
+            catch (Exception) when (!ct.IsCancellationRequested)
+            {
+                // The request that prepared it failed or was cancelled: this one prepares it again.
+            }
+        }
+
+        foreach (var (k, entry) in _prepared)
+        {
+            if (PreparedExpired(entry.Done, now))
+                _prepared.TryRemove(k, out _);
+        }
+
+        var task = GetPlaybackMediaSourcesCore(
+            item,
+            user,
+            allowMediaProbe,
+            enablePathSubstitution,
+            null,
+            false,
+            ct
+        );
+        _prepared[key] = (
+            task,
+            task.ContinueWith(
+                _ => DateTime.UtcNow,
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default
+            )
+        );
+        return await task.ConfigureAwait(false);
+    }
+
+    // Jellyfin's streaming requests pass no user, the declared type notwithstanding.
+    private static string? UserKey(User? user) =>
+        user?.Id.ToString("N", CultureInfo.InvariantCulture);
+
+    /// <param name="requestedSourceId">The source to prepare; null reads it from the request.</param>
+    /// <param name="preProbe">
+    /// Prepares the source ahead of playback: nothing is stubbed, and a row on RemuxDB's media
+    /// info gets its segment lookup but not the delayed probe, which would resolve a stream
+    /// nobody may play.
+    /// </param>
+    private async Task<IReadOnlyList<MediaSourceInfo>> GetPlaybackMediaSourcesCore(
+        BaseItem item,
+        User user,
+        bool allowMediaProbe,
+        bool enablePathSubstitution,
+        string? requestedSourceId,
+        bool preProbe,
         CancellationToken ct
     )
     {
@@ -361,14 +717,14 @@ public sealed class MediaSourceManagerDecorator(
         }
 
         var manager = _manager.Value;
-        var ctx = _http.HttpContext;
-
         var sources = GetStaticMediaSources(item, enablePathSubstitution, user);
 
+        requestedSourceId ??= _http.ReadRequest(
+            ctx => ctx.Items.TryGetValue("MediaSourceId", out var idObj) ? idObj as string : null,
+            null
+        );
         Guid? mediaSourceId =
-            ctx?.Items.TryGetValue("MediaSourceId", out var idObj) == true
-            && idObj is string idStr
-            && Guid.TryParse(idStr, out var fromCtx)
+            Guid.TryParse(requestedSourceId, out var fromCtx)
                 ? fromCtx
                 : (
                     item.IsPrimaryVersion()
@@ -379,101 +735,459 @@ public sealed class MediaSourceManagerDecorator(
                 );
 
         _log.LogDebug(
-            "GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId}",
+            "GetPlaybackMediaSources {ItemId} mediaSourceId={MediaSourceId} action={Action} preProbe={PreProbe}",
             item.Id,
-            mediaSourceId
+            mediaSourceId,
+            _http.ReadRequest(ctx => ctx.GetActionName(), null),
+            preProbe
         );
 
-        // SyncPlay: ensure all group members use the same media source.
-        var syncPlayState = ResolveSyncPlaySource(user, item, ctx, mediaSourceId);
-        if (syncPlayState.OverrideSourceId is not null)
-            mediaSourceId = syncPlayState.OverrideSourceId;
-
-        var selected = SelectByIdOrFirst(sources, mediaSourceId);
-
-        // Guard: never return a gelato:// or stremio:// virtual source.
-        if (selected is not null && IsVirtualSource(selected))
+        // SyncPlay starts its members on the item without a version: they get the group's.
+        var syncPlayGroup =
+            !preProbe && item.IsGelatoPlaybackItem() && !item.HasStreamTag()
+                ? _http.ReadRequest(ctx => syncPlaySources.GroupOf(ctx), null)
+                : null;
+        var picked =
+            Guid.TryParse(requestedSourceId, out var requestedId) && requestedId != item.Id;
+        if (
+            syncPlayGroup is not null
+            && !picked
+            && _http.ReadRequest(ctx => syncPlaySources.SourceFor(ctx, item.Id), null)
+                is { } groupSource
+            && Guid.TryParse(groupSource, out var groupSourceId)
+        )
         {
-            _log.LogWarning(
-                "GetPlaybackMediaSources: selected source {Id} has virtual path, falling back",
-                selected.Id);
-            selected = sources.FirstOrDefault(s => !IsVirtualSource(s))
-                       ?? sources.FirstOrDefault();
-            if (syncPlayState.CacheKey is not null)
-                _syncPlaySourceCache.TryRemove(syncPlayState.CacheKey, out _);
+            _log.LogDebug(
+                "GetPlaybackMediaSources {ItemId}: SyncPlay group plays {SourceId}",
+                item.Id,
+                groupSourceId
+            );
+            mediaSourceId = groupSourceId;
         }
 
+        var selected = SelectByIdOrFirst(sources, mediaSourceId);
         if (selected is null)
             return sources;
 
-        UpdateSyncPlayCache(syncPlayState, selected, item, user, ct);
+        var canMoveOn = false;
+        if (!preProbe)
+        {
+            selected = _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false)
+                ? FailOver(item, sources, selected, out canMoveOn)
+                : FailedOver(sources, selected);
+        }
+
+        // A version picked by a member is the group's from now on.
+        if (
+            syncPlayGroup is { } group
+            && picked
+            && Guid.TryParse(selected.Id, out var selectedId)
+            && selectedId != item.Id
+        )
+        {
+            syncPlaySources.Choose(group, item.Id, selected.Id);
+        }
 
         var owner = ResolveOwnerFor(selected, item);
+        if (!owner.IsGelatoPlaybackItem())
+        {
+            // A local movie's linked stream rows are in Jellyfin's list too, with their real URLs.
+            // They are played through their own source id, which the branch below handles. A file
+            // merged into a Gelato movie is asked for itself: Jellyfin would probe the movie's
+            // placeholder path otherwise.
+            var streamRowIds = GetStreamRowIds(GetStreamRows(item as Video));
+            var playbackSources = await _inner
+                .GetPlaybackMediaSources(
+                    item.IsGelatoPlaybackItem() ? owner : item,
+                    user,
+                    allowMediaProbe,
+                    enablePathSubstitution,
+                    ct
+                )
+                .ConfigureAwait(false);
+            return playbackSources.Where(s => !streamRowIds.Contains(s.Id)).ToList();
+        }
+
         if (owner.IsPrimaryVersion() && owner.Id != item.Id)
         {
             sources = GetStaticMediaSources(owner, enablePathSubstitution, user);
-            selected = SelectByIdOrFirst(sources, mediaSourceId);
+            selected = Select(sources);
             if (selected is null)
                 return sources;
         }
 
-        if (NeedsProbe(selected))
+        // Ahead of playback only the source that was asked for is prepared. When the title's rows
+        // changed since the page was opened (a split, a sync), the list falls back to another
+        // source or to the title's placeholder, and probing that would save the movie/episode
+        // in the middle of the change.
+        if (
+            preProbe
+            && (
+                IsPlaceholder(selected)
+                || !string.Equals(selected.Id, requestedSourceId, StringComparison.OrdinalIgnoreCase)
+            )
+        )
+        {
+            return sources;
+        }
+
+        // A row probed before is done ahead of playback: one whose probe found a file too short
+        // still looks unprobed, and would be probed again on every visit. Not a row that lost
+        // the tracks its probe found: playback would probe that one at the click.
+        if (
+            preProbe
+            && owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceProbe
+            && HasVideo(selected)
+        )
+        {
+            await EnsureSegmentsAsync(owner, ct).ConfigureAwait(false);
+            return sources;
+        }
+
+        // A pre-probe of this source is under way: its result is what plays, not a second probe.
+        if (!preProbe && _preProbing.TryGetValue(PreProbeKey(selected), out var running))
+        {
+            await running.WaitAsync(ct).ConfigureAwait(false);
+            sources = GetStaticMediaSources(
+                owner.IsPrimaryVersion() ? owner : item,
+                enablePathSubstitution,
+                user
+            );
+            selected = Select(sources) ?? selected;
+        }
+
+        // RemuxDB's media info plays as it is and is probed afterwards, unless it lacks what the
+        // playback decides on.
+        // A title without streams plays its placeholder, whose gelato:// path Jellyfin's probe
+        // refuses: probing it only cost the click, twice.
+        var fromRemuxDb = owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb;
+        var needsProbe =
+            !IsPlaceholder(selected)
+            && (
+                NeedsProbe(selected, owner)
+                || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams))
+            );
+
+        // A pre-probe that starts while this playback probes sees it and stays out.
+        var probeKey = PreProbeKey(selected);
+        using var claim = needsProbe && !preProbe ? ClaimProbe(probeKey) : null;
+        if (needsProbe)
         {
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
+            var remuxDbStreams = fromRemuxDb ? remuxDb.GetStreams(owner.Id) : null;
 
-            var segmentTask = _mediaSegmentManager.RunSegmentPluginProviders(
-                owner,
-                libraryOptions,
-                false,
-                ct
-            );
+            var segmentTask = segmentLookups.IsDue(owner)
+                ? _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct)
+                : Task.CompletedTask;
             var metadataTask = ProbeStreamAsync((Video)owner, selected.Path, ct);
             //  var subtitleTask = DownloadSubtitles((Video)owner, ct);
 
             await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
 
-            await owner
-                .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+            await SaveProbedAsync(
+                    owner,
+                    () =>
+                    {
+                        if (
+                            owner is Video probedRow
+                            && probedRow.HasStreamTag()
+                            && !remuxDb.OnProbed(probedRow, libraryOptions)
+                            && remuxDbStreams is not null
+                        )
+                        {
+                            // A dead link: keep RemuxDB's, and try again on the next playback.
+                            remuxDb.RestoreStreams(owner.Id, remuxDbStreams);
+                        }
+                    },
+                    ct
+                )
                 .ConfigureAwait(false);
 
+            // The probe saved the file's chapters, which the lookup before it could not see.
+            if (SegmentLookups.UsesChapters(owner))
+                await RunSegmentsAsync(owner, ct).ConfigureAwait(false);
+
             var refreshed = GetStaticMediaSources(item, enablePathSubstitution, user);
-            selected = SelectByIdOrFirst(refreshed, mediaSourceId);
+            selected = Select(refreshed);
+
+            // Still unprobed after its probe: a dead link, left alone for a while.
+            if (preProbe && (selected is null || NeedsProbe(selected, owner)))
+                MarkPreProbeFailed(probeKey);
+
+            // No video at all: a dead stream, which a playback that may moves on from. One that
+            // is only short (a clip) plays.
+            if ((preProbe || canMoveOn) && (selected is null || !HasVideo(selected)))
+            {
+                MarkDead(probeKey);
+                if (canMoveOn)
+                {
+                    // No URL in the log: stream links carry the debrid key.
+                    _log.LogWarning(
+                        "A stream of {Item} did not start: its probe found no video",
+                        item.Name
+                    );
+                    return await GetPlaybackMediaSourcesCore(
+                            item,
+                            user,
+                            allowMediaProbe,
+                            enablePathSubstitution,
+                            requestedSourceId,
+                            false,
+                            ct
+                        )
+                        .ConfigureAwait(false);
+                }
+            }
 
             if (selected is null)
                 return refreshed;
+        }
+        else
+        {
+            // Also a row probed before: one IntroDB had nothing for is looked up again after a
+            // while, and one whose chapters were never read gets their segments.
+            await EnsureSegmentsAsync(owner, ct).ConfigureAwait(false);
+            if (fromRemuxDb && !preProbe)
+                ProbeLater(owner.Id);
         }
 
         if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
         {
             item.RunTimeTicks = selected.RunTimeTicks;
-            await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
-                .ConfigureAwait(false);
+            await SaveProbedAsync(item, null, ct).ConfigureAwait(false);
+        }
+
+        if (!preProbe)
+            MarkPreparedForPlayback(PreProbeKey(selected));
+
+        // Stub path after probing is done so the real URL is never sent to clients.
+        // Force File protocol so clients proxy through Jellyfin instead of direct-playing.
+        // Both playback info actions, not the POST alone: native clients use the GET.
+        if (!preProbe && _http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false))
+        {
+            selected.Stub();
         }
 
         return [selected];
 
-        static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
+        // The source asked for, or the stream a playback of it moved on to.
+        MediaSourceInfo? Select(IReadOnlyList<MediaSourceInfo> list)
         {
-            if (!id.HasValue)
-                return list.FirstOrDefault();
-
-            var target = id.Value;
-
-            return list.FirstOrDefault(s =>
-                    !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
-                ) ?? list.FirstOrDefault();
+            var s = SelectByIdOrFirst(list, mediaSourceId);
+            return s is null || preProbe ? s : FailedOver(list, s);
         }
 
-        static bool NeedsProbe(MediaSourceInfo s) =>
-            (s.MediaStreams?.All(ms => ms.Type != MediaStreamType.Video) ?? true)
-            || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
-
-        static bool IsVirtualSource(MediaSourceInfo s) =>
-            s.Path?.StartsWith("gelato", StringComparison.OrdinalIgnoreCase) == true
-            || s.Path?.StartsWith("stremio", StringComparison.OrdinalIgnoreCase) == true;
-
+        // Gelato's sources name their item in the ETag (the first stream carries the movie's id).
+        // Jellyfin's own, like a file merged in as a version, use the item's id.
         BaseItem ResolveOwnerFor(MediaSourceInfo s, BaseItem fallback) =>
-            Guid.TryParse(s.ETag, out var g) ? libraryManager.GetItemById(g) ?? fallback : fallback;
+            (Guid.TryParse(s.ETag, out var etag) ? libraryManager.GetItemById(etag) : null)
+            ?? (Guid.TryParse(s.Id, out var id) ? libraryManager.GetItemById(id) : null)
+            ?? fallback;
+    }
+
+    private static bool HasVideo(MediaSourceInfo s) =>
+        s.MediaStreams?.Any(ms => ms.Type == MediaStreamType.Video) ?? false;
+
+    private static bool NeedsProbe(MediaSourceInfo s) =>
+        !HasVideo(s) || (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks;
+
+    /// <summary>
+    /// <see cref="NeedsProbe(MediaSourceInfo)"/>, except for a short row its probe found to be
+    /// short: a trailer the addon listed first, or a debrid's clip for a file it does not have
+    /// yet. Probing it again found the same clip, 0.7 s at PlaybackInfo and again at the master
+    /// playlist of every play. The debrid's clip stays one at later plays and is listed last
+    /// (<see cref="IsShortClip"/>).
+    /// </summary>
+    private static bool NeedsProbe(MediaSourceInfo s, BaseItem owner) =>
+        !HasVideo(s)
+        || (
+            (s.RunTimeTicks ?? 0) < TimeSpan.FromMinutes(2).Ticks
+            && owner.GelatoData<string>("mediaInfo") != RemuxDbService.SourceProbe
+        );
+
+    /// <summary>How long one stream gets to answer, and then to deliver its first bytes.</summary>
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>How long a playback that moved on from a dead stream keeps to its replacement.</summary>
+    private static readonly TimeSpan FailoverTtl = TimeSpan.FromHours(12);
+
+    // The stream a playback moved on to, by the dead stream's row. The source keeps the id the
+    // client asked for: Jellyfin picks the source out of the answer by that id, in PlaybackInfo
+    // and in every streaming request after it.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (string Row, DateTime At)
+    > _failover = new();
+
+    /// <summary>
+    /// At the start of a playback: the stream the title plays by default, or the next of its
+    /// streams (<see cref="StreamLinks.MaxStreams"/> in all) when it is known not to start: its
+    /// pre-probe or its playback's probe found it dead lately (<see cref="MarkDead"/>). Nothing is fetched for that, so a stream
+    /// that works starts as fast as before. A version picked by hand (one that is not the first)
+    /// and a stream row's own page play as they are. <paramref name="canMoveOn"/> says whether
+    /// the playback moves on again when the probe of the stream returned finds no video; when
+    /// every stream is known dead, the first plays as it did before.
+    /// </summary>
+    private MediaSourceInfo FailOver(
+        BaseItem item,
+        IReadOnlyList<MediaSourceInfo> sources,
+        MediaSourceInfo selected,
+        out bool canMoveOn
+    )
+    {
+        canMoveOn = false;
+        var key = PreProbeKey(selected);
+        _failover.TryRemove(key, out _);
+        if (
+            !GelatoPlugin.Instance!.Configuration.PlaybackFailover
+            || item.IsStream()
+            || !ReferenceEquals(selected, sources[0])
+            || StreamLinks.AsHttpUri(selected.Path) is null
+        )
+        {
+            return selected;
+        }
+
+        var candidates = sources
+            .Where(s => StreamLinks.AsHttpUri(s.Path) is not null)
+            .Take(StreamLinks.MaxStreams)
+            .ToList();
+        var index = candidates.FindIndex(s => !DeadRecently(PreProbeKey(s)));
+        if (index < 0)
+        {
+            _log.LogWarning(
+                "None of the first {Count} streams of {Item} started lately; playing the first",
+                candidates.Count,
+                item.Name
+            );
+            return selected;
+        }
+
+        canMoveOn = true;
+        if (index == 0)
+            return selected;
+
+        var candidate = candidates[index];
+        _failover[key] = (PreProbeKey(candidate), DateTime.UtcNow);
+        candidate.Id = selected.Id;
+        _log.LogInformation(
+            "Playing stream {Index} of {Item}: the streams before it did not start",
+            index + 1,
+            item.Name
+        );
+        return candidate;
+    }
+
+    /// <summary>
+    /// The stream a playback of <paramref name="selected"/> moved on to, under the id that was
+    /// asked for; <paramref name="selected"/> itself when it did not.
+    /// </summary>
+    private MediaSourceInfo FailedOver(IReadOnlyList<MediaSourceInfo> list, MediaSourceInfo selected)
+    {
+        var key = PreProbeKey(selected);
+        if (!_failover.TryGetValue(key, out var entry))
+            return selected;
+
+        var now = DateTime.UtcNow;
+        if (now - entry.At >= FailoverTtl)
+        {
+            _failover.TryRemove(key, out _);
+            return selected;
+        }
+
+        if (list.FirstOrDefault(s => PreProbeKey(s) == entry.Row) is not { } replacement)
+            return selected;
+
+        replacement.Id = selected.Id;
+        return replacement;
+    }
+
+    /// <summary>
+    /// Saves an item after its probe, as a writer of its movie/episode's rows. Not when it was
+    /// deleted while the probe ran: saving it would bring it back.
+    /// </summary>
+    private Task SaveProbedAsync(BaseItem probed, Action? beforeSave, CancellationToken ct) =>
+        _manager.Value.RunExclusiveAsync(
+            (probed as Video)?.PrimaryVersionId ?? probed.Id,
+            async token =>
+            {
+                // Asked of the database as well: an episode deleted with its series stays in the
+                // library's cache.
+                var current = _libraryManager.GetItemById(probed.Id);
+                if (current is null || _libraryManager.RetrieveItem(probed.Id) is null)
+                {
+                    _log.LogDebug("Not saving the probe of {Id}: it was deleted", probed.Id);
+                    return;
+                }
+
+                // A sync that ran during the probe saved the item from a copy of its own and made
+                // that the library's instance. Saving the probed one as it is would undo the sync:
+                // the user it added to the row loses the version until the next sync.
+                var saved = probed;
+                if (!ReferenceEquals(current, probed))
+                {
+                    if (probed.HasStreamTag())
+                    {
+                        TakeSyncedData(current, probed);
+                    }
+                    else
+                    {
+                        // A movie/episode gets nothing but its runtime from a probe.
+                        current.RunTimeTicks ??= probed.RunTimeTicks;
+                        saved = current;
+                    }
+                }
+
+                beforeSave?.Invoke();
+                await saved
+                    .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, token)
+                    .ConfigureAwait(false);
+            },
+            ct
+        );
+
+    /// <summary>
+    /// Puts what a sync writes on a stream row onto the instance that was probed: its users,
+    /// order, names and file (the Gelato data), its URL and its movie/episode. What the probe set
+    /// stays.
+    /// </summary>
+    private static void TakeSyncedData(BaseItem synced, BaseItem probed)
+    {
+        probed.ExternalId = synced.ExternalId;
+        probed.Path = synced.Path;
+        probed.ProviderIds = synced.ProviderIds;
+        probed.Tags = synced.Tags;
+        probed.LockedFields = synced.LockedFields;
+        probed.ParentId = synced.ParentId;
+        probed.DateLastRefreshed = synced.DateLastRefreshed;
+        if (synced is Video { PrimaryVersionId: { } primaryId } && probed is Video row)
+            row.SetPrimaryVersionId(primaryId);
+    }
+
+    /// <summary>
+    /// The source with the id, or the first one. A movie/episode's first stream is listed with
+    /// the movie's id and names its row in the ETag only, so a row id a client kept from an
+    /// earlier list is looked for there too. That source then answers under the row's id:
+    /// Jellyfin picks the source to play out of the answer by the id that was asked for.
+    /// </summary>
+    private static MediaSourceInfo? SelectByIdOrFirst(IReadOnlyList<MediaSourceInfo> list, Guid? id)
+    {
+        if (!id.HasValue)
+            return list.FirstOrDefault();
+
+        var target = id.Value;
+
+        var byId = list.FirstOrDefault(s =>
+            !string.IsNullOrEmpty(s.Id) && Guid.TryParse(s.Id, out var g) && g == target
+        );
+        if (byId is not null)
+            return byId;
+
+        var byRow = list.FirstOrDefault(s => Guid.TryParse(s.ETag, out var g) && g == target);
+        if (byRow is not null)
+            byRow.Id = byRow.ETag;
+
+        return byRow ?? list.FirstOrDefault();
     }
 
     public Task<MediaSourceInfo> GetMediaSource(
@@ -557,8 +1271,9 @@ public sealed class MediaSourceManagerDecorator(
     private MediaSourceInfo GetVersionInfo(
         BaseItem item,
         MediaSourceType type,
-        HttpContext ctx,
-        User? user = null
+        User? user = null,
+        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null,
+        bool inLibrary = true
     )
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -575,8 +1290,8 @@ public sealed class MediaSourceManagerDecorator(
             Id = item.Id.ToString("N", CultureInfo.InvariantCulture),
             ETag = item.Id.ToString("N", CultureInfo.InvariantCulture),
             Protocol = MediaProtocol.Http,
-            MediaStreams = _inner.GetMediaStreams(item.Id),
-            MediaAttachments = _inner.GetMediaAttachments(item.Id),
+            MediaStreams = GetMediaStreamsWithExternalSubs(item, titleSubtitles, inLibrary),
+            MediaAttachments = inLibrary ? _inner.GetMediaAttachments(item.Id) : [],
             Name = richName,
             Path = item.Path,
             RunTimeTicks = item.RunTimeTicks,
@@ -590,14 +1305,6 @@ public sealed class MediaSourceManagerDecorator(
             //HasSegments = MediaSegmentManager.HasSegments(item.Id)
         };
 
-        // Set custom HTTP header for binge group routing/load balancing in streaming requests for Anfiteatro client to serve binge group aware content.
-        if (!string.IsNullOrEmpty(bingeGroup))
-        {
-            info.RequiredHttpHeaders = new Dictionary<string, string>
-            {
-                { "X-Gelato-BingeGroup", bingeGroup },
-            };
-        }
 
         if (user is not null)
         {
@@ -626,27 +1333,556 @@ public sealed class MediaSourceManagerDecorator(
             }
         }
 
-        // massive cheat. clients will direct play remote files directly. But we always want to proxy it.
-        // just fake a real file.
-        if (ctx.GetActionName() == "GetPostedPlaybackInfo")
-        {
-            info.IsRemote = false;
-            info.Protocol = MediaProtocol.File;
-        }
-
         info.Bitrate = item.TotalBitrate;
         info.InferTotalBitrate();
 
         return info;
     }
 
+    // Jellyfin's MediaInfoResolver.GetExternalStreamsAsync bails immediately when !video.IsFileProtocol
+    // (stream items have http:// paths). This means external subtitle files saved to the internal
+    // metadata folder are never discovered during library refresh and never written to the DB.
+    // We work around this by scanning the metadata folder ourselves at playback time and merging
+    // any matching subtitle files into the DB streams on the fly. A stream row lists the files of
+    // its movie/episode after its own.
+    private IReadOnlyList<MediaStream> GetMediaStreamsWithExternalSubs(
+        BaseItem item,
+        IReadOnlyList<(string Path, string Language, string Codec)>? titleSubtitles = null,
+        bool inLibrary = true
+    )
+    {
+        var streams = inLibrary ? _inner.GetMediaStreams(item.Id).ToList() : [];
+
+        var existingPaths = new HashSet<string>(
+            streams.Where(s => s.Path != null).Select(s => s.Path!),
+            StringComparer.OrdinalIgnoreCase
+        );
+
+        var nextIndex = streams.Count > 0 ? streams.Max(s => s.Index) + 1 : 0;
+
+        // A probe records the subtitle files next to the row as streams, and a probed row is not
+        // probed again: a file deleted since stayed listed and its delivery answered 404. Left out
+        // after nextIndex is taken, so the files listed below keep their indexes.
+        streams.RemoveAll(s =>
+            s.IsExternal
+            && s.IsExternalUrl != true
+            && !string.IsNullOrEmpty(s.Path)
+            && !File.Exists(s.Path)
+        );
+
+        // Oldest first, the row's and the title's together: a subtitle saved after a PlaybackInfo
+        // (the download after a probe) takes the next index, and the indexes a player already has
+        // keep their file. In the folder's order, or the row's files before the title's, a new file
+        // moved the others and the player's request got another subtitle or none.
+        var files = item.GetGelatoSubtitleFiles()
+            .Concat(titleSubtitles ?? [])
+            .OrderBy(f => File.GetLastWriteTimeUtc(f.Path))
+            .ThenBy(f => f.Path, StringComparer.Ordinal)
+            .Where(f => !existingPaths.Contains(f.Path))
+            .ToList();
+        if (files.Count == 0)
+            return streams;
+
+        // A file keeps the index it was listed with, and a deleted file's index is not given to
+        // the next one: numbered by position, deleting a file moved every newer one down, and a
+        // player that had the list got another subtitle for the index it asked for.
+        var given = _subtitleIndexes.GetOrAdd(
+            item.Id,
+            _ => new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        );
+        lock (given)
+        {
+            var next = given.Count > 0 ? Math.Max(nextIndex, given.Values.Max() + 1) : nextIndex;
+            foreach (var (file, langCode, codec) in files)
+            {
+                if (!given.TryGetValue(file, out var index) || index < nextIndex)
+                {
+                    index = next++;
+                    given[file] = index;
+                }
+
+                streams.Add(
+                    new MediaStream
+                    {
+                        Type = MediaStreamType.Subtitle,
+                        IsExternal = true,
+                        IsExternalUrl = false,
+                        SupportsExternalStream = true,
+                        Path = file,
+                        Language = langCode,
+                        Codec = codec,
+                        Index = index,
+                        IsDefault = false,
+                        IsForced = false,
+                        IsHearingImpaired = false,
+                    }
+                );
+            }
+        }
+
+        return streams;
+    }
+
+    // The indexes GetMediaStreamsWithExternalSubs gave the subtitle files it lists from disk, by
+    // row, the files deleted since included.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        Guid,
+        Dictionary<string, int>
+    > _subtitleIndexes = new();
+
+    // Sources being pre-probed, by the row they play: a playback of the same source waits for the
+    // result instead of probing it a second time. The source's id is not the key: a movie's first
+    // stream has the movie's id, whichever row that is at the moment.
+    private static string PreProbeKey(MediaSourceInfo source) => source.ETag ?? source.Id;
+
+    private IDisposable? ClaimProbe(string key)
+    {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        return _preProbing.TryAdd(key, done.Task) ? new ProbeClaim(this, key, done) : null;
+    }
+
+    private sealed class ProbeClaim(
+        MediaSourceManagerDecorator owner,
+        string key,
+        TaskCompletionSource done
+    ) : IDisposable
+    {
+        public void Dispose()
+        {
+            owner._preProbing.TryRemove(key, out _);
+            done.TrySetResult();
+        }
+    }
+
+    /// <summary>How long a page or version stays open before it is pre-probed.</summary>
+    private static readonly TimeSpan PreProbeDelay = TimeSpan.FromSeconds(1);
+
+    /// <summary>How long a pre-probe may run. A probe takes 2 to 5 seconds.</summary>
+    private static readonly TimeSpan PreProbeTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// How long a source whose pre-probe failed is left alone. A dead link would otherwise hold a
+    /// slot for <see cref="PreProbeTimeout"/> on every visit. Playback still probes it.
+    /// </summary>
+    private static readonly TimeSpan PreProbeRetry = TimeSpan.FromMinutes(30);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        DateTime
+    > _preProbeFailed = new();
+
+    private bool PreProbeFailedRecently(string key)
+    {
+        if (!_preProbeFailed.TryGetValue(key, out var failedAt))
+            return false;
+
+        if (DateTime.UtcNow - failedAt < PreProbeRetry)
+            return true;
+
+        _preProbeFailed.TryRemove(new KeyValuePair<string, DateTime>(key, failedAt));
+        return false;
+    }
+
+    /// <summary>
+    /// How long a source a playback prepared is not pre-probed. The player loads the item again
+    /// when it starts, which schedules a pre-probe of the source it is already playing.
+    /// </summary>
+    private static readonly TimeSpan PreparedForPlaybackWindow = TimeSpan.FromMinutes(1);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        DateTime
+    > _preparedForPlayback = new();
+
+    private void MarkPreparedForPlayback(string key)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var (staleKey, preparedAt) in _preparedForPlayback)
+        {
+            if (now - preparedAt >= PreparedForPlaybackWindow)
+                _preparedForPlayback.TryRemove(staleKey, out _);
+        }
+
+        _preparedForPlayback[key] = now;
+    }
+
+    private bool PreparedForPlaybackRecently(string key) =>
+        _preparedForPlayback.TryGetValue(key, out var preparedAt)
+        && DateTime.UtcNow - preparedAt < PreparedForPlaybackWindow;
+
+    // Sources found dead lately: no answer, an error, a body cut short or no video at all. A
+    // playback of the title's default source moves on from them (FailOver).
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _dead =
+        new();
+
+    private void MarkDead(string key)
+    {
+        MarkPreProbeFailed(key);
+        foreach (var (staleKey, deadAt) in _dead)
+        {
+            if (DateTime.UtcNow - deadAt >= PreProbeRetry)
+                _dead.TryRemove(staleKey, out _);
+        }
+
+        _dead[key] = DateTime.UtcNow;
+    }
+
+    private bool DeadRecently(string key) =>
+        _dead.TryGetValue(key, out var deadAt) && DateTime.UtcNow - deadAt < PreProbeRetry;
+
+    private void MarkPreProbeFailed(string key)
+    {
+        // Sources nobody opens again are dropped once the map grows.
+        if (_preProbeFailed.Count > 1000)
+        {
+            foreach (var (staleKey, failedAt) in _preProbeFailed)
+            {
+                if (DateTime.UtcNow - failedAt >= PreProbeRetry)
+                    _preProbeFailed.TryRemove(staleKey, out _);
+            }
+        }
+
+        _preProbeFailed[key] = DateTime.UtcNow;
+    }
+
+    // Pre-probes running at once. A playback is never held up by this: it probes on its own.
+    private readonly SemaphoreSlim _preProbeSlots = new(2);
+
+    // The pre-probe waiting out its delay, per user and title: the next version of the title
+    // replaces it, so flicking through the versions probes the one that is stopped on.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        CancellationTokenSource
+    > _pendingPreProbe = new();
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task> _preProbing =
+        new();
+
+    private void SchedulePreProbe(BaseItem item, MediaSourceInfo source, User user)
+    {
+        if (
+            !GelatoPlugin.Instance!.GetConfig(user.Id).PreProbe
+            || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
+            || !item.IsGelatoPlaybackItem()
+            || IsPlaceholder(source)
+            || _preProbing.ContainsKey(PreProbeKey(source))
+            || PreProbeFailedRecently(PreProbeKey(source))
+        )
+        {
+            return;
+        }
+
+        // Not in the request's context: the request is over when this runs, and the source list it
+        // builds must not see it as a page visit again.
+        var pending = new CancellationTokenSource();
+        var pendingKey = $"{user.Id}:{(item as Video)?.PrimaryVersionId ?? item.Id}";
+        _pendingPreProbe.AddOrUpdate(
+            pendingKey,
+            pending,
+            (_, previous) =>
+            {
+                previous.Cancel();
+                return pending;
+            }
+        );
+
+        using (ExecutionContext.SuppressFlow())
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(PreProbeDelay, pending.Token).ConfigureAwait(false);
+                    _pendingPreProbe.TryRemove(
+                        new KeyValuePair<string, CancellationTokenSource>(pendingKey, pending)
+                    );
+                    await PreProbeAsync(item, source, user).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Another page or version took its place.
+                }
+                finally
+                {
+                    pending.Dispose();
+                }
+            });
+        }
+    }
+
+    /// <summary>
+    /// Prepares the source for playback as a playback request would: probes it when it needs one
+    /// and looks its segments up. Does nothing for a source already being prepared.
+    /// </summary>
+    private async Task PreProbeAsync(BaseItem item, MediaSourceInfo source, User user)
+    {
+        var key = PreProbeKey(source);
+        if (PreProbeFailedRecently(key) || PreparedForPlaybackRecently(key))
+            return;
+
+        // Registered only once running: a playback waits for a pre-probe under way, not for one
+        // queued behind the others.
+        await _preProbeSlots.WaitAsync().ConfigureAwait(false);
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!_preProbing.TryAdd(key, done.Task))
+        {
+            _preProbeSlots.Release();
+            return;
+        }
+
+        // A stream that takes the connection and never answers would hold its slot, and the
+        // playbacks waiting for it, for good.
+        using var timeout = new CancellationTokenSource(PreProbeTimeout);
+        try
+        {
+            // Deleted while this waited: the instance at hand would be probed and saved back. An
+            // item inserted again since has the same id, so the library's instance is the one.
+            if (_libraryManager.GetItemById(item.Id) is not { } current)
+                return;
+
+            // A source with its media info is not probed, so its link is checked here: a dead one
+            // is passed over by the playback that follows (FailOver). Unprobed ones are checked by
+            // their probe.
+            if (
+                GelatoPlugin.Instance!.Configuration.PlaybackFailover
+                && !NeedsProbe(source)
+                && StreamLinks.AsHttpUri(source.Path) is { } uri
+            )
+            {
+                var reason = await StreamLinks
+                    .CheckAsync(httpClientFactory.CreateClient(), uri, StartTimeout, timeout.Token)
+                    .ConfigureAwait(false);
+                if (reason is not null)
+                {
+                    MarkDead(key);
+                    // No URL in the log: stream links carry the debrid key.
+                    _log.LogWarning(
+                        "Pre-probe of {Id} source {Source}: the stream did not start ({Reason})",
+                        item.Id,
+                        source.Id,
+                        reason
+                    );
+                    return;
+                }
+            }
+
+            await GetPlaybackMediaSourcesCore(
+                    current,
+                    user,
+                    true,
+                    false,
+                    source.Id,
+                    true,
+                    timeout.Token
+                )
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            MarkPreProbeFailed(key);
+            _log.LogWarning(
+                "Pre-probe of {Id} source {Source} gave up after {Seconds}s",
+                item.Id,
+                source.Id,
+                PreProbeTimeout.TotalSeconds
+            );
+        }
+        catch (Exception ex)
+        {
+            MarkPreProbeFailed(key);
+            _log.LogWarning(ex, "Pre-probe failed for {Id} source {Source}", item.Id, source.Id);
+        }
+        finally
+        {
+            _preProbing.TryRemove(key, out _);
+            done.TrySetResult();
+            _preProbeSlots.Release();
+        }
+    }
+
+    /// <summary>
+    /// Pre-probes the source an episode plays by default, syncing its streams first when they
+    /// are not: the next episode of one that is nearing its end.
+    /// </summary>
+    public async Task PreProbeDefaultAsync(BaseItem item, User user)
+    {
+        if (
+            !GelatoPlugin.Instance!.GetConfig(user.Id).PreProbe
+            || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
+            || !item.IsGelatoPlaybackItem()
+        )
+        {
+            return;
+        }
+
+        var manager = _manager.Value;
+        var syncKey = SyncCacheKey(item, user.Id);
+        var syncItemId = (item as Video)?.PrimaryVersionId ?? item.Id;
+        if (!manager.HasStreamSync(syncKey, syncItemId))
+        {
+            await _lock
+                .RunSingleFlightAsync(
+                    item.Id,
+                    async ct =>
+                    {
+                        if (await manager.SyncStreams(item, user.Id, ct).ConfigureAwait(false) > 0)
+                            manager.SetStreamSync(syncKey);
+                    }
+                )
+                .ConfigureAwait(false);
+        }
+
+        var sources = GetStaticMediaSources(item, false, user);
+        if (sources.Count > 0 && !IsPlaceholder(sources[0]))
+            await PreProbeAsync(item, sources[0], user).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The movie/episode's own placeholder, listed when the user has no streams: there is nothing
+    /// to probe, and probing it would save the movie on every visit. Asked before the source
+    /// goes into a response, which stubs its path.
+    /// </summary>
+    private static bool IsPlaceholder(MediaSourceInfo source) =>
+        string.IsNullOrEmpty(source.Path)
+        || source.Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
+        || source.Path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>How long playback waits for the segment providers of a row that plays on RemuxDB's media info.</summary>
+    private static readonly TimeSpan SegmentWait = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>
+    /// Fetches the row's segments before playback starts, so the client has them for its skip
+    /// buttons on the first play, unless the provider has an answer for the row that still holds
+    /// (<see cref="SegmentLookups.IsDue"/>).
+    /// </summary>
+    private Task EnsureSegmentsAsync(BaseItem owner, CancellationToken ct) =>
+        segmentLookups.IsDue(owner) ? RunSegmentsAsync(owner, ct) : Task.CompletedTask;
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        Guid,
+        Task
+    > _segmentRuns = new();
+
+    /// <summary>
+    /// Runs the segment providers for the row, once at a time. Playback waits at most
+    /// <see cref="SegmentWait"/>; a slower provider finishes in the background.
+    /// </summary>
+    private async Task RunSegmentsAsync(BaseItem owner, CancellationToken ct)
+    {
+        var run = _segmentRuns.GetOrAdd(
+            owner.Id,
+            id =>
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _mediaSegmentManager
+                            .RunSegmentPluginProviders(
+                                owner,
+                                _libraryManager.GetLibraryOptions(owner),
+                                false,
+                                CancellationToken.None
+                            )
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogWarning(ex, "Segment lookup failed for {Id}", id);
+                    }
+                })
+        );
+        _ = run.ContinueWith(
+            done => _segmentRuns.TryRemove(new KeyValuePair<Guid, Task>(owner.Id, done)),
+            TaskScheduler.Default
+        );
+
+        await Task.WhenAny(run, Task.Delay(SegmentWait, ct)).ConfigureAwait(false);
+    }
+
+    /// <summary>How long after playback starts a stream with RemuxDB's media info is probed.</summary>
+    private static readonly TimeSpan ProbeLaterDelay = TimeSpan.FromSeconds(30);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, byte> _probingLater =
+        new();
+
+    /// <summary>
+    /// Probes a row that played with RemuxDB's media info once, in the background. It adds what
+    /// RemuxDB does not record (attachments, such as the fonts of ASS subtitles) and corrects a
+    /// wrong match. The segment providers run before playback (<see cref="EnsureSegmentsAsync"/>).
+    /// Late enough not to hold
+    /// up the playback's own requests to the stream.
+    /// </summary>
+    private void ProbeLater(Guid rowId)
+    {
+        if (!_probingLater.TryAdd(rowId, 0))
+            return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(ProbeLaterDelay).ConfigureAwait(false);
+
+                // A copy from the database: the probe points the item at a temporary file while it
+                // runs, and the cached instance serves the playback meanwhile.
+                if (
+                    _libraryManager.RetrieveItem(rowId) is not Video row
+                    || row.GelatoData<string>("mediaInfo") != RemuxDbService.SourceRemuxDb
+                    || string.IsNullOrEmpty(row.Path)
+                )
+                {
+                    return;
+                }
+
+                var libraryOptions = _libraryManager.GetLibraryOptions(row);
+                var before = remuxDb.GetStreams(rowId);
+                await ProbeStreamAsync(row, row.Path, CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                // As a writer of the movie's rows: a sync meanwhile may have deleted this one, and
+                // saving it would bring it back.
+                await _manager
+                    .Value.RunExclusiveAsync(
+                        row.PrimaryVersionId ?? rowId,
+                        async ct =>
+                        {
+                            if (_libraryManager.GetItemById(rowId) is null)
+                                return;
+
+                            if (!remuxDb.OnProbed(row, libraryOptions))
+                            {
+                                // A dead link: keep RemuxDB's, and try again on the next playback.
+                                remuxDb.RestoreStreams(rowId, before);
+                                return;
+                            }
+
+                            remuxDb.CompareWithProbe(rowId, before, remuxDb.GetStreams(rowId));
+                            await row.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, ct)
+                                .ConfigureAwait(false);
+                        },
+                        CancellationToken.None
+                    )
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _log.LogWarning(ex, "Background probe failed for {Id}", rowId);
+            }
+            finally
+            {
+                _probingLater.TryRemove(rowId, out _);
+            }
+        });
+    }
+
     private async Task ProbeStreamAsync(Video owner, string streamUrl, CancellationToken ct)
     {
-        var gelatoFilename = owner.GelatoData<string>("filename");
-        var strmBaseName = !string.IsNullOrEmpty(gelatoFilename)
-            ? Path.GetFileNameWithoutExtension(gelatoFilename)
-            : $"{owner.Id:N}";
-        var tmpStrm = Path.Combine(Path.GetTempPath(), $"{strmBaseName}.strm");
+        // Named after the row, not the release: Jellyfin's probe takes subtitle files named like
+        // the release, which is how Gelato saves them, into the row's streams at index 0 and
+        // numbers the file's own after them. A file saved after a PlaybackInfo then moved every
+        // index the player had at the next probe. Saved files are listed after the file's
+        // streams instead (GetMediaStreamsWithExternalSubs).
+        var tmpStrm = Path.Combine(Path.GetTempPath(), $"gelato-probe-{owner.Id:N}.strm");
         await File.WriteAllTextAsync(tmpStrm, streamUrl, ct).ConfigureAwait(false);
 
         var origPath = owner.Path;
@@ -655,17 +1891,68 @@ public sealed class MediaSourceManagerDecorator(
         owner.IsShortcut = true;
         owner.DateModified = new FileInfo(tmpStrm).LastWriteTimeUtc;
 
+        // The probe's full refresh also downloads the library's subtitle languages, before the
+        // playback that waits for the probe starts: a subtitle provider that took 20 to 60 s per
+        // file held the click that long. The searches inside the probe find nothing, and the
+        // download runs in the background once the probe is done.
+        SubtitleManagerDecorator.Probing.Value = true;
+        var probed = false;
         try
         {
-            _log.LogInformation("Probing stream for {Id} via {Url}", owner.Id, streamUrl);
-            await owner.RefreshMetadata(
-                new MetadataRefreshOptions(directoryService)
-                {
-                    EnableRemoteContentProbe = true,
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                },
-                ct
+            _log.LogInformation(
+                "Probing stream for {Id} via {Url}",
+                owner.Id,
+                Redact.Url(streamUrl)
             );
+
+            var options = new MetadataRefreshOptions(directoryService)
+            {
+                EnableRemoteContentProbe = true,
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            };
+
+            var probeProvider = FindProbeProvider(owner);
+            if (probeProvider is not null)
+            {
+                // Call the ffprobe provider directly instead of going through
+                // RefreshMetadata.
+                //
+                // RefreshMetadata runs the whole metadata pipeline, and with
+                // FullRefresh that includes ExecuteRemoteProviders - so every
+                // stream probe also re-queried OMDb/TMDb for the item. On a
+                // library browsed through Gelato that is a remote metadata
+                // lookup per probe, and it is where the recurring
+                // "Error in The Open Movie Database" JsonException spam comes
+                // from: OMDb returns malformed JSON for some season payloads
+                // and the probe drags that call along every time.
+                //
+                // The probe provider on its own does exactly what is wanted
+                // here - read the container's streams - and nothing else. The
+                // caller already persists the result with
+                // UpdateToRepositoryAsync and runs segment providers itself, so
+                // no other part of the pipeline is needed. It also keeps image
+                // fetchers away from the item while its path points at the
+                // temporary .strm file.
+                await probeProvider.FetchAsync(owner, options, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                // No probe provider resolved - fall back to the old path rather
+                // than silently skipping the probe. Logged at information: this
+                // path used to be taken on every probe without anyone noticing.
+                _log.LogInformation(
+                    "No probe provider available for {Id}, falling back to RefreshMetadata",
+                    owner.Id
+                );
+                await owner.RefreshMetadata(options, ct).ConfigureAwait(false);
+            }
+            probed = true;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // The playback went away or the pre-probe ran out of time: the caller decides what
+            // that is, and saving after it would fail on the same token anyway.
+            throw;
         }
         catch (Exception ex)
         {
@@ -673,6 +1960,7 @@ public sealed class MediaSourceManagerDecorator(
         }
         finally
         {
+            SubtitleManagerDecorator.Probing.Value = false;
             owner.Path = origPath;
             owner.IsShortcut = origShortcut;
             try
@@ -683,200 +1971,125 @@ public sealed class MediaSourceManagerDecorator(
             { /* best effort */
             }
         }
+
+        if (probed)
+            DownloadSubtitlesLater(owner.Id);
     }
 
-    /// <summary>
-    /// State bag for SyncPlay source resolution, passed between
-    /// <see cref="ResolveSyncPlaySource"/> and <see cref="UpdateSyncPlayCache"/>.
-    /// </summary>
-    private readonly record struct SyncPlaySourceState(
-        bool IsSyncPlay,
-        string? CacheKey,
-        string? PrevSourceId,
-        Guid? OverrideSourceId,
-        bool HadExplicitSource,
-        string ItemIdStr);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        Guid,
+        byte
+    > _downloadingSubtitles = new();
 
     /// <summary>
-    /// Determines whether the current request is part of a SyncPlay session
-    /// and, if so, resolves the media source the group should be using.
+    /// Downloads the library's subtitle languages for a probed row, as the probe did inside the
+    /// playback before. One run per row at a time: a pre-probe and the click's probe that meet
+    /// start one. A subtitle that arrives is listed from its file on the next look at the row.
     /// </summary>
-    private SyncPlaySourceState ResolveSyncPlaySource(
-        User? user, BaseItem item, HttpContext? ctx, Guid? currentMediaSourceId)
+    private void DownloadSubtitlesLater(Guid rowId)
     {
-        var hadExplicit = ctx?.Items.ContainsKey("MediaSourceId") == true;
-        var itemIdStr = item.Id.ToString("N");
-        var empty = new SyncPlaySourceState(false, null, null, null, hadExplicit, itemIdStr);
+        if (!_downloadingSubtitles.TryAdd(rowId, 0))
+            return;
 
-        if (user is null)
-            return empty;
-
-        bool isSyncPlay;
-        try
+        _ = Task.Run(async () =>
         {
-            isSyncPlay = _syncPlayManager.Value.IsUserActive(user.Id);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "SyncPlay: IsUserActive check failed for {UserId}", user.Id);
-            return empty;
-        }
-
-        if (!isSyncPlay)
-            return empty;
-
-        try
-        {
-            var groupId = SyncPlayGroupTracker.GetGroupForUser(user.Id);
-            var groupPart = groupId?.ToString("N") ?? "unknown";
-            var cacheKey = $"sp:{groupPart}:{item.Id:N}";
-
-            // Check for a previously cached source.
-            string? prevSourceId = null;
-            if (_syncPlaySourceCache.TryGetValue(cacheKey, out var prev)
-                && prev.Expiry > DateTime.UtcNow)
+            try
             {
-                prevSourceId = prev.SourceId;
-            }
-
-            // If the cache is empty (group just created/joined), seed from
-            // the group leader's session so joiners get the same source.
-            // Only seed with a specific stream ID — the item's own ID is
-            // the default and caching it would block version switching.
-            if (prevSourceId is null)
-            {
-                var groupSessions = _sessionManager.Value.Sessions
-                    .Where(s => SyncPlayGroupTracker.GetGroupForUser(s.UserId) == groupId
-                                && s.NowPlayingItem is not null
-                                && s.NowPlayingItem.Id == item.Id);
-
-                foreach (var gs in groupSessions)
+                // A copy from the database, with the stream's own path: the cached instance may
+                // be probed again meanwhile, which points it at a temporary file.
+                if (
+                    _libraryManager.RetrieveItem(rowId) is not Video row
+                    || row is not (Movie or Episode)
+                    || string.IsNullOrEmpty(row.Path)
+                )
                 {
-                    var msid = gs.PlayState?.MediaSourceId;
-                    if (!string.IsNullOrEmpty(msid) && msid != itemIdStr)
+                    return;
+                }
+
+                var options = _libraryManager.GetLibraryOptions(row);
+                if (options.SubtitleDownloadLanguages is not { Length: > 0 } languages)
+                    return;
+
+                // A dead link probes without a video stream: nothing to find subtitles for.
+                var streams = _inner.GetMediaStreams(rowId);
+                if (streams.All(s => s.Type != MediaStreamType.Video))
+                    return;
+
+                var subtitleManager = _subtitleManager.Value;
+                foreach (var language in languages)
+                {
+                    if (!WantsSubtitle(streams, language, options))
+                        continue;
+
+                    var request = new SubtitleSearchRequest
                     {
-                        prevSourceId = msid;
-                        _syncPlaySourceCache[cacheKey] =
-                            (msid, DateTime.UtcNow + _syncPlayCacheTtl);
-                        _log.LogDebug(
-                            "SyncPlay: seeded cache from group session, source={SourceId}",
-                            msid);
-                        break;
+                        ContentType =
+                            row is Episode ? VideoContentType.Episode : VideoContentType.Movie,
+                        IndexNumber = row.IndexNumber,
+                        Language = language,
+                        MediaPath = row.Path,
+                        Name = row.Name,
+                        ParentIndexNumber = row.ParentIndexNumber,
+                        ProductionYear = row.ProductionYear,
+                        ProviderIds = row.ProviderIds,
+                        SearchAllProviders = false,
+                        IsPerfectMatch = options.RequirePerfectSubtitleMatch,
+                        DisabledSubtitleFetchers = options.DisabledSubtitleFetchers,
+                        SubtitleFetcherOrder = options.SubtitleFetcherOrder,
+                        IsAutomated = true,
+                    };
+                    if (row is Episode episode)
+                    {
+                        request.IndexNumberEnd = episode.IndexNumberEnd;
+                        request.SeriesName = episode.SeriesName;
+                    }
+
+                    var found = await subtitleManager
+                        .SearchSubtitles(request, CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (found.FirstOrDefault() is { } subtitle)
+                    {
+                        await subtitleManager
+                            .DownloadSubtitles(row, subtitle.Id, CancellationToken.None)
+                            .ConfigureAwait(false);
                     }
                 }
             }
-
-            // Only override when the cache holds a specific stream ID.
-            Guid? overrideId = null;
-            if (!hadExplicit
-                && prevSourceId is not null
-                && prevSourceId != itemIdStr
-                && Guid.TryParse(prevSourceId, out var cachedId))
+            catch (Exception ex)
             {
-                _log.LogDebug(
-                    "SyncPlay: overriding mediaSourceId to cached {SourceId} for item {ItemId}",
-                    cachedId, item.Id);
-                overrideId = cachedId;
+                _log.LogWarning(ex, "Subtitle download after the probe failed for {Id}", rowId);
             }
-
-            return new SyncPlaySourceState(true, cacheKey, prevSourceId, overrideId, hadExplicit, itemIdStr);
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex, "SyncPlay: source resolution failed");
-            return new SyncPlaySourceState(true, null, null, null, hadExplicit, itemIdStr);
-        }
-    }
-
-    /// <summary>
-    /// Caches the resolved source for the SyncPlay group and propagates
-    /// explicit version switches to other group members.
-    /// </summary>
-    private void UpdateSyncPlayCache(
-        SyncPlaySourceState state, MediaSourceInfo selected, BaseItem item, User? user, CancellationToken ct)
-    {
-        if (!state.IsSyncPlay || state.CacheKey is null || user is null)
-            return;
-
-        try
-        {
-            // Only cache a specific stream ID — the item's own ID is the
-            // default (sources[0]) and caching it would block version
-            // switching because SyncPlay commands never carry mediaSourceId.
-            if (selected.Id != state.ItemIdStr)
+            finally
             {
-                _syncPlaySourceCache[state.CacheKey] =
-                    (selected.Id, DateTime.UtcNow + _syncPlayCacheTtl);
+                _downloadingSubtitles.TryRemove(rowId, out _);
             }
+        });
 
-            if (state.HadExplicitSource
-                && state.PrevSourceId is not null
-                && selected.Id != state.PrevSourceId)
-            {
-                _ = PropagateSourceToGroupAsync(
-                    user.Id, item.Id, selected.Id, ct);
-            }
-        }
-        catch (Exception ex)
+        // What Jellyfin's SubtitleDownloader skips: a text subtitle in the language, and with the
+        // library's options a default audio track or an embedded subtitle in it.
+        static bool WantsSubtitle(
+            IReadOnlyList<MediaStream> streams,
+            string language,
+            LibraryOptions options
+        )
         {
-            _log.LogWarning(ex, "SyncPlay: cache/propagate failed");
-        }
-    }
+            bool Is(MediaStream s) =>
+                string.Equals(s.Language, language, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Sends a PlayNow command to every other session in the same SyncPlay
-    /// group, telling them to switch to the new media source.
-    /// </summary>
-    private async Task PropagateSourceToGroupAsync(
-        Guid initiatorUserId,
-        Guid itemId,
-        string newMediaSourceId,
-        CancellationToken ct)
-    {
-        try
-        {
-            var groupId = SyncPlayGroupTracker.GetGroupForUser(initiatorUserId);
-            if (groupId is null) return;
+            if (streams.Any(s => s.Type == MediaStreamType.Subtitle && s.IsTextSubtitleStream && Is(s)))
+                return false;
 
-            // Find the initiator's session (needed as controllingSessionId).
-            var initiatorSession = _sessionManager.Value.Sessions
-                .FirstOrDefault(s => s.UserId == initiatorUserId);
-            if (initiatorSession is null) return;
+            var audio = streams.Where(s => s.Type == MediaStreamType.Audio).ToList();
+            var defaultAudio = audio.Where(s => s.IsDefault).ToList();
+            if (defaultAudio.Count == 0)
+                defaultAudio = audio.Take(1).ToList();
+            if (options.SkipSubtitlesIfAudioTrackMatches && defaultAudio.Any(Is))
+                return false;
 
-            // Find other group members' active sessions.
-            var targets = _sessionManager.Value.Sessions
-                .Where(s =>
-                    s.UserId != initiatorUserId
-                    && SyncPlayGroupTracker.GetGroupForUser(s.UserId) == groupId)
-                .ToList();
-
-            foreach (var target in targets)
-            {
-                var command = new PlayRequest
-                {
-                    ItemIds = [itemId],
-                    MediaSourceId = newMediaSourceId,
-                    PlayCommand = PlayCommand.PlayNow,
-                    StartPositionTicks = target.PlayState?.PositionTicks,
-                    ControllingUserId = initiatorUserId,
-                };
-
-                await _sessionManager.Value.SendPlayCommand(
-                    initiatorSession.Id,
-                    target.Id,
-                    command,
-                    ct).ConfigureAwait(false);
-
-                _log.LogDebug(
-                    "SyncPlay: sent source switch to session {SessionId} " +
-                    "(user {UserId}, source {SourceId})",
-                    target.Id, target.UserId, newMediaSourceId);
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.LogWarning(ex,
-                "SyncPlay: failed to propagate source change to group members");
+            return !(
+                options.SkipSubtitlesIfEmbeddedSubtitlesPresent
+                && streams.Any(s => s.Type == MediaStreamType.Subtitle && !s.IsExternal && Is(s))
+            );
         }
     }
 }

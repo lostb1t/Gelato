@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 using System;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -15,7 +14,7 @@ using Microsoft.Extensions.Logging;
 namespace Gelato.Services;
 
 /// <summary>
-/// Client for retrieving intro timestamps from IntroDB.
+/// Client for retrieving intro, recap and outro timestamps from IntroDB.
 /// </summary>
 public sealed class IntroDbClient
 {
@@ -25,7 +24,7 @@ public sealed class IntroDbClient
     public const int DefaultTimeoutSeconds = 10;
 
     private const string BaseUrl = "https://api.introdb.app";
-    private const string IntroPath = "/intro";
+    private const string SegmentsPath = "/segments";
     private const double MillisecondsPerSecond = 1000d;
 
     private static readonly JsonSerializerOptions SerializerOptions = new JsonSerializerOptions
@@ -61,14 +60,15 @@ public sealed class IntroDbClient
     }
 
     /// <summary>
-    /// Fetch intro timestamps for a specific episode.
+    /// Fetch the intro, recap and outro of a specific episode.
     /// </summary>
     /// <param name="imdbId">IMDb id.</param>
     /// <param name="seasonNumber">Season number.</param>
     /// <param name="episodeNumber">Episode number.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Intro result or null if not available.</returns>
-    public async Task<IntroDbIntroResult?> GetIntroAsync(
+    /// <returns>The segments IntroDB has, none when it has no entry for the episode.</returns>
+    /// <exception cref="HttpRequestException">IntroDB could not be asked or did not answer properly.</exception>
+    public async Task<IReadOnlyList<IntroDbSegment>> GetSegmentsAsync(
         string imdbId,
         int seasonNumber,
         int episodeNumber,
@@ -96,11 +96,7 @@ public sealed class IntroDbClient
             );
         }
 
-        Debug.Assert(!string.IsNullOrWhiteSpace(imdbId), "IMDb id must be provided.");
-        Debug.Assert(seasonNumber > 0, "Season number must be positive.");
-        Debug.Assert(episodeNumber > 0, "Episode number must be positive.");
-
-        var requestUri = BuildIntroUri(imdbId, seasonNumber, episodeNumber);
+        var requestUri = BuildSegmentsUri(imdbId, seasonNumber, episodeNumber);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
         using var response = await _httpClient
@@ -109,9 +105,10 @@ public sealed class IntroDbClient
 
         if (response.StatusCode == HttpStatusCode.NotFound)
         {
-            return null;
+            return [];
         }
 
+        // Numbers IntroDB does not take: asking again does not change that.
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
             _logger.LogWarning(
@@ -120,19 +117,16 @@ public sealed class IntroDbClient
                 seasonNumber,
                 episodeNumber
             );
-            return null;
+            return [];
         }
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning(
-                "IntroDB request failed for {ImdbId} S{Season}E{Episode} with status {Status}.",
-                imdbId,
-                seasonNumber,
-                episodeNumber,
+            throw new HttpRequestException(
+                $"IntroDB answered {(int)response.StatusCode}",
+                null,
                 response.StatusCode
             );
-            return null;
         }
 
 #if EMBY
@@ -142,53 +136,72 @@ public sealed class IntroDbClient
             .Content.ReadAsStreamAsync(cancellationToken)
             .ConfigureAwait(false);
 #endif
-        var payload = await JsonSerializer
-            .DeserializeAsync<IntroDbIntroResponse>(
-                payloadStream,
-                SerializerOptions,
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+        IntroDbSegmentsResponse? payload;
+        try
+        {
+            payload = await JsonSerializer
+                .DeserializeAsync<IntroDbSegmentsResponse>(
+                    payloadStream,
+                    SerializerOptions,
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
+        }
+        catch (JsonException exception)
+        {
+            throw new HttpRequestException("IntroDB's answer could not be read", exception);
+        }
 
         if (payload == null)
         {
-            _logger.LogWarning(
-                "IntroDB response could not be parsed for {ImdbId} S{Season}E{Episode}.",
-                imdbId,
-                seasonNumber,
-                episodeNumber
-            );
-            return null;
+            throw new HttpRequestException("IntroDB's answer was empty");
         }
 
-        if (payload.EndMs <= payload.StartMs || payload.StartMs < 0)
+        var segments = new List<IntroDbSegment>();
+        foreach (
+            var (kind, timing) in new[]
+            {
+                (IntroDbSegmentKind.Intro, payload.Intro),
+                (IntroDbSegmentKind.Recap, payload.Recap),
+                (IntroDbSegmentKind.Outro, payload.Outro),
+            }
+        )
         {
-            _logger.LogWarning(
-                "IntroDB returned invalid timing for {ImdbId} S{Season}E{Episode}: {StartMs} - {EndMs}.",
-                imdbId,
-                seasonNumber,
-                episodeNumber,
-                payload.StartMs,
-                payload.EndMs
+            if (timing is null)
+            {
+                continue;
+            }
+
+            if (timing.EndMs <= timing.StartMs || timing.StartMs < 0)
+            {
+                _logger.LogWarning(
+                    "IntroDB returned invalid {Kind} timing for {ImdbId} S{Season}E{Episode}: {StartMs} - {EndMs}.",
+                    kind,
+                    imdbId,
+                    seasonNumber,
+                    episodeNumber,
+                    timing.StartMs,
+                    timing.EndMs
+                );
+                continue;
+            }
+
+            segments.Add(
+                new IntroDbSegment(
+                    kind,
+                    timing.StartMs / MillisecondsPerSecond,
+                    timing.EndMs / MillisecondsPerSecond
+                )
             );
-            return null;
         }
 
-        return new IntroDbIntroResult(
-            payload.ImdbId,
-            payload.Season,
-            payload.Episode,
-            payload.StartMs / MillisecondsPerSecond,
-            payload.EndMs / MillisecondsPerSecond,
-            payload.Confidence,
-            payload.SubmissionCount
-        );
+        return segments;
     }
 
-    private Uri BuildIntroUri(string imdbId, int seasonNumber, int episodeNumber)
+    private Uri BuildSegmentsUri(string imdbId, int seasonNumber, int episodeNumber)
     {
         var baseUri = _httpClient.BaseAddress ?? new Uri(BaseUrl, UriKind.Absolute);
-        var builder = new UriBuilder(new Uri(baseUri, IntroPath))
+        var builder = new UriBuilder(new Uri(baseUri, SegmentsPath))
         {
             Query =
                 $"imdb_id={Uri.EscapeDataString(imdbId)}&season={seasonNumber}&episode={episodeNumber}",
@@ -196,37 +209,33 @@ public sealed class IntroDbClient
         return builder.Uri;
     }
 
-    private sealed class IntroDbIntroResponse
+    private sealed class IntroDbSegmentsResponse
     {
-        [JsonPropertyName("imdb_id")]
-        public string ImdbId { get; set; } = string.Empty;
+        [JsonPropertyName("intro")]
+        public IntroDbTiming? Intro { get; set; }
 
-        [JsonPropertyName("season")]
-        public int Season { get; set; }
+        [JsonPropertyName("recap")]
+        public IntroDbTiming? Recap { get; set; }
 
-        [JsonPropertyName("episode")]
-        public int Episode { get; set; }
+        [JsonPropertyName("outro")]
+        public IntroDbTiming? Outro { get; set; }
+    }
 
+    private sealed class IntroDbTiming
+    {
         [JsonPropertyName("start_ms")]
         public long StartMs { get; set; }
 
         [JsonPropertyName("end_ms")]
         public long EndMs { get; set; }
-
-        [JsonPropertyName("confidence")]
-        public double Confidence { get; set; }
-
-        [JsonPropertyName("submission_count")]
-        public int SubmissionCount { get; set; }
     }
 }
 
-public sealed record IntroDbIntroResult(
-    string ImdbId,
-    int Season,
-    int Episode,
-    double StartSeconds,
-    double EndSeconds,
-    double Confidence,
-    int SubmissionCount
-);
+public enum IntroDbSegmentKind
+{
+    Intro,
+    Recap,
+    Outro,
+}
+
+public sealed record IntroDbSegment(IntroDbSegmentKind Kind, double StartSeconds, double EndSeconds);

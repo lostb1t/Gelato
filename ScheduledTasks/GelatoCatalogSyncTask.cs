@@ -9,7 +9,7 @@ public sealed class GelatoCatalogItemsSyncTask(
     CatalogImportService importService
 ) : IScheduledTask
 {
-    public string Name => "Import Gelato Catalogs";
+    public string Name => "Import Catalogs";
     public string Key => "GelatoCatalogItemsSync";
     public string Description => "Imports items from enabled Stremio catalogs into Jellyfin.";
     public string Category => "Gelato";

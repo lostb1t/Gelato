@@ -10,24 +10,68 @@ public class PluginConfiguration : BasePluginConfiguration
 {
     public string MoviePath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "movies");
     public string SeriesPath { get; set; } = Path.Combine(Path.GetTempPath(), "gelato", "series");
+
+    /// <summary>
+    /// Where Gelato creates the folder it adds to a library picked on the settings page. Empty means
+    /// the folder the movie path is in, so an install from before the library pickers keeps its folders
+    /// next to each other.
+    /// </summary>
+    public string BasePath { get; set; } = "";
     public int StreamTTL { get; set; } = 3600;
     public int CatalogMaxItems { get; set; } = 100;
     public string Url { get; set; } = "";
     public bool EnableMixed { get; set; } = false;
+    public bool ExtendLocalSeriesTrees { get; set; } = false;
     public bool FilterUnreleased { get; set; } = false;
-    public int FilterUnreleasedBufferDays { get; set; } = 30;
+    public int FilterUnreleasedBufferDays { get; set; } = 0;
     public bool DisableSourceCount { get; set; } = true;
-    public bool P2PEnabled { get; set; } = false;
-    public int P2PDLSpeed { get; set; } = 0;
-    public int P2PULSpeed { get; set; } = 0;
     public string FFmpegAnalyzeDuration { get; set; } = "5M";
     public string FFmpegProbeSize { get; set; } = "40M";
     public bool CreateCollections { get; set; } = false;
     public int MaxCollectionItems { get; set; } = 100;
     public bool DisableSearch { get; set; } = false;
-
+    public bool EnableJavaScriptInjection { get; set; } = false;
+    public bool LazyImages { get; set; } = false;
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
+
+    /// <summary>
+    /// Fill in a stream's tracks, runtime and size from RemuxDB when its streams are synced,
+    /// so they show before playback and playback skips its probe.
+    /// </summary>
+    public bool RemuxDbEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Probe a stream before it is played: when its item is opened or another version of it is
+    /// picked, and the next episode while an episode nears its end. Playback of a stream
+    /// that needs a probe then starts without waiting for it.
+    /// </summary>
+    public bool PreProbe { get; set; } = true;
+
+    /// <summary>
+    /// When the stream a title plays by default does not start (a dead or truncated debrid
+    /// link), play the next of its streams instead. A version picked by hand is played as it is.
+    /// </summary>
+    public bool PlaybackFailover { get; set; }
+
+    /// <summary>
+    /// Submit a stream's probe to RemuxDB when it played a file RemuxDB did not know. Anonymous,
+    /// and only for streams whose torrent is known.
+    /// </summary>
+    public bool RemuxDbContribute { get; set; } = true;
+
+    public string RemuxDbUrl { get; set; } = RemuxDb.RemuxDbClient.DefaultUrl;
+
+    /// <summary>
+    /// Random id RemuxDB requires of every client, created on first use. Tied to nothing else.
+    /// </summary>
+    public string RemuxDbClientId { get; set; } = "";
+
+    /// <summary>
+    /// The Jellyfin version Gelato last started against, so it can tell when the server has been
+    /// upgraded underneath it. Empty until the first start that records one.
+    /// </summary>
+    public string LastSeenServerVersion { get; set; } = "";
 
     public string GetBaseUrl()
     {
@@ -54,12 +98,82 @@ public class PluginConfiguration : BasePluginConfiguration
     [XmlIgnore]
     public Folder? SeriesFolder;
 
+    public string GetBasePath() =>
+        string.IsNullOrWhiteSpace(BasePath) ? GetDefaultBasePath() : BasePath.Trim();
+
+    /// <summary>
+    /// The base path when none is set: a "gelato" folder next to the movie path, or the folder the
+    /// movie path is in when that is one already (the default install: %TEMP%/gelato). A movie path
+    /// among real media, e.g. /media/gelato-movies, gets /media/gelato, not /media itself.
+    /// </summary>
+    public string GetDefaultBasePath()
+    {
+        var parent = string.IsNullOrWhiteSpace(MoviePath)
+            ? null
+            : Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(MoviePath.Trim()));
+        if (string.IsNullOrWhiteSpace(parent))
+            return Path.Combine(Path.GetTempPath(), "gelato");
+
+        return string.Equals(Path.GetFileName(parent), "gelato", StringComparison.OrdinalIgnoreCase)
+            ? parent
+            : Path.Combine(parent, "gelato");
+    }
+
     public PluginConfiguration GetEffectiveConfig(Guid userId)
     {
         var userConfig = UserConfigs.FirstOrDefault(u => u.UserId == userId);
         return userConfig is null ? this : userConfig.ApplyOverrides(this);
     }
+
+    /// <summary>
+    /// Every folder Gelato seeds a stub file into: the base movie and series paths, each
+    /// per-user override and each catalog's own folder. A path configured more than once is
+    /// returned once.
+    /// </summary>
+    public IReadOnlyList<GelatoLibraryPath> GetLibraryPaths()
+    {
+        var seen = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal
+        );
+        var paths = new List<GelatoLibraryPath>();
+
+        void Add(string label, string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            string key;
+            try
+            {
+                key = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+            }
+            catch (Exception)
+            {
+                key = path;
+            }
+
+            if (seen.Add(key))
+                paths.Add(new GelatoLibraryPath(label, path));
+        }
+
+        Add("Movies", MoviePath);
+        Add("Series", SeriesPath);
+        foreach (var user in UserConfigs)
+        {
+            Add("Movies (user override)", user.MoviePath);
+            Add("Series (user override)", user.SeriesPath);
+        }
+        foreach (var catalog in Catalogs)
+        {
+            Add($"Catalog {catalog.Name}", catalog.Path);
+        }
+
+        return paths;
+    }
 }
+
+/// <summary>A folder Gelato uses as a library location.</summary>
+public sealed record GelatoLibraryPath(string Label, string Path);
 
 public class UserConfig
 {
@@ -86,16 +200,20 @@ public class UserConfig
             StreamTTL = baseConfig.StreamTTL,
             CatalogMaxItems = baseConfig.CatalogMaxItems,
             EnableMixed = baseConfig.EnableMixed,
+            ExtendLocalSeriesTrees = baseConfig.ExtendLocalSeriesTrees,
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
             DisableSourceCount = baseConfig.DisableSourceCount,
-            P2PEnabled = baseConfig.P2PEnabled,
-            P2PDLSpeed = baseConfig.P2PDLSpeed,
-            P2PULSpeed = baseConfig.P2PULSpeed,
             FFmpegAnalyzeDuration = baseConfig.FFmpegAnalyzeDuration,
             FFmpegProbeSize = baseConfig.FFmpegProbeSize,
             CreateCollections = baseConfig.CreateCollections,
             MaxCollectionItems = baseConfig.MaxCollectionItems,
+            RemuxDbEnabled = baseConfig.RemuxDbEnabled,
+            PreProbe = baseConfig.PreProbe,
+            PlaybackFailover = baseConfig.PlaybackFailover,
+            RemuxDbContribute = baseConfig.RemuxDbContribute,
+            RemuxDbUrl = baseConfig.RemuxDbUrl,
+            RemuxDbClientId = baseConfig.RemuxDbClientId,
             UserConfigs = baseConfig.UserConfigs,
         };
     }
@@ -103,24 +221,27 @@ public class UserConfig
 
 public class GelatoStremioProviderFactory(IHttpClientFactory http, ILoggerFactory log)
 {
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        GelatoStremioProvider
+    > _cache = new(StringComparer.OrdinalIgnoreCase);
+
     public GelatoStremioProvider Create(Guid userId)
     {
         var cfg = GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId);
-        return new GelatoStremioProvider(
-            cfg.GetBaseUrl(),
-            http,
-            log.CreateLogger<GelatoStremioProvider>()
-        );
+        return Create(cfg);
     }
 
     public GelatoStremioProvider Create(PluginConfiguration cfg)
     {
-        return new GelatoStremioProvider(
-            cfg.GetBaseUrl(),
-            http,
-            log.CreateLogger<GelatoStremioProvider>()
+        var baseUrl = cfg.GetBaseUrl();
+        return _cache.GetOrAdd(
+            baseUrl,
+            url => new GelatoStremioProvider(url, http, log.CreateLogger<GelatoStremioProvider>())
         );
     }
+
+    public void ClearCache() => _cache.Clear();
 }
 
 public class CatalogConfig
@@ -134,4 +255,15 @@ public class CatalogConfig
     public int MaxItems { get; set; } = 0;
     public bool CreateCollection { get; set; } = false;
     public string Url { get; set; } = "";
+
+    /// <summary>
+    /// The folder this catalog's items go into, instead of the movie or series folder. Empty means
+    /// the default folders. Added to a Jellyfin library, it gives the catalog a library of its own.
+    /// </summary>
+    public string Path { get; set; } = "";
+
+    public int GetMaxItems(int globalMaxItems) => MaxItems > 0 ? MaxItems : globalMaxItems;
+
+    /// <summary>What the catalog's items are marked with: an id alone is shared by its types.</summary>
+    public string GetKey() => $"{Type}:{Id}";
 }

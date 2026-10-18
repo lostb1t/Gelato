@@ -1,30 +1,34 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>Gelato</AssemblyName>
-    <Version>0.26.0.0</Version>
+    <Version>0.26.26.0</Version>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Model" Version="10.11.6" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.6" />
-    <PackageReference Include="Jellyfin.Common" Version="10.11.6" />
-    <PackageReference Include="MonoTorrent" Version="3.0.2" />
+    <PackageReference Include="Jellyfin.Model" Version="12.1.0" />
+    <PackageReference Include="Jellyfin.Controller" Version="12.1.0" />
+    <PackageReference Include="Jellyfin.Common" Version="12.1.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="System.Reflection.TypeExtensions" Version="4.7.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="9.0.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.0" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Config\config.html" />
+    <EmbeddedResource Include="Config\*.css" />
+    <EmbeddedResource Include="Config\*.js" />
+    <!-- Embed all frontend assets so they are delivered with the plugin -->
+    <EmbeddedResource Include="Frontend\**\*" />
   </ItemGroup>
   <Target Name="CleanupJellyfinDlls" AfterTargets="Build">
     <ItemGroup>
       <AllDlls Include="$(OutDir)*.dll" />
       <FilesToKeep
-        Include="&#xA;        $(OutDir)Gelato.dll;&#xA;        $(OutDir)JellyfinLoaderStub*.dll;  &#xA;        $(OutDir)0Harmony.dll;             &#xA;        $(OutDir)MonoTorrent*.dll;&#xA;        $(OutDir)Mono.Nat.dll;&#xA;        $(OutDir)ReusableTasks.dll"
+        Include="&#xA;        $(OutDir)Gelato.dll;&#xA;        $(OutDir)JellyfinLoaderStub*.dll;  &#xA;        $(OutDir)0Harmony.dll"
       />
       <FilesToDelete Include="@(AllDlls)" Exclude="@(FilesToKeep)" />
     </ItemGroup>

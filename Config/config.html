@@ -8,750 +8,378 @@
 </head>
 
 <body>
-  <div data-role="page" id="gelatoConfigurationPage" class="page type-interior pluginConfigurationPage">
+  <div data-role="page" id="gelatoConfigurationPage" class="page type-interior pluginConfigurationPage"
+    data-controller="__plugin/gelato-settings.js">
+    <link rel="stylesheet" href="configurationpage?name=gelato.css" />
     <div data-role="content">
       <div class="content-primary">
         <form id="gelatoForm">
           <div class="verticalSection">
-            <div class="sectionTitleContainer flex align-items-center">
-              <h2 class="sectionTitle">Gelato Configuration</h2>
+            <div class="sectionTitleContainer gelatoHeader">
+              <h2 class="sectionTitle">Gelato</h2>
             </div>
           </div>
 
-          <!-- Tabs Navigation -->
-          <div class="verticalSection">
-            <div class="padded-top padded-bottom"
-              style="display: flex; border-bottom: 1px solid rgba(255, 255, 255, 0.1); margin-bottom: 2em; gap: 2em;">
-              <button type="button" class="paper-icon-button-light tab-button active" data-tab="general"
-                style="padding: 0.5em 0; border-bottom: 2px solid #00a4dc; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 1;">General</button>
-              <button type="button" class="paper-icon-button-light tab-button" data-tab="catalogs"
-                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">Catalogs</button>
-              <button type="button" class="paper-icon-button-light tab-button" data-tab="userconfigs"
-                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">User Configs</button>
-              <button type="button" class="paper-icon-button-light tab-button" data-tab="advanced"
-                style="padding: 0.5em 0; border-bottom: 2px solid transparent; cursor: pointer; background: none; color: inherit; font-weight: bold; opacity: 0.6;">Advanced</button>
-            </div>
+          <div class="gelatoTabs" role="tablist">
+            <button type="button" class="tab-button active" role="tab" data-tab="addon"><span class="material-icons extension" aria-hidden="true"></span>Addon</button>
+            <button type="button" class="tab-button" role="tab" data-tab="libraries"><span class="material-icons video_library" aria-hidden="true"></span>Libraries</button>
+            <button type="button" class="tab-button" role="tab" data-tab="catalogs"><span class="material-icons view_carousel" aria-hidden="true"></span>Catalogs</button>
+            <button type="button" class="tab-button" role="tab" data-tab="search"><span class="material-icons search" aria-hidden="true"></span>Search</button>
+            <button type="button" class="tab-button" role="tab" data-tab="playback"><span class="material-icons play_circle_outline" aria-hidden="true"></span>Playback</button>
+            <button type="button" class="tab-button" role="tab" data-tab="userconfigs"><span class="material-icons people" aria-hidden="true"></span>Users</button>
+            <span class="tabInk" aria-hidden="true"></span>
           </div>
 
-          <!-- General Tab -->
-          <div id="tab-general" class="tab-content" style="display: block;">
-            <h3 class="sectionTitle">General Settings</h3>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtUrl">AIOStreams URL (manifest or base):</label>
-              <input is="emby-input" type="text" id="txtUrl" required="required" class="emby-input" />
-              <div class="fieldDescription">Paste the manifest URL or base endpoint. <code>GetBaseUrl()</code> will
-                strip <code>/manifest.json</code> automatically.</div>
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtMoviePath">Movies path:</label>
-              <input is="emby-input" type="text" id="txtMoviePath" class="emby-input" />
-              <div class="fieldDescription">Filesystem path for movie items. Use this path as library folder.</div>
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtSeriesPath">Series path:</label>
-              <input is="emby-input" type="text" id="txtSeriesPath" class="emby-input" />
-              <div class="fieldDescription">Filesystem path for series items. Use this path as library folder.</div>
-            </div>
-       
-
-            <h3 class="sectionTitle" style="margin-top: 2em;">Search & Discovery</h3>
-
-            <div class="checkboxContainer checkboxContainer-withDescription">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
-                <span>Show streams for local items</span>
-              </label>
-            </div>
-
-            <div class="checkboxContainer checkboxContainer-withDescription">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkDisableSearch" />
-                <span>Internal database search only (No remote requests)</span>
-              </label>
-            </div>
-
-            <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
-              <label>
-                <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
-                <span>Filter unreleased items</span>
-              </label>
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
-              <input is="emby-input" type="number" id="txtBufferDays" class="emby-input" />
-              <div class="fieldDescription">Items released within these many days will be hidden if filter is enabled.
+          <!-- Addon -->
+          <div id="tab-addon" class="tab-content" role="tabpanel">
+            <div class="gelatoCard wide">
+              <h3><span class="material-icons link" aria-hidden="true"></span>AIOStreams
+                <button type="button" is="emby-button" class="raised emby-button" id="btnOpenSetup">
+                  <span class="material-icons auto_fix_high" aria-hidden="true"></span>
+                  <span>Setup assistant</span>
+                </button>
+              </h3>
+              <p class="cardLead">Everything Gelato shows comes from your AIOStreams addon: its catalogs, its search and
+                its streams.</p>
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtUrl">AIOStreams URL (manifest or base):</label>
+                <div class="gelatoRow">
+                  <input type="text" id="txtUrl" required="required" class="emby-input" autocomplete="off" spellcheck="false" />
+                  <button type="button" is="emby-button" class="raised emby-button" id="btnCheckAddon">Test</button>
+                </div>
+                <div class="fieldDescription">The manifest URL from AIOStreams, with or without
+                  <code>/manifest.json</code>.</div>
               </div>
+              <div id="addonStatus"></div>
             </div>
+
           </div>
 
-          <!-- Catalogs Tab -->
-          <div id="tab-catalogs" class="tab-content" style="display: none;">
-            <div class="verticalSection">
-              <div class="sectionTitleContainer">
-                <h3 class="sectionTitle">Manage Catalogs</h3>
-                <div class="fieldDescription">
-                  Enable Stremio catalogs to import them into Jellyfin.
-                  <br />
-                  <b>Sequential Import:</b> Series are processed one-by-one to respect rate limits.
+          <!-- Libraries -->
+          <div id="tab-libraries" class="tab-content" role="tabpanel">
+            <div class="gelatoCard wide">
+              <h3><span class="material-icons folder_special" aria-hidden="true"></span>Where titles go</h3>
+              <p class="cardLead">The libraries Gelato puts what you search for and import. A catalog can pick a library of
+                its own on the Catalogs tab.</p>
+
+              <div class="twoCols">
+                <div class="inputContainer">
+                  <label class="inputLabel inputLabelUnfocused" for="selMovieLibrary">Default movies library:</label>
+                  <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                    <select is="emby-select" id="selMovieLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                    <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+                  </div>
+                  <div class="fieldDescription">Where movies go unless a catalog picks its own library. Pick one of your
+                    libraries, also one with your own media in it, or <b>New library…</b> for a folder to create one with.</div>
+                </div>
+
+                <div class="inputContainer">
+                  <label class="inputLabel inputLabelUnfocused" for="selSeriesLibrary">Default series library:</label>
+                  <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                    <select is="emby-select" id="selSeriesLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                    <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+                  </div>
+                  <div class="fieldDescription">Where series go unless a catalog picks its own library. Pick one of your
+                    libraries, also one with your own media in it, or <b>New library…</b> for a folder to create one with.</div>
                 </div>
               </div>
 
-              <div class="inputContainer" style="display: flex; gap: 1em; align-items: center; margin-bottom: 1em;">
-                <div style="flex-grow: 1;">
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtBasePath">Gelato folder:</label>
+                <input type="text" id="txtBasePath" class="emby-input" />
+                <div class="fieldDescription">Where Gelato creates the folders it adds to picked libraries. Empty uses
+                  the default shown.</div>
+              </div>
+            </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons sd_storage" aria-hidden="true"></span>Your own media</h3>
+              <p class="cardLead">For the titles Jellyfin found on disk.</p>
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
+                  <span>Show streams for local items</span>
+                </label>
+                <div class="fieldDescription">
+                  When enabled, Gelato will provide streams for shows imported by Jellyfin's file scanner.
+                </div>
+              </div>
+
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkExtendLocalSeriesTrees" />
+                  <span>Extend local series trees with virtual items</span>
+                </label>
+                <div class="fieldDescription">
+                  When enabled, Gelato will inject missing seasons and episodes (as virtual items) into locally scanned shows,
+                  so you can stream episodes you don't have on disk. Run the <strong>Sync Series Trees</strong> task after
+                  changing this setting — it will create virtual items when enabled, or remove them when disabled.
+                </div>
+              </div>
+            </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons image" aria-hidden="true"></span>Images</h3>
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkLazyImages" />
+                  <span>Lazy images</span>
+                </label>
+                <div class="fieldDescription">Download images on first access instead of at import time saving a lot of storage.</div>
+              </div>
+            </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons playlist_add" aria-hidden="true"></span>Requests from Seerr</h3>
+              <p class="cardLead">A request approved in Seerr (Jellyseerr, Overseerr) can add the title here. Set up a
+                webhook in Seerr under <b>Settings &gt; Notifications &gt; Webhook</b> with these fields.</p>
+
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtSeerrUrl">Webhook URL:</label>
+                <div style="display: flex; gap: .5em; align-items: center;">
+                  <input type="text" id="txtSeerrUrl" class="emby-input" readonly style="flex: 1;" />
+                  <button type="button" class="raised emby-button" data-copy="txtSeerrUrl" style="margin: 0; white-space: nowrap;">Copy</button>
+                </div>
+                <div class="fieldDescription">This server's address as your browser reaches it. If Seerr reaches Jellyfin
+                  under another one (another container, another host), use that instead.</div>
+              </div>
+
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtSeerrAuth">Authorization Header:</label>
+                <div style="display: flex; gap: .5em; align-items: center;">
+                  <input type="text" id="txtSeerrAuth" class="emby-input" readonly style="flex: 1;" value='MediaBrowser Token="API key"' />
+                  <button type="button" class="raised emby-button" data-copy="txtSeerrAuth" style="margin: 0; white-space: nowrap;">Copy</button>
+                </div>
+                <div class="fieldDescription">Put a key from <a href="#/dashboard/keys" target="_blank" class="button-link">Dashboard
+                  &gt; API Keys</a> in place of <b>API key</b>.</div>
+              </div>
+
+              <div class="fieldDescription" style="margin-bottom: 1.2em;">Leave the <b>JSON Payload</b> as it is and tick the
+                notification types <b>Request Approved</b> and <b>Request Automatically Approved</b>. A series request adds the
+                whole series. When the requester is a Jellyfin user with their own libraries, the title goes there.</div>
+            </div>
+          </div>
+
+          <!-- Catalogs -->
+          <div id="tab-catalogs" class="tab-content" role="tabpanel">
+            <div class="gelatoCard wide">
+              <h3><span class="material-icons view_carousel" aria-hidden="true"></span>Catalogs</h3>
+              <p class="cardLead">
+                Enable Stremio catalogs to import them into Jellyfin.
+                <b>Sequential Import:</b> Series are processed one-by-one to respect rate limits.
+              </p>
+              <div class="fieldDescription" id="unreleasedHint" style="display: none; margin: -.6em 0 1em;">
+                Unreleased titles are imported but stay hidden while <b>Filter unreleased items</b> is on (Search tab).
+              </div>
+
+              <div class="inputContainer gelatoRow" style="margin-bottom: 1em;">
+                <div>
                   <!--suppress HtmlFormInputWithoutLabel -->
-                    <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type..."
-                    is="emby-input" class="emby-input" />
+                  <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type..."
+                    class="emby-input" />
                 </div>
                 <button type="button" is="emby-button" class="raised emby-button"
                   id="btnRefreshCatalogs">Refresh</button>
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="txtMaxCollectionItems">Maximum items a collection should hold:</label>
-                <input is="emby-input" type="number" id="txtMaxCollectionItems" class="emby-input" />
-                <div class="fieldDescription">NOTE: Please disable the collection cleanup task!</div>
-                <h3 class="sectionTitle">Importer</h3>
-            
-                <div id="catalogsList"
-                  style="max-height: 600px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; background: rgba(0,0,0,0.2);">
+                <div id="catalogsList">
                   <!-- Catalogs rendered here -->
                 </div>
 
-                <div style="margin-top: 1.5em; display: flex; justify-content: flex-end;">
-                  <button type="button" is="emby-button" class="raised emby-button" id="btnImportAll"
-                    style="background: #00a4dc; color: #fff;">
-                    <span>Import</span>
+                <div style="margin-top: 1.2em; display: flex; justify-content: flex-end;">
+                  <button type="button" is="emby-button" class="raised button-submit emby-button" id="btnImportAll"
+                    style="width: auto; margin: 0;">
+                    <span>Import all</span>
                   </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Advanced Tab (FFmpeg & Overrides) -->
-          <div id="tab-advanced" class="tab-content" style="display: none;">
-            <h3 class="sectionTitle">FFmpeg Settings</h3>
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtFFmpegAnalyzeDuration">FFmpeg
-                analyzeduration:</label>
-              <input is="emby-input" type="text" id="txtFFmpegAnalyzeDuration" class="emby-input" />
-              <div class="fieldDescription">Default: <code>5M</code>.</div>
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtFFmpegProbeSize">FFmpeg probesize:</label>
-              <input is="emby-input" type="text" id="txtFFmpegProbeSize" class="emby-input" />
-              <div class="fieldDescription">Default: <code>40M</code>.</div>
-            </div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Stream TTL (seconds):</label>
-              <input is="emby-input" type="number" id="txtStreamTTL" class="emby-input" />
-              <div class="fieldDescription">Cache duration for external stream URLs.</div>
-            </div>
-
-          </div>
-
-          <!-- User Configs Tab -->
-          <div id="tab-userconfigs" class="tab-content" style="display: none;">
-            <h3 class="sectionTitle">User Overrides</h3>
-            <div class="fieldDescription" style="margin-bottom: 1em;">
-              Override settings for specific users.
-            </div>
-
-            <div id="userOverridesList" style="margin-bottom: 1em;"></div>
-
-            <div class="inputContainer">
-              <label class="inputLabel inputLabelUnfocused" for="selUserConfig">Add/Edit override for user:</label>
-              <select id="selUserConfig" is="emby-select" class="emby-select">
-                <option value="">-- Select user --</option>
-              </select>
-            </div>
-
-            <div id="userOverrideContainer"
-              style="display:none; margin-top:1em; padding: 1em; background: rgba(0,0,0,0.1); border-radius: 4px;">
-              <div class="inputContainer">
-                <label class="inputLabel" for="txtUserUrl">AIOStreams URL:</label>
-                <input is="emby-input" type="text" id="txtUserUrl" class="emby-input" />
-              </div>
-
-              <div class="inputContainer">
-                <label class="inputLabel" for="txtUserMoviePath">Movie path:</label>
-                <input is="emby-input" type="text" id="txtUserMoviePath" class="emby-input" />
-              </div>
-
-              <div class="inputContainer">
-                <label class="inputLabel" for="txtUserSeriesPath">Series path:</label>
-                <input is="emby-input" type="text" id="txtUserSeriesPath" class="emby-input" />
-              </div>
-
-              <div class="checkboxContainer">
+          <!-- Search -->
+          <div id="tab-search" class="tab-content" role="tabpanel">
+            <div class="gelatoCard">
+              <h3><span class="material-icons travel_explore" aria-hidden="true"></span>Addon search</h3>
+              <p class="cardLead">A Jellyfin search also asks AIOStreams, and what it finds can be opened and played
+                straight away. Who searches only the library can be set per user on the Users tab.</p>
+              <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
-                  <input is="emby-checkbox" type="checkbox" id="chkUserDisableSearch" />
-                  <span>Local search only</span>
+                  <input is="emby-checkbox" type="checkbox" id="chkDisableSearch" />
+                  <span>Internal database search only (No remote requests)</span>
+                </label>
+                <div class="fieldDescription">Searches find only what is in your libraries already, for every user.</div>
+              </div>
+            </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons toggle_on" aria-hidden="true"></span>Search bar toggle</h3>
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkEnableJavaScriptInjection" />
+                  <span>Enable frontend customization</span>
+                </label>
+                <div class="fieldDescription">Adds a local search toggle to the searchbar.
+                  Requires Jellyfin-JavaScript-Injector plugin to be installed and configured.
+                </div>
+              </div>
+            </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons event_busy" aria-hidden="true"></span>Unreleased titles</h3>
+              <p class="cardLead">Keeps titles that are not released yet out of search results, and hides them in your
+                Gelato libraries until they are.</p>
+              <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
+                  <span>Filter unreleased items</span>
                 </label>
               </div>
 
-              <div style="margin-top: 1em;">
-                <button type="button" id="btnAddOverride" is="emby-button" class="raised emby-button">Save
-                  Override</button>
-                <button type="button" id="btnCancelOverride" is="emby-button" class="emby-button"
-                  style="margin-left: 0.5em;">Cancel</button>
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
+                <input type="number" id="txtBufferDays" class="emby-input" />
+                <div class="fieldDescription">Items released within these many days will be hidden if filter is enabled.
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="verticalSection" style="margin-top: 2em;">
-            <button id="btnSave" is="emby-button" type="submit" class="raised button-submit block emby-button">
-              <span>Save Configuration</span>
+          <!-- Playback -->
+          <div id="tab-playback" class="tab-content" role="tabpanel">
+            <div class="gelatoCard">
+              <h3><span class="material-icons bolt" aria-hidden="true"></span>Streams</h3>
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkPreProbe" />
+                  <span>Probe streams before playback</span>
+                </label>
+                <div class="fieldDescription">Probes a stream when you open its page or pick another version, and the next episode while one is ending, so playback starts without waiting for the probe. The next episode's stream is the one of the same binge group as the stream that is playing, when the addon sets one.</div>
+              </div>
+
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkPlaybackFailover" />
+                  <span>Try the next stream when one does not start</span>
+                </label>
+                <div class="fieldDescription">A stream known not to work (a dead link, or one with no video) is skipped for the next stream of the title, up to three. A stream that works starts as fast as before. A version you picked yourself plays as it is.</div>
+              </div>
+
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Stream TTL (seconds):</label>
+                <input type="number" id="txtStreamTTL" class="emby-input" />
+                <div class="fieldDescription">Cache duration for external stream URLs.</div>
+              </div>
+            </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons storage" aria-hidden="true"></span>RemuxDB</h3>
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkRemuxDbEnabled" />
+                  <span>Look up media info on RemuxDB</span>
+                </label>
+                <div class="fieldDescription">Shows audio, subtitles and quality of a stream before you play it, and starts playback faster.</div>
+              </div>
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkRemuxDbContribute" />
+                  <span>Contribute to RemuxDB</span>
+                </label>
+                <div class="fieldDescription">Shares this info for streams you play, so others see it too. Anonymous: no links, accounts or personal data.</div>
+              </div>
+            </div>
+
+            <div class="gelatoCard">
+              <h3><span class="material-icons tune" aria-hidden="true"></span>FFmpeg</h3>
+              <p class="cardLead">How much of a stream FFmpeg reads to find its tracks. Leave them unless playback
+                misses tracks or starts slowly.</p>
+              <div class="twoCols">
+                <div class="inputContainer">
+                  <label class="inputLabel inputLabelUnfocused" for="txtFFmpegAnalyzeDuration">FFmpeg
+                    analyzeduration:</label>
+                  <input type="text" id="txtFFmpegAnalyzeDuration" class="emby-input" />
+                  <div class="fieldDescription">Default: <code>5M</code>.</div>
+                </div>
+
+                <div class="inputContainer">
+                  <label class="inputLabel inputLabelUnfocused" for="txtFFmpegProbeSize">FFmpeg probesize:</label>
+                  <input type="text" id="txtFFmpegProbeSize" class="emby-input" />
+                  <div class="fieldDescription">Default: <code>40M</code>.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Users -->
+          <div id="tab-userconfigs" class="tab-content" role="tabpanel">
+            <div class="gelatoCard wide">
+              <h3><span class="material-icons manage_accounts" aria-hidden="true"></span>User Overrides</h3>
+              <p class="cardLead">Override settings for specific users: their own addon, their own libraries, or search
+                in the library only.</p>
+
+              <div id="userOverridesList" style="margin-bottom: 1em;"></div>
+
+              <div class="inputContainer">
+                <label class="inputLabel inputLabelUnfocused" for="selUserConfig">Add/Edit override for user:</label>
+                <select id="selUserConfig" is="emby-select" class="emby-select emby-select-withcolor">
+                  <option value="">-- Select user --</option>
+                </select>
+              </div>
+
+              <div id="userOverrideContainer"
+                style="display:none; margin: 1em 0; padding: 1em; border: 1px solid var(--g-line); border-radius: var(--g-radius);">
+                <div class="inputContainer">
+                  <label class="inputLabel" for="txtUserUrl">AIOStreams URL:</label>
+                  <input type="text" id="txtUserUrl" class="emby-input" />
+                </div>
+
+                <div class="inputContainer">
+                  <label class="inputLabel" for="selUserMovieLibrary">Default movies library:</label>
+                  <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                    <select is="emby-select" id="selUserMovieLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                    <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+                  </div>
+                  <div class="fieldDescription">Where this user's movies go.</div>
+                </div>
+
+                <div class="inputContainer">
+                  <label class="inputLabel" for="selUserSeriesLibrary">Default series library:</label>
+                  <div class="libraryPick" style="display: flex; gap: .5em; align-items: center;">
+                    <select is="emby-select" id="selUserSeriesLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
+                    <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
+                  </div>
+                  <div class="fieldDescription">Where this user's series go.</div>
+                </div>
+
+                <div class="checkboxContainer">
+                  <label>
+                    <input is="emby-checkbox" type="checkbox" id="chkUserDisableSearch" />
+                    <span>Local search only</span>
+                  </label>
+                </div>
+
+                <div style="margin-top: 1em;">
+                  <button type="button" id="btnAddOverride" is="emby-button" class="raised emby-button">Save
+                    Override</button>
+                  <button type="button" id="btnCancelOverride" is="emby-button" class="emby-button"
+                    style="margin-left: 0.5em;">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="gelatoSaveBar" role="status">
+            <div class="saveState"><span class="saveDot"></span><span id="saveStateText">Unsaved changes</span></div>
+            <button id="btnSave" is="emby-button" type="submit" class="raised button-submit emby-button">
+              <span>Save</span>
             </button>
           </div>
         </form>
       </div>
     </div>
 
-    <script type="text/javascript">
-      (function () {
-        const pluginId = "94EA4E14-8163-4989-96FE-0A2094BC2D6A";
-        // Unique ID for this IIFE instance to prevent collisions if multiple loaded
-        const pageId = "gelatoConfigurationPage";
-        const page = document.querySelector('#' + pageId);
-        const form = document.querySelector('#gelatoForm');
 
-        // Tab Logic
-        const tabs = page.querySelectorAll('.tab-button');
-        const tabContents = page.querySelectorAll('.tab-content');
-
-        tabs.forEach(tab => {
-          tab.addEventListener('click', () => {
-            // Deactivate all
-            tabs.forEach(t => {
-              t.classList.remove('active');
-              t.style.borderBottom = '2px solid transparent';
-              t.style.opacity = '0.6';
-            });
-            tabContents.forEach(c => c.style.display = 'none');
-
-            // Activate clicked
-            tab.classList.add('active');
-            tab.style.borderBottom = '2px solid #00a4dc'; // Jellyfin Blue
-            tab.style.opacity = '1';
-
-            const targetId = 'tab-' + tab.dataset.tab;
-            page.querySelector('#' + targetId).style.display = 'block';
-
-            // Lazy load catalogs if switching to catalogs tab
-            if (tab.dataset.tab === 'catalogs') {
-              // Always refresh display on switch
-              renderCatalogs();
-              if (allCatalogs.length === 0) loadCatalogs();
-            }
-          });
-        });
-
-        // Elements
-        const txtUrl = page.querySelector('#txtUrl');
-        const txtMoviePath = page.querySelector('#txtMoviePath');
-        const txtSeriesPath = page.querySelector('#txtSeriesPath');
-        const txtMaxCollectionItems = page.querySelector('#txtMaxCollectionItems');
-
-        const txtStreamTTL = page.querySelector('#txtStreamTTL');
-        const chkEnableMixed = page.querySelector('#chkEnableMixed');
-        const chkDisableSearch = page.querySelector('#chkDisableSearch');
-        const chkFilterUnreleased = page.querySelector('#chkFilterUnreleased');
-        const txtBufferDays = page.querySelector('#txtBufferDays');
-        const txtFFmpegAnalyzeDuration = page.querySelector('#txtFFmpegAnalyzeDuration');
-        const txtFFmpegProbeSize = page.querySelector('#txtFFmpegProbeSize');
-
-        // Catalogs
-        const catalogsList = page.querySelector('#catalogsList');
-        const txtCatalogSearch = page.querySelector('#txtCatalogSearch');
-        const btnRefreshCatalogs = page.querySelector('#btnRefreshCatalogs');
-        let allCatalogs = [];
-
-        // Overrides
-        const selUserConfig = page.querySelector('#selUserConfig');
-        const userOverrideContainer = page.querySelector('#userOverrideContainer');
-        const userOverridesList = page.querySelector('#userOverridesList');
-        const txtUserUrl = page.querySelector('#txtUserUrl');
-        const txtUserMoviePath = page.querySelector('#txtUserMoviePath');
-        const txtUserSeriesPath = page.querySelector('#txtUserSeriesPath');
-        const chkUserDisableSearch = page.querySelector('#chkUserDisableSearch');
-
-        let currentConfig = null;
-        let users = [];
-
-        async function loadCatalogs() {
-          try {
-            // Show loading spinner in list
-            catalogsList.innerHTML = '<div style="padding: 2em; text-align: center;"><div class="mdl-spinner mdl-js-spinner is-active"></div><p>Loading catalogs...</p></div>';
-
-            // Get current configuration to preserve user settings
-            const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            const savedCatalogs = cfg.Catalogs || [];
-
-            const response = await window.ApiClient.getJSON(window.ApiClient.getUrl('gelato/catalogs'));
-            
-            // Merge server catalogs with saved user preferences
-            allCatalogs = (response || []).map(serverCat => {
-              // Find matching saved catalog
-              const savedCat = savedCatalogs.find(s => s.Id === serverCat.Id && s.Type === serverCat.Type);
-              
-              return {
-                Id: serverCat.Id || '',
-                Type: serverCat.Type || '',
-                Name: serverCat.Name || '',
-                // Use saved user preference if available, otherwise use server default
-                Enabled: savedCat ? savedCat.Enabled : (serverCat.Enabled || false),
-                MaxItems: savedCat ? savedCat.MaxItems : (serverCat.MaxItems || 0),
-                CreateCollection: savedCat ? savedCat.CreateCollection : (serverCat.CreateCollection || false),
-                Url: serverCat.Url || ''
-              };
-            });
-            
-            renderCatalogs();
-          } catch (e) {
-            console.error('Error loading catalogs:', e);
-            catalogsList.innerHTML = '<p style="color:red; padding: 1em;">Error loading catalogs. Check logs.</p>';
-          }
-        }
-
-        function renderCatalogs() {
-          catalogsList.innerHTML = '';
-          const searchTerm = (txtCatalogSearch.value || '').toLowerCase();
-
-          const filtered = allCatalogs.filter(cat =>
-            (cat.Name || '').toLowerCase().includes(searchTerm) ||
-            (cat.Type || '').toLowerCase().includes(searchTerm)
-          );
-
-          if (filtered.length === 0) {
-            if (allCatalogs.length === 0) {
-              // Not loaded yet or empty manifest
-            } else {
-              catalogsList.innerHTML = '<p style="padding: 1em; text-align: center; opacity: 0.7;">No matching catalogs found.</p>';
-              return;
-            }
-          }
-
-          if (allCatalogs.length === 0) return; // Wait for load
-
-          const table = document.createElement('table');
-          table.classList.add('table', 'detailTable');
-          table.style.width = '100%';
-          table.style.textAlign = 'left';
-          table.style.borderCollapse = 'collapse';
-
-          const header = document.createElement('tr');
-          header.style.backgroundColor = 'rgba(0,0,0,0.3)';
-          header.innerHTML = `
-                <th style="padding: 10px;">Name</th>
-                <th style="padding: 10px;">Type</th>
-                <th style="padding: 10px;">Enabled</th>
-                <th style="padding: 10px;">Collection</th>
-                <th style="padding: 10px;">Max items</th>
-                <th style="padding: 10px;">Actions</th>
-            `;
-          table.appendChild(header);
-
-          filtered.forEach(cat => {
-            const row = document.createElement('tr');
-            row.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
-
-            // Name
-            const nameCell = document.createElement('td');
-            nameCell.style.padding = '10px';
-            nameCell.textContent = cat.Name;
-            row.appendChild(nameCell);
-
-            // Type
-            const typeCell = document.createElement('td');
-            typeCell.style.padding = '10px';
-            typeCell.innerHTML = '<span style="padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); font-size: 0.9em;">' + cat.Type + '</span>';
-            row.appendChild(typeCell);
-
-            // Enabled
-            const enabledCell = document.createElement('td');
-            enabledCell.style.padding = '10px';
-            const enabledCheck = document.createElement('input');
-            enabledCheck.type = 'checkbox';
-            enabledCheck.checked = cat.Enabled;
-            enabledCheck.is = 'emby-checkbox';
-            enabledCheck.dataset.catalogId = cat.Id;
-            enabledCheck.dataset.catalogType = cat.Type;
-            enabledCheck.dataset.field = 'Enabled';
-            enabledCell.appendChild(enabledCheck);
-            row.appendChild(enabledCell);
-
-            // Create Collection
-            const collCell = document.createElement('td');
-            collCell.style.padding = '10px';
-            const collCheck = document.createElement('input');
-            collCheck.type = 'checkbox';
-            collCheck.checked = cat.CreateCollection;
-            collCheck.disabled = !cat.Enabled;
-            collCheck.style.opacity = cat.Enabled ? '1' : '0.45';
-            collCheck.is = 'emby-checkbox';
-            collCheck.dataset.catalogId = cat.Id;
-            collCheck.dataset.catalogType = cat.Type;
-            collCheck.dataset.field = 'CreateCollection';
-            collCell.appendChild(collCheck);
-            row.appendChild(collCell);
-
-            // Items per catalog
-            const maxCell = document.createElement('td');
-            maxCell.style.padding = '10px';
-            const maxInput = document.createElement('input');
-            maxInput.type = 'number';
-            maxInput.value = cat.MaxItems > 0 ? cat.MaxItems : 100;
-            maxInput.disabled = !cat.Enabled;
-            maxInput.style.width = '70px';
-            maxInput.style.opacity = cat.Enabled ? '1' : '0.45';
-            maxInput.is = 'emby-input';
-            maxInput.classList.add('emby-input');
-            maxInput.style.padding = '4px';
-            maxInput.dataset.catalogId = cat.Id;
-            maxInput.dataset.catalogType = cat.Type;
-            maxInput.dataset.field = 'MaxItems';
-
-            maxCell.appendChild(maxInput);
-            row.appendChild(maxCell);
-
-            // Actions
-            const actionCell = document.createElement('td');
-            actionCell.style.padding = '10px';
-
-            const importBtn = document.createElement('button');
-            importBtn.type = 'button';
-            importBtn.textContent = 'Import';
-            importBtn.className = 'raised emby-button';
-            importBtn.is = 'emby-button';
-            importBtn.style.background = '#00a4dc';
-            importBtn.style.color = '#fff';
-            importBtn.style.padding = '0.3em 0.8em';
-            importBtn.disabled = !cat.Enabled;
-            importBtn.style.opacity = cat.Enabled ? '1' : '0.45';
-            importBtn.onclick = async () => {
-              await triggerImport(cat);
-            };
-
-            // Toggle all row controls when Enabled changes
-            enabledCheck.addEventListener('change', () => {
-              const on = enabledCheck.checked;
-              maxInput.disabled = !on;
-              maxInput.style.opacity = on ? '1' : '0.45';
-              collCheck.disabled = !on;
-              collCheck.style.opacity = on ? '1' : '0.45';
-              importBtn.disabled = !on;
-              importBtn.style.opacity = on ? '1' : '0.45';
-            });
-
-            actionCell.appendChild(importBtn);
-            row.appendChild(actionCell);
-            table.appendChild(row);
-          });
-
-          catalogsList.appendChild(table);
-        }
-
-        async function updateCatalogConfig(cat) {
-          Dashboard.showLoadingMsg();
-          try {
-            const url = window.ApiClient.getUrl('gelato/catalogs/' + encodeURIComponent(cat.Id) + '/' + encodeURIComponent(cat.Type) + '/config');
-            await window.ApiClient.ajax({
-              type: "POST",
-              url: url,
-              data: JSON.stringify(cat),
-              contentType: 'application/json'
-            });
-          } catch (e) {
-            console.error(e);
-            Dashboard.alert("Error saving catalog config.");
-          } finally {
-            Dashboard.hideLoadingMsg();
-          }
-        }
-
-        function collectCatalogStatesFromDOM() {
-          const rows = catalogsList.querySelectorAll('tr');
-          rows.forEach(row => {
-            const enabledCheck = row.querySelector('input[data-field="Enabled"]');
-            const collCheck = row.querySelector('input[data-field="CreateCollection"]');
-            const maxInput = row.querySelector('input[data-field="MaxItems"]');
-            if (!enabledCheck || !collCheck || !maxInput) return;
-
-            const catId = enabledCheck.dataset.catalogId;
-            const catType = enabledCheck.dataset.catalogType;
-            const cat = allCatalogs.find(c => c.Id === catId && c.Type === catType);
-            if (!cat) return;
-
-            cat.Enabled = enabledCheck.checked;
-            cat.CreateCollection = collCheck.checked;
-            cat.MaxItems = parseInt(maxInput.value) || 0;
-          });
-        }
-
-        async function triggerImport(cat) {
-          if (!confirm('Start import for ' + cat.Name + '?')) return;
-          Dashboard.showLoadingMsg();
-          try {
-            // FIXED: Use string concatenation
-            const url = window.ApiClient.getUrl('gelato/catalogs/' + encodeURIComponent(cat.Id) + '/' + encodeURIComponent(cat.Type) + '/import');
-            await window.ApiClient.ajax({ type: "POST", url: url });
-            Dashboard.alert("Import started.");
-          } catch (e) {
-            console.error(e);
-            Dashboard.alert("Error starting import.");
-          } finally {
-            Dashboard.hideLoadingMsg();
-          }
-        }
-
-        async function triggerImportAll() {
-          if (!confirm('Start import?')) return;
-          Dashboard.showLoadingMsg();
-          try {
-            const url = window.ApiClient.getUrl('gelato/catalogs/import-all');
-            await window.ApiClient.ajax({ type: "POST", url: url });
-            Dashboard.alert("Global import started in background.");
-          } catch (e) {
-            console.error(e);
-            Dashboard.alert("Error starting global import.");
-          } finally {
-            Dashboard.hideLoadingMsg();
-          }
-        }
-
-        async function loadConfig() {
-          Dashboard.showLoadingMsg();
-          try {
-            const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            currentConfig = cfg;
-
-            // Populate fields
-            if (txtUrl) txtUrl.value = cfg.Url || "";
-            if (txtMoviePath) txtMoviePath.value = cfg.MoviePath || "";
-            if (txtSeriesPath) txtSeriesPath.value = cfg.SeriesPath || "";
-            if (txtMaxCollectionItems) txtMaxCollectionItems.value = cfg.MaxCollectionItems || 100;
-            if (txtStreamTTL) txtStreamTTL.value = cfg.StreamTTL || 3600;
-            if (chkEnableMixed) chkEnableMixed.checked = cfg.EnableMixed ?? true;
-            if (chkDisableSearch) chkDisableSearch.checked = cfg.DisableSearch || false;
-            if (chkFilterUnreleased) chkFilterUnreleased.checked = cfg.FilterUnreleased || false;
-            if (txtBufferDays) txtBufferDays.value = cfg.FilterUnreleasedBufferDays || 30;
-            if (txtFFmpegAnalyzeDuration) txtFFmpegAnalyzeDuration.value = cfg.FFmpegAnalyzeDuration || "5M";
-            if (txtFFmpegProbeSize) txtFFmpegProbeSize.value = cfg.FFmpegProbeSize || "25M";
-
-            // User Overrides Logic
-            await loadUsers();
-            renderOverridesList();
-
-          } catch (e) {
-            console.error(e);
-          } finally {
-            Dashboard.hideLoadingMsg();
-          }
-        }
-
-        async function saveConfig(e) {
-          e.preventDefault();
-          Dashboard.showLoadingMsg();
-          try {
-            const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
-            cfg.Url = txtUrl.value.trim();
-            cfg.MoviePath = txtMoviePath.value.trim();
-            cfg.SeriesPath = txtSeriesPath.value.trim();
-
-            // Max collection items
-            cfg.MaxCollectionItems = parseInt(txtMaxCollectionItems.value) || 100;
-            
-            // Stream TTL
-            cfg.StreamTTL = parseInt(txtStreamTTL.value) || 3600;
-            cfg.EnableMixed = chkEnableMixed.checked;
-
-            cfg.DisableSearch = chkDisableSearch.checked;
-            cfg.FilterUnreleased = chkFilterUnreleased.checked;
-            cfg.FilterUnreleasedBufferDays = parseInt(txtBufferDays.value) || 30;
-
-            cfg.FFmpegAnalyzeDuration = txtFFmpegAnalyzeDuration.value;
-            cfg.FFmpegProbeSize = txtFFmpegProbeSize.value;
-
-            // Only collect catalog states if catalogs have been loaded (i.e., if we're on catalogs tab or it was loaded)
-            if (allCatalogs.length > 0) {
-              collectCatalogStatesFromDOM();
-              cfg.Catalogs = allCatalogs;
-            } else {
-              // If catalogs haven't been loaded, keep the existing catalog configuration
-              // This prevents overwriting catalog settings when saving from other tabs
-              cfg.Catalogs = cfg.Catalogs || [];
-            }
-
-            // Handle User Configs
-            // Use currentConfig.UserConfigs which contains any unsaved user overrides
-            const userConfigsObj = (currentConfig && currentConfig.UserConfigs) || {};
-            cfg.UserConfigs = Object.entries(userConfigsObj).map(([userId, override]) => ({
-              UserId: userId,
-              Url: override.Url,
-              MoviePath: override.MoviePath,
-              SeriesPath: override.SeriesPath,
-              DisableSearch: override.DisableSearch
-            }));
-
-            await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
-
-            // Update local currentConfig to match
-            currentConfig = cfg;
-            // Re-hydrate the object form of UserConfigs for local editing
-            const savedUserConfigsArray = cfg.UserConfigs || [];
-            cfg.UserConfigs = {};
-            savedUserConfigsArray.forEach(userConfig => {
-              cfg.UserConfigs[userConfig.UserId] = {
-                Url: userConfig.Url,
-                MoviePath: userConfig.MoviePath,
-                SeriesPath: userConfig.SeriesPath,
-                DisableSearch: userConfig.DisableSearch
-              };
-            });
-
-            Dashboard.processPluginConfigurationUpdateResult();
-          } catch (e) {
-            console.error(e);
-          } finally {
-            Dashboard.hideLoadingMsg();
-          }
-        }
-
-        async function loadUsers() {
-          try {
-            users = await window.ApiClient.getUsers();
-            selUserConfig.innerHTML = '<option value="">-- Select user --</option>';
-            users.forEach(u => {
-              const opt = document.createElement('option');
-              opt.value = u.Id;
-              opt.textContent = u.Name;
-              selUserConfig.appendChild(opt);
-            });
-          } catch (e) { console.error(e); }
-        }
-
-        function renderOverridesList() {
-          userOverridesList.innerHTML = '';
-          const overrides = currentConfig?.UserConfigs || {};
-          const entries = Object.entries(overrides);
-
-          if (entries.length === 0) {
-            userOverridesList.innerHTML = '<p style="color: #888; font-style: italic;">No user overrides configured.</p>';
-            return;
-          }
-
-          for (const [userId, override] of entries) {
-            const userName = users.find(u => u.Id === userId)?.Name || userId;
-
-            const container = document.createElement('div');
-            container.style.cssText = 'display: flex; align-items: center; padding: 0.75em; margin-bottom: 0.5em; background: rgba(0,0,0,0.1); border-radius: 4px;';
-
-            const infoDiv = document.createElement('div');
-            infoDiv.style.flex = '1';
-            infoDiv.innerHTML = `<strong>${userName}</strong>`;
-            container.appendChild(infoDiv);
-
-            const editBtn = document.createElement('button');
-            editBtn.type = 'button';
-            editBtn.className = 'emby-button';
-            editBtn.is = 'emby-button';
-            editBtn.innerHTML = 'Edit';
-            editBtn.onclick = () => editOverride(userId);
-            container.appendChild(editBtn);
-
-            const delBtn = document.createElement('button');
-            delBtn.type = 'button';
-            delBtn.className = 'emby-button';
-            delBtn.is = 'emby-button';
-            delBtn.innerHTML = 'Delete';
-            delBtn.onclick = () => deleteOverride(userId);
-            delBtn.style.marginLeft = '0.5em';
-            container.appendChild(delBtn);
-
-            userOverridesList.appendChild(container);
-          }
-        }
-
-        function editOverride(userId) {
-          selUserConfig.value = userId;
-          onUserSelected();
-        }
-
-        function deleteOverride(userId) {
-          if (currentConfig?.UserConfigs) {
-            delete currentConfig.UserConfigs[userId];
-            renderOverridesList();
-          }
-        }
-
-        function onUserSelected() {
-          const userId = selUserConfig.value;
-          if (!userId) {
-            userOverrideContainer.style.display = 'none';
-            return;
-          }
-          userOverrideContainer.style.display = 'block';
-
-          const override = currentConfig?.UserConfigs?.[userId];
-          if (override) {
-            txtUserUrl.value = override.Url || '';
-            txtUserMoviePath.value = override.MoviePath || '';
-            txtUserSeriesPath.value = override.SeriesPath || '';
-            chkUserDisableSearch.checked = override.DisableSearch || false;
-          } else {
-            // New
-            txtUserUrl.value = currentConfig?.Url || '';
-            txtUserMoviePath.value = currentConfig?.MoviePath || '';
-            txtUserSeriesPath.value = currentConfig?.SeriesPath || '';
-            chkUserDisableSearch.checked = false;
-          }
-        }
-
-        page.querySelector('#btnCancelOverride').addEventListener('click', () => {
-          selUserConfig.value = '';
-          userOverrideContainer.style.display = 'none';
-        });
-
-        page.querySelector('#btnAddOverride').addEventListener('click', () => {
-          const userId = selUserConfig.value;
-          if (!userId) return;
-          if (!currentConfig.UserConfigs) currentConfig.UserConfigs = {};
-
-          currentConfig.UserConfigs[userId] = {
-            Url: txtUserUrl.value.trim(),
-            MoviePath: txtUserMoviePath.value.trim(),
-            SeriesPath: txtUserSeriesPath.value.trim(),
-            DisableSearch: chkUserDisableSearch.checked
-          };
-
-          renderOverridesList();
-          selUserConfig.value = '';
-          userOverrideContainer.style.display = 'none';
-        });
-
-        function init() {
-          form.addEventListener("submit", saveConfig);
-          txtCatalogSearch.addEventListener('input', renderCatalogs);
-          btnRefreshCatalogs.addEventListener('click', loadCatalogs);
-          page.querySelector('#btnImportAll').addEventListener('click', triggerImportAll);
-          selUserConfig.addEventListener('change', onUserSelected);
-
-          // Tab 1 active by default
-          const startTab = page.querySelector('.tab-button[data-tab="general"]');
-          if (startTab) startTab.click();
-
-          loadConfig();
-        }
-
-        page.addEventListener("pageshow", init);
-      })();
-    </script>
   </div>
 </body>
 

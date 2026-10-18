@@ -5,7 +5,10 @@ using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.IO;
 using Microsoft.Extensions.Logging;
 
 // For BoxSet
@@ -17,9 +20,86 @@ public class CatalogImportService(
     GelatoManager manager,
     CatalogService catalogService,
     ICollectionManager collectionManager,
-    ILibraryManager libraryManager
+    ILibraryManager libraryManager,
+    IFileSystem fileSystem
 )
 {
+    private static readonly SemaphoreSlim _collectionLock = new(1, 1);
+
+    private static readonly TimeSpan FolderWait = TimeSpan.FromSeconds(60);
+
+    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
+
+    /// <summary>
+    /// The catalog's folder. A library that was picked a moment ago has the folder among its
+    /// locations before the scan has made it an item: the import waits for that scan, up to a
+    /// minute, instead of importing into the default folders as it does for a folder that is in
+    /// no library at all.
+    /// </summary>
+    private async Task<Folder?> WaitForCatalogFolderAsync(
+        CatalogConfig catalog,
+        CancellationToken ct
+    )
+    {
+        var folder = manager.TryGetCatalogFolder(catalog);
+        if (folder is not null || string.IsNullOrWhiteSpace(catalog.Path))
+            return folder;
+
+        var waited = Stopwatch.StartNew();
+        while (
+            folder is null
+            && waited.Elapsed < FolderWait
+            && libraryManager
+                .GetVirtualFolders()
+                .Any(v => v.Locations.Any(l => string.Equals(l, catalog.Path, PathComparison)))
+        )
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), ct).ConfigureAwait(false);
+            folder = manager.TryGetCatalogFolder(catalog);
+        }
+
+        if (folder is not null)
+        {
+            logger.LogInformation(
+                "Catalog {Name}: waited {Seconds:F0}s for the scan that adds {Path} to its library",
+                catalog.Name,
+                waited.Elapsed.TotalSeconds,
+                catalog.Path
+            );
+        }
+
+        return folder;
+    }
+
+    /// <summary>
+    /// Makes the library of a catalog's folder take the folder in. A library lists what is in the
+    /// folders it knows, and it learns a new location only when a scan refreshes it, early in the
+    /// scan but after the folder became an item. With that scan stopped, or not that far yet, the
+    /// library listed none of the movies the import moved into the folder until the next scan. The
+    /// refresh is the one a scan starts with.
+    /// </summary>
+    private async Task AddToLibraryAsync(Folder folder, CancellationToken ct)
+    {
+        var libraries = libraryManager
+            .GetVirtualFolders()
+            .Where(v => v.Locations.Any(l => string.Equals(l, folder.Path, PathComparison)))
+            .Select(v => Guid.TryParse(v.ItemId, out var id) ? libraryManager.GetItemById(id) : null)
+            .OfType<CollectionFolder>()
+            .Where(l => !l.PhysicalFolderIds.Contains(folder.Id))
+            .ToList();
+        foreach (var library in libraries)
+        {
+            await library.RefreshMetadata(ct).ConfigureAwait(false);
+            logger.LogInformation(
+                "Library {Library} did not know its folder {Path} yet, refreshed it",
+                library.Name,
+                folder.Path
+            );
+        }
+    }
+
     public async Task ImportCatalogAsync(
         string catalogId,
         string type,
@@ -41,8 +121,40 @@ public class CatalogImportService(
         }
         var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
         var stremio = cfg.Stremio;
-        var seriesFolder = cfg.SeriesFolder;
-        var movieFolder = cfg.MovieFolder;
+
+        var catalogFolder = await WaitForCatalogFolderAsync(catalogCfg, ct).ConfigureAwait(false);
+        if (catalogFolder is not null)
+            await AddToLibraryAsync(catalogFolder, ct).ConfigureAwait(false);
+
+        // The catalog names a folder that is not there: in no library, or not reachable. New
+        // items go to the movie and series folders, and nothing is moved: without this, a folder
+        // that is gone for a while would send everything the catalog has in it back to the
+        // default folders.
+        var folderMissing = catalogFolder is null && !string.IsNullOrWhiteSpace(catalogCfg.Path);
+        if (folderMissing)
+        {
+            logger.LogWarning(
+                "Catalog {Name}: folder {Path} is not in a Jellyfin library, importing new items into the movie and series folders and moving nothing",
+                catalogCfg.Name,
+                catalogCfg.Path
+            );
+        }
+
+        // A catalog's folder takes the kind its library is for: movies in a shows library, or the
+        // other way round, are not listed by it. A mixed library takes both. The other kind goes
+        // to its default folder, as for a catalog without a folder.
+        var seriesFolder =
+            catalogFolder is not null && manager.LibraryTakes(catalogFolder, BaseItemKind.Series)
+                ? catalogFolder
+                : cfg.SeriesFolder;
+        var movieFolder =
+            catalogFolder is not null && manager.LibraryTakes(catalogFolder, BaseItemKind.Movie)
+                ? catalogFolder
+                : cfg.MovieFolder;
+        var catalogKey = catalogCfg.GetKey();
+        var catalogKeys = cfg.Catalogs.Select(c => c.GetKey()).ToHashSet();
+        var foldersOfOthers = GetFoldersOfOthers(cfg, catalogFolder, otherCatalogs: true);
+        var userFolders = GetFoldersOfOthers(cfg, catalogFolder, otherCatalogs: false);
 
         if (seriesFolder is null)
         {
@@ -54,12 +166,10 @@ public class CatalogImportService(
             logger.LogWarning("No movie root folder found");
         }
 
-        var maxItems = catalogCfg.MaxItems > 0 ? catalogCfg.MaxItems : cfg.CatalogMaxItems;
-        long done = 0;
-
-        var opts = new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct };
+        var maxItems = catalogCfg.GetMaxItems(cfg.CatalogMaxItems);
 
         var stopwatch = Stopwatch.StartNew();
+        var outcome = "failed";
         logger.LogInformation(
             "Starting import for catalog {Name} ({Id}) - Limit: {Limit}",
             catalogCfg.Name,
@@ -70,10 +180,17 @@ public class CatalogImportService(
         try
         {
             var skip = 0;
-            var processed = 0;
-            var importedIds = new ConcurrentBag<Guid>();
+            var processedItems = 0;
+            var created = 0;
+            var existing = 0;
+            var claimed = 0;
+            var moved = 0;
+            var skipped = 0;
+            var failed = 0;
+            // keyed on stremio meta.Id to deduplicate within the import run
+            var importedIds = new ConcurrentDictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
 
-            while (processed < maxItems)
+            while (processedItems < maxItems)
             {
                 ct.ThrowIfCancellationRequested();
 
@@ -86,81 +203,150 @@ public class CatalogImportService(
                     break;
                 }
 
-                //  await Parallel.ForEachAsync(
-                //    page,
-                //     opts,
-                //      async (meta, ctInner) =>
-                foreach (var meta in page)
-                {
-                    var p = Interlocked.Increment(ref processed);
-                    ct.ThrowIfCancellationRequested();
-                    if (p > maxItems)
-                    {
-                        return;
-                    }
+                var remaining = maxItems - processedItems;
+                var batch = page.Take(remaining).ToList();
 
-                    //meta_ids.TryAdd(meta.Id, 0);
-                    var mediaType = meta.Type;
-                    var baseItemKind = mediaType.ToBaseItem();
-
-                    // catalog can contain multiple types.
-
-                    var root = baseItemKind switch
-                    {
-                        BaseItemKind.Series => seriesFolder,
-                        BaseItemKind.Movie => movieFolder,
-                        _ => null,
-                    };
-
-                    if (root is not null)
-                    {
-                        try
+                await Parallel
+                    .ForEachAsync(
+                        batch,
+                        new ParallelOptions
                         {
-                            var (item, _) = await manager
-                                .InsertMeta(
-                                    root,
-                                    meta,
-                                    null,
-                                    true,
-                                    true,
-                                    baseItemKind == BaseItemKind.Series,
-                                    ct
-                                )
-                                .ConfigureAwait(false);
-
-                            if (item != null)
-                                importedIds.Add(item.Id);
-                        }
-                        catch (Exception ex)
+                            MaxDegreeOfParallelism = 4,
+                            CancellationToken = ct,
+                        },
+                        async (meta, innerCt) =>
                         {
-                            logger.LogError(
-                                "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
-                                catalogId,
-                                meta.Id,
-                                ex.Message,
-                                ex.StackTrace
-                            );
-                        }
-                    }
+                            if (!importedIds.TryAdd(meta.Id, Guid.Empty))
+                            {
+                                Interlocked.Increment(ref skipped);
+                                Interlocked.Increment(ref processedItems);
+                                return;
+                            }
 
-                    var current = Interlocked.Increment(ref done);
-                    progress?.Report(Math.Min(100, current / (double)maxItems * 100.0));
-                }
-                //     );
+                            var mediaType = meta.Type;
+                            var baseItemKind = mediaType.ToBaseItem();
+
+                            // catalog can contain multiple types.
+                            var root = baseItemKind switch
+                            {
+                                BaseItemKind.Series => seriesFolder,
+                                BaseItemKind.Movie => movieFolder,
+                                _ => null,
+                            };
+
+                            if (root is not null)
+                            {
+                                try
+                                {
+                                    var (item, isNew) = await manager
+                                        .InsertMeta(
+                                            root,
+                                            meta,
+                                            null,
+                                            true,
+                                            true,
+                                            baseItemKind == BaseItemKind.Series,
+                                            innerCt
+                                        )
+                                        .ConfigureAwait(false);
+
+                                    if (item != null)
+                                    {
+                                        importedIds[meta.Id] = item.Id;
+                                        Interlocked.Increment(
+                                            ref isNew ? ref created : ref existing
+                                        );
+
+                                        // The catalog's own from now on, also one that was in
+                                        // the library and is no catalog's yet: what is the
+                                        // catalog's moves with it when its library changes.
+                                        if (
+                                            await ClaimAsync(
+                                                    item,
+                                                    catalogKey,
+                                                    catalogKeys,
+                                                    foldersOfOthers,
+                                                    innerCt
+                                                )
+                                                .ConfigureAwait(false)
+                                            && !isNew
+                                        )
+                                        {
+                                            Interlocked.Increment(ref claimed);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        Interlocked.Increment(ref failed);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Interlocked.Increment(ref failed);
+                                    logger.LogError(
+                                        "{CatId}: insert meta failed for {Id}. Exception: {Message}\n{StackTrace}",
+                                        catalogId,
+                                        meta.Id,
+                                        ex.Message,
+                                        ex.StackTrace
+                                    );
+                                }
+                            }
+                            else
+                            {
+                                Interlocked.Increment(ref skipped);
+                            }
+
+                            var done = Interlocked.Increment(ref processedItems);
+                            progress?.Report(done * 100.0 / maxItems);
+                        }
+                    )
+                    .ConfigureAwait(false);
 
                 skip += page.Count;
             }
 
-            if (catalogCfg.CreateCollection)
+            // What is the catalog's goes where the catalog imports into. After its library was
+            // set, changed or cleared that is all of it, also what an earlier import brought in
+            // with a higher limit: found by its mark, without asking the addon.
+            if (!folderMissing)
             {
-                await UpdateCollectionAsync(catalogCfg, importedIds.ToList()).ConfigureAwait(false);
-                importedIds.Clear();
+                foreach (var item in manager.GetCatalogItems(catalogKey))
+                {
+                    var target = item is Series ? seriesFolder : movieFolder;
+                    if (
+                        target is not null
+                        && await MoveIntoAsync(item, target, userFolders, ct).ConfigureAwait(false)
+                    )
+                    {
+                        moved++;
+                    }
+                }
             }
 
-            logger.LogInformation("{Id}: processed ({Count} items)", catalogCfg.Id, processed);
+            if (catalogCfg.CreateCollection)
+            {
+                var itemIds = importedIds.Values.Where(id => id != Guid.Empty).ToList();
+                await UpdateCollectionAsync(catalogCfg, itemIds).ConfigureAwait(false);
+            }
+
+            // Skipped: listed twice in the catalog, or a type without a library folder.
+            logger.LogInformation(
+                "{Id}: processed {Count} items: {Created} new, {Existing} already in the library ({Claimed} of them the catalog's from now on), {Moved} moved into the catalog's folder, {Skipped} skipped, {Failed} failed",
+                catalogCfg.Id,
+                processedItems,
+                created,
+                existing,
+                claimed,
+                moved,
+                skipped,
+                failed
+            );
+            outcome = "completed";
         }
         catch (OperationCanceledException ex)
         {
+            outcome = "aborted";
             logger.LogWarning(
                 ex,
                 "Catalog {Id} aborted due to non-user cancellation, continuing with next catalog",
@@ -169,6 +355,7 @@ public class CatalogImportService(
         }
         catch (Exception ex)
         {
+            outcome = "failed";
             logger.LogError(
                 ex,
                 "Catalog sync failed for {Id}: {Message}",
@@ -180,37 +367,176 @@ public class CatalogImportService(
         stopwatch.Stop();
         progress?.Report(100);
         logger.LogInformation(
-            "Catalog {catalog} sync completed in {Minutes}m {Seconds}s ({TotalSeconds:F2}s total)",
+            "Catalog {catalog} sync {Outcome} after {Minutes}m {Seconds}s ({TotalSeconds:F2}s total)",
             catalogCfg.Name,
+            outcome,
             (int)stopwatch.Elapsed.TotalMinutes,
             stopwatch.Elapsed.Seconds,
             stopwatch.Elapsed.TotalSeconds
         );
     }
 
+    /// <summary>
+    /// Folders whose items are not this catalog's to take: the per-user folders, whose items
+    /// belong to that user, and with <paramref name="otherCatalogs"/> the folders of the other
+    /// catalogs. An item there is not made the catalog's own; one that is the catalog's already
+    /// follows it out of another catalog's folder, but not out of a user's. The movie and series
+    /// folders are not among them, and neither is a folder no catalog uses any more.
+    /// </summary>
+    private HashSet<Guid> GetFoldersOfOthers(
+        PluginConfiguration cfg,
+        Folder? target,
+        bool otherCatalogs
+    )
+    {
+        var ids = otherCatalogs
+            ? manager.GetCatalogFolders(cfg).Select(f => f.Id).ToHashSet()
+            : [];
+
+        foreach (var user in cfg.UserConfigs)
+        {
+            var userCfg = GelatoPlugin.Instance!.GetConfig(user.UserId);
+            if (userCfg.MovieFolder is { } userMovies)
+                ids.Add(userMovies.Id);
+            if (userCfg.SeriesFolder is { } userSeries)
+                ids.Add(userSeries.Id);
+        }
+
+        if (target is not null)
+            ids.Remove(target.Id);
+        if (cfg.MovieFolder is { } movies)
+            ids.Remove(movies.Id);
+        if (cfg.SeriesFolder is { } series)
+            ids.Remove(series.Id);
+
+        return ids;
+    }
+
+    /// <summary>Gelato's own placeholder for a title: not a local file, not a stream row.</summary>
+    private static bool IsPlaceholder(BaseItem item) =>
+        item is Movie or Series
+        && !item.HasStreamTag()
+        && (item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false);
+
+    /// <summary>
+    /// Makes an item the import created or found the catalog's own. One a catalog has already
+    /// stays with that catalog: the first to import a title keeps it, so two catalogs that list it
+    /// do not pass it back and forth. One that was in the library before catalogs kept their
+    /// items, or came in by a search, is taken by the first import that lists it within its limit.
+    /// </summary>
+    private async Task<bool> ClaimAsync(
+        BaseItem item,
+        string catalogKey,
+        IReadOnlySet<string> catalogKeys,
+        HashSet<Guid> foldersOfOthers,
+        CancellationToken ct
+    )
+    {
+        if (!IsPlaceholder(item) || foldersOfOthers.Contains(item.ParentId))
+            return false;
+
+        return await manager
+            .ClaimForCatalogAsync(item, catalogKey, catalogKeys, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Moves an item that is the catalog's into the folder the catalog imports into, when it is
+    /// somewhere else. Setting a catalog's folder, changing it or clearing it takes effect on
+    /// items imported before that on the next sync. Only Gelato's own placeholders move: a local
+    /// file stays where the library put it.
+    /// </summary>
+    private async Task<bool> MoveIntoAsync(
+        BaseItem item,
+        Folder target,
+        HashSet<Guid> leaveAlone,
+        CancellationToken ct
+    )
+    {
+        if (
+            !IsPlaceholder(item)
+            || item.ParentId == target.Id
+            || leaveAlone.Contains(item.ParentId)
+        )
+        {
+            return false;
+        }
+
+        try
+        {
+            return await manager.MoveToFolderAsync(item, target, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Could not move {Name} ({Id}) into {Folder}",
+                item.Name,
+                item.Id,
+                target.Path
+            );
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The catalog's collection, found by the catalog's id on it. Jellyfin takes a collection's
+    /// id from its folder, "<name> [boxset]": creating one under a name that is taken does not
+    /// make a second collection, it takes the first one over, with its id written over and its
+    /// members replaced. A movie and a series catalog of one name ("TMDB Top Rated") passed one
+    /// collection back and forth that way, and a collection the user made was taken as well. So
+    /// a catalog whose name is taken gets a collection named apart: "TMDB Top Rated (series)".
+    /// </summary>
     private async Task<BoxSet?> GetOrCreateBoxSetAsync(CatalogConfig config)
     {
         var id = $"{config.Type}.{config.Id}";
-        var collection = libraryManager
-            .GetItemList(
-                new InternalItemsQuery
-                {
-                    IncludeItemTypes = [BaseItemKind.BoxSet],
-                    CollapseBoxSetItems = false,
-                    Recursive = true,
-                    HasAnyProviderId = new Dictionary<string, string> { { "Stremio", id } },
-                }
-            )
-            .OfType<BoxSet>()
-            .FirstOrDefault();
 
-        if (collection is null)
+        // One at a time: two imports of catalogs of one name would both find the name free.
+        await _collectionLock.WaitAsync().ConfigureAwait(false);
+        try
         {
+            var collections = libraryManager
+                .GetItemList(
+                    new InternalItemsQuery
+                    {
+                        IncludeItemTypes = [BaseItemKind.BoxSet],
+                        CollapseBoxSetItems = false,
+                        Recursive = true,
+                    }
+                )
+                .OfType<BoxSet>()
+                .ToList();
+
+            var collection = collections.FirstOrDefault(c =>
+                string.Equals(c.GetProviderId("Stremio"), id, StringComparison.Ordinal)
+            );
+            if (collection is not null)
+                return collection;
+
+            var taken = collections
+                .Select(c => Path.GetFileName(c.Path))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var name = CollectionNames(config)
+                .First(n => !taken.Contains(fileSystem.GetValidFilename(n) + " [boxset]"));
+            if (name != config.Name)
+            {
+                logger.LogInformation(
+                    "Catalog {Id}: a collection named {Name} exists, naming this one {NewName}",
+                    id,
+                    config.Name,
+                    name
+                );
+            }
+
             collection = await collectionManager
                 .CreateCollectionAsync(
                     new CollectionCreationOptions
                     {
-                        Name = config.Name,
+                        Name = name,
                         IsLocked = true,
                         ProviderIds = new Dictionary<string, string> { { "Stremio", id } },
                     }
@@ -221,20 +547,49 @@ public class CatalogImportService(
             await collection
                 .UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, CancellationToken.None)
                 .ConfigureAwait(false);
+            return collection;
         }
-        return collection;
+        finally
+        {
+            _collectionLock.Release();
+        }
+    }
+
+    /// <summary>The catalog's name, then the name with its type, then that numbered.</summary>
+    private static IEnumerable<string> CollectionNames(CatalogConfig config)
+    {
+        var type = config.Type.ToLowerInvariant() switch
+        {
+            "movie" => "movies",
+            var other => other,
+        };
+
+        yield return config.Name;
+        yield return $"{config.Name} ({type})";
+        for (var n = 2; ; n++)
+            yield return $"{config.Name} ({type} {n})";
     }
 
     private async Task UpdateCollectionAsync(CatalogConfig config, List<Guid> ids)
     {
+        // A collection holds what the catalog imports: the catalog's item limit is its size.
+        logger.LogInformation(
+            "Updating collection {Name} with {Count} items",
+            config.Name,
+            ids.Count
+        );
         try
         {
             var collection = await GetOrCreateBoxSetAsync(config).ConfigureAwait(false);
             if (collection != null)
             {
-                var currentChildren = libraryManager
-                    .GetItemList(new InternalItemsQuery { Parent = collection, Recursive = false })
-                    .Select(i => i.Id)
+                // A collection's members are links, not children: a query for its children
+                // finds none, and titles that left the catalog stayed in its collection.
+                var currentChildren = (
+                    libraryManager.GetItemById<BoxSet>(collection.Id) ?? collection
+                )
+                    .LinkedChildren.Select(c => c.ItemId)
+                    .OfType<Guid>()
                     .ToList();
 
                 if (currentChildren.Count != 0)
@@ -244,16 +599,9 @@ public class CatalogImportService(
                         .ConfigureAwait(false);
                 }
 
-                var itemsToAdd = ids.ToList();
-
                 await collectionManager
-                    .AddToCollectionAsync(collection.Id, itemsToAdd)
+                    .AddToCollectionAsync(collection.Id, ids)
                     .ConfigureAwait(false);
-                logger.LogInformation(
-                    "Updated collection {Name} with {Count} items",
-                    config.Name,
-                    itemsToAdd.Count
-                );
             }
         }
         catch (Exception ex)
@@ -273,16 +621,15 @@ public class CatalogImportService(
             return;
         }
 
-        var globalMaxItems = GelatoPlugin.Instance!.GetConfig(Guid.Empty).CatalogMaxItems;
-        var total = enabled.Sum(c => c.MaxItems > 0 ? c.MaxItems : globalMaxItems);
+        var globalMaxItems = GelatoPlugin.Instance!.Configuration.CatalogMaxItems;
+        var total = enabled.Sum(c => c.GetMaxItems(globalMaxItems));
         var offset = 0;
 
         foreach (var cat in enabled)
         {
             ct.ThrowIfCancellationRequested();
-            logger.LogInformation("Processing enabled catalog: {Name}", cat.Name);
 
-            var catMax = cat.MaxItems > 0 ? cat.MaxItems : globalMaxItems;
+            var catMax = cat.GetMaxItems(globalMaxItems);
             var localOffset = offset;
             var catProgress = progress is null
                 ? null
@@ -295,6 +642,9 @@ public class CatalogImportService(
 
             offset += catMax;
         }
+
+        // collections appear empty after inporting this fixes that.. sometimes...
+        libraryManager.QueueLibraryScan();
 
         progress?.Report(100);
     }

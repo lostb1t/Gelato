@@ -1,0 +1,127 @@
+using Jellyfin.Data.Enums;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Tasks;
+using Microsoft.Extensions.Logging;
+
+namespace Gelato.ScheduledTasks;
+
+public sealed class PurgeGelatoTask(
+    ILibraryManager libraryManager,
+    ILogger<PurgeGelatoTask> log,
+    GelatoManager manager
+) : IScheduledTask
+{
+    public string Name => "WARNING: purge all gelato items";
+    public string Key => "PurgeGelatoTask";
+    public string Description =>
+        "Removes all gelato items (local items are kept). Play positions, played flags and "
+        + "favourites for those items are cleared as well, so this really is a fresh start.";
+    public string Category => "Gelato Maintenance";
+
+    public IEnumerable<TaskTriggerInfo> GetDefaultTriggers() => [];
+
+    public Task ExecuteAsync(IProgress<double> progress, CancellationToken ct)
+    {
+        var items = libraryManager
+            .GetItemList(
+                new InternalItemsQuery
+                {
+                    IncludeItemTypes =
+                    [
+                        BaseItemKind.Episode,
+                        BaseItemKind.Season,
+                        BaseItemKind.Movie,
+                        BaseItemKind.Series,
+                        BaseItemKind.BoxSet,
+                    ],
+                    Recursive = true,
+                    HasAnyProviderId = new Dictionary<string, string>
+                    {
+                        { "Stremio", string.Empty },
+                        { "stremio", string.Empty },
+                    },
+                    GroupByPresentationUniqueKey = false,
+                    GroupBySeriesPresentationUniqueKey = false,
+                    CollapseBoxSetItems = false,
+                    IsDeadPerson = true,
+                    // Stream rows are alternate versions, which Jellyfin leaves out of queries by
+                    // default. DeleteItemsUnsafeFast deletes only what it is given, so without this
+                    // every linked row would survive the purge, watch state included.
+                    IncludeOwnedItems = true,
+                }
+            )
+            .Where(item =>
+            {
+                if (!item.IsGelato())
+                {
+                    return false;
+                }
+
+                // A collection lives in Jellyfin's own collections directory, so its path always exists
+                // and the guard below skipped every one of them: a purge left the catalogs' collections
+                // in the library. A collection carrying a Stremio id is one Gelato created.
+                if (item.GetBaseItemKind() == BaseItemKind.BoxSet)
+                {
+                    return true;
+                }
+
+                if (File.Exists(item.Path) || Directory.Exists(item.Path))
+                {
+                    log.LogWarning("Skipping item {ItemId} with local path {Path}", item.Id, item.Path);
+                    return false;
+                }
+
+                return true;
+            })
+            .OrderBy(item => item.GetBaseItemKind() switch
+            {
+                BaseItemKind.Episode => 0,
+                BaseItemKind.Season => 1,
+                _ => 2,
+            })
+            .ToList();
+
+        var stats = items
+            .GroupBy(i => i.GetBaseItemKind())
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        const int batchSize = 250;
+        var totalItems = items.Count;
+        var processed = 0;
+
+        // Collections are deleted with their folder: the database rows alone would leave
+        // "<name> [boxset]/collection.xml" behind, and the next library scan reads it back in.
+        var collections = items.Where(i => i.GetBaseItemKind() == BaseItemKind.BoxSet).ToList();
+        var rest = items.Where(i => i.GetBaseItemKind() != BaseItemKind.BoxSet).ToList();
+
+        foreach (var batch in rest.Chunk(batchSize))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // A purge is deliberate, so the watch state goes with it. Otherwise Jellyfin parks it
+            // and the next catalog import hands it straight back, which is not what "purge all
+            // gelato items" is asking for.
+            manager.ForgetWatchState(batch, ct);
+            libraryManager.DeleteItemsUnsafeFast(batch);
+            processed += batch.Length;
+            progress?.Report((double)processed / totalItems * 100);
+        }
+
+        if (collections.Count > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            manager.ForgetWatchState(collections, ct);
+            libraryManager.DeleteItemsUnsafeFast(collections, deleteSourceFiles: true);
+            processed += collections.Count;
+            progress?.Report((double)processed / totalItems * 100);
+        }
+
+        manager.ClearCache();
+        progress?.Report(100.0);
+
+        var parts = stats.Select(kv => $"{kv.Key}={kv.Value}");
+        log.LogInformation("Deleted: {Stats} (Total={Total})", string.Join(", ", parts), stats.Values.Sum());
+        return Task.CompletedTask;
+    }
+}
