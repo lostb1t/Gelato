@@ -175,7 +175,7 @@ public class InsertActionFilter(
                     user,
                     false,
                     refreshItem,
-                    meta.Type is StremioMediaType.Series,
+                    false,
                     ct,
                     copy
                 );

@@ -126,7 +126,7 @@ public class SeerrController(
                 user,
                 false,
                 true,
-                mediaType is StremioMediaType.Series,
+                false,
                 HttpContext.RequestAborted
             )
             .ConfigureAwait(false);
