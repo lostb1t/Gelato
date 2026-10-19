@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.27.0] - 2026-10-19\n\n### 🚀 Features\n\n- Syncplay source syncing (#120)\n- Look up IntroDB's end credits for movies (#310)\n- List movie and series search results by rank (#311)\n- List a person's titles outside the library on their page (#314)\n- Hide titles opened from search until someone plays them (#316)\n- Sync series trees when extending local series is switched (#318)\n\n### 🐛 Bug Fixes\n\n- Offer every version in a playback info that names none (#313)\n- List upcoming episodes with the unreleased filter on (#315)\n- Move playback on from a short clip without taking it for a dead stream (#317)\n\n### 📚 Documentation\n\n- Reword the settings page and the README in one voice (#319)\n\n### ⚡ Performance\n\n- Build an owned title's sources once per search (#312)\n",
+        "checksum": "bb1ce7a767266e25c69d971ac9a60436",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.27.0/gelato_0.26.27.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-19T22:53:09Z",
+        "version": "0.26.27.0"
+      },
+      {
         "changelog": "## [0.26.26.0] - 2026-10-18\n\n### 🚀 Features\n\n- Skip segments from a stream's named chapters with RemuxDB on (#300)\n- Look segments up again and read chapters of rows probed before (#303)\n- List a stream that probed to a short clip after the others (#304)\n- Add a title to the library when its request is approved in Seerr (#306)\n- Show how to set up the seerr webhook on the settings page and in the readme (#307)\n\n### 🐛 Bug Fixes\n\n- Keep an episode edit made while its series refresh runs (#301)\n- Leave a local series that is being scanned to the next tree sync run (#302)\n- Keep a title deleted right after it was added from coming back (#308)\n- List a catalog's moved movies in its library at once (#309)\n\n### ⚡ Performance\n\n- Leave a probed short stream and a placeholder unprobed at play (#305)\n",
         "checksum": "02d8f65ae173ec6ad013cd11549822d6",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.26.0/gelato_0.26.26.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-16T06:57:20Z",
         "version": "0.26.14.0"
-      },
-      {
-        "changelog": "## [0.26.13.9] - 2026-04-14\n\n### 🐛 Bug Fixes\n\n- Duplicates on import\n\n### ⚙️ Miscellaneous Tasks\n\n- Linting\n",
-        "checksum": "b15071bf67f07713f22680d0fcd9e965",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.13.9/gelato_0.26.13.9.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-14T14:48:43Z",
-        "version": "0.26.13.9"
       }
     ]
   }
