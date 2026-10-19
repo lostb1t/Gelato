@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using Gelato.Config;
 using Gelato.ScheduledTasks;
 using Gelato.Services;
@@ -15,10 +14,9 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     private readonly ILogger<GelatoPlugin> _log;
     private readonly GelatoManager _manager;
-    private ConcurrentDictionary<Guid, PluginConfiguration> UserConfigs { get; } = new();
     private readonly GelatoStremioProviderFactory _stremioFactory;
-    private readonly ITaskManager _taskManager;
     private readonly GelatoCache _cache;
+    private readonly ITaskManager _taskManager;
     public PalcoCacheService PalcoCache { get; } // Migrated Palco Cache Service
 
     public GelatoPlugin(
@@ -95,11 +93,10 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         var treesChanged = Configuration.ExtendLocalSeriesTrees != cfg.ExtendLocalSeriesTrees;
         base.UpdateConfiguration(cfg);
 
-        // Only what came from the old configuration: what search results became stays, a client
-        // keeps their ids in its page (GelatoManager.ClearCache, for the purges, drops that too).
-        _cache.Invalidate();
-        _stremioFactory.ClearCache();
-        UserConfigs.Clear();
+        // Everything that came from the old configuration or the addon as it was: a changed
+        // setting takes effect with the next request, and the Catalogs tab's Refresh (a save of
+        // the unchanged configuration) reads the manifest again.
+        _cache.Invalidate(cfg);
 
         // A changed movie or series path can be the folder items without one were waiting for.
         _manager.AdoptParkedSoon();
@@ -131,7 +128,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     {
         try
         {
-            var cfg = UserConfigs.GetOrAdd(
+            var cfg = _cache.UserConfig(
                 userId,
                 _ =>
                 {

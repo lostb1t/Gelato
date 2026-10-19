@@ -69,12 +69,21 @@ public sealed class GelatoManager(
     // a reset gets the older stamp and the sync before it counts as the newer one.
     private static long _streamSyncSeq;
 
-    public void SetStreamSync(string guid)
+    /// <summary>Taken before a stream sync starts, for <see cref="SetStreamSync"/>.</summary>
+    public int CacheGeneration => cache.Generation;
+
+    /// <summary>
+    /// Remembers that the streams behind the key were synced, unless a save came in since the sync
+    /// started (<paramref name="generation"/>, <see cref="CacheGeneration"/>): it may have asked
+    /// the old addon.
+    /// </summary>
+    public void SetStreamSync(string guid, int generation)
     {
-        cache.Memo.Set(
+        cache.SetMemo(
             $"streamsync:{guid}",
             Interlocked.Increment(ref _streamSyncSeq),
-            TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
+            TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL),
+            generation
         );
     }
 
@@ -160,7 +169,7 @@ public sealed class GelatoManager(
             shared.Compact(1.0);
         }
 
-        cache.Invalidate();
+        cache.Invalidate(GelatoPlugin.Instance!.Configuration);
 
         _log.LogDebug("Cache cleared");
     }

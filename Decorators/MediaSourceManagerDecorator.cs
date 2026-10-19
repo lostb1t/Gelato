@@ -235,12 +235,13 @@ public sealed class MediaSourceManagerDecorator(
 
                         try
                         {
+                            var generation = manager.CacheGeneration;
                             var count = await manager
                                 .SyncStreams(item, userId, ct)
                                 .ConfigureAwait(false);
                             if (count > 0)
                             {
-                                manager.SetStreamSync(cacheKey);
+                                manager.SetStreamSync(cacheKey, generation);
                             }
                         }
                         catch (Exception ex)
@@ -1827,8 +1828,9 @@ public sealed class MediaSourceManagerDecorator(
                     item.Id,
                     async ct =>
                     {
+                        var generation = manager.CacheGeneration;
                         if (await manager.SyncStreams(item, user.Id, ct).ConfigureAwait(false) > 0)
-                            manager.SetStreamSync(syncKey);
+                            manager.SetStreamSync(syncKey, generation);
                     }
                 )
                 .ConfigureAwait(false);

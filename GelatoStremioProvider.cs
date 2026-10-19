@@ -132,64 +132,121 @@ public class GelatoStremioProvider(
         }
     }
 
+    // A manifest, when it is read again and whether a save asked for it (GelatoCache.Invalidate).
+    private DateTime _manifestDue;
+    private volatile bool _manifestExpired;
+    private Task<StremioManifest?>? _manifestReading;
+    private readonly object _manifestLock = new();
+
+    // How often Expire ran, and how often when the read in flight started: one started before the
+    // latest save may have gone out before a change in AIOStreams, so its answer is not taken.
+    private int _expiries;
+    private int _manifestReadingFrom;
+
+    /// <summary>
+    /// Makes the next use read the manifest again, and wait for it, and forgets the metas read from
+    /// the addon as it was.
+    /// </summary>
+    public void Expire()
+    {
+        lock (_manifestLock)
+        {
+            _expiries++;
+            _manifestExpired = true;
+        }
+
+        _metaCache.Clear();
+    }
+
+    /// <summary>
+    /// The addon's manifest. Read once and used for <see cref="Services.GelatoCache.ManifestLifetime"/>;
+    /// the first use after that reads it again in the background and gets the one it has. After a
+    /// configuration save, or with <paramref name="force"/>, the read is waited for. A read that
+    /// fails keeps the manifest there was and is tried again after
+    /// <see cref="Services.GelatoCache.ManifestRetry"/>.
+    /// </summary>
     public async Task<StremioManifest?> GetManifestAsync(bool force = false)
     {
-        if (!force && _manifest is not null)
-            return _manifest;
+        var kept = _manifest;
+        if (kept is null || force || _manifestExpired)
+            return await ReadManifestOnce().ConfigureAwait(false);
+
+        if (DateTime.UtcNow >= _manifestDue)
+            _ = ReadManifestOnce();
+        return kept;
+    }
+
+    private Task<StremioManifest?> ReadManifestOnce()
+    {
+        lock (_manifestLock)
+        {
+            if (_manifestReading is { IsCompleted: false } reading && _manifestReadingFrom == _expiries)
+                return reading;
+            _manifestReadingFrom = _expiries;
+            return _manifestReading = ReadManifestAsync(_expiries);
+        }
+    }
+
+    private async Task<StremioManifest?> ReadManifestAsync(int from)
+    {
+        // Before the request: a save while it runs asks for another one.
+        _manifestExpired = false;
         try
         {
             var url = $"{baseUrl}/manifest.json";
-            var m = await GetJsonAsync<StremioManifest>(url);
+            var m = await GetJsonAsync<StremioManifest>(url).ConfigureAwait(false);
+            // A save came in meanwhile: the read after it decides. Without a manifest yet, this one
+            // is kept until then rather than leaving its waiters with none.
+            if (from != Volatile.Read(ref _expiries) && _manifest is not null)
+                return _manifest;
+            if (m is null)
+            {
+                _manifestDue = DateTime.UtcNow + Services.GelatoCache.ManifestRetry;
+                return _manifest;
+            }
+
+            StremioCatalog? SearchCatalog(StremioMediaType type) =>
+                m.Catalogs?.Where(c =>
+                        string.Equals(
+                            c.Type,
+                            type.ToString(),
+                            StringComparison.CurrentCultureIgnoreCase
+                        ) && c.IsSearchCapable()
+                    )
+                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault();
+
+            var movie = SearchCatalog(StremioMediaType.Movie);
+            var series = SearchCatalog(StremioMediaType.Series);
+            // Said on the first read and when it changes, not on every read after the lifetime.
+            var first = _manifest is null;
+            if (first || movie?.Id != _movieSearchCatalog?.Id)
+            {
+                if (movie == null)
+                    log.LogWarning("manifest has no search-capable movie catalog");
+                else
+                    log.LogDebug("manifest uses movie search catalog: {Id}", movie.Id);
+            }
+
+            if (first || series?.Id != _seriesSearchCatalog?.Id)
+            {
+                if (series == null)
+                    log.LogWarning("manifest has no search-capable series catalog");
+                else
+                    log.LogDebug("manifest uses series search catalog: {Id}", series.Id);
+            }
+
+            _movieSearchCatalog = movie;
+            _seriesSearchCatalog = series;
             _manifest = m;
-
-            if (m?.Catalogs != null)
-            {
-                _movieSearchCatalog = m
-                    .Catalogs.Where(c =>
-                        string.Equals(
-                            c.Type,
-                            nameof(StremioMediaType.Movie),
-                            StringComparison.CurrentCultureIgnoreCase
-                        ) && c.IsSearchCapable()
-                    )
-                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
-                    .FirstOrDefault();
-
-                _seriesSearchCatalog = m
-                    .Catalogs.Where(c =>
-                        string.Equals(
-                            c.Type,
-                            nameof(StremioMediaType.Series),
-                            StringComparison.CurrentCultureIgnoreCase
-                        ) && c.IsSearchCapable()
-                    )
-                    .OrderBy(c => c.Id.Contains("people", StringComparison.OrdinalIgnoreCase))
-                    .FirstOrDefault();
-            }
-
-            if (_movieSearchCatalog == null)
-            {
-                log.LogWarning("manifest has no search-capable movie catalog");
-            }
-            else
-            {
-                log.LogDebug("manifest uses movie search catalog: {Id}", _movieSearchCatalog.Id);
-            }
-
-            if (_seriesSearchCatalog == null)
-            {
-                log.LogWarning("manifest has no search-capable series catalog");
-            }
-            else
-            {
-                log.LogDebug("manifest uses series search catalog: {Id}", _seriesSearchCatalog.Id);
-            }
+            _manifestDue = DateTime.UtcNow + Services.GelatoCache.ManifestLifetime;
             return m;
         }
         catch (Exception ex)
         {
             log.LogWarning(ex, "GetManifestAsync: cannot fetch manifest");
-            return null;
+            _manifestDue = DateTime.UtcNow + Services.GelatoCache.ManifestRetry;
+            return _manifest;
         }
     }
 
