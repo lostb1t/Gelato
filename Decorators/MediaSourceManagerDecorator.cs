@@ -956,13 +956,18 @@ public sealed class MediaSourceManagerDecorator(
             selected = Select(refreshed);
             sources = refreshed;
 
+            // The source just probed, wherever it is listed now. A debrid's clip goes after the
+            // others (IsShortClip), and the stream that takes its place under the id asked for is
+            // not the one probed: judged by that one, a working clip looked dead.
+            var probed = refreshed.FirstOrDefault(s => PreProbeKey(s) == probeKey);
+
             // Still unprobed after its probe: a dead link, left alone for a while.
-            if (preProbe && (selected is null || NeedsProbe(selected, owner)))
+            if (preProbe && (probed is null || NeedsProbe(probed, owner)))
                 MarkPreProbeFailed(probeKey);
 
             // No video at all: a dead stream, which a playback that may moves on from. One that
             // is only short (a clip) plays.
-            if ((preProbe || canMoveOn) && (selected is null || !HasVideo(selected)))
+            if ((preProbe || canMoveOn) && (probed is null || !HasVideo(probed)))
             {
                 MarkDead(probeKey);
                 if (canMoveOn)
@@ -983,6 +988,29 @@ public sealed class MediaSourceManagerDecorator(
                         )
                         .ConfigureAwait(false);
                 }
+            }
+
+            // The probe found a clip, listed after the others now: the playback goes on with the
+            // stream in its place, prepared as its own playback would be. A clip picked by its
+            // own id is still the one asked for, and plays.
+            if (
+                !preProbe
+                && probed is not null
+                && selected is not null
+                && PreProbeKey(selected) != probeKey
+                && NeedsProbe(selected, ResolveOwnerFor(selected, item))
+            )
+            {
+                return await GetPlaybackMediaSourcesCore(
+                        item,
+                        user,
+                        allowMediaProbe,
+                        enablePathSubstitution,
+                        requestedSourceId,
+                        false,
+                        ct
+                    )
+                    .ConfigureAwait(false);
             }
 
             if (selected is null)
