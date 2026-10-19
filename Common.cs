@@ -522,6 +522,16 @@ public static class ActionContextExtensions
         return actionName != null && BaseItemListActionNames.Contains(actionName);
     }
 
+    /// <summary>
+    /// Whether the request is the TV "Upcoming" list, which asks for episodes that have not aired.
+    /// </summary>
+    public static bool IsUpcomingEpisodes(this HttpContext ctx) =>
+        string.Equals(
+            ctx.GetActionName(),
+            "GetUpcomingEpisodes",
+            StringComparison.OrdinalIgnoreCase
+        );
+
     public static bool IsHomeScreenSectionListing(this HttpContext ctx)
     {
         var action = ctx.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>();

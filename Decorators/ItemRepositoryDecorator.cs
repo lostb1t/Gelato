@@ -119,7 +119,13 @@ public sealed class GelatoItemRepository(
         if (!isStreamTagQuery && filter.ExcludeTags.Length == 0 && filter.IsResumable != true)
             filter.ExcludeTags = [GelatoManager.StreamTag];
 
-        if (filter.MaxPremiereDate is not null || !filterUnreleased)
+        // The Upcoming list asks for unaired episodes on purpose. UnreleasedListingFilter still
+        // drops the episodes of a series the filter hides.
+        if (
+            filter.MaxPremiereDate is not null
+            || !filterUnreleased
+            || _http.ReadRequest(ctx => ctx.IsUpcomingEpisodes(), false)
+        )
             return filter;
 
         var isPremiereFilteredQuery =
