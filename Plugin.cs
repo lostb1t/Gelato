@@ -1,10 +1,12 @@
 using System.Collections.Concurrent;
 using Gelato.Config;
+using Gelato.ScheduledTasks;
 using Gelato.Services;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
+using MediaBrowser.Model.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato;
@@ -15,6 +17,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly GelatoManager _manager;
     private ConcurrentDictionary<Guid, PluginConfiguration> UserConfigs { get; } = new();
     private readonly GelatoStremioProviderFactory _stremioFactory;
+    private readonly ITaskManager _taskManager;
     public PalcoCacheService PalcoCache { get; } // Migrated Palco Cache Service
 
     public GelatoPlugin(
@@ -23,7 +26,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         IXmlSerializer xmlSerializer,
         ILogger<GelatoPlugin> log,
         GelatoStremioProviderFactory stremioFactory,
-        PalcoCacheService palcoCache
+        PalcoCacheService palcoCache,
+        ITaskManager taskManager
     )
         : base(applicationPaths, xmlSerializer)
     {
@@ -32,6 +36,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _manager = manager;
         _stremioFactory = stremioFactory;
         PalcoCache = palcoCache;
+        _taskManager = taskManager;
     }
 
     public static GelatoPlugin? Instance { get; private set; }
@@ -84,6 +89,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override void UpdateConfiguration(BasePluginConfiguration configuration)
     {
         var cfg = (PluginConfiguration)configuration;
+        var treesChanged = Configuration.ExtendLocalSeriesTrees != cfg.ExtendLocalSeriesTrees;
         base.UpdateConfiguration(cfg);
 
         _manager.ClearCache();
@@ -92,6 +98,18 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
         // A changed movie or series path can be the folder items without one were waiting for.
         _manager.AdoptParkedSoon();
+
+        // The task adds the missing seasons and episodes to local series, or removes them once
+        // the setting is off. Jellyfin starts it now when idle; a run in progress read the old
+        // value, so it runs once more after that one (its queue holds a task once).
+        if (treesChanged)
+        {
+            _log.LogInformation(
+                "Extending local series trees turned {State}, queueing the series tree sync",
+                cfg.ExtendLocalSeriesTrees ? "on" : "off"
+            );
+            _taskManager.QueueScheduledTask<SyncSeriesTreesTask>();
+        }
 
         // Notify subscribers that configuration changed
         try
