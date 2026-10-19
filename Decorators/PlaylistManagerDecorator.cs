@@ -1,3 +1,4 @@
+using Gelato.Services;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -16,6 +17,7 @@ public sealed class PlaylistManagerDecorator(
     IUserManager userManager,
     IProviderManager providerManager,
     IDirectoryService directoryService,
+    PendingSearchTitles pendingTitles,
     ILogger<PlaylistManagerDecorator> log
 ) : IPlaylistManager
 {
@@ -29,6 +31,7 @@ public sealed class PlaylistManagerDecorator(
     public Task<PlaylistCreationResult> CreatePlaylist(PlaylistCreationRequest request)
     {
         request.ItemIdList = PrimaryIds(request.ItemIdList);
+        ReleasePending(request.ItemIdList);
         return inner.CreatePlaylist(request);
     }
 
@@ -39,6 +42,13 @@ public sealed class PlaylistManagerDecorator(
             )
             .Distinct()
             .ToList();
+
+    // A title opened from search and put into a playlist is kept: it shows in the library again.
+    private void ReleasePending(IEnumerable<Guid> ids)
+    {
+        foreach (var id in ids)
+            pendingTitles.Release(libraryManager.GetItemById(id));
+    }
 
     public Task UpdatePlaylist(PlaylistUpdateRequest request) => inner.UpdatePlaylist(request);
 
@@ -63,6 +73,7 @@ public sealed class PlaylistManagerDecorator(
         var user = userId == Guid.Empty ? null : userManager.GetUserById(userId);
         var options = new DtoOptions(false) { EnableImages = true };
 
+        ReleasePending(itemIds);
         var resolved = PrimaryIds(itemIds)
             .Select(libraryManager.GetItemById)
             .Where(i => i is not null);

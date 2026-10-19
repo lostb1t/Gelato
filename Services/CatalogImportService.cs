@@ -21,7 +21,8 @@ public class CatalogImportService(
     CatalogService catalogService,
     ICollectionManager collectionManager,
     ILibraryManager libraryManager,
-    IFileSystem fileSystem
+    IFileSystem fileSystem,
+    PendingSearchTitles pendingTitles
 )
 {
     private static readonly SemaphoreSlim _collectionLock = new(1, 1);
@@ -253,6 +254,7 @@ public class CatalogImportService(
                                     if (item != null)
                                     {
                                         importedIds[meta.Id] = item.Id;
+                                        pendingTitles.Release(item);
                                         Interlocked.Increment(
                                             ref isNew ? ref created : ref existing
                                         );
