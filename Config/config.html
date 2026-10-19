@@ -39,7 +39,7 @@
                   <span>Setup assistant</span>
                 </button>
               </h3>
-              <p class="cardLead">Everything Gelato shows comes from your AIOStreams addon: its catalogs, its search and
+              <p class="cardLead">Everything Gelato shows comes from your AIOStreams addon: its catalogs, its search, and
                 its streams.</p>
               <div class="inputContainer">
                 <label class="inputLabel inputLabelUnfocused" for="txtUrl">AIOStreams URL (manifest or base):</label>
@@ -47,7 +47,7 @@
                   <input type="text" id="txtUrl" required="required" class="emby-input" autocomplete="off" spellcheck="false" />
                   <button type="button" is="emby-button" class="raised emby-button" id="btnCheckAddon">Test</button>
                 </div>
-                <div class="fieldDescription">The manifest URL from AIOStreams, with or without
+                <div class="fieldDescription">The manifest URL AIOStreams shows under <b>Install</b>, with or without
                   <code>/manifest.json</code>.</div>
               </div>
               <div id="addonStatus"></div>
@@ -59,8 +59,8 @@
           <div id="tab-libraries" class="tab-content" role="tabpanel">
             <div class="gelatoCard wide">
               <h3><span class="material-icons folder_special" aria-hidden="true"></span>Where titles go</h3>
-              <p class="cardLead">The libraries Gelato puts what you search for and import. A catalog can pick a library of
-                its own on the Catalogs tab.</p>
+              <p class="cardLead">Where the titles you open from search or import go. A catalog can have a library of its own
+                on the <b>Catalogs</b> tab.</p>
 
               <div class="twoCols">
                 <div class="inputContainer">
@@ -69,8 +69,8 @@
                     <select is="emby-select" id="selMovieLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
                     <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
                   </div>
-                  <div class="fieldDescription">Where movies go unless a catalog picks its own library. Pick one of your
-                    libraries, also one with your own media in it, or <b>New library…</b> for a folder to create one with.</div>
+                  <div class="fieldDescription">Where movies go unless a catalog has its own library. Pick any of your movie
+                    libraries, also one with your own media in it, or <b>New library</b> to get a folder for a new one.</div>
                 </div>
 
                 <div class="inputContainer">
@@ -79,41 +79,41 @@
                     <select is="emby-select" id="selSeriesLibrary" class="emby-select emby-select-withcolor" style="flex: 1;"></select>
                     <button type="button" class="raised emby-button" style="display: none; margin: 0; white-space: nowrap;">Copy folder</button>
                   </div>
-                  <div class="fieldDescription">Where series go unless a catalog picks its own library. Pick one of your
-                    libraries, also one with your own media in it, or <b>New library…</b> for a folder to create one with.</div>
+                  <div class="fieldDescription">Where series go unless a catalog has its own library. Pick any of your shows
+                    libraries, also one with your own media in it, or <b>New library</b> to get a folder for a new one.</div>
                 </div>
               </div>
 
               <div class="inputContainer">
                 <label class="inputLabel inputLabelUnfocused" for="txtBasePath">Gelato folder:</label>
                 <input type="text" id="txtBasePath" class="emby-input" />
-                <div class="fieldDescription">Where Gelato creates the folders it adds to picked libraries. Empty uses
-                  the default shown.</div>
+                <div class="fieldDescription">Where Gelato creates the folders it adds to your libraries. Leave it empty
+                  for the default shown.</div>
               </div>
             </div>
 
             <div class="gelatoCard">
               <h3><span class="material-icons sd_storage" aria-hidden="true"></span>Your own media</h3>
-              <p class="cardLead">For the titles Jellyfin found on disk.</p>
+              <p class="cardLead">For titles Jellyfin found on disk.</p>
               <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkEnableMixed" />
-                  <span>Show streams for local items</span>
+                  <span>Show streams for your own media</span>
                 </label>
                 <div class="fieldDescription">
-                  When enabled, Gelato will provide streams for shows imported by Jellyfin's file scanner.
+                  Movies and episodes Jellyfin found on disk also get the addon's streams, as more versions.
                 </div>
               </div>
 
               <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkExtendLocalSeriesTrees" />
-                  <span>Extend local series trees with virtual items</span>
+                  <span>Add missing seasons and episodes to your own series</span>
                 </label>
                 <div class="fieldDescription">
-                  When enabled, Gelato will inject missing seasons and episodes (as virtual items) into locally scanned shows,
-                  so you can stream episodes you don't have on disk. Run the <strong>Sync Series Trees</strong> task after
-                  changing this setting — it will create virtual items when enabled, or remove them when disabled.
+                  Your own series also list the seasons and episodes you don't have on disk, and you can stream them.
+                  When you save a change, the <strong>Sync series trees</strong> task starts and adds them, or removes
+                  them when this is off.
                 </div>
               </div>
             </div>
@@ -125,14 +125,14 @@
                   <input is="emby-checkbox" type="checkbox" id="chkLazyImages" />
                   <span>Lazy images</span>
                 </label>
-                <div class="fieldDescription">Download images on first access instead of at import time saving a lot of storage.</div>
+                <div class="fieldDescription">Downloads images when they're first shown instead of at import, which saves a lot of storage.</div>
               </div>
             </div>
 
             <div class="gelatoCard">
               <h3><span class="material-icons playlist_add" aria-hidden="true"></span>Requests from Seerr</h3>
-              <p class="cardLead">A request approved in Seerr (Jellyseerr, Overseerr) can add the title here. Set up a
-                webhook in Seerr under <b>Settings &gt; Notifications &gt; Webhook</b> with these fields.</p>
+              <p class="cardLead">A request approved in Seerr (Jellyseerr, Overseerr) adds the title to your library. In Seerr,
+                go to <b>Settings &gt; Notifications &gt; Webhook</b> and fill in these fields.</p>
 
               <div class="inputContainer">
                 <label class="inputLabel inputLabelUnfocused" for="txtSeerrUrl">Webhook URL:</label>
@@ -141,7 +141,7 @@
                   <button type="button" class="raised emby-button" data-copy="txtSeerrUrl" style="margin: 0; white-space: nowrap;">Copy</button>
                 </div>
                 <div class="fieldDescription">This server's address as your browser reaches it. If Seerr reaches Jellyfin
-                  under another one (another container, another host), use that instead.</div>
+                  at another address (from another container or host), use that one.</div>
               </div>
 
               <div class="inputContainer">
@@ -150,13 +150,13 @@
                   <input type="text" id="txtSeerrAuth" class="emby-input" readonly style="flex: 1;" value='MediaBrowser Token="API key"' />
                   <button type="button" class="raised emby-button" data-copy="txtSeerrAuth" style="margin: 0; white-space: nowrap;">Copy</button>
                 </div>
-                <div class="fieldDescription">Put a key from <a href="#/dashboard/keys" target="_blank" class="button-link">Dashboard
-                  &gt; API Keys</a> in place of <b>API key</b>.</div>
+                <div class="fieldDescription">Replace <b>API key</b> with a key from <a href="#/dashboard/keys" target="_blank"
+                  class="button-link">Dashboard &gt; API Keys</a>.</div>
               </div>
 
-              <div class="fieldDescription" style="margin-bottom: 1.2em;">Leave the <b>JSON Payload</b> as it is and tick the
+              <div class="fieldDescription" style="margin-bottom: 1.2em;">Leave <b>JSON Payload</b> as it is, and select the
                 notification types <b>Request Approved</b> and <b>Request Automatically Approved</b>. A series request adds the
-                whole series. When the requester is a Jellyfin user with their own libraries, the title goes there.</div>
+                whole series. If the requester has libraries of their own on the <b>Users</b> tab, the title goes there.</div>
             </div>
           </div>
 
@@ -165,17 +165,18 @@
             <div class="gelatoCard wide">
               <h3><span class="material-icons view_carousel" aria-hidden="true"></span>Catalogs</h3>
               <p class="cardLead">
-                Enable Stremio catalogs to import them into Jellyfin.
-                <b>Sequential Import:</b> Series are processed one-by-one to respect rate limits.
+                Turn on a catalog to import its titles into your library.
+                Series get their seasons and episodes after the import, so a big catalog takes a while.
               </p>
               <div class="fieldDescription" id="unreleasedHint" style="display: none; margin: -.6em 0 1em;">
-                Unreleased titles are imported but stay hidden while <b>Filter unreleased items</b> is on (Search tab).
+                Titles that aren't released yet are imported but stay hidden while <b>Hide titles that aren't released
+                yet</b> is on (<b>Search</b> tab).
               </div>
 
               <div class="inputContainer gelatoRow" style="margin-bottom: 1em;">
                 <div>
                   <!--suppress HtmlFormInputWithoutLabel -->
-                  <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type..."
+                  <input type="text" id="txtCatalogSearch" placeholder="Search catalogs by name or type"
                     class="emby-input" />
                 </div>
                 <button type="button" is="emby-button" class="raised emby-button"
@@ -201,28 +202,28 @@
           <div id="tab-search" class="tab-content" role="tabpanel">
             <div class="gelatoCard">
               <h3><span class="material-icons travel_explore" aria-hidden="true"></span>Addon search</h3>
-              <p class="cardLead">A Jellyfin search also asks AIOStreams, and what it finds can be opened and played
-                straight away. Who searches only the library can be set per user on the Users tab.</p>
+              <p class="cardLead">Jellyfin's search also asks AIOStreams, and you can open and play what it finds right
+                away. To keep a user's searches to the library, use the <b>Users</b> tab.</p>
               <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkAddonSearch" />
                   <span>Search AIOStreams from Jellyfin</span>
                 </label>
-                <div class="fieldDescription">A Jellyfin search also finds what is not in your libraries yet. Off: searches find only what is in your libraries already, for every user, and nothing is asked of AIOStreams or TMDB.</div>
+                <div class="fieldDescription">Search also finds titles that aren't in your library yet. Off: search stays in your library, for every user, and Gelato asks neither AIOStreams nor TMDB.</div>
               </div>
               <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="personRemoteTitlesSetting">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkPersonRemoteTitles" />
-                  <span>Show a person's titles that are not in the library</span>
+                  <span>Show a person's titles that aren't in the library</span>
                 </label>
-                <div class="fieldDescription">An actor's or director's page also lists their other films and series from TMDB, and they open like search results. Only while the search above is on.</div>
+                <div class="fieldDescription">An actor's or director's page also lists their other movies and series from TMDB. They open like search results. Works only while the search above is on.</div>
               </div>
               <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="hideUnplayedSearchTitlesSetting">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkHideUnplayedSearchTitles" />
                   <span>Keep opened search results out of the library until played</span>
                 </label>
-                <div class="fieldDescription">Opening a search result still adds it to the library, but it stays out of the library, home rows and counts until someone plays it, marks it a favourite, likes it (a watchlist) or adds it to a collection or playlist. Search still finds it. Titles nobody played are removed again after 5 days.</div>
+                <div class="fieldDescription">A search result you open stays out of the library, the home screen rows, and the counts until someone plays or keeps it (favorite, watchlist, collection, or playlist). Search still finds it. Gelato removes it after 5 days if nobody does.</div>
               </div>
             </div>
 
@@ -231,29 +232,29 @@
               <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkEnableJavaScriptInjection" />
-                  <span>Enable frontend customization</span>
+                  <span>Add a library-only switch to the search bar</span>
                 </label>
-                <div class="fieldDescription">Adds a local search toggle to the searchbar.
-                  Requires Jellyfin-JavaScript-Injector plugin to be installed and configured.
+                <div class="fieldDescription">A globe button in the search bar switches a search between the addon and your library only.
+                  Needs the JavaScript Injector plugin, installed and set up.
                 </div>
               </div>
             </div>
 
             <div class="gelatoCard">
               <h3><span class="material-icons event_busy" aria-hidden="true"></span>Unreleased titles</h3>
-              <p class="cardLead">Keeps titles that are not released yet out of search results, and hides them in your
-                Gelato libraries until they are.</p>
+              <p class="cardLead">Keeps titles that aren't released yet out of search, and hides Gelato's titles in your
+                libraries until they are.</p>
               <div class="checkboxContainer checkboxContainer-withDescription" style="margin-bottom: 0.5em;">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkFilterUnreleased" />
-                  <span>Filter unreleased items</span>
+                  <span>Hide titles that aren't released yet</span>
                 </label>
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Release buffer days:</label>
+                <label class="inputLabel inputLabelUnfocused" for="txtBufferDays">Days after release:</label>
                 <input type="number" id="txtBufferDays" class="emby-input" />
-                <div class="fieldDescription">Items released within these many days will be hidden if filter is enabled.
+                <div class="fieldDescription">A title counts as released this many days after its release date. 0: on the day itself.
                 </div>
               </div>
             </div>
@@ -268,21 +269,21 @@
                   <input is="emby-checkbox" type="checkbox" id="chkPreProbe" />
                   <span>Probe streams before playback</span>
                 </label>
-                <div class="fieldDescription">Probes a stream when you open its page or pick another version, and the next episode while one is ending, so playback starts without waiting for the probe. The next episode's stream is the one of the same binge group as the stream that is playing, when the addon sets one.</div>
+                <div class="fieldDescription">Checks a stream's tracks when you open a title's page or pick another version, and the next episode's stream while an episode is ending, so playback starts without that wait.</div>
               </div>
 
               <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkPlaybackFailover" />
-                  <span>Try the next stream when one does not start</span>
+                  <span>Try the next stream when one doesn't start</span>
                 </label>
-                <div class="fieldDescription">A stream known not to work (a dead link, or one with no video) is skipped for the next stream of the title, up to three. A stream that works starts as fast as before. A version you picked yourself plays as it is.</div>
+                <div class="fieldDescription">Skips a stream known not to work (a dead link, or one with no video) and plays the title's next stream, trying the first 3. A version you pick yourself plays as it is.</div>
               </div>
 
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Stream TTL (seconds):</label>
+                <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Keep streams for (seconds):</label>
                 <input type="number" id="txtStreamTTL" class="emby-input" />
-                <div class="fieldDescription">Cache duration for external stream URLs.</div>
+                <div class="fieldDescription">How long Gelato keeps a title's streams before it asks the addon again. Default: 3600 (1 hour).</div>
               </div>
             </div>
 
@@ -293,20 +294,20 @@
                   <input is="emby-checkbox" type="checkbox" id="chkRemuxDbEnabled" />
                   <span>Look up media info on RemuxDB</span>
                 </label>
-                <div class="fieldDescription">Shows audio, subtitles and quality of a stream before you play it, and starts playback faster.</div>
+                <div class="fieldDescription">Shows a stream's audio, subtitles, and quality before you play it, and playback starts faster.</div>
               </div>
               <div class="checkboxContainer checkboxContainer-withDescription">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkRemuxDbContribute" />
                   <span>Contribute to RemuxDB</span>
                 </label>
-                <div class="fieldDescription">Shares this info for streams you play, so others see it too. Anonymous: no links, accounts or personal data.</div>
+                <div class="fieldDescription">Shares that info for streams you play that RemuxDB doesn't know yet, so others see it too. Anonymous: no links, accounts, or personal data.</div>
               </div>
             </div>
 
             <div class="gelatoCard">
               <h3><span class="material-icons tune" aria-hidden="true"></span>FFmpeg</h3>
-              <p class="cardLead">How much of a stream FFmpeg reads to find its tracks. Leave them unless playback
+              <p class="cardLead">How much of a stream FFmpeg reads to find its tracks. Change these only if playback
                 misses tracks or starts slowly.</p>
               <div class="twoCols">
                 <div class="inputContainer">
@@ -328,14 +329,14 @@
           <!-- Users -->
           <div id="tab-userconfigs" class="tab-content" role="tabpanel">
             <div class="gelatoCard wide">
-              <h3><span class="material-icons manage_accounts" aria-hidden="true"></span>User Overrides</h3>
-              <p class="cardLead">Override settings for specific users: their own addon, their own libraries, or search
-                in the library only.</p>
+              <h3><span class="material-icons manage_accounts" aria-hidden="true"></span>User overrides</h3>
+              <p class="cardLead">Give a user their own addon, their own libraries, or searches that stay in the
+                library.</p>
 
               <div id="userOverridesList" class="gelatoOverrideList"></div>
 
               <div class="inputContainer">
-                <label class="inputLabel inputLabelUnfocused" for="selUserConfig">Add/Edit override for user:</label>
+                <label class="inputLabel inputLabelUnfocused" for="selUserConfig">Add or edit an override for:</label>
                 <select id="selUserConfig" is="emby-select" class="emby-select emby-select-withcolor">
                   <option value="">-- Select user --</option>
                 </select>
@@ -370,19 +371,19 @@
                     <input is="emby-checkbox" type="checkbox" id="chkUserAddonSearch" />
                     <span>Search AIOStreams from Jellyfin</span>
                   </label>
-                  <div class="fieldDescription">Off: this user's searches find only what is in the libraries already.</div>
+                  <div class="fieldDescription">Off: this user's searches find only what's in the library.</div>
                 </div>
                 <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="userPersonRemoteTitlesSetting">
                   <label>
                     <input is="emby-checkbox" type="checkbox" id="chkUserPersonRemoteTitles" />
-                    <span>Show a person's titles that are not in the library</span>
+                    <span>Show a person's titles that aren't in the library</span>
                   </label>
-                  <div class="fieldDescription">Only while this user's search above is on.</div>
+                  <div class="fieldDescription">Works only while this user's search above is on.</div>
                 </div>
 
                 <div class="gelatoOverrideActions">
                   <button type="button" id="btnAddOverride" is="emby-button" class="raised emby-button">Save
-                    Override</button>
+                    override</button>
                   <button type="button" id="btnCancelOverride" is="emby-button" class="emby-button">Cancel</button>
                 </div>
               </div>

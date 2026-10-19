@@ -21,19 +21,19 @@ const SETUP_STEPS = ['welcome', 'addon', 'libraries', 'catalogs', 'choices', 'fi
 // that says the opposite of its switch.
 const SETUP_CHOICES = [
   { key: 'DisableSearch', invert: true, title: 'Search AIOStreams from Jellyfin',
-    text: 'A Jellyfin search also finds what is not in your libraries yet, ready to play.' },
-  { key: 'FilterUnreleased', title: 'Hide titles that are not released yet',
-    text: 'Keeps cinema-only and announced titles out of search and your libraries until they can be streamed.' },
-  { key: 'PlaybackFailover', title: 'Try the next stream when one does not start',
-    text: 'A stream known not to work is skipped for the next one, up to three. A version you pick yourself plays as it is.' },
+    text: 'Search also finds titles that aren\'t in your library yet, ready to play.' },
+  { key: 'FilterUnreleased', title: 'Hide titles that aren\'t released yet',
+    text: 'Keeps cinema-only and announced titles out of search and your library until you can stream them.' },
+  { key: 'PlaybackFailover', title: 'Try the next stream when one doesn\'t start',
+    text: 'Skips a stream known not to work and plays the next one, trying the first 3. A version you pick yourself plays as it is.' },
   { key: 'RemuxDbEnabled', title: 'Look up media info on RemuxDB',
-    text: 'Shows audio, subtitles and quality of a stream before you play it.' },
+    text: 'Shows a stream\'s audio, subtitles, and quality before you play it.' },
   { key: 'RemuxDbContribute', title: 'Contribute to RemuxDB',
-    text: 'Shares that info for streams you play. Anonymous: no links, accounts or personal data.' },
+    text: 'Shares that info for streams you play that RemuxDB doesn\'t know yet. Anonymous: no links, accounts, or personal data.' },
   { key: 'LazyImages', title: 'Lazy images',
-    text: 'Downloads artwork when it is first shown instead of at import, which saves a lot of storage.' },
+    text: 'Downloads images when they\'re first shown instead of at import, which saves a lot of storage.' },
   { key: 'EnableMixed', title: 'Streams for your own media',
-    text: 'Titles Jellyfin found on disk get the addon\'s streams as further versions.' },
+    text: 'Movies and episodes Jellyfin found on disk also get the addon\'s streams, as more versions.' },
 ];
 
 const SETUP_HTML = `
@@ -49,39 +49,39 @@ const SETUP_HTML = `
         <div class="hero">
           <span class="gelatoLogo big" data-logo="animated"></span>
           <h2>Welcome to Gelato</h2>
-          <p class="stepLead">Gelato puts what your AIOStreams addon offers into Jellyfin, as movies and
-            series you browse, search and play like your own. A few steps and it is ready.</p>
+          <p class="stepLead">Gelato brings what your AIOStreams addon offers into Jellyfin: movies and
+            series you browse, search, and play like your own. Setup takes 4 steps.</p>
         </div>
         <div class="heroPoints">
           <div><span class="material-icons travel_explore" aria-hidden="true"></span><b>Search everything</b>Find any title from Jellyfin's search and play it right away.</div>
-          <div><span class="material-icons view_carousel" aria-hidden="true"></span><b>Import catalogs</b>Top lists, trending, your Trakt lists: as library items.</div>
-          <div><span class="material-icons bolt" aria-hidden="true"></span><b>Stream on demand</b>Nothing is downloaded: streams are found when you press play.</div>
+          <div><span class="material-icons view_carousel" aria-hidden="true"></span><b>Import catalogs</b>Top lists, trending, and your Trakt lists, as titles in your library.</div>
+          <div><span class="material-icons bolt" aria-hidden="true"></span><b>Stream on demand</b>Nothing is downloaded. Gelato finds the streams when you press play.</div>
         </div>
       </section>
 
       <section class="setupStep" data-step="addon">
         <h2>Connect AIOStreams</h2>
-        <p class="stepLead">Paste the manifest URL of your AIOStreams addon. You find it in AIOStreams after
-          saving your config, under <b>Install</b>: copy the link instead of opening it.</p>
+        <p class="stepLead">Paste the manifest URL of your AIOStreams addon. In AIOStreams, save your config,
+          go to <b>Install</b>, and copy the link instead of opening it.</p>
         <div class="inputContainer">
           <label class="inputLabel" for="txtSetupUrl">AIOStreams URL:</label>
           <div style="display: flex; gap: .6em; align-items: center;">
             <input type="text" id="txtSetupUrl" class="emby-input" style="flex: 1;" autocomplete="off" spellcheck="false" placeholder="https://…/manifest.json" />
             <button type="button" data-do="check" class="raised emby-button" style="margin: 0; white-space: nowrap;">Connect</button>
           </div>
-          <div class="fieldDescription">Your server asks the addon, so it has to reach this address.</div>
+          <div class="fieldDescription">Your Jellyfin server connects to the addon, so it has to reach this address.</div>
         </div>
         <div data-addon></div>
         <div data-anyway style="display: none;" class="fieldDescription">
           <button type="button" class="linkButton" data-do="anyway">Use this URL anyway</button>
-          — for an addon that is down for a moment.
+          if the addon is down for a moment.
         </div>
       </section>
 
       <section class="setupStep" data-step="libraries">
         <h2>Pick your libraries</h2>
-        <p class="stepLead">Gelato's movies and series go into Jellyfin libraries. Use libraries you have —
-          Gelato adds a folder of its own to them — or let it create new ones.</p>
+        <p class="stepLead">Gelato's movies and series go into Jellyfin libraries. Pick libraries you have,
+          and Gelato adds a folder of its own to them, or let it create new ones.</p>
         <div class="pickCard" data-kind="movie">
           <h3><span class="material-icons movie" aria-hidden="true"></span>Movies</h3>
           <div class="inputContainer">
@@ -112,28 +112,28 @@ const SETUP_HTML = `
         <div data-collections style="display: none;">
           <label class="choice">
             <span class="switch"><input type="checkbox" data-collection /><i></i></span>
-            <span class="choiceText"><b>Also make a collection for each picked catalog</b><span>Its titles also
-              show together as a Jellyfin collection named after the catalog. Per catalog on the Catalogs
-              tab later.</span></span>
+            <span class="choiceText"><b>Also create a collection for each catalog you pick</b><span>Its titles also
+              show together in a Jellyfin collection named after the catalog. Change it per catalog later on
+              the Catalogs tab.</span></span>
           </label>
         </div>
       </section>
 
       <section class="setupStep" data-step="choices">
         <h2>A few choices</h2>
-        <p class="stepLead">Good defaults are on. Everything here can be changed later in the settings.</p>
+        <p class="stepLead">Good defaults are on. Change any of these later in the settings.</p>
         <div data-choices></div>
       </section>
 
       <section class="setupStep" data-step="finish">
         <div data-summary>
           <h2>Ready to go</h2>
-          <p class="stepLead">This is what Gelato will set up.</p>
+          <p class="stepLead">This is what Gelato sets up.</p>
           <ul class="summary"></ul>
           <label class="choice" style="padding-top: 0;">
             <span class="switch"><input type="checkbox" data-import checked /><i></i></span>
-            <span class="choiceText"><b>Import the picked catalogs now</b><span>Runs in the background; the
-              titles show up in your libraries as they come in.</span></span>
+            <span class="choiceText"><b>Import the catalogs now</b><span>Runs in the background. Titles show
+              up in your library as they come in.</span></span>
           </label>
         </div>
         <div data-work style="display: none;">
@@ -145,8 +145,8 @@ const SETUP_HTML = `
           <div class="bigCheck"><span class="material-icons check" aria-hidden="true"></span></div>
           <h2>All set. Enjoy!</h2>
           <p class="stepLead" data-donetext></p>
-          <p class="fieldDescription">Gelato set up the libraries for its titles, not their language, subtitle
-            downloads or metadata order: those are under
+          <p class="fieldDescription">Gelato set up the libraries for its titles. Their language, subtitle
+            downloads, and metadata order are in
             <a href="#/dashboard/libraries" class="button-link" data-do="libraries">Dashboard &gt; Libraries</a>.</p>
         </div>
       </section>
@@ -316,8 +316,8 @@ export async function openSetup(ctx) {
     $('[data-collections]').style.display = importable.length ? '' : 'none';
     if (importable.length === 0) {
       box.innerHTML = '<p class="fieldDescription">' + (state.addon
-        ? 'Your addon lists no catalogs to import. Search works all the same.'
-        : 'The addon was not reached, so its catalogs are not known yet. Pick them later on the Catalogs tab.') +
+        ? 'Your addon lists no catalogs to import. Search still works.'
+        : 'Gelato couldn\'t reach the addon, so its catalogs aren\'t known yet. Pick them later on the Catalogs tab.') +
         '</p>';
       return;
     }
@@ -529,8 +529,8 @@ export async function openSetup(ctx) {
       $('[data-work]').style.display = 'none';
       $('[data-done]').style.display = '';
       $('[data-donetext]').textContent = doImport
-        ? 'The import runs in the background: titles show up in your libraries as they come in. Try a search meanwhile.'
-        : 'Try a search: what your addon finds can be opened and played right away.';
+        ? 'The import runs in the background, and titles show up in your library as they come in. Try a search in the meantime.'
+        : 'Try a search: you can open and play what your addon finds right away.';
       btnNext.textContent = 'Close';
       btnNext.disabled = false;
       sprinkle($('.sprinkles'));
@@ -541,8 +541,8 @@ export async function openSetup(ctx) {
     } catch (e) {
       console.error(e);
       running.fail();
-      $('[data-fail]').textContent = 'That did not work: ' + await errorText(e) +
-        '. Nothing after this step was done; go back to change something, or try again.';
+      $('[data-fail]').textContent = 'That didn\'t work: ' + await errorText(e) +
+        '. The steps after this one didn\'t run. Go back to change something, or try again.';
       btnBack.style.visibility = '';
       btnNext.textContent = 'Try again';
       btnNext.disabled = false;
