@@ -39,10 +39,16 @@ public sealed class UnreleasedListingFilter(IItemRepository itemRepository) : IA
         if (hidden.Count == 0)
             return;
 
+        // The Upcoming list is made of unaired episodes, all of them in the set: it keeps those of
+        // a released series and drops those of a series the filter hides.
+        Func<BaseItemDto, bool> isHidden = ctx.HttpContext.IsUpcomingEpisodes()
+            ? i => i.SeriesId is { } series && hidden.Contains(series)
+            : i => hidden.Contains(i.Id);
+
         switch (result.Value)
         {
             case QueryResult<BaseItemDto> query when query.Items.Count > 0:
-                var kept = query.Items.Where(i => !hidden.Contains(i.Id)).ToArray();
+                var kept = query.Items.Where(i => !isHidden(i)).ToArray();
                 if (kept.Length == query.Items.Count)
                     return;
                 result.Value = new QueryResult<BaseItemDto>(
@@ -53,7 +59,7 @@ public sealed class UnreleasedListingFilter(IItemRepository itemRepository) : IA
                 return;
 
             case IReadOnlyList<BaseItemDto> items when items.Count > 0:
-                var list = items.Where(i => !hidden.Contains(i.Id)).ToArray();
+                var list = items.Where(i => !isHidden(i)).ToArray();
                 if (list.Length != items.Count)
                     result.Value = list;
                 return;
