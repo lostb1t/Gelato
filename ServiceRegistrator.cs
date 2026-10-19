@@ -53,6 +53,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ItemIdLookup>();
         services.AddSingleton<GelatoManager>();
         services.AddSingleton<ItemWriteCounter>();
+        services.AddSingleton<GelatoCache>();
         services.DecorateSingle<IItemPersistenceService, ItemPersistenceServiceDecorator>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());

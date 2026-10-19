@@ -18,6 +18,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private ConcurrentDictionary<Guid, PluginConfiguration> UserConfigs { get; } = new();
     private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly ITaskManager _taskManager;
+    private readonly GelatoCache _cache;
     public PalcoCacheService PalcoCache { get; } // Migrated Palco Cache Service
 
     public GelatoPlugin(
@@ -27,7 +28,8 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         ILogger<GelatoPlugin> log,
         GelatoStremioProviderFactory stremioFactory,
         PalcoCacheService palcoCache,
-        ITaskManager taskManager
+        ITaskManager taskManager,
+        GelatoCache cache
     )
         : base(applicationPaths, xmlSerializer)
     {
@@ -37,6 +39,7 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _stremioFactory = stremioFactory;
         PalcoCache = palcoCache;
         _taskManager = taskManager;
+        _cache = cache;
     }
 
     public static GelatoPlugin? Instance { get; private set; }
@@ -92,7 +95,9 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         var treesChanged = Configuration.ExtendLocalSeriesTrees != cfg.ExtendLocalSeriesTrees;
         base.UpdateConfiguration(cfg);
 
-        _manager.ClearCache();
+        // Only what came from the old configuration: what search results became stays, a client
+        // keeps their ids in its page (GelatoManager.ClearCache, for the purges, drops that too).
+        _cache.Invalidate();
         _stremioFactory.ClearCache();
         UserConfigs.Clear();
 

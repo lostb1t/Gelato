@@ -1,4 +1,5 @@
 using System.Threading.Channels;
+using Gelato.Services;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,7 @@ namespace Gelato.RemuxDb;
 /// </summary>
 public sealed class RemuxDbContributor(
     RemuxDbClient client,
-    IMemoryCache cache,
+    GelatoCache owner,
     ILogger<RemuxDbContributor> log
 ) : BackgroundService
 {
@@ -34,7 +35,7 @@ public sealed class RemuxDbContributor(
     public void Enqueue(RemuxDbTitle title, RemuxDbSubmission submission)
     {
         var key = SentKey(submission);
-        if (cache.TryGetValue(key, out _))
+        if (owner.Memo.TryGetValue(key, out _))
             return;
 
         if (!_queue.Writer.TryWrite((title, submission)))
@@ -43,7 +44,7 @@ public sealed class RemuxDbContributor(
             return;
         }
 
-        cache.Set(key, true, SentTtl);
+        owner.Memo.Set(key, true, SentTtl);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -71,7 +72,7 @@ public sealed class RemuxDbContributor(
                 }
                 else
                 {
-                    cache.Remove(SentKey(submission));
+                    owner.Memo.Remove(SentKey(submission));
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -80,7 +81,7 @@ public sealed class RemuxDbContributor(
             }
             catch (Exception ex)
             {
-                cache.Remove(SentKey(submission));
+                owner.Memo.Remove(SentKey(submission));
                 log.LogWarning(
                     "RemuxDB submission for {Filename} failed: {Error}",
                     submission.Filename,

@@ -106,7 +106,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         IntroDbClient introDbClient,
         IChapterRepository chapters,
         SegmentLookups lookups,
-        IMemoryCache cache,
+        GelatoCache cache,
         ILogger<IntroDbSegmentProvider> logger
     )
     {
@@ -121,7 +121,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         _introDbClient = introDbClient;
         _chapters = chapters;
         _lookups = lookups;
-        _cache = cache;
+        _cache = cache.Memo;
         _logger = logger;
     }
 

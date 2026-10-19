@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Gelato.Services;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -19,7 +20,7 @@ namespace Gelato.RemuxDb;
 /// id generated for this install (<see cref="Config.PluginConfiguration.RemuxDbClientId"/>) and
 /// derived from nothing else.
 /// </remarks>
-public sealed class RemuxDbClient(HttpClient http, IMemoryCache cache, ILogger<RemuxDbClient> log)
+public sealed class RemuxDbClient(HttpClient http, GelatoCache owner, ILogger<RemuxDbClient> log)
 {
     public const string DefaultUrl = "https://remuxdb.1632022.xyz";
 
@@ -82,7 +83,7 @@ public sealed class RemuxDbClient(HttpClient http, IMemoryCache cache, ILogger<R
     )
     {
         var key = CacheKey(title);
-        if (cache.TryGetValue(key, out IReadOnlyList<RemuxDbVersion>? cached) && cached is not null)
+        if (owner.Memo.TryGetValue(key, out IReadOnlyList<RemuxDbVersion>? cached) && cached is not null)
             return cached;
 
         // RemuxDB reads season and episode from the id itself (tt0903747:1:1) and ignores
@@ -149,14 +150,14 @@ public sealed class RemuxDbClient(HttpClient http, IMemoryCache cache, ILogger<R
             title.CacheKey,
             versions.Count
         );
-        cache.Set(key, versions, ttl);
+        owner.Memo.Set(key, versions, ttl);
         return versions;
     }
 
     /// <summary>Forgets a title's lookup, so a file just submitted is found on the next sync.</summary>
     public void Forget(RemuxDbTitle title)
     {
-        cache.Remove(CacheKey(title));
+        owner.Memo.Remove(CacheKey(title));
         _ = Ahead.TryTake(title.CacheKey);
     }
 
