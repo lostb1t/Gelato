@@ -186,8 +186,8 @@ export default function (view) {
       <div data-step="ask">
         <label class="inputLabel" for="txtNewLibraryName">Library name:</label>
         <input type="text" id="txtNewLibraryName" class="emby-input" />
-        <div class="fieldDescription">Jellyfin creates no library without a folder, so Gelato makes the
-          folder first. You create the library with it in the next step.</div>
+        <div class="fieldDescription">Jellyfin needs a folder for a new library, so Gelato creates the
+          folder first. You add the library with it in the next step.</div>
       </div>
       <div data-step="ready" style="display: none;">
         <label class="inputLabel" for="txtNewLibraryPath">Folder for the library:</label>
@@ -196,10 +196,10 @@ export default function (view) {
           <button type="button" data-do="copy" class="raised emby-button">Copy</button>
         </div>
         <ol style="padding-left: 1.2em;">
-          <li><b>Save</b> here.</li>
-          <li>Under <b>Dashboard &gt; Libraries</b>, add a library and give it this folder.</li>
+          <li>Select <b>Save</b> on this page.</li>
+          <li>In <b>Dashboard &gt; Libraries</b>, add a library with this folder.</li>
         </ol>
-        <div class="fieldDescription">Once the library is there, it is shown here under its name.</div>
+        <div class="fieldDescription">Once the library exists, it shows up here under its name.</div>
       </div>
       <div data-step="error" class="fieldDescription" style="color: #f44336; display: none;"></div>
       <div style="display: flex; gap: 1em; justify-content: flex-end; margin-top: 1em;">
@@ -359,7 +359,7 @@ export default function (view) {
         } catch (err) {
           console.error(err);
           // Said in the dialog: an alert would open behind it.
-          fail('Could not create the folder: ' + await errorText(err));
+          fail('Couldn\'t create the folder: ' + await errorText(err));
         }
       };
       dialog.querySelector('[data-do="copy"]').onclick = async () => {
@@ -412,8 +412,8 @@ export default function (view) {
 
   // A folder no Jellyfin library holds: Gelato has nowhere to put the items. Said under the
   // select; in the catalog table, where there is no room, as the tooltip.
-  const NO_LIBRARY_WARNING = 'This folder is in no Jellyfin library yet, so Gelato cannot list these items. ' +
-    'Add a library under Dashboard > Libraries with this folder, or pick one of your libraries and save: ' +
+  const NO_LIBRARY_WARNING = 'This folder isn\'t in a Jellyfin library yet, so these titles don\'t show up anywhere. ' +
+    'Add a library with this folder in Dashboard > Libraries, or pick one of your libraries and save: ' +
     'Gelato adds a folder of its own to it.';
 
   function showLibraryWarning(select) {
@@ -464,7 +464,7 @@ export default function (view) {
         note.append('No library yet: ', copyLink, ' · ', link);
       } else {
         link.textContent = 'Dashboard > Libraries';
-        note.append('This folder is in no library yet. Copy it and add a library with it under ', link,
+        note.append('This folder isn\'t in a library yet. Copy it and add a library with it in ', link,
           ', or pick one of your libraries here. Gelato finds the new library on its own.');
       }
     }
@@ -578,7 +578,7 @@ export default function (view) {
   async function loadCatalogs() {
     try {
       // Show loading spinner in list
-      catalogsList.innerHTML = '<div style="padding: 2em; text-align: center;"><span class="gelatoSpin" style="font-size: 1.6em;"></span><p>Loading catalogs...</p></div>';
+      catalogsList.innerHTML = '<div style="padding: 2em; text-align: center;"><span class="gelatoSpin" style="font-size: 1.6em;"></span><p>Loading catalogs…</p></div>';
 
       // Get current configuration to preserve user settings
       const cfg = await window.ApiClient.getPluginConfiguration(pluginId);
@@ -589,7 +589,7 @@ export default function (view) {
       if (!(cfg.Url || '').trim()) {
         allCatalogs = [];
         catalogsList.innerHTML = '<p style="padding: 1em; text-align: center; opacity: 0.7;">No catalogs yet. ' +
-          'Enter your AIOStreams URL on the Addon tab and save: the catalogs are the ones your addon lists.</p>';
+          'Enter your AIOStreams URL on the Addon tab and save. The catalogs are the ones your addon lists.</p>';
         return;
       }
 
@@ -620,7 +620,7 @@ export default function (view) {
       console.error('Error loading catalogs:', e);
       const failed = document.createElement('p');
       failed.style.cssText = 'color: red; padding: 1em;';
-      failed.textContent = 'Could not load the catalogs: ' + await errorText(e);
+      failed.textContent = 'Couldn\'t load the catalogs: ' + await errorText(e);
       catalogsList.replaceChildren(failed);
     }
   }
@@ -688,7 +688,7 @@ export default function (view) {
 
     if (filtered.length === 0) {
       catalogsList.innerHTML = '<p style="padding: 1em; text-align: center; opacity: 0.7;">' +
-        (allCatalogs.length === 0 ? 'Your addon lists no catalogs that can be imported.' : 'No matching catalogs found.') +
+        (allCatalogs.length === 0 ? 'Your addon lists no catalogs that can be imported.' : 'No catalogs match your search.') +
         '</p>';
       return;
     }
@@ -706,9 +706,9 @@ export default function (view) {
     header.innerHTML = `
           <th style="padding: 10px;">Name</th>
           <th style="padding: 10px;">Type</th>
-          <th style="padding: 10px;">Import${help('Imports the catalog into your library and keeps it up to date each time the Import Catalogs task runs. Off: the catalog is not imported.')}</th>
+          <th style="padding: 10px;">Import${help('Imports the catalog’s titles into your library and updates them each time the Import Catalogs task runs.')}</th>
           <th style="padding: 10px;">Collection${help('Also puts the catalog’s titles into a Jellyfin collection named after the catalog.')}</th>
-          <th style="padding: 10px;">Max items${help('How many titles of the catalog are imported, from its top.')}</th>
+          <th style="padding: 10px;">Max items${help('How many titles to import, from the top of the catalog.')}</th>
           <th style="padding: 10px;">Library${help('Where the catalog’s titles go. Default: the movies or series library from the Libraries tab.')}</th>
           <th style="padding: 10px;"></th>
       `;
@@ -875,7 +875,7 @@ export default function (view) {
   }
 
   async function triggerImport(cat) {
-    if (!await askConfirm('Import catalog', 'Start import for ' + cat.Name + '?', 'Start import')) return;
+    if (!await askConfirm('Import catalog', 'Import ' + cat.Name + ' now?', 'Start import')) return;
     Dashboard.showLoadingMsg();
     try {
       // The import reads the saved settings, so the row is saved as it is on the page first:
@@ -896,7 +896,7 @@ export default function (view) {
       Dashboard.alert("Import started.");
     } catch (e) {
       console.error(e);
-      await showError('Error starting import', e);
+      await showError('Couldn\'t start the import', e);
     } finally {
       Dashboard.hideLoadingMsg();
     }
@@ -923,11 +923,11 @@ export default function (view) {
     collectCatalogStatesFromDOM();
     const enabled = allCatalogs.filter(c => c.Enabled);
     if (enabled.length === 0) {
-      Dashboard.alert('No catalog is enabled.');
+      Dashboard.alert('No catalog is turned on.');
       return;
     }
-    const which = enabled.length === 1 ? enabled[0].Name : 'the ' + enabled.length + ' enabled catalogs';
-    if (!await askConfirm('Import all catalogs', 'Start import for ' + which + '?', 'Start import')) return;
+    const which = enabled.length === 1 ? enabled[0].Name : 'the ' + enabled.length + ' catalogs that are on';
+    if (!await askConfirm('Import all catalogs', 'Import ' + which + ' now?', 'Start import')) return;
     Dashboard.showLoadingMsg();
     try {
       // The import reads the saved settings, so the table is saved as it is on the page
@@ -940,10 +940,10 @@ export default function (view) {
 
       const url = window.ApiClient.getUrl('gelato/catalogs/import-all');
       await window.ApiClient.ajax({ type: "POST", url: url });
-      Dashboard.alert("Global import started in background.");
+      Dashboard.alert("Import started in the background.");
     } catch (e) {
       console.error(e);
-      await showError('Error starting global import', e);
+      await showError('Couldn\'t start the import', e);
     } finally {
       Dashboard.hideLoadingMsg();
     }
@@ -1061,7 +1061,7 @@ export default function (view) {
       markDirty(false, true);
     } catch (e) {
       console.error(e);
-      await showError('Error saving', e);
+      await showError('Couldn\'t save the settings', e);
     } finally {
       Dashboard.hideLoadingMsg();
     }
@@ -1086,7 +1086,7 @@ export default function (view) {
     const entries = Object.entries(overrides);
 
     if (entries.length === 0) {
-      userOverridesList.innerHTML = '<p style="opacity: .6; font-style: italic;">No user overrides configured.</p>';
+      userOverridesList.innerHTML = '<p style="opacity: .6; font-style: italic;">No user overrides yet.</p>';
       return;
     }
 
@@ -1189,7 +1189,7 @@ export default function (view) {
       seriesPath = await resolveLibraryPick(selUserSeriesLibrary.value, previous.SeriesPath);
     } catch (e) {
       console.error(e);
-      await showError('Could not set up the library folder', e);
+      await showError('Couldn\'t set up the library folder', e);
       return;
     } finally {
       Dashboard.hideLoadingMsg();

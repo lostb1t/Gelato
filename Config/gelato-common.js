@@ -115,12 +115,12 @@ export function renderAddonCard(target, res, error) {
       const hint = document.createElement('div');
       hint.className = 'addonMeta';
       hint.style.marginTop = '.4em';
-      hint.textContent = 'It answers, but offers no streams: this looks like AIOStreams itself, not your saved ' +
-        'config. Copy the manifest URL AIOStreams shows after saving.';
+      hint.textContent = 'It answers but offers no streams, so this looks like AIOStreams itself, not your saved ' +
+        'config. Copy the manifest URL AIOStreams shows after you save.';
       text.appendChild(hint);
     }
   } else {
-    name.textContent = 'The addon did not answer';
+    name.textContent = 'The addon didn\'t answer';
     meta.textContent = error || res?.Error || 'Check the URL and that this server can reach it.';
     text.append(name, meta);
   }
