@@ -323,6 +323,10 @@ public sealed class DtoServiceDecorator(
 
     private void Patch(BaseItemDto dto, BaseItem? item, bool isList, User? user)
     {
+        // Gelato's own mark for a title opened from search (PendingTagFilter keeps it in the item).
+        if (dto.Tags is { Length: > 0 } tags && tags.Contains(PendingSearchTitles.Tag))
+            dto.Tags = [.. tags.Where(t => t != PendingSearchTitles.Tag)];
+
         var manager = _manager.Value;
         if (item is not null && user is not null && IsGelato(dto) && manager.CanDelete(item, user))
         {

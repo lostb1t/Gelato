@@ -77,6 +77,7 @@ An approved request then adds the movie or series to the Gelato library, and See
 - debridio tmdb and debridio tvdb are pronlematic. I suggest using the regular tmdb addon.
 - Stream cache can be cleared by restarting the server
 - A catalog can import into a library of its own (the Library column under Catalogs), an Anime or Documentaries library say. Pick a library you already have and save: Gelato adds a folder of its own to it. For a new one choose **New library…**: Gelato makes the folder, and you add a library with it in Jellyfin (Jellyfin creates no library without a folder). On the next import new items go there, and items the catalog imported before move there, watch state included. An item two catalogs list stays with the one that took it first. A movies library only takes the catalog's movies and a shows library its series; the other kind goes to the default library. Setting the catalog back to Default moves its items back. A search inside such a library is answered by the addon too, and a result opened from it goes into that library.
+- Opening a search result adds it to the library. With **Keep opened search results out of the library until played** (under the search setting) it stays out of the library, home rows and counts until someone plays it, marks it a favourite, likes it (a watchlist) or adds it to a collection or playlist; search still finds it. A title nobody played is removed again after 5 days.
 
 ### ❤️ Support the Project
 

@@ -68,6 +68,7 @@ export default function (view) {
   const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
   const chkLazyImages = page.querySelector('#chkLazyImages');
   const chkPersonRemoteTitles = page.querySelector('#chkPersonRemoteTitles');
+  const chkHideUnplayedSearchTitles = page.querySelector('#chkHideUnplayedSearchTitles');
   const chkPreProbe = page.querySelector('#chkPreProbe');
   const chkPlaybackFailover = page.querySelector('#chkPlaybackFailover');
   const chkRemuxDbEnabled = page.querySelector('#chkRemuxDbEnabled');
@@ -255,6 +256,8 @@ export default function (view) {
     const off = !chkAddonSearch.checked;
     chkPersonRemoteTitles.disabled = off;
     page.querySelector('#personRemoteTitlesSetting').classList.toggle('gelatoNested-off', off);
+    chkHideUnplayedSearchTitles.disabled = off;
+    page.querySelector('#hideUnplayedSearchTitlesSetting').classList.toggle('gelatoNested-off', off);
   }
 
   function showUserPersonRemoteTitles() {
@@ -971,6 +974,7 @@ export default function (view) {
       if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
       if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? false;
       if (chkPersonRemoteTitles) chkPersonRemoteTitles.checked = cfg.PersonRemoteTitles ?? true;
+      chkHideUnplayedSearchTitles.checked = cfg.HideUnplayedSearchTitles ?? false;
       showPersonRemoteTitles();
       if (chkPreProbe) chkPreProbe.checked = cfg.PreProbe ?? true;
       if (chkPlaybackFailover) chkPlaybackFailover.checked = cfg.PlaybackFailover ?? false;
@@ -1016,6 +1020,7 @@ export default function (view) {
       cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
       cfg.LazyImages = chkLazyImages.checked;
       cfg.PersonRemoteTitles = chkPersonRemoteTitles.checked;
+      cfg.HideUnplayedSearchTitles = chkHideUnplayedSearchTitles.checked;
       cfg.PreProbe = chkPreProbe.checked;
       cfg.PlaybackFailover = chkPlaybackFailover.checked;
       cfg.RemuxDbEnabled = chkRemuxDbEnabled.checked;

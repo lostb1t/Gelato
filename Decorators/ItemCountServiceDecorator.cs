@@ -28,7 +28,11 @@ public sealed class ItemCountServiceDecorator(
 {
     public int GetCount(InternalItemsQuery filter) => inner.GetCount(filter);
 
-    public ItemCounts GetItemCounts(InternalItemsQuery filter) => inner.GetItemCounts(filter);
+    public ItemCounts GetItemCounts(InternalItemsQuery filter)
+    {
+        (repo as GelatoItemRepository)?.ExcludePendingFromCounts(filter);
+        return inner.GetItemCounts(filter);
+    }
 
     public ItemCounts GetItemCountsForNameItem(
         BaseItemKind kind,

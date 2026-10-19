@@ -1,3 +1,4 @@
+using Gelato.Services;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
@@ -11,6 +12,7 @@ public class InsertActionFilter(
     GelatoManager manager,
     IUserManager userManager,
     ILibraryManager libraryManager,
+    PendingSearchTitles pendingTitles,
     ILogger<InsertActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -98,7 +100,8 @@ public class InsertActionFilter(
             user,
             copy,
             refreshItem: wantsPlayed is null,
-            streamSyncFollows: ctx.ListsMediaSources()
+            streamSyncFollows: ctx.ListsMediaSources(),
+            pending: true
         );
         if (baseItem is not null)
             ctx.ReplaceGuid(baseItem.Id);
@@ -158,7 +161,8 @@ public class InsertActionFilter(
         StremioMeta meta,
         User user,
         bool refreshItem = true,
-        bool copy = false
+        bool copy = false,
+        bool pending = false
     )
     {
         BaseItem? baseItem = null;
@@ -183,7 +187,13 @@ public class InsertActionFilter(
         );
 
         if (baseItem is not null && created)
+        {
             log.LogInformation("inserted new media: {Name}", baseItem.Name);
+
+            // Opened, not played: kept out of the library's listings until someone plays it.
+            if (pending && GelatoPlugin.Instance!.Configuration.HideUnplayedSearchTitles)
+                pendingTitles.Add(baseItem);
+        }
 
         return baseItem;
     }
@@ -256,7 +266,8 @@ public class InsertActionFilter(
         User user,
         bool copy,
         bool refreshItem = true,
-        bool streamSyncFollows = false
+        bool streamSyncFollows = false,
+        bool pending = false
     )
     {
         var isSeries = stremioMeta.Type == StremioMediaType.Series;
@@ -291,7 +302,8 @@ public class InsertActionFilter(
             meta,
             user,
             refreshItem,
-            copy
+            copy,
+            pending
         );
         if (baseItem is not null)
         {

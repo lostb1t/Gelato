@@ -47,7 +47,11 @@ public sealed class DeleteResourceFilter(
         ctx.Result = new NoContentResult();
     }
 
-    private Task DeleteItemAsync(BaseItem item)
+    /// <summary>
+    /// Deletes a Gelato title with its stream rows. Also for
+    /// <see cref="ScheduledTasks.RemoveUnplayedSearchTitlesTask"/>.
+    /// </summary>
+    internal Task DeleteItemAsync(BaseItem item)
     {
         // Queued behind a sync of the same movie/episode (a version's rows are its movie's): a sync
         // that ran on after the deletion would save the rows and the item back into the library.

@@ -1,3 +1,4 @@
+using Gelato.Services;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Collections;
 using MediaBrowser.Controller.Entities;
@@ -14,6 +15,7 @@ public sealed class CollectionManagerDecorator(
     ILibraryManager libraryManager,
     IProviderManager providerManager,
     IDirectoryService directoryService,
+    PendingSearchTitles pendingTitles,
     ILogger<CollectionManagerDecorator> log
 ) : ICollectionManager
 {
@@ -45,11 +47,24 @@ public sealed class CollectionManagerDecorator(
             )
             .Distinct()
             .ToList();
+        ReleasePending(options.ItemIdList);
         return inner.CreateCollectionAsync(options);
+    }
+
+    // A title opened from search and put into a collection is kept: it shows in the library again.
+    private void ReleasePending(IEnumerable<string> ids)
+    {
+        foreach (var id in ids)
+        {
+            if (Guid.TryParse(id, out var guid))
+                pendingTitles.Release(libraryManager.GetItemById(guid));
+        }
     }
 
     public async Task AddToCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds)
     {
+        itemIds = itemIds.ToList();
+        ReleasePending(itemIds.Select(i => i.ToString("N")));
         if (libraryManager.GetItemById(collectionId) is not BoxSet collection)
             throw new ArgumentException(
                 "No collection exists with the supplied collectionId " + collectionId

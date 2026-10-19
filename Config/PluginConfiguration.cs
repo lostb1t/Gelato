@@ -39,6 +39,22 @@ public class PluginConfiguration : BasePluginConfiguration
     /// searches to the library: no remote requests then.
     /// </summary>
     public bool PersonRemoteTitles { get; set; } = true;
+
+    /// <summary>
+    /// A title put into the library because someone opened it from search stays out of the
+    /// library's listings until someone plays it, marks it a favourite, likes it (a watchlist)
+    /// or adds it to a collection or playlist, and is removed again when nobody did within
+    /// <see cref="RemoveUnplayedSearchTitlesDays"/>. Search still finds it.
+    /// </summary>
+    public bool HideUnplayedSearchTitles { get; set; } = false;
+
+    /// <summary>
+    /// How many days a title opened from search stays hidden before it is removed. Not on the
+    /// settings page: a fixed age that only the tests change.
+    /// </summary>
+    public double RemoveUnplayedSearchTitlesDays { get; set; } = DefaultRemoveUnplayedSearchTitlesDays;
+
+    public const double DefaultRemoveUnplayedSearchTitlesDays = 5;
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
@@ -217,6 +233,8 @@ public class UserConfig
             ExtendLocalSeriesTrees = baseConfig.ExtendLocalSeriesTrees,
             FilterUnreleased = baseConfig.FilterUnreleased,
             FilterUnreleasedBufferDays = baseConfig.FilterUnreleasedBufferDays,
+            HideUnplayedSearchTitles = baseConfig.HideUnplayedSearchTitles,
+            RemoveUnplayedSearchTitlesDays = baseConfig.RemoveUnplayedSearchTitlesDays,
             DisableSourceCount = baseConfig.DisableSourceCount,
             FFmpegAnalyzeDuration = baseConfig.FFmpegAnalyzeDuration,
             FFmpegProbeSize = baseConfig.FFmpegProbeSize,

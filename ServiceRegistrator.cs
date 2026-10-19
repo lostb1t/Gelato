@@ -43,6 +43,9 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<StreamUserDataFilter>();
         services.AddSingleton<VersionActionFilter>();
         services.AddSingleton<UnreleasedListingFilter>();
+        services.AddSingleton<PendingListingFilter>();
+        services.AddSingleton<PendingTagFilter>();
+        services.AddSingleton<PendingSearchTitles>();
         services.AddSingleton<MediaSegmentFilter>();
         services.AddSingleton<LibraryStructureFilter>();
         services.AddSingleton<SyncPlayFilter>();
@@ -68,6 +71,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<IHostedService, GelatoJavaScriptRegistrationService>();
         services.AddSingleton<IHostedService, UpgradeRepairService>();
         services.AddSingleton<IHostedService, StreamUserDataSync>();
+        services.AddSingleton<IHostedService, PendingSearchTitlesRelease>();
         services.AddSingleton<IHostedService, PreProbeNextEpisodeService>();
         services.AddSingleton<IHostedService, LegacyRowAdoptionService>();
         services.AddSingleton<IHostedService, ParkedItemAdoption>();
@@ -163,6 +167,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<StreamUserDataFilter>();
             o.Filters.AddService<VersionActionFilter>();
             o.Filters.AddService<UnreleasedListingFilter>();
+            o.Filters.AddService<PendingListingFilter>();
+            o.Filters.AddService<PendingTagFilter>();
             o.Filters.AddService<MediaSegmentFilter>();
             o.Filters.AddService<LibraryStructureFilter>();
             o.Filters.AddService<SyncPlayFilter>();

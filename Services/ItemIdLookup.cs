@@ -37,6 +37,19 @@ public sealed class ItemIdLookup(IDbContextFactory<JellyfinDbContext> dbFactory)
             .ToArray();
     }
 
+    /// <summary>The ids of the items tagged <paramref name="tag"/>.</summary>
+    public Guid[] WithTag(string tag)
+    {
+        var clean = tag.GetCleanValue();
+        using var db = dbFactory.CreateDbContext();
+        return db
+            .ItemValuesMap.AsNoTracking()
+            .Where(m => m.ItemValue.Type == ItemValueType.Tags && m.ItemValue.CleanValue == clean)
+            .Select(m => m.ItemId)
+            .Distinct()
+            .ToArray();
+    }
+
     /// <summary>
     /// The ids of the items whose <paramref name="provider"/> id is <paramref name="value"/>.
     /// </summary>

@@ -3,6 +3,7 @@
 
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
+using Gelato.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Dto;
@@ -15,7 +16,8 @@ namespace Gelato.Decorators;
 public sealed class GelatoItemRepository(
     IItemRepository inner,
     IHttpContextAccessor http,
-    ItemWriteCounter writes
+    ItemWriteCounter writes,
+    ItemIdLookup lookup
 ) : IItemRepository
 {
     private static readonly BaseItemKind[] ListScopeMediaKinds =
@@ -119,6 +121,8 @@ public sealed class GelatoItemRepository(
         if (!isStreamTagQuery && filter.ExcludeTags.Length == 0 && filter.IsResumable != true)
             filter.ExcludeTags = [GelatoManager.StreamTag];
 
+        ExcludePending(filter);
+
         // The Upcoming list asks for unaired episodes on purpose. UnreleasedListingFilter still
         // drops the episodes of a series the filter hides.
         if (
@@ -147,6 +151,87 @@ public sealed class GelatoItemRepository(
             filter.ExcludeItemIds = [.. filter.ExcludeItemIds, .. unreleased];
 
         return filter;
+    }
+
+    /// <summary>
+    /// Leaves the titles opened from search and never played out of a listing, unless the listing
+    /// is a search: a search still finds them.
+    /// </summary>
+    private void ExcludePending(InternalItemsQuery filter)
+    {
+        if (
+            !GelatoPlugin.Instance!.Configuration.HideUnplayedSearchTitles
+            || _http.ReadRequest(ctx => ctx.IsSearchRequest(), true)
+        )
+            return;
+
+        var kept = GetPending();
+        if (
+            kept.Ids.Length > 0
+            && !_http.ReadRequest(ctx => IsInsidePending(ctx, kept.Set), true)
+        )
+            filter.ExcludeItemIds = [.. filter.ExcludeItemIds, .. kept.Ids];
+    }
+
+    /// <summary>
+    /// The library counts (<c>/Items/Counts</c>) leave the hidden titles out like the listings.
+    /// </summary>
+    public void ExcludePendingFromCounts(InternalItemsQuery filter)
+    {
+        if (_http.ReadRequest(ctx => ctx.GetActionName() == "GetItemCounts", false))
+            ExcludePending(filter);
+    }
+
+    /// <summary>
+    /// Whether the request lists what is inside a hidden title (its seasons, its episodes): the
+    /// page of a title just opened from search shows them.
+    /// </summary>
+    public static bool IsInsidePending(HttpContext ctx, IReadOnlySet<Guid> hidden)
+    {
+        foreach (var key in (string[])["seriesId", "parentId", "seasonId"])
+        {
+            var value = ctx.Request.RouteValues[key]?.ToString() ?? ctx.Request.Query[key].ToString();
+            if (Guid.TryParse(value, out var id) && hidden.Contains(id))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The items <see cref="PendingSearchTitles"/> keeps out of listings: the titles, and a
+    /// series' seasons and episodes with it. Empty while the setting is off.
+    /// </summary>
+    public IReadOnlySet<Guid> GetPendingIds() =>
+        GelatoPlugin.Instance?.Configuration.HideUnplayedSearchTitles == true
+            ? GetPending().Set
+            : new HashSet<Guid>();
+
+    private sealed record PendingIds(long Version, Guid[] Ids, HashSet<Guid> Set);
+
+    private volatile PendingIds _pending;
+
+    // Kept like the unreleased set, until the next item write: the mark is one, and a series'
+    // episodes arrive with its refresh.
+    private PendingIds GetPending()
+    {
+        var version = writes.Version;
+        var kept = _pending;
+        if (kept is not null && kept.Version == version)
+            return kept;
+
+        var titles = lookup.WithTag(PendingSearchTitles.Tag);
+        Guid[] ids = titles.Length == 0
+            ? []
+            :
+            [
+                .. titles,
+                .. inner.GetItemIdsList(new InternalItemsQuery { AncestorIds = titles }),
+            ];
+        var read = new PendingIds(version, ids, [.. ids]);
+        if (writes.IsCounting)
+            _pending = read;
+        return read;
     }
 
     /// <summary>
@@ -213,7 +298,11 @@ public sealed class GelatoItemRepository(
     public IReadOnlyList<BaseItem> GetLatestItemList(
         InternalItemsQuery filter,
         CollectionType collectionType
-    ) => inner.GetLatestItemList(filter, collectionType);
+    )
+    {
+        ExcludePending(filter);
+        return inner.GetLatestItemList(filter, collectionType);
+    }
 
     public QueryResult<(BaseItem Item, ItemCounts ItemCounts)> GetGenres(
         InternalItemsQuery filter
@@ -252,11 +341,25 @@ public sealed class GelatoItemRepository(
         MediaStreamType mediaStreamType
     ) => inner.GetMediaStreamLanguages(filter, mediaStreamType);
 
-    public QueryFiltersLegacy GetQueryFiltersLegacy(InternalItemsQuery filter) =>
-        inner.GetQueryFiltersLegacy(filter);
+    // The tag lists of a library's filters (/Items/Filters, /Items/Filters2) leave out Gelato's
+    // mark for a title opened from search.
+    public QueryFiltersLegacy GetQueryFiltersLegacy(InternalItemsQuery filter)
+    {
+        var filters = inner.GetQueryFiltersLegacy(filter);
+        if (filters.Tags is { } tags)
+            filters.Tags = WithoutPendingTag(tags);
+        return filters;
+    }
 
     public IReadOnlyList<string> GetTagNames(InternalItemsQuery filter) =>
-        inner.GetTagNames(filter);
+        WithoutPendingTag(inner.GetTagNames(filter));
+
+    private static string[] WithoutPendingTag(IEnumerable<string> tags) =>
+        [
+            .. tags.Where(t =>
+                !t.Equals(PendingSearchTitles.Tag, StringComparison.OrdinalIgnoreCase)
+            ),
+        ];
 
     public Task<bool> ItemExistsAsync(Guid id) => inner.ItemExistsAsync(id);
 

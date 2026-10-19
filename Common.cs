@@ -532,6 +532,13 @@ public static class ActionContextExtensions
             StringComparison.OrdinalIgnoreCase
         );
 
+    /// <summary>
+    /// A search: a listing with a search term, or the search bar's suggestions.
+    /// </summary>
+    public static bool IsSearchRequest(this HttpContext ctx) =>
+        !string.IsNullOrWhiteSpace(ctx.Request.Query["searchTerm"])
+        || string.Equals(ctx.GetActionName(), "GetSearchHints", StringComparison.OrdinalIgnoreCase);
+
     public static bool IsHomeScreenSectionListing(this HttpContext ctx)
     {
         var action = ctx.GetEndpoint()?.Metadata.GetMetadata<ControllerActionDescriptor>();
