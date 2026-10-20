@@ -922,8 +922,8 @@ public sealed class MediaSourceManagerDecorator(
             var libraryOptions = _libraryManager.GetLibraryOptions(owner);
             var remuxDbStreams = fromRemuxDb ? remuxDb.GetStreams(owner.Id) : null;
 
-            var segmentTask = segmentLookups.IsDue(owner)
-                ? _mediaSegmentManager.RunSegmentPluginProviders(owner, libraryOptions, false, ct)
+            var segmentTask = segmentLookups.IsDue(owner, libraryOptions)
+                ? RunSegmentProvidersAsync(owner, libraryOptions, ct)
                 : Task.CompletedTask;
             var metadataTask = ProbeStreamAsync((Video)owner, selected.Path, ct);
             //  var subtitleTask = DownloadSubtitles((Video)owner, ct);
@@ -1860,7 +1860,21 @@ public sealed class MediaSourceManagerDecorator(
     /// (<see cref="SegmentLookups.IsDue"/>).
     /// </summary>
     private Task EnsureSegmentsAsync(BaseItem owner, CancellationToken ct) =>
-        segmentLookups.IsDue(owner) ? RunSegmentsAsync(owner, ct) : Task.CompletedTask;
+        segmentLookups.IsDue(owner, _libraryManager.GetLibraryOptions(owner))
+            ? RunSegmentsAsync(owner, ct)
+            : Task.CompletedTask;
+
+    private async Task RunSegmentProvidersAsync(
+        BaseItem owner,
+        LibraryOptions libraryOptions,
+        CancellationToken ct
+    )
+    {
+        await _mediaSegmentManager
+            .RunSegmentPluginProviders(owner, libraryOptions, false, ct)
+            .ConfigureAwait(false);
+        segmentLookups.SetRan(owner.Id, libraryOptions);
+    }
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<
         Guid,
@@ -1880,11 +1894,9 @@ public sealed class MediaSourceManagerDecorator(
                 {
                     try
                     {
-                        await _mediaSegmentManager
-                            .RunSegmentPluginProviders(
+                        await RunSegmentProvidersAsync(
                                 owner,
                                 _libraryManager.GetLibraryOptions(owner),
-                                false,
                                 CancellationToken.None
                             )
                             .ConfigureAwait(false);

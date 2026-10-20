@@ -125,8 +125,11 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         _logger = logger;
     }
 
+    /// <summary>The provider's name in a library's segment provider settings.</summary>
+    public const string ProviderName = "Gelato IntroDB";
+
     /// <inheritdoc />
-    public string Name => "Gelato IntroDB";
+    public string Name => ProviderName;
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<MediaSegmentDto>> GetMediaSegments(
