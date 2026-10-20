@@ -67,14 +67,14 @@ An approved request adds the movie or series to your library, and Seerr marks it
 
 ### FAQ
 
-- After you change your config in AIOStreams, save it there, then select **Refresh** on the **Catalogs** tab of the Gelato settings. Gelato reads the addon again; you don't need to restart.
+- After you change your config in AIOStreams, save it there, then select **Refresh** on the **Catalogs** tab of the Gelato settings. Gelato reads the addon again; you don't need to restart, also not after changing Gelato's settings.
 - Turn on at least 1 catalog that supports search in AIOStreams. I suggest the TMDB addon.
 - To start over, run the **WARNING: purge all gelato items** task in **Dashboard > Scheduled Tasks**. It removes the watch state along with the titles, so it's a real fresh start.
 - Removing a title doesn't lose its watch state. Jellyfin keeps it, and Gelato puts it back when the title returns, so a movie you delete and add again later still has your progress.
 - If titles went missing and took your watch state with them (after a Jellyfin 12 upgrade, for example), run the **Repair watch state** task in **Dashboard > Scheduled Tasks**. It imports what's gone again and gives it back its watch state. It has no schedule: it can't tell what you deleted on purpose from what you lost by accident, so it runs only when you start it, and it also brings back titles you deleted yourself. Gelato also runs it once on the first start after you install this release, and after every later major Jellyfin upgrade. Don't run Jellyfin's own **User data cleanup task** first: that task deletes the kept watch state.
 - I suggest a lower timeout for your Stremio addons in AIOStreams, for example 5 seconds.
 - Debridio TMDB and Debridio TVDB cause problems. I suggest the regular TMDB addon.
-- To clear the stream cache, restart the server.
+- To clear the stream cache, save Gelato's settings: the next visit of a title asks the addon for its streams again.
 - A catalog can import into a library of its own, for example an Anime or Documentaries library: use the **Library** column on the **Catalogs** tab. Pick a library you have and save, and Gelato adds a folder of its own to it. For a new one, pick **New library**: Gelato creates the folder, and you add a library with it in Jellyfin (Jellyfin needs a folder for a new library). At the next import, new titles go there, and the titles the catalog imported before move there with their watch state. A title that 2 catalogs list stays with the one that imported it first. A movies library takes only the catalog's movies, and a shows library only its series; the rest goes to the default library. Set the catalog back to **Default** to move its titles back. A search inside such a library also asks the addon, and a result you open from it goes into that library.
 - Opening a search result adds it to your library. With **Keep opened search results out of the library until played** on (on the **Search** tab), it stays out of the library, the home screen rows, and the counts until someone plays it, marks it as a favorite, likes it (a watchlist), or adds it to a collection or playlist. Search still finds it. If nobody does within 5 days, Gelato removes it again.
 

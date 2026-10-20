@@ -36,7 +36,8 @@ public sealed class GelatoManager(
     IUserManager userManager,
     IUserDataManager userDataManager,
     RemuxDbService remuxDb,
-    ItemIdLookup idLookup
+    ItemIdLookup idLookup,
+    GelatoCache cache
 )
 {
     public const string StreamTag = "gelato-stream";
@@ -56,24 +57,33 @@ public sealed class GelatoManager(
 
     public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
     {
-        memoryCache.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
+        cache.Memo.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
     }
 
     public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
     {
-        return memoryCache.Get<List<StremioSubtitle>>($"subs:{guid}");
+        return cache.Memo.Get<List<StremioSubtitle>>($"subs:{guid}");
     }
 
     // Orders a stream sync and a reset. Not the wall clock: when it is set back between the two,
     // a reset gets the older stamp and the sync before it counts as the newer one.
     private static long _streamSyncSeq;
 
-    public void SetStreamSync(string guid)
+    /// <summary>Taken before a stream sync starts, for <see cref="SetStreamSync"/>.</summary>
+    public int CacheGeneration => cache.Generation;
+
+    /// <summary>
+    /// Remembers that the streams behind the key were synced, unless a save came in since the sync
+    /// started (<paramref name="generation"/>, <see cref="CacheGeneration"/>): it may have asked
+    /// the old addon.
+    /// </summary>
+    public void SetStreamSync(string guid, int generation)
     {
-        memoryCache.Set(
+        cache.SetMemo(
             $"streamsync:{guid}",
             Interlocked.Increment(ref _streamSyncSeq),
-            TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
+            TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL),
+            generation
         );
     }
 
@@ -83,7 +93,7 @@ public sealed class GelatoManager(
     /// </summary>
     public bool HasStreamSync(string guid, Guid itemId)
     {
-        if (!memoryCache.TryGetValue($"streamsync:{guid}", out long syncedAt))
+        if (!cache.Memo.TryGetValue($"streamsync:{guid}", out long syncedAt))
             return false;
 
         return !memoryCache.TryGetValue($"streamsync-reset:{itemId}", out long resetAt)
@@ -147,15 +157,19 @@ public sealed class GelatoManager(
         return null;
     }
 
+    /// <summary>
+    /// Forgets everything, what search results became too: after a purge the items they name are
+    /// gone. A configuration save empties only what came from the configuration
+    /// (<see cref="GelatoCache.Invalidate"/>).
+    /// </summary>
     public void ClearCache()
     {
-        if (memoryCache is MemoryCache cache)
+        if (memoryCache is MemoryCache shared)
         {
-            cache.Compact(1.0);
+            shared.Compact(1.0);
         }
 
-        repo.ForgetUnreleasedIds();
-        RemuxDbClient.ForgetLookupsAhead();
+        cache.Invalidate(GelatoPlugin.Instance!.Configuration);
 
         _log.LogDebug("Cache cleared");
     }
@@ -1069,8 +1083,8 @@ public sealed class GelatoManager(
 
             var cfg = GelatoPlugin.Instance!.Configuration;
             // The lookup is memoized, misses too, and the folder may be seconds old.
-            memoryCache.Remove($"rootfolder:{cfg.MoviePath}");
-            memoryCache.Remove($"rootfolder:{cfg.SeriesPath}");
+            cache.Memo.Remove($"rootfolder:{cfg.MoviePath}");
+            cache.Memo.Remove($"rootfolder:{cfg.SeriesPath}");
             var movieFolder = RescueFolder(
                 () => TryGetMovieFolder(cfg),
                 BaseItemKind.Movie,
@@ -1124,7 +1138,7 @@ public sealed class GelatoManager(
         }
 
         var key = $"rootfolder:{path}";
-        if (memoryCache.TryGetValue(key, out Folder? cached))
+        if (cache.Memo.TryGetValue(key, out Folder? cached))
         {
             return cached;
         }
@@ -1137,9 +1151,9 @@ public sealed class GelatoManager(
         {
             // Said once in a while, not on every lookup: the lookup runs for every request.
             var warned = $"seedfailed:{path}";
-            if (!memoryCache.TryGetValue(warned, out _))
+            if (!cache.Memo.TryGetValue(warned, out _))
             {
-                memoryCache.Set(warned, true, TimeSpan.FromMinutes(10));
+                cache.Memo.Set(warned, true, TimeSpan.FromMinutes(10));
                 _log.LogWarning(ex, "Could not write the seed file into {Path}", path);
             }
         }
@@ -1150,7 +1164,7 @@ public sealed class GelatoManager(
 
         // Misses are cached too, so a configured-but-not-yet-added library does not cost
         // a directory probe and a query on every request while it is being set up.
-        memoryCache.Set(key, folder, FolderCacheTtl);
+        cache.Memo.Set(key, folder, FolderCacheTtl);
         return folder;
     }
 

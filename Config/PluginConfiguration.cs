@@ -55,6 +55,15 @@ public class PluginConfiguration : BasePluginConfiguration
     public double RemoveUnplayedSearchTitlesDays { get; set; } = DefaultRemoveUnplayedSearchTitlesDays;
 
     public const double DefaultRemoveUnplayedSearchTitlesDays = 5;
+
+    /// <summary>
+    /// How many hours the addon's manifest is used before it is read again
+    /// (<see cref="Services.GelatoCache.ManifestLifetime"/>). Not on the settings page: a fixed
+    /// lifetime that only the tests change.
+    /// </summary>
+    public double ManifestLifetimeHours { get; set; } = DefaultManifestLifetimeHours;
+
+    public const double DefaultManifestLifetimeHours = 12;
     public List<CatalogConfig> Catalogs { get; set; } = [];
     public List<UserConfig> UserConfigs { get; set; } = [];
 
@@ -251,13 +260,12 @@ public class UserConfig
     }
 }
 
-public class GelatoStremioProviderFactory(IHttpClientFactory http, ILoggerFactory log)
+public class GelatoStremioProviderFactory(
+    IHttpClientFactory http,
+    ILoggerFactory log,
+    Services.GelatoCache cache
+)
 {
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        GelatoStremioProvider
-    > _cache = new(StringComparer.OrdinalIgnoreCase);
-
     public GelatoStremioProvider Create(Guid userId)
     {
         var cfg = GelatoPlugin.Instance!.Configuration.GetEffectiveConfig(userId);
@@ -266,14 +274,11 @@ public class GelatoStremioProviderFactory(IHttpClientFactory http, ILoggerFactor
 
     public GelatoStremioProvider Create(PluginConfiguration cfg)
     {
-        var baseUrl = cfg.GetBaseUrl();
-        return _cache.GetOrAdd(
-            baseUrl,
+        return cache.Provider(
+            cfg.GetBaseUrl(),
             url => new GelatoStremioProvider(url, http, log.CreateLogger<GelatoStremioProvider>())
         );
     }
-
-    public void ClearCache() => _cache.Clear();
 }
 
 public class CatalogConfig

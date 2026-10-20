@@ -53,6 +53,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<ItemIdLookup>();
         services.AddSingleton<GelatoManager>();
         services.AddSingleton<ItemWriteCounter>();
+        services.AddSingleton<GelatoCache>();
         services.DecorateSingle<IItemPersistenceService, ItemPersistenceServiceDecorator>();
         services.DecorateSingle<IItemRepository, GelatoItemRepository>();
         services.AddSingleton(sp => (GelatoItemRepository)sp.GetRequiredService<IItemRepository>());
@@ -179,8 +180,18 @@ public class ServiceRegistrator : IPluginServiceRegistrator
     {
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            var analyze = GelatoPlugin.Instance?.Configuration?.FFmpegAnalyzeDuration ?? "5M";
-            var probe = GelatoPlugin.Instance?.Configuration?.FFmpegProbeSize ?? "40M";
+            ApplyFFmpeg(GelatoPlugin.Instance?.Configuration);
+            // Jellyfin reads both values on every probe, so a saved change takes effect at once.
+            GelatoPlugin.ConfigurationChanged += ApplyFFmpeg;
+            return Task.CompletedTask;
+        }
+
+        private void ApplyFFmpeg(PluginConfiguration? cfg)
+        {
+            var analyze = cfg?.FFmpegAnalyzeDuration ?? "5M";
+            var probe = cfg?.FFmpegProbeSize ?? "40M";
+            if (config["FFmpeg:probesize"] == probe && config["FFmpeg:analyzeduration"] == analyze)
+                return;
 
             config["FFmpeg:probesize"] = probe;
             config["FFmpeg:analyzeduration"] = analyze;
@@ -190,7 +201,6 @@ public class ServiceRegistrator : IPluginServiceRegistrator
                 probe,
                 analyze
             );
-            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -212,6 +222,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         /// </remarks>
         public Task StopAsync(CancellationToken cancellationToken)
         {
+            GelatoPlugin.ConfigurationChanged -= ApplyFFmpeg;
             var cfg = GelatoPlugin.Instance?.Configuration;
             if (cfg is null)
                 return Task.CompletedTask;
