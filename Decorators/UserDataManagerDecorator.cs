@@ -347,8 +347,48 @@ public sealed class UserDataManagerDecorator : IUserDataManager
         DtoOptions options
     ) => _inner.GetUserDataDto(item, itemDto, user, options);
 
-    public bool UpdatePlayState(BaseItem item, UserItemData data, long? reportedPositionTicks) =>
-        _inner.UpdatePlayState(item, data, reportedPositionTicks);
+    /// <summary>
+    /// Judges a stream's playback by its movie/episode's runtime when the stream runs under half
+    /// of it, with the server's resume settings as ever. Jellyfin marks an item played at the
+    /// first progress report when it runs under <c>MinResumeDurationSeconds</c>, and the video a
+    /// debrid service serves for a file it does not have runs 8 or 30 s: 30 % into it marked the
+    /// 94-minute movie played and lost its resume point. Judged by the movie, anything up to the
+    /// clip's end is under <c>MinResumePct</c>. A shorter cut keeps its own runtime, so finishing
+    /// it still counts, and so does a stream longer than its title (a local file in mixed mode can
+    /// be the shorter one).
+    /// </summary>
+    public bool UpdatePlayState(BaseItem item, UserItemData data, long? reportedPositionTicks)
+    {
+        if (ShortStreamTitle(item) is not { } title)
+            return _inner.UpdatePlayState(item, data, reportedPositionTicks);
+
+        _log.LogDebug(
+            "Judging playback of {Row} ({Runtime}) by {Title} ({Expected})",
+            item.Id,
+            TimeSpan.FromTicks(item.RunTimeTicks ?? 0),
+            title.Id,
+            TimeSpan.FromTicks(title.RunTimeTicks ?? 0)
+        );
+        // The stream's played mark is a copy of the movie's: left on, Jellyfin would mark every
+        // version played again after the report and reset the movie's resume point.
+        data.Played = false;
+        return _inner.UpdatePlayState(title, data, reportedPositionTicks);
+    }
+
+    /// <summary>
+    /// The movie or episode of a stream row that runs under half of it, or null.
+    /// </summary>
+    public Video? ShortStreamTitle(BaseItem item)
+    {
+        if (item is not Video { PrimaryVersionId: { } primaryId } row || !row.HasStreamTag())
+            return null;
+
+        return
+            _libraryManager.Value.GetItemById(primaryId) is Video { RunTimeTicks: > 0 } title
+            && (row.RunTimeTicks ?? 0) < title.RunTimeTicks / 2
+            ? title
+            : null;
+    }
 
     public void ResetPlaybackStreamSelections(User user, BaseItem item) =>
         _inner.ResetPlaybackStreamSelections(user, item);

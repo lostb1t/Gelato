@@ -90,6 +90,21 @@ public sealed class StreamUserDataSync(
             return;
         }
 
+        // A stream that runs under half of its title, the clip a debrid service serves for a file
+        // it does not have, leaves the movie as it was: no last played date, and no position 0
+        // over its resume point. Judged by the movie's runtime, a clip's report finds no
+        // position; one that does means the file was the film after all.
+        if (
+            userDataManager.ShortStreamTitle(row) is not null
+            && (
+                e.SaveReason is UserDataSaveReason.PlaybackStart
+                || e.UserData.PlaybackPositionTicks == 0
+            )
+        )
+        {
+            return;
+        }
+
         try
         {
             if (
