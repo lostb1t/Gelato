@@ -228,8 +228,9 @@ public class UserConfig
     {
         return new PluginConfiguration
         {
-            // User overridable fields - all required, no fallback to baseConfig
-            Url = Url,
+            // User overridable fields, no fallback to baseConfig, except that an empty URL means
+            // the addon everyone uses
+            Url = string.IsNullOrWhiteSpace(Url) ? baseConfig.Url : Url,
             MoviePath = MoviePath,
             SeriesPath = SeriesPath,
             DisableSearch = DisableSearch,
