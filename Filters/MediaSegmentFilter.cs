@@ -34,7 +34,7 @@ public sealed class MediaSegmentFilter(
         {
             try
             {
-                if (PlayingRow(ctx, itemId) is { } rowId)
+                if (await PlayingRow(ctx, itemId) is { } rowId)
                 {
                     log.LogDebug("Segments of {ItemId} are those of its stream {RowId}", itemId, rowId);
                     ctx.ActionArguments["itemId"] = rowId;
@@ -50,10 +50,10 @@ public sealed class MediaSegmentFilter(
     }
 
     /// <summary>
-    /// The stream row listed with the movie/episode's id for this user, when it has segments.
-    /// The movie's own are kept otherwise.
+    /// The stream row listed with the movie/episode's id for this user, when it has segments the
+    /// library serves: not only those of a provider disabled in it. The movie's own are kept otherwise.
     /// </summary>
-    private Guid? PlayingRow(ActionExecutingContext ctx, Guid itemId)
+    private async Task<Guid?> PlayingRow(ActionExecutingContext ctx, Guid itemId)
     {
         if (
             libraryManager.GetItemById(itemId) is not Video video
@@ -72,11 +72,19 @@ public sealed class MediaSegmentFilter(
             .FirstOrDefault(s => s.Id == id);
 
         // Gelato's sources name their row in the ETag.
-        return
-            Guid.TryParse(source?.ETag, out var rowId)
-            && rowId != itemId
-            && mediaSegmentManager.HasSegments(rowId)
-            ? rowId
-            : null;
+        if (
+            !Guid.TryParse(source?.ETag, out var rowId)
+            || rowId == itemId
+            || !mediaSegmentManager.HasSegments(rowId)
+            || libraryManager.GetItemById(rowId) is not { } row
+        )
+        {
+            return null;
+        }
+
+        var segments = await mediaSegmentManager
+            .GetSegmentsAsync(row, null, libraryManager.GetLibraryOptions(row))
+            .ConfigureAwait(false);
+        return segments.Any() ? rowId : null;
     }
 }

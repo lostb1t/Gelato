@@ -1,9 +1,11 @@
 using System.Globalization;
 using System.Text.Json;
+using Gelato.Providers;
 using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Model.Configuration;
 
 namespace Gelato.Services;
 
@@ -75,20 +77,62 @@ public sealed class SegmentLookups(PalcoCacheService cache)
         );
     }
 
-    public void Forget(Guid rowId) => cache.Delete(Key(rowId), Namespace);
+    public void Forget(Guid rowId)
+    {
+        cache.Delete(Key(rowId), Namespace);
+        cache.Delete(OthersKey(rowId), Namespace);
+    }
 
     /// <summary>
     /// Whether a playback of the row should run the segment providers: the provider has
-    /// something to do for it and has no answer for it that still holds.
+    /// something to do for it and has no answer for it that still holds. With the provider
+    /// disabled in the row's library, its answer does not count: the library's other providers
+    /// run, again after <see cref="MissRetry"/> or when the library's disabled providers change.
     /// </summary>
-    public bool IsDue(BaseItem row)
+    public bool IsDue(BaseItem row, LibraryOptions libraryOptions)
     {
         var chapters = UsesChapters(row);
         if (row is not (Episode or Movie) && !chapters)
             return false;
 
+        if (IsDisabled(libraryOptions))
+            return cache.Get(OthersKey(row.Id), Namespace) != DisabledProviders(libraryOptions);
+
         return Get(row.Id) is not { } lookup || (chapters && !lookup.Chapters);
     }
+
+    /// <summary>
+    /// Keeps that the segment providers ran for the row. Only needed with Gelato's provider
+    /// disabled, which keeps its own answer otherwise.
+    /// </summary>
+    public void SetRan(Guid rowId, LibraryOptions libraryOptions)
+    {
+        if (IsDisabled(libraryOptions))
+        {
+            cache.Set(
+                OthersKey(rowId),
+                DisabledProviders(libraryOptions),
+                (int)MissRetry.TotalSeconds,
+                Namespace
+            );
+        }
+    }
+
+    private static bool IsDisabled(LibraryOptions libraryOptions) =>
+        libraryOptions.DisabledMediaSegmentProviders.Contains(
+            IntroDbSegmentProvider.ProviderName,
+            StringComparer.OrdinalIgnoreCase
+        );
+
+    private static string DisabledProviders(LibraryOptions libraryOptions) =>
+        string.Join(
+            '|',
+            libraryOptions
+                .DisabledMediaSegmentProviders.Select(n => n.ToLowerInvariant())
+                .Order(StringComparer.Ordinal)
+        );
+
+    private static string OthersKey(Guid rowId) => Key(rowId) + ":others";
 
     private static string Key(Guid rowId) => rowId.ToString("N", CultureInfo.InvariantCulture);
 }
