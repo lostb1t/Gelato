@@ -52,13 +52,15 @@ public sealed class GelatoSeasonMetadataProvider(
             // one and the kitsu:/mal:/anilist:/anidb: namespaces an anime catalog hands out
             // (lostb1t/Gelato#225). Only the series' ids, never the season's - a season carries a
             // Stremio id of its own, the series id with the season number appended.
-            seriesMeta = string.IsNullOrWhiteSpace(seriesImdbId)
-                ? await stremio
-                    .GetMetaAsync(info.SeriesProviderIds, StremioMediaType.Series)
-                    .ConfigureAwait(false)
-                : await stremio
-                    .GetMetaAsync(seriesImdbId, StremioMediaType.Series)
-                    .ConfigureAwait(false);
+            // With one, it goes in among them instead of alone: the candidates are tried in the order
+            // the addon's manifest prefers, and an addon whose meta resource takes tmdb: ids only (the
+            // TMDB addon behind AIOStreams) answered every IMDb id 404.
+            var seriesIds = new Dictionary<string, string>(info.SeriesProviderIds);
+            if (!string.IsNullOrWhiteSpace(seriesImdbId))
+                seriesIds.TryAdd(MetadataProvider.Imdb.ToString(), seriesImdbId);
+            seriesMeta = await stremio
+                .GetMetaAsync(seriesIds, StremioMediaType.Series)
+                .ConfigureAwait(false);
         }
         catch (Exception ex)
         {
