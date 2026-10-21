@@ -191,7 +191,8 @@ public class InsertActionFilter(
                     refreshItem,
                     false,
                     ct,
-                    copy
+                    copy,
+                    savePeople: true
                 );
             }
         );
