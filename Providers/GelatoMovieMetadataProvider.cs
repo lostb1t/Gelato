@@ -103,19 +103,33 @@ public sealed class GelatoMovieMetadataProvider(
 
     private static void MapPeople(StremioMeta meta, MetadataResult<Movie> result)
     {
-        foreach (var member in meta.App_Extras?.Cast ?? [])
+        var cast = meta.App_Extras?.Cast;
+        if (cast is { Count: > 0 })
         {
-            if (string.IsNullOrWhiteSpace(member.Name))
-                continue;
-            result.AddPerson(
-                new PersonInfo
-                {
-                    Name = member.Name,
-                    Role = member.Character,
-                    Type = PersonKind.Actor,
-                    ImageUrl = member.Photo,
-                }
-            );
+            foreach (var member in cast)
+            {
+                if (string.IsNullOrWhiteSpace(member.Name))
+                    continue;
+                result.AddPerson(
+                    new PersonInfo
+                    {
+                        Name = member.Name,
+                        Role = member.Character,
+                        Type = PersonKind.Actor,
+                        ImageUrl = member.Photo,
+                    }
+                );
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(meta.Cast))
+        {
+            foreach (
+                var name in meta.Cast.Split(
+                    ',',
+                    StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries
+                )
+            )
+                result.AddPerson(new PersonInfo { Name = name, Type = PersonKind.Actor });
         }
 
         var directors = meta.App_Extras?.Directors;

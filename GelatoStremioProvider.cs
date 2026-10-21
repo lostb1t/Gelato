@@ -1134,6 +1134,10 @@ public class StremioMeta
 
     [JsonConverter(typeof(StringOrArrayConverter))]
     public string? Writer { get; set; }
+
+    // Cinemeta's actors: names only, where AIOMetadata and the TMDB addon fill app_extras.cast.
+    [JsonConverter(typeof(StringOrArrayConverter))]
+    public string? Cast { get; set; }
     public string? LandscapePoster { get; set; }
 
     [JsonConverter(typeof(NullableFloatLenientConverter))]
