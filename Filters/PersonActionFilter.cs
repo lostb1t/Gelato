@@ -1,6 +1,7 @@
 using System.Globalization;
 using Gelato.Config;
 using Gelato.Decorators;
+using Gelato.Services;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Database.Implementations.Entities;
@@ -35,6 +36,7 @@ public class PersonActionFilter(
     IServerConfigurationManager serverConfig,
     GelatoManager manager,
     SearchActionFilter search,
+    ParentalRatings parental,
     ILogger<PersonActionFilter> log
 ) : IAsyncActionFilter
 {
@@ -403,6 +405,26 @@ public class PersonActionFilter(
             metas = metas.Where(m => m.Meta.IsReleased(cfg.FilterUnreleasedBufferDays)).ToList();
         }
 
+        // As search does: what the user's parental control would hide in the library.
+        if (ParentalRatings.Restricts(user))
+        {
+            var allowed = (
+                await parental
+                    .FilterAsync(
+                        [.. metas.Select(m => m.Meta)],
+                        user,
+                        type =>
+                            type == StremioMediaType.Series
+                                ? cfg.SeriesFolder ?? manager.TryGetSeriesFolder(userId)
+                                : cfg.MovieFolder ?? manager.TryGetMovieFolder(userId),
+                        stremio,
+                        ct
+                    )
+                    .ConfigureAwait(false)
+            ).ToHashSet(ReferenceEqualityComparer.Instance);
+            metas = metas.Where(m => allowed.Contains(m.Meta)).ToList();
+        }
+
         var titles = metas
             .Select(m => (m.Credit, m.Meta, Item: manager.IntoBaseItem(m.Meta)))
             .Where(t => t.Item is not null)
@@ -410,7 +432,7 @@ public class PersonActionFilter(
             .ToList();
 
         var libraryItems = await search
-            .FindLibraryItemsAsync(titles.Select(t => t.Item), user, ct)
+            .FindLibraryItemsAsync(titles.Select(t => t.Item), ct)
             .ConfigureAwait(false);
 
         // A title the library holds is the library's to list. Where its item lists the person, the

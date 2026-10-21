@@ -3,6 +3,7 @@ using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
 
@@ -13,6 +14,7 @@ public class InsertActionFilter(
     IUserManager userManager,
     ILibraryManager libraryManager,
     PendingSearchTitles pendingTitles,
+    ParentalRatings parental,
     ILogger<InsertActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -84,6 +86,14 @@ public class InsertActionFilter(
         if (!insertable)
         {
             await next();
+            return;
+        }
+
+        // A title the user's parental control hides is not the user's to put in: answered as
+        // Jellyfin answers for an item it hides from the user.
+        if (!await AllowsAsync(guid, stremioMeta, userId, user, ctx.HttpContext.RequestAborted))
+        {
+            ctx.Result = new NotFoundResult();
             return;
         }
 
@@ -217,9 +227,42 @@ public class InsertActionFilter(
                 continue;
 
             var copy = manager.IsSearchCopy(userId, guid);
-            if (FindExisting(guid, stremioMeta, userId, user, copy) is null)
+            if (
+                FindExisting(guid, stremioMeta, userId, user, copy) is null
+                && await AllowsAsync(guid, stremioMeta, userId, user, ctx.HttpContext.RequestAborted)
+            )
                 await InsertAsync(guid, stremioMeta, userId, user, copy);
         }
+    }
+
+    /// <summary>
+    /// Whether the user's parental control lets the user see the search result in the folder it
+    /// would go into (<see cref="ParentalRatings"/>).
+    /// </summary>
+    private async Task<bool> AllowsAsync(
+        Guid guid,
+        StremioMeta stremioMeta,
+        Guid userId,
+        User user,
+        CancellationToken ct
+    )
+    {
+        if (
+            !ParentalRatings.Restricts(user)
+            || GelatoPlugin.Instance!.GetConfig(userId).Stremio is not { } stremio
+            || await parental
+                .AllowsAsync(stremioMeta, GetRoot(guid, stremioMeta, userId), user, stremio, ct)
+                .ConfigureAwait(false)
+        )
+            return true;
+
+        log.LogInformation(
+            "{Name} ({Id}) is hidden from {User} by parental control: not put into the library",
+            stremioMeta.GetName(),
+            stremioMeta.Id,
+            user.Username
+        );
+        return false;
     }
 
     /// <summary>

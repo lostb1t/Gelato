@@ -26,6 +26,7 @@ public class SearchActionFilter(
     IDbContextFactory<JellyfinDbContext> dbFactory,
     GelatoManager manager,
     LibraryFolderService libraryFolders,
+    ParentalRatings parental,
     ILogger<SearchActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -529,6 +530,24 @@ public class SearchActionFilter(
             lists = lists.Select(l => l.Where(x => x.IsReleased(bufferDays)).ToList()).ToList();
         }
 
+        // What the user's parental control hides in the library it hides here too: a title above
+        // the user's maximum rating was offered, and opening it put it into the library.
+        if (userManager.GetUserById(userId) is { } user && ParentalRatings.Restricts(user))
+        {
+            var allowed = (
+                await parental
+                    .FilterAsync(
+                        [.. lists.SelectMany(l => l)],
+                        user,
+                        type => type == StremioMediaType.Series ? seriesFolder : movieFolder,
+                        stremio,
+                        CancellationToken.None
+                    )
+                    .ConfigureAwait(false)
+            ).ToHashSet(ReferenceEqualityComparer.Instance);
+            lists = lists.Select(l => l.Where(allowed.Contains).ToList()).ToList();
+        }
+
         return Interleave(lists);
     }
 
@@ -631,7 +650,7 @@ public class SearchActionFilter(
             .Where(r => r.Item is not null)
             .Select(r => (r.Meta, Item: r.Item!))
             .ToList();
-        var libraryItems = await FindLibraryItemsAsync(results.Select(r => r.Item), user, ct);
+        var libraryItems = await FindLibraryItemsAsync(results.Select(r => r.Item), ct);
         var unknownIds = await FindUnknownIdsAsync(results.Select(r => r.Item.Id), ct);
 
         var dtos = new List<BaseItemDto>(metas.Count);
@@ -721,11 +740,12 @@ public class SearchActionFilter(
     /// The library items any of the results stands in for, in two queries for the whole search:
     /// the items holding one of the results' provider ids, then those items. Asking
     /// <see cref="GelatoManager.FindExistingItem"/> per result cost a query each, about 16 ms, and
-    /// most results are not in the library, so the miss has to be the cheap case.
+    /// most results are not in the library, so the miss has to be the cheap case. Whatever the
+    /// user may see: an item the user's parental control hides is found too, so that its title is
+    /// no result rather than a stand-in for it (the callers leave out what the user cannot see).
     /// </summary>
     internal async Task<IReadOnlyList<BaseItem>> FindLibraryItemsAsync(
         IEnumerable<BaseItem> candidates,
-        User? user,
         CancellationToken ct
     )
     {
@@ -754,7 +774,7 @@ public class SearchActionFilter(
             return [];
 
         return libraryManager.GetItemList(
-            new InternalItemsQuery(user)
+            new InternalItemsQuery
             {
                 ItemIds = itemIds,
                 IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Series],
