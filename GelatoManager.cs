@@ -3,12 +3,14 @@ using System.Diagnostics;
 using System.Globalization;
 using Gelato.Config;
 using Gelato.Decorators;
+using Gelato.Providers;
 using Gelato.RemuxDb;
 using Gelato.Services;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Net;
+using MediaBrowser.Controller.BaseItemManager;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -37,7 +39,8 @@ public sealed class GelatoManager(
     IUserDataManager userDataManager,
     RemuxDbService remuxDb,
     ItemIdLookup idLookup,
-    GelatoCache cache
+    GelatoCache cache,
+    IBaseItemManager baseItemManager
 )
 {
     public const string StreamTag = "gelato-stream";
@@ -1219,6 +1222,10 @@ public sealed class GelatoManager(
     /// The title goes into <paramref name="parent"/> even when the user has it as a file in another
     /// library: a search inside the Gelato library asked for it there.
     /// </param>
+    /// <param name="savePeople">
+    /// The people are saved before this returns, not only by the metadata refresh: the page of a
+    /// title opened from search shows its cast on the first load.
+    /// </param>
     public async Task<(BaseItem? Item, bool Created)> InsertMeta(
         Folder parent,
         StremioMeta meta,
@@ -1227,7 +1234,8 @@ public sealed class GelatoManager(
         bool refreshItem,
         bool queueRefreshItem,
         CancellationToken ct,
-        bool copy = false
+        bool copy = false,
+        bool savePeople = false
     )
     {
         var mediaType = meta.Type;
@@ -1347,6 +1355,12 @@ public sealed class GelatoManager(
             return (null, false);
         }
 
+        // Before the refresh starts: it saves the same people again, from the same meta. Only
+        // where the library the title went into lets Gelato's metadata provider run for this
+        // type: elsewhere the refresh would replace them with another provider's.
+        if (savePeople && IsGelatoMetadataEnabled(parent, baseItem))
+            await SavePeopleAsync(baseItem, meta, ct).ConfigureAwait(false);
+
         if (refreshItem)
         {
             var options = new MetadataRefreshOptions(new DirectoryService(fileSystem))
@@ -1369,6 +1383,35 @@ public sealed class GelatoManager(
         }
         _log.LogDebug("inserted new {Kind}: {Name}", baseItem.GetBaseItemKind(), baseItem.Name);
         return (baseItem, true);
+    }
+
+    /// <summary>
+    /// Whether the library of <paramref name="folder"/>, the folder the insert put
+    /// <paramref name="item"/> in, runs Gelato's metadata provider for the item's type, by the
+    /// rule Jellyfin's refresh decides it with. With several libraries of a type, each has its own.
+    /// </summary>
+    private bool IsGelatoMetadataEnabled(Folder folder, BaseItem item)
+    {
+        var typeOptions = libraryManager
+            .GetLibraryOptions(folder)
+            ?.GetTypeOptions(item.GetType().Name);
+        return baseItemManager.IsMetadataFetcherEnabled(item, typeOptions, "Gelato");
+    }
+
+    private async Task SavePeopleAsync(BaseItem item, StremioMeta meta, CancellationToken ct)
+    {
+        var people = MetaPeople.From(meta);
+        if (people.Count == 0)
+            return;
+
+        var sw = Stopwatch.StartNew();
+        await libraryManager.UpdatePeopleAsync(item, people, ct).ConfigureAwait(false);
+        _log.LogDebug(
+            "saved {Count} people of {Name} in {Ms} ms",
+            people.Count,
+            item.Name,
+            sw.ElapsedMilliseconds
+        );
     }
 
     /// <summary>
