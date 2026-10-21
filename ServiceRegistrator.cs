@@ -46,6 +46,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<PendingListingFilter>();
         services.AddSingleton<PendingTagFilter>();
         services.AddSingleton<PendingSearchTitles>();
+        services.AddSingleton<ParentalRatings>();
         services.AddSingleton<MediaSegmentFilter>();
         services.AddSingleton<LibraryStructureFilter>();
         services.AddSingleton<SyncPlayFilter>();

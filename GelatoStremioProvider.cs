@@ -525,6 +525,95 @@ public class GelatoStremioProvider(
         }
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        (List<TmdbContentRating> Ratings, DateTime Expiry)
+    > ContentRatings = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Sets a series' TMDB content ratings, per country, memoised per series for
+    /// <see cref="ReleaseInfoTtl"/>: what the parental control of a user judges a series the
+    /// library does not hold by. A series TMDB does not know gets an empty list, so it is unrated
+    /// rather than unknown; one TMDB did not answer for keeps none.
+    /// </summary>
+    public async Task EnrichContentRatingsAsync(
+        StremioMeta meta,
+        CancellationToken cancellationToken
+    )
+    {
+        if (meta.Type != StremioMediaType.Series || meta.App_Extras?.ContentRatings is not null)
+            return;
+
+        if (ContentRatings.TryGetValue(meta.Id, out var known) && known.Expiry > DateTime.UtcNow)
+        {
+            meta.App_Extras ??= new StremioAppExtras();
+            meta.App_Extras.ContentRatings = known.Ratings;
+            return;
+        }
+
+        var apiKey = GetTmdbApiKey();
+        var providerIds = meta.GetProviderIds();
+        try
+        {
+            using var client = http.CreateClient(nameof(GelatoStremioProvider));
+            client.Timeout = TimeSpan.FromSeconds(10);
+
+            var tmdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Tmdb));
+            if (
+                string.IsNullOrWhiteSpace(tmdbId)
+                && providerIds.GetValueOrDefault(nameof(MetadataProvider.Imdb)) is
+                { Length: > 0 } imdbId
+            )
+            {
+                var found = await client
+                    .GetStringAsync(
+                        $"https://api.themoviedb.org/3/find/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&external_source=imdb_id",
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+                using var doc = JsonDocument.Parse(found);
+                tmdbId =
+                    doc.RootElement.TryGetProperty("tv_results", out var tv)
+                    && tv.GetArrayLength() > 0
+                    && tv[0].TryGetProperty("id", out var id)
+                        ? id.GetInt32().ToString(CultureInfo.InvariantCulture)
+                        : null;
+            }
+
+            var ratings = new List<TmdbContentRating>();
+            if (!string.IsNullOrWhiteSpace(tmdbId))
+            {
+                var response = await client
+                    .GetStringAsync(
+                        $"https://api.themoviedb.org/3/tv/{Uri.EscapeDataString(tmdbId)}/content_ratings?api_key={apiKey}",
+                        cancellationToken
+                    )
+                    .ConfigureAwait(false);
+                ratings =
+                    JsonSerializer
+                        .Deserialize<TmdbResults<TmdbContentRating>>(
+                            response,
+                            JsonOpts
+                        )
+                        ?.Results ?? [];
+            }
+
+            meta.App_Extras ??= new StremioAppExtras();
+            meta.App_Extras.ContentRatings = ratings;
+            ContentRatings[meta.Id] = (ratings, DateTime.UtcNow + ReleaseInfoTtl);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            meta.App_Extras ??= new StremioAppExtras();
+            meta.App_Extras.ContentRatings = [];
+            ContentRatings[meta.Id] = ([], DateTime.UtcNow + ReleaseInfoTtl);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            log.LogDebug(ex, "EnrichContentRatings: no answer for {Id} ({Name})", meta.Id, meta.Name);
+        }
+    }
+
     private async Task FetchReleaseInfoAsync(StremioMeta meta, CancellationToken cancellationToken)
     {
         log.LogDebug("EnrichDigitalReleaseDate: asking TMDB for {Id} ({Name})", meta.Id, meta.Name);
@@ -1398,6 +1487,10 @@ public class StremioAppExtras
     [JsonPropertyName("releaseDates")]
     public TmdbReleaseDatesContainer? ReleaseDates { get; set; }
 
+    /// <summary>A series' TMDB content ratings (<see cref="GelatoStremioProvider.EnrichContentRatingsAsync"/>).</summary>
+    [JsonIgnore]
+    public List<TmdbContentRating>? ContentRatings { get; set; }
+
     /// <summary>
     /// Whether TMDB lists a service the movie streams, rents or sells on, in any country. Set
     /// together with <see cref="ReleaseDates"/> when those come from TMDB.
@@ -1594,6 +1687,19 @@ public class TmdbWatchProvidersContainer
 public class TmdbReleaseDatesContainer
 {
     public List<TmdbReleaseDateCountry>? Results { get; set; }
+}
+
+public class TmdbResults<T>
+{
+    public List<T>? Results { get; set; }
+}
+
+public class TmdbContentRating
+{
+    [JsonPropertyName("iso_3166_1")]
+    public string? Iso31661 { get; set; }
+
+    public string? Rating { get; set; }
 }
 
 public class TmdbReleaseDateCountry
