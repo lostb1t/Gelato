@@ -1,3 +1,4 @@
+using Gelato.Filters;
 using Jellyfin.Data.Events;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -13,6 +14,7 @@ namespace Gelato.Decorators;
 public sealed class ProviderManagerDecorator(
     IProviderManager inner,
     IApplicationPaths appPaths,
+    ItemEditLocks editLocks,
     ILogger<ProviderManagerDecorator> log
 ) : IProviderManager
 {
@@ -217,8 +219,18 @@ public sealed class ProviderManagerDecorator(
     public Task RefreshFullItem(BaseItem item, MetadataRefreshOptions options, CancellationToken cancellationToken) =>
         inner.RefreshFullItem(item, options, cancellationToken);
 
-    public Task<ItemUpdateType> RefreshSingleItem(BaseItem item, MetadataRefreshOptions options, CancellationToken cancellationToken) =>
-        inner.RefreshSingleItem(SavedSince(item), options, cancellationToken);
+    /// <summary>
+    /// Refreshes a Gelato item under its <see cref="ItemEditLocks"/> lock, so that an edit made
+    /// meanwhile in the metadata editor is not saved over (<see cref="ItemEditFilter"/>).
+    /// </summary>
+    public async Task<ItemUpdateType> RefreshSingleItem(BaseItem item, MetadataRefreshOptions options, CancellationToken cancellationToken)
+    {
+        if (!item.IsGelato())
+            return await inner.RefreshSingleItem(item, options, cancellationToken).ConfigureAwait(false);
+
+        using (await editLocks.EnterAsync(item.Id, cancellationToken).ConfigureAwait(false))
+            return await inner.RefreshSingleItem(SavedSince(item), options, cancellationToken).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// The item as it is saved now, when it was saved after <paramref name="item"/> was read;
