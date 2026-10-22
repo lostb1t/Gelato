@@ -50,6 +50,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<MediaSegmentFilter>();
         services.AddSingleton<LibraryStructureFilter>();
         services.AddSingleton<SyncPlayFilter>();
+        services.AddSingleton<ItemEditLocks>();
+        services.AddSingleton<ItemEditFilter>();
         services.AddSingleton<SyncPlaySources>();
         services.AddSingleton<ItemIdLookup>();
         services.AddSingleton<GelatoManager>();
@@ -178,6 +180,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<MediaSegmentFilter>();
             o.Filters.AddService<LibraryStructureFilter>();
             o.Filters.AddService<SyncPlayFilter>();
+            o.Filters.AddService<ItemEditFilter>();
         });
     }
 
