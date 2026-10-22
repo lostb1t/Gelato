@@ -3706,6 +3706,19 @@ public sealed class GelatoManager(
         )
             return;
 
+        // The user can delete the series while its tree is being taken off. Saving it then writes
+        // the deleted row back, with no path, library or episodes. The database, not the cache:
+        // Jellyfin deletes the row before it drops the cached item.
+        if (libraryManager.RetrieveItem(series.Id) is null)
+        {
+            _log.LogDebug(
+                "ClearTreeSyncedTag: {SeriesName} ({Id}) was deleted meanwhile, not saving it.",
+                series.Name,
+                series.Id
+            );
+            return;
+        }
+
         series.Tags =
         [
             .. tags.Where(t => !t.Equals(TreeSyncedTag, StringComparison.OrdinalIgnoreCase)),
