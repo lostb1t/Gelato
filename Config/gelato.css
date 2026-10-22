@@ -91,11 +91,15 @@
 
 /* The tabs: an icon and a word each, a line under the open one that slides to the next. On a
    phone the row scrolls instead of wrapping. */
+#gelatoConfigurationPage .gelatoTabBar {
+  position: relative;
+  margin: 1em 0 1.5em;
+}
+
 #gelatoConfigurationPage .gelatoTabs {
   position: relative;
   display: flex;
   gap: .3em;
-  margin: 1em 0 1.5em;
   border-bottom: 1px solid var(--g-line);
   overflow-x: auto;
   scrollbar-width: none;
@@ -153,6 +157,54 @@
   border-radius: 3px 3px 0 0;
   background: var(--g-accent);
   transition: transform .3s cubic-bezier(.4, 0, .2, 1), width .3s cubic-bezier(.4, 0, .2, 1);
+}
+
+/* A row that does not fit fades out at the side with more tabs and shows a chevron there, which
+   scrolls the row on a click. A mask, not a gradient on top: the page's background is the skin's. */
+#gelatoConfigurationPage .gelatoTabs.moreLeft {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 3.5em);
+  mask-image: linear-gradient(to right, transparent, #000 3.5em);
+}
+
+#gelatoConfigurationPage .gelatoTabs.moreRight {
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 3.5em);
+  mask-image: linear-gradient(to left, transparent, #000 3.5em);
+}
+
+#gelatoConfigurationPage .gelatoTabs.moreLeft.moreRight {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 3.5em, #000 calc(100% - 3.5em), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 3.5em, #000 calc(100% - 3.5em), transparent);
+}
+
+#gelatoConfigurationPage .tabMore {
+  appearance: none;
+  position: absolute;
+  top: 0;
+  bottom: 1px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2em;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+#gelatoConfigurationPage .tabMoreLeft {
+  left: 0;
+}
+
+#gelatoConfigurationPage .tabMoreRight {
+  right: 0;
+}
+
+#gelatoConfigurationPage .gelatoTabs.moreLeft ~ .tabMoreLeft,
+#gelatoConfigurationPage .gelatoTabs.moreRight ~ .tabMoreRight {
+  display: flex;
 }
 
 /* The page uses the whole width: Jellyfin keeps a form to 54em, which on a wide screen leaves the
