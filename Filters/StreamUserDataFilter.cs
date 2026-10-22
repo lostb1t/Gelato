@@ -58,7 +58,7 @@ public sealed class StreamUserDataFilter(
                 !ctx.TryGetRouteGuid(out var itemId)
                 || libraryManager.GetItemById(itemId)
                     is not Video { PrimaryVersionId: { } primaryId } row
-                || !row.HasStreamTag()
+                || !row.IsStreamRow()
                 || libraryManager.GetItemById(primaryId) is not { } primary
                 || GetUser(ctx) is not { } user
                 || userDataManager.GetUserData(user, primary) is not { } data

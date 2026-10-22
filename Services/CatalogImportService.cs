@@ -417,8 +417,8 @@ public class CatalogImportService(
     /// <summary>Gelato's own placeholder for a title: not a local file, not a stream row.</summary>
     private static bool IsPlaceholder(BaseItem item) =>
         item is Movie or Series
-        && !item.HasStreamTag()
-        && (item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false);
+        && !item.IsStreamRow()
+        && item.Path.IsGelatoUri();
 
     /// <summary>
     /// Makes an item the import created or found the catalog's own. One a catalog has already

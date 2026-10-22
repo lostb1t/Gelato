@@ -33,7 +33,7 @@ public sealed class DeleteResourceFilter(
         var item = library.GetItemById<BaseItem>(guid, user);
 
         // Only handle Gelato items that user can delete
-        if (item is null || !item.IsGelato() || !manager.CanDelete(item, user))
+        if (item is null || !item.HasStremioId() || !manager.CanDelete(item, user))
         {
             await next();
             return;
@@ -77,7 +77,7 @@ public sealed class DeleteResourceFilter(
                 log.LogInformation("Deleting {Name} ({Id})", item.Name, item.Id);
                 var options = new DeleteOptions { DeleteFileLocation = false };
                 // A stream row's path is the stream URL, which Jellyfin would log with its key.
-                if (item is Video row && row.IsStream())
+                if (item is Video row && row.IsStremioNonPrimary())
                     manager.DeleteStreamRow(row, options, true);
                 else
                     library.DeleteItem(item, options, true);

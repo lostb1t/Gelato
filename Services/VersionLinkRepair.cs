@@ -35,7 +35,7 @@ public sealed class VersionLinkRepair(
     {
         if (
             e.Item is not Video { PrimaryVersionId: null, LinkedAlternateVersions.Length: 0 } video
-            || video.HasStreamTag()
+            || video.IsStreamRow()
             || !video.IsGelatoPlaybackItem()
         )
         {

@@ -50,7 +50,7 @@ public sealed class SegmentLookups(
 
     /// <summary>Whether the provider reads the row's chapters: Gelato's stream rows, with RemuxDB on.</summary>
     public static bool UsesChapters(BaseItem row) =>
-        RemuxDbEnabled && row is Video video && video.HasStreamTag();
+        RemuxDbEnabled && row is Video video && video.IsStreamRow();
 
     public Lookup? Get(Guid rowId)
     {

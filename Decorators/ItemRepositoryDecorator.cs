@@ -123,7 +123,7 @@ public sealed class GelatoItemRepository(
 
         ExcludePending(filter);
 
-        // The Upcoming list asks for unaired episodes on purpose. UnreleasedListingFilter still
+        // The Upcoming list asks for unaired episodes on purpose. HiddenListingFilter still
         // drops the episodes of a series the filter hides.
         if (
             filter.MaxPremiereDate is not null
@@ -237,7 +237,7 @@ public sealed class GelatoItemRepository(
     /// <summary>
     /// The Gelato items the unreleased filter hides, for the configured buffer. Jellyfin answers a
     /// non-recursive listing from a folder's cached children instead of querying the repository,
-    /// so <see cref="Filters.UnreleasedListingFilter"/> needs the same set to finish the job on the
+    /// so <see cref="Filters.HiddenListingFilter"/> needs the same set to finish the job on the
     /// response.
     /// </summary>
     public IReadOnlySet<Guid> GetUnreleasedIds(int bufferDays) =>

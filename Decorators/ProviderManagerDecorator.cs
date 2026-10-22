@@ -225,7 +225,7 @@ public sealed class ProviderManagerDecorator(
     /// </summary>
     public async Task<ItemUpdateType> RefreshSingleItem(BaseItem item, MetadataRefreshOptions options, CancellationToken cancellationToken)
     {
-        if (!item.IsGelato())
+        if (!item.HasStremioId())
             return await inner.RefreshSingleItem(item, options, cancellationToken).ConfigureAwait(false);
 
         using (await editLocks.EnterAsync(item.Id, cancellationToken).ConfigureAwait(false))
@@ -246,7 +246,7 @@ public sealed class ProviderManagerDecorator(
     /// </remarks>
     private BaseItem SavedSince(BaseItem item)
     {
-        if (!item.IsGelato())
+        if (!item.HasStremioId())
             return item;
 
         try

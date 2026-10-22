@@ -133,7 +133,7 @@ namespace Gelato.Decorators
 
             // Placeholders (gelato://stub/…) are not a release, and what is saved for one is
             // offered with every version: only a subtitle picked by hand belongs there.
-            if (path.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase))
+            if (path.IsGelatoUri())
             {
                 _log.LogDebug("Skipping automated subtitle search for placeholder {Path}", path);
                 return true;
@@ -148,7 +148,7 @@ namespace Gelato.Decorators
             item ??= _libraryManager
                 .Value.GetItemList(new InternalItemsQuery { Path = path, IncludeOwnedItems = true })
                 .FirstOrDefault();
-            if (item is null || !item.IsGelato())
+            if (item is null || !item.HasStremioId())
                 return false;
 
             var wanted = NormalizeLanguage(language);
@@ -189,7 +189,7 @@ namespace Gelato.Decorators
             // This is the overload Jellyfin calls (the scheduled task, metadata refresh and the
             // subtitle API). The inner one loads the library options and saves on its own, so
             // route Gelato items through the overload below.
-            if (video.IsGelato())
+            if (video.HasStremioId())
             {
                 return DownloadSubtitles(
                     video,
@@ -209,7 +209,7 @@ namespace Gelato.Decorators
             CancellationToken cancellationToken
         )
         {
-            if (video.IsGelato())
+            if (video.HasStremioId())
             {
                 // A Gelato item has no folder to save next to. With the name swap below the "media
                 // folder" would be the server's working directory, and for a placeholder the path
@@ -369,14 +369,14 @@ namespace Gelato.Decorators
         /// </summary>
         private Video PlayingRow(Video video)
         {
-            if (video.HasStreamTag() || !video.IsGelatoPlaybackItem())
+            if (video.IsStreamRow() || !video.IsGelatoPlaybackItem())
                 return null;
 
             // The first stream is listed under the movie's id and names its row in the ETag.
             var row = Guid.TryParse(PlayingSource(video)?.ETag, out var rowId)
                 ? _libraryManager.Value.GetItemById(rowId) as Video
                 : null;
-            return row is not null && row.HasStreamTag() ? row : null;
+            return row is not null && row.IsStreamRow() ? row : null;
         }
 
         /// <summary>
