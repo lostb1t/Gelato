@@ -64,7 +64,7 @@ public sealed class StreamUserDataSync(
 
         if (
             e.Item is not Video row
-            || !row.HasStreamTag()
+            || !row.IsStreamRow()
             || e.SaveReason
                 is not (
                     UserDataSaveReason.PlaybackStart

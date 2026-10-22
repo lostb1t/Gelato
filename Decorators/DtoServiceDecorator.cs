@@ -70,7 +70,7 @@ public sealed class DtoServiceDecorator(
     )
     {
         if (
-            !item.HasStreamTag()
+            !item.IsStreamRow()
             || (item as Video)?.PrimaryVersionId is not { } primaryId
             || libraryManager.GetItemById(primaryId) is not { } primary
         )
@@ -236,7 +236,7 @@ public sealed class DtoServiceDecorator(
             : video;
         var streams = owner is null
             ? 0
-            : libraryManager.GetLinkedAlternateVersions(owner).Count(v => v.HasStreamTag());
+            : libraryManager.GetLinkedAlternateVersions(owner).Count(v => v.IsStreamRow());
         if (streams == 0)
             return;
 
@@ -310,17 +310,6 @@ public sealed class DtoServiceDecorator(
         return dto;
     }
 
-    static bool IsGelato(BaseItemDto dto)
-    {
-        return dto.LocationType == LocationType.Remote
-            && (
-                dto.Type == BaseItemKind.Movie
-                || dto.Type == BaseItemKind.Episode
-                || dto.Type == BaseItemKind.Series
-                || dto.Type == BaseItemKind.Season
-            );
-    }
-
     private void Patch(BaseItemDto dto, BaseItem? item, bool isList, User? user)
     {
         // Gelato's own mark for a title opened from search (PendingTagFilter keeps it in the item).
@@ -328,12 +317,12 @@ public sealed class DtoServiceDecorator(
             dto.Tags = [.. tags.Where(t => t != PendingSearchTitles.Tag)];
 
         var manager = _manager.Value;
-        if (item is not null && user is not null && IsGelato(dto) && manager.CanDelete(item, user))
+        if (item is not null && user is not null && dto.IsRemoteTitle() && manager.CanDelete(item, user))
         {
             dto.CanDelete = true;
         }
 
-        if (IsGelato(dto))
+        if (dto.IsRemoteTitle())
         {
             dto.CanDownload = true;
             // mark if placeholder
@@ -341,8 +330,7 @@ public sealed class DtoServiceDecorator(
                 isList
                 || dto.MediaSources?.Length != 1
                 || dto.Path is null
-                || !dto.MediaSources[0]
-                    .Path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
+                || !dto.MediaSources[0].Path.HasGelatoPrefix()
             )
             {
                 StubStreamPaths(dto);

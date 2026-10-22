@@ -11,7 +11,6 @@ namespace Gelato.Filters;
 
 public sealed class DownloadFilter(
     ILibraryManager library,
-    GelatoManager manager,
     IUserManager userManager,
     IMediaSourceManager mediaSourceManager,
     IHttpClientFactory httpClientFactory,
@@ -45,13 +44,13 @@ public sealed class DownloadFilter(
 
         var item = library.GetItemById<Video>(hasMediaSourceId ? mediaSourceId : guid, user);
 
-        if (item != null && manager.IsStremio(item))
+        if (item != null && item.HasStremioId())
         {
             // A client that named a stream row, as the item or as its media source, gets that
             // stream or nothing. For the movie or episode its streams are tried in Gelato's order
             // (a row named as the item used to get the first stream of its title).
             var paths =
-                item.IsStream()
+                item.IsStremioNonPrimary()
                     ? [item.Path]
                     : mediaSourceManager
                         .GetStaticMediaSources(item, true, user)

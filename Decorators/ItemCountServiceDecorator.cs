@@ -165,7 +165,7 @@ public sealed class ItemCountServiceDecorator(
 
         var query = StreamRowsQuery(ancestorIds, user);
         query.ItemIds = ids;
-        return repo.GetItemList(query).Where(i => i.HasStreamTag()).ToList();
+        return repo.GetItemList(query).Where(i => i.IsStreamRow()).ToList();
     }
 
     private HashSet<Guid> GetPlayedIds(IReadOnlyList<BaseItem> streams, User? user)

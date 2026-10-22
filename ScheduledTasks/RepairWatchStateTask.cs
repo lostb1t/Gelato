@@ -195,7 +195,7 @@ public sealed partial class RepairWatchStateTask(
             )
             // Stream rows copy the provider ids of the item they hang off, so they resolve to the
             // same keys. Reattaching onto one would hide the watch state behind a row nobody sees.
-            .Where(item => !item.IsStream())
+            .Where(item => !item.IsStremioNonPrimary())
             .ToList();
 
         var reattached = 0;

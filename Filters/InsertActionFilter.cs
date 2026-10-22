@@ -1,8 +1,10 @@
+using System.Reflection;
 using Gelato.Services;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Logging;
@@ -23,9 +25,17 @@ public class InsertActionFilter(
 
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
-        ActionExecutionDelegate next
+        ActionExecutionDelegate inner
     )
     {
+        // The action runs with the media source it names kept for the request (see
+        // KeepMediaSourceId), taken after the ids below are redirected.
+        Task<ActionExecutedContext> next()
+        {
+            KeepMediaSourceId(ctx);
+            return inner();
+        }
+
         // An add to a collection or a playlist, or the creation of one, names its items in a list,
         // and nothing has to have opened them: a multi-select or a script sends search results as
         // they are. Each one goes into the library first, so the redirect below knows an item for
@@ -59,7 +69,7 @@ public class InsertActionFilter(
         if (
             insertable
             && libraryManager.GetItemById(guid) is Series localSeries
-            && !localSeries.IsGelato()
+            && !localSeries.HasStremioId()
         )
         {
             await HandleLocalSeriesAsync(userId, localSeries, ctx.HttpContext.RequestAborted);
@@ -370,4 +380,108 @@ public class InsertActionFilter(
                 ? manager.TryGetSeriesFolder(userId)
                 : manager.TryGetMovieFolder(userId)
         );
+    private const string MediaSourceIdKey = "MediaSourceId";
+    private static readonly string[] MediaSourceIdInputKeys = ["MediaSourceId", "RouteMediaSourceId"];
+
+    /// <summary>
+    /// Keeps the media source id a request names, as "MediaSourceId" or "RouteMediaSourceId" in
+    /// its arguments, a body's properties, its route or its query, under "MediaSourceId" in the
+    /// request's items: MediaSourceManagerDecorator prepares that source for playback.
+    /// </summary>
+    private static void KeepMediaSourceId(ActionExecutingContext ctx)
+    {
+        if (ctx.HttpContext.Items.ContainsKey(MediaSourceIdKey))
+            return;
+
+        if (
+            TryFromArgs(ctx.ActionArguments, out var id)
+            || TryFromRoute(ctx, out id)
+            || TryFromQuery(ctx.HttpContext.Request, out id)
+        )
+        {
+            if (!string.IsNullOrWhiteSpace(id))
+                ctx.HttpContext.Items[MediaSourceIdKey] = id;
+        }
+    }
+
+    private static bool TryFromArgs(IDictionary<string, object?> args, out string? id)
+    {
+        foreach (var kv in args)
+        {
+            if (kv.Value is null)
+                continue;
+
+            foreach (var key in MediaSourceIdInputKeys)
+            {
+                if (
+                    kv.Key.Equals(key, StringComparison.OrdinalIgnoreCase)
+                    && kv.Value is string s
+                    && !string.IsNullOrWhiteSpace(s)
+                )
+                {
+                    id = s;
+                    return true;
+                }
+            }
+        }
+
+        foreach (var kv in args)
+        {
+            var v = kv.Value;
+            if (v is null)
+                continue;
+
+            var type = v.GetType();
+            foreach (var key in MediaSourceIdInputKeys)
+            {
+                var prop = type.GetProperty(
+                    key,
+                    BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase
+                );
+                if (prop?.GetValue(v) is string s && !string.IsNullOrWhiteSpace(s))
+                {
+                    id = s;
+                    return true;
+                }
+            }
+        }
+
+        id = null;
+        return false;
+    }
+
+    private static bool TryFromRoute(ActionExecutingContext ctx, out string? id)
+    {
+        foreach (var key in MediaSourceIdInputKeys)
+        {
+            if (
+                ctx.RouteData.Values.TryGetValue(key, out var val)
+                && val is string s
+                && !string.IsNullOrWhiteSpace(s)
+            )
+            {
+                id = s;
+                return true;
+            }
+        }
+
+        id = null;
+        return false;
+    }
+
+    private static bool TryFromQuery(HttpRequest req, out string? id)
+    {
+        foreach (var key in MediaSourceIdInputKeys)
+        {
+            var val = req.Query[key];
+            if (!string.IsNullOrWhiteSpace(val))
+            {
+                id = val.ToString();
+                return true;
+            }
+        }
+
+        id = null;
+        return false;
+    }
 }

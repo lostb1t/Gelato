@@ -50,7 +50,7 @@ public sealed class PurgeGelatoStreamsTask(
         var streams = libraryManager
             .GetItemList(query)
             .OfType<Video>()
-            .Where(v => v.IsStream())
+            .Where(v => v.IsStremioNonPrimary())
             .ToArray();
 
         var total = streams.Length;

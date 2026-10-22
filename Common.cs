@@ -353,7 +353,7 @@ public static class ActionContextExtensions
 
     private static readonly string[] IdsGuidKeys = ["ids", "Ids", "IDs"];
 
-    private static readonly HashSet<string> SearchActionNames = new(
+    private static readonly HashSet<string> GetItemsActionNames = new(
         StringComparer.OrdinalIgnoreCase
     )
     {
@@ -535,6 +535,11 @@ public static class ActionContextExtensions
     /// <summary>
     /// A search: a listing with a search term, or the search bar's suggestions.
     /// </summary>
+    /// <remarks>
+    /// Read from the request, for code that has no action context (the item repository). Wider
+    /// than <see cref="TryGetSearchTerm"/> in the actions it takes, narrower in the terms: a blank
+    /// one is no search here.
+    /// </remarks>
     public static bool IsSearchRequest(this HttpContext ctx) =>
         !string.IsNullOrWhiteSpace(ctx.Request.Query["searchTerm"])
         || string.Equals(ctx.GetActionName(), "GetSearchHints", StringComparison.OrdinalIgnoreCase);
@@ -565,8 +570,22 @@ public static class ActionContextExtensions
                 == true;
     }
 
-    public static bool IsApiSearchAction(this ActionExecutingContext ctx) =>
-        ctx.GetActionName() is { } actionName && SearchActionNames.Contains(actionName);
+    /// <summary>
+    /// Whether the action is GetItems, the listing behind the search page, a person's page and
+    /// most library views. Whether it searches is <see cref="TryGetSearchTerm"/>.
+    /// </summary>
+    public static bool IsGetItemsAction(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is { } actionName && GetItemsActionNames.Contains(actionName);
+
+    /// <summary>
+    /// A GetItems call that names a search term: the term as the action received it, a blank one
+    /// included. <see cref="IsSearchRequest"/> is the test for code without an action context.
+    /// </summary>
+    public static bool TryGetSearchTerm(this ActionExecutingContext ctx, out string searchTerm)
+    {
+        searchTerm = string.Empty;
+        return ctx.IsGetItemsAction() && ctx.TryGetActionArgument("searchTerm", out searchTerm!);
+    }
 
     public static bool IsPlaybackInfoAction(this HttpContext? ctx) =>
         ctx?.GetActionName() is { } actionName && PlaybackInfoActionNames.Contains(actionName);
@@ -914,11 +933,6 @@ public static class ActionContextExtensions
 
 public static class BaseItemExtensions
 {
-    public static bool IsGelato(this BaseItem item)
-    {
-        return !string.IsNullOrWhiteSpace(item.GetProviderId("Stremio"));
-    }
-
     /// <summary>
     /// Drops the EndDate a Gelato metadata result carries when the refreshed item is not Gelato's
     /// own. <see cref="GelatoManager.IntoBaseItem"/> always sets EndDate, since the unreleased
@@ -959,12 +973,6 @@ public static class BaseItemExtensions
     public static bool IsNotInLibrary(this BaseItem item) =>
         ItemsNotInLibrary.TryGetValue(item, out _);
 
-    public static bool HasStreamTag(this BaseItem item)
-    {
-        return item.Tags is not null
-            && item.Tags.Contains(GelatoManager.StreamTag, StringComparer.OrdinalIgnoreCase);
-    }
-
     /// <summary>
     /// The movie/episode a stream row is a version of; any other item as it is.
     /// </summary>
@@ -972,36 +980,11 @@ public static class BaseItemExtensions
         this BaseItem item,
         ILibraryManager libraryManager
     ) =>
-        item.HasStreamTag()
+        item.IsStreamRow()
         && (item as Video)?.PrimaryVersionId is { } primaryId
         && libraryManager.GetItemById(primaryId) is { } primary
             ? primary
             : item;
-
-    /// <summary>
-    /// Whether Gelato serves this item: a stream row, or an item whose path is a <c>gelato://</c>
-    /// placeholder.
-    /// </summary>
-    /// <remarks>
-    /// A local file that only carries a Stremio id (EnableMixed) is not one of them and is left to
-    /// Jellyfin.
-    /// </remarks>
-    public static bool IsGelatoPlaybackItem(this BaseItem item) =>
-        item.HasStreamTag()
-        || (item.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false);
-
-    public static bool IsPrimaryVersion(this BaseItem item)
-    {
-        return !item.HasStreamTag()
-            && (item as Video)?.PrimaryVersionId is null
-            && !item.IsVirtualItem;
-    }
-
-    public static bool IsStream(this BaseItem item)
-    {
-        return !string.IsNullOrWhiteSpace(item.GetProviderId("Stremio"))
-            && !item.IsPrimaryVersion();
-    }
 
     public static T? GelatoData<T>(this BaseItem item, string key)
     {
@@ -1140,7 +1123,5 @@ public static class MediaSourceExtensions
     }
 
     private static bool IsStubbed(string path) =>
-        path.IsUrl()
-        || path.StartsWith("gelato", StringComparison.OrdinalIgnoreCase)
-        || path.StartsWith("stremio", StringComparison.OrdinalIgnoreCase);
+        path.IsUrl() || path.IsPlaceholderPath();
 }

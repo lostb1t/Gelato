@@ -53,7 +53,7 @@ public sealed class PurgeGelatoTask(
             )
             .Where(item =>
             {
-                if (!item.IsGelato())
+                if (!item.HasStremioId())
                 {
                     return false;
                 }

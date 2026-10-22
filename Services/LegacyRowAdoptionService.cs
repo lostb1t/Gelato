@@ -57,7 +57,7 @@ public sealed class LegacyRowAdoptionService(
                     }
                 )
                 .OfType<Video>()
-                .Where(v => v.HasStreamTag())
+                .Where(v => v.IsStreamRow())
                 .ToList();
 
             var adopted = 0;
@@ -89,7 +89,7 @@ public sealed class LegacyRowAdoptionService(
                         }
                     )
                     .OfType<Video>()
-                    .Where(v => !v.HasStreamTag() && v.PrimaryVersionId is null)
+                    .Where(v => !v.IsStreamRow() && v.PrimaryVersionId is null)
                     .ToList();
                 if (primaries.Count == 0)
                 {

@@ -65,7 +65,7 @@ public sealed class ImageResourceFilter(
         // A stream row has no images of its own; the DTO hands out its movie's image tags.
         if (
             libraryManager.GetItemById(guid) is Video { PrimaryVersionId: { } primaryId } row
-            && row.HasStreamTag()
+            && row.IsStreamRow()
         )
         {
             routeValues["itemId"] = primaryId.ToString("N");

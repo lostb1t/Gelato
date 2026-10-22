@@ -81,7 +81,7 @@ public sealed class UserDataManagerDecorator : IUserDataManager
     {
         ItemSaved?.Invoke(this, e);
 
-        if (_quiet > 0 || e.Item?.HasStreamTag() == true)
+        if (_quiet > 0 || e.Item?.IsStreamRow() == true)
             return;
 
         UserDataSaved?.Invoke(this, e);
@@ -102,7 +102,7 @@ public sealed class UserDataManagerDecorator : IUserDataManager
     {
         if (
             item is Video row
-            && row.HasStreamTag()
+            && row.IsStreamRow()
             && _libraryManager.Value.GetItemById(row.Id) is null
         )
         {
@@ -177,7 +177,7 @@ public sealed class UserDataManagerDecorator : IUserDataManager
             .WithProviderId("Stremio", stremioId)
             .Select(library.GetItemById)
             .OfType<Video>()
-            .Where(v => !v.HasStreamTag() && v.GetBaseItemKind() == row.GetBaseItemKind())
+            .Where(v => !v.IsStreamRow() && v.GetBaseItemKind() == row.GetBaseItemKind())
             .ToList();
         return titles.FirstOrDefault(v => v.ParentId == row.ParentId) ?? titles.FirstOrDefault();
     }
@@ -380,7 +380,7 @@ public sealed class UserDataManagerDecorator : IUserDataManager
     /// </summary>
     public Video? ShortStreamTitle(BaseItem item)
     {
-        if (item is not Video { PrimaryVersionId: { } primaryId } row || !row.HasStreamTag())
+        if (item is not Video { PrimaryVersionId: { } primaryId } row || !row.IsStreamRow())
             return null;
 
         return

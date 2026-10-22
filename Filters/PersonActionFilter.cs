@@ -127,7 +127,7 @@ public class PersonActionFilter(
         }
 
         if (
-            !ctx.IsApiSearchAction()
+            !ctx.IsGetItemsAction()
             || GetPersonPage(ctx) is not { } page
             || libraryManager.GetItemById(page.PersonId) is not Person person
             || person.GetProviderId(MetadataProvider.Tmdb) is not { Length: > 0 }

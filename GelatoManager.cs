@@ -455,7 +455,7 @@ public sealed class GelatoManager(
         if (
             GetInsertedId(searchId) is { } inserted
             && libraryManager.GetItemById(inserted) is { } item
-            && !item.IsGelato()
+            && !item.HasStremioId()
         )
             memoryCache.Remove($"inserted:{searchId}");
     }
@@ -520,8 +520,8 @@ public sealed class GelatoManager(
 
         var parent = existing.GetParent();
         return existing.GetType() == item.GetType()
-            && !existing.HasStreamTag()
-            && (existing.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false)
+            && !existing.IsStreamRow()
+            && existing.Path.IsGelatoUri()
             && (!IsDefaultFolder(parent) || IsCatalogFolder(parent))
             ? existing
             : null;
@@ -803,8 +803,8 @@ public sealed class GelatoManager(
             var roots = below
                 .Where(i =>
                     i is Movie or Series
-                    && !i.HasStreamTag()
-                    && (i.Path?.StartsWith("gelato://", StringComparison.OrdinalIgnoreCase) ?? false)
+                    && !i.IsStreamRow()
+                    && i.Path.IsGelatoUri()
                 )
                 .Select(i => libraryManager.GetItemById(i.Id) ?? i)
                 .ToList();
@@ -831,7 +831,7 @@ public sealed class GelatoManager(
             var rows = below
                 .OfType<Movie>()
                 .Where(v =>
-                    v.HasStreamTag()
+                    v.IsStreamRow()
                     && (
                         v.PrimaryVersionId is { } primary
                             ? rootIds.Contains(primary)
@@ -1207,9 +1207,9 @@ public sealed class GelatoManager(
                 return x switch
                 {
                     null => false,
-                    _ when copyInto is not null && !x.IsGelato() && !SharesLibrary(copyInto, x) =>
+                    _ when copyInto is not null && !x.HasStremioId() && !SharesLibrary(copyInto, x) =>
                         false,
-                    Video v => !v.IsStream(),
+                    Video v => !v.IsStremioNonPrimary(),
                     _ => true,
                 };
             });
@@ -1590,7 +1590,7 @@ public sealed class GelatoManager(
             ?? GetCatalogFolders(GelatoPlugin.Instance!.Configuration)
                 .Where(f => f.Id != root.Id)
                 .Select(f => GetByProviderIds(series.ProviderIds, BaseItemKind.Series, f))
-                .FirstOrDefault(s => s is not null && s.IsGelato() && !s.IsFileProtocol);
+                .FirstOrDefault(s => s is not null && s.HasStremioId() && !s.IsFileProtocol);
     }
 
     /// <summary>
@@ -1674,7 +1674,7 @@ public sealed class GelatoManager(
             return 0;
         }
 
-        if (video.IsStream())
+        if (video.IsStremioNonPrimary())
         {
             _log.LogWarning("SyncStreams: item is a stream, skipping");
             return 0;
@@ -1767,7 +1767,7 @@ public sealed class GelatoManager(
         var existingStreamItems = repo.GetItemList(query)
             .OfType<Video>()
             .Where(v =>
-                v.IsStream()
+                v.IsStremioNonPrimary()
                 && (
                     v.PrimaryVersionId is not { } owner
                     || owner == video.Id
@@ -2085,7 +2085,7 @@ public sealed class GelatoManager(
         // links of every instance end up in.
         var stored = libraryManager.GetLinkedAlternateVersions(primary).ToList();
         var others = stored
-            .Where(v => !rowIds.Contains(v.Id) && !v.HasStreamTag())
+            .Where(v => !rowIds.Contains(v.Id) && !v.IsStreamRow())
             .Select(v => new LinkedChild
             {
                 ItemId = v.Id,
@@ -2142,7 +2142,7 @@ public sealed class GelatoManager(
                 }
             )
             .OfType<Video>()
-            .Where(v => v.HasStreamTag() && v.PrimaryVersionId == primary.Id)
+            .Where(v => v.IsStreamRow() && v.PrimaryVersionId == primary.Id)
             .ToList();
         if (owned.Count == 0)
             return false;
@@ -2160,7 +2160,7 @@ public sealed class GelatoManager(
     {
         var rows = libraryManager
             .GetLinkedAlternateVersions(primary)
-            .Where(v => v.HasStreamTag())
+            .Where(v => v.IsStreamRow())
             .ToList();
 
         if (
@@ -2184,7 +2184,7 @@ public sealed class GelatoManager(
                     }
                 )
                 .OfType<Video>()
-                .Where(v => v.HasStreamTag() && v.PrimaryVersionId is null);
+                .Where(v => v.IsStreamRow() && v.PrimaryVersionId is null);
             rows.AddRange(unlinked.Where(v => rows.All(r => r.Id != v.Id)));
         }
 
@@ -2292,7 +2292,7 @@ public sealed class GelatoManager(
         var rowIds = rows.Select(r => r.Id).ToHashSet();
         var all = libraryManager
             .GetLinkedAlternateVersions(primary)
-            .Where(v => v.HasStreamTag() && !rowIds.Contains(v.Id))
+            .Where(v => v.IsStreamRow() && !rowIds.Contains(v.Id))
             .Concat(rows)
             .ToList();
         LinkVersions(primary, all, ct);
@@ -2396,11 +2396,6 @@ public sealed class GelatoManager(
         return item.IsAuthorizedToDelete(user, allCollectionFolders);
     }
 
-    public bool IsStremio(BaseItem item)
-    {
-        return item.IsGelato();
-    }
-
     /// <summary>
     /// The path of a season Gelato adds to a series.
     /// </summary>
@@ -2456,7 +2451,7 @@ public sealed class GelatoManager(
                     IncludeItemTypes = [BaseItemKind.Season],
                 }
             )
-            .Any(s => s.IsGelato());
+            .Any(s => s.HasStremioId());
 
     /// <summary>
     /// Whether Jellyfin is scanning the series, or a folder above it, right now.
@@ -2495,15 +2490,15 @@ public sealed class GelatoManager(
                 }
             )
             .OfType<Episode>()
-            .Where(e => !e.IsStream() && e.IndexNumber.HasValue && e.ParentIndexNumber.HasValue)
+            .Where(e => !e.IsStremioNonPrimary() && e.IndexNumber.HasValue && e.ParentIndexNumber.HasValue)
             .GroupBy(e => (e.ParentIndexNumber, e.IndexNumber));
 
         foreach (var slot in slots)
         {
-            var shadowed = slot.Where(e => e.IsGelato() && !e.IsFileProtocol).ToList();
+            var shadowed = slot.Where(e => e.HasStremioId() && !e.IsFileProtocol).ToList();
             if (
                 shadowed.Count == 0
-                || slot.FirstOrDefault(e => e.IsFileProtocol && !e.IsGelato()) is not { } file
+                || slot.FirstOrDefault(e => e.IsFileProtocol && !e.HasStremioId()) is not { } file
             )
                 continue;
 
@@ -2678,7 +2673,7 @@ public sealed class GelatoManager(
                 }
             )
             .OfType<Episode>()
-            .Where(x => !x.IsStream() && x.IndexNumber.HasValue && x.ParentIndexNumber.HasValue)
+            .Where(x => !x.IsStremioNonPrimary() && x.IndexNumber.HasValue && x.ParentIndexNumber.HasValue)
             .GroupBy(e => e.ParentIndexNumber!.Value)
             .ToDictionary(
                 g => g.Key,
@@ -2687,7 +2682,7 @@ public sealed class GelatoManager(
                         // A local episode and a Gelato one can share a number; update the Gelato one.
                         .ToDictionary(
                             n => n.Key,
-                            n => n.FirstOrDefault(e => e.IsGelato()) ?? n.First()
+                            n => n.FirstOrDefault(e => e.HasStremioId()) ?? n.First()
                         )
             );
 
@@ -2797,7 +2792,7 @@ public sealed class GelatoManager(
                 newSeasons.Add(season);
                 seasonsInserted++;
             }
-            else if (season.IsGelato() && season.IsFileProtocol)
+            else if (season.HasStremioId() && season.IsFileProtocol)
             {
                 // Added by an older Gelato below a local series, so still carrying a path that
                 // looks like a folder on disk. Repair it before the next scan takes the season
@@ -2829,7 +2824,7 @@ public sealed class GelatoManager(
                 if (existingEpisodes.TryGetValue(index.Value, out var existingEpisode))
                 {
                     // Local episodes (no Stremio id) keep the metadata of their own library.
-                    if (existingEpisode.IsGelato() && ApplyEpisodeMeta(existingEpisode, epMeta))
+                    if (existingEpisode.HasStremioId() && ApplyEpisodeMeta(existingEpisode, epMeta))
                     {
                         _log.LogTrace("Updated episode {EpisodeName}", existingEpisode.Name);
                         updatedEpisodes.Add(existingEpisode);
@@ -3320,7 +3315,7 @@ public sealed class GelatoManager(
                 )
                 .OfType<Series>()
                 .Where(s =>
-                    !s.IsGelato()
+                    !s.HasStremioId()
                     && (
                         !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
                         || !string.IsNullOrWhiteSpace(s.GetProviderId("Tmdb"))
@@ -3352,7 +3347,7 @@ public sealed class GelatoManager(
                         Interlocked.Increment(ref noMeta);
                     else
                     {
-                        var isLocal = !series.IsGelato();
+                        var isLocal = !series.HasStremioId();
                         await SyncSeriesTreesAsync(
                                 cfg,
                                 meta,
@@ -3420,12 +3415,12 @@ public sealed class GelatoManager(
             .GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Series] })
             .OfType<Series>()
             .ToList();
-        var gelatoSeries = allSeries.Where(s => s.IsGelato() && !IsLocalSeries(s)).ToList();
+        var gelatoSeries = allSeries.Where(s => s.HasStremioId() && !IsLocalSeries(s)).ToList();
         if (gelatoSeries.Count == 0)
             return;
 
         string[] showIds = ["Imdb", "Tmdb", "Tvdb"];
-        foreach (var local in allSeries.Where(s => !s.IsGelato() && IsLocalSeries(s)))
+        foreach (var local in allSeries.Where(s => !s.HasStremioId() && IsLocalSeries(s)))
         {
             ct.ThrowIfCancellationRequested();
 
@@ -3450,7 +3445,7 @@ public sealed class GelatoManager(
                     }
                 )
                 .Any(e =>
-                    !e.IsStream()
+                    !e.IsStremioNonPrimary()
                     && (
                         e.Path?.StartsWith("gelato://stub/", StringComparison.OrdinalIgnoreCase)
                         ?? false
@@ -3494,7 +3489,7 @@ public sealed class GelatoManager(
             .GetItemList(new InternalItemsQuery { IncludeItemTypes = [BaseItemKind.Series] })
             .OfType<Series>()
             .Where(s =>
-                !s.IsGelato()
+                !s.HasStremioId()
                 && s.Status != SeriesStatus.Continuing // continuing handled in pass 2
                 && (
                     !string.IsNullOrWhiteSpace(s.GetProviderId("Imdb"))
@@ -3613,7 +3608,7 @@ public sealed class GelatoManager(
         // show's own episodes out of the library — with the seasons they emptied — while the files
         // stayed on disk, so only a rescan of the library brought them back (lostb1t/Gelato#153).
         var virtualEpisodes = allEpisodes
-            .Where(ep => ep.IsGelato() && !ep.IsFileProtocol)
+            .Where(ep => ep.HasStremioId() && !ep.IsFileProtocol)
             .ToList();
 
         // With no episode to remove the rest still runs: a season Gelato added can be left empty,
@@ -3671,7 +3666,7 @@ public sealed class GelatoManager(
 
             // A season of the local series itself stays, even with nothing left below it: the
             // library owns it, and the next scan would only have to find it again.
-            if (!season.IsGelato())
+            if (!season.HasStremioId())
                 continue;
 
             try
@@ -3869,7 +3864,7 @@ public sealed class GelatoManager(
             // Stream rows copy the provider ids of the item they hang off, so they resolve to the
             // same user data keys. Reattaching onto one would move the watch state to a row the
             // user never sees.
-            if (item.IsStream())
+            if (item.IsStremioNonPrimary())
                 continue;
 
             var before = item.UserData?.Count ?? 0;

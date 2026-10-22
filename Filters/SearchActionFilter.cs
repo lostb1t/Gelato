@@ -41,8 +41,7 @@ public class SearchActionFilter(
         var cfg = GelatoPlugin.Instance!.GetConfig(userId);
         if (
             cfg.DisableSearch
-            || !ctx.IsApiSearchAction()
-            || !ctx.TryGetActionArgument<string>("searchTerm", out var searchTerm)
+            || !ctx.TryGetSearchTerm(out var searchTerm)
             // GetConfig falls back to a bare configuration when the Gelato url is unset,
             // which leaves Stremio null — let the request through untouched.
             || cfg.Stremio is not { } stremio
@@ -698,7 +697,7 @@ public class SearchActionFilter(
             // title held only as files elsewhere is a result here, and opening it adds a Gelato
             // copy to this library (lostb1t/Gelato#261): the user's file library stays as it is.
             var copy = existing is null && matches.Count > 0;
-            if (copy && matches.Any(m => m.IsGelato()))
+            if (copy && matches.Any(m => m.HasStremioId()))
                 continue;
 
             var dto =
@@ -861,7 +860,7 @@ public class SearchActionFilter(
         return libraryItems
             .Where(item =>
                 item.GetBaseItemKind() == kind
-                && !(item is Video video && video.IsStream())
+                && !(item is Video video && video.IsStremioNonPrimary())
                 && candidate.ProviderIds.Any(id =>
                     string.Equals(
                         item.GetProviderId(id.Key),
@@ -870,7 +869,7 @@ public class SearchActionFilter(
                     )
                 )
             )
-            .OrderBy(item => item.IsGelato() ? 1 : 0)
+            .OrderBy(item => item.HasStremioId() ? 1 : 0)
             .ToList();
     }
 }

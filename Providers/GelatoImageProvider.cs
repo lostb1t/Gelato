@@ -30,7 +30,7 @@ public sealed class GelatoImageProvider(
         // A stream row is a version of its movie and shows the movie's images. It carries a
         // Stremio id of its own, so letting it through here would give it an image set of its own
         // and the movie's images would stop showing on the version page.
-        if (item.IsStream())
+        if (item.IsStremioNonPrimary())
         {
             log.LogDebug("GelatoImageProvider: {Name} is a stream row", item.Name);
             return [];

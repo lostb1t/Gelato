@@ -52,7 +52,7 @@ public sealed class SimilarItemsManagerDecorator(
         // A stream row is a version of its movie: the tag every stream row shares would make the
         // other movies' rows its most similar items.
         if (
-            item.HasStreamTag()
+            item.IsStreamRow()
             && (item as Video)?.PrimaryVersionId is { } primaryId
             && libraryManager.GetItemById(primaryId) is { } movie
         )
@@ -77,7 +77,7 @@ public sealed class SimilarItemsManagerDecorator(
                 )
                 .ConfigureAwait(false);
 
-            var kept = items.Where(i => !i.HasStreamTag()).ToList();
+            var kept = items.Where(i => !i.IsStreamRow()).ToList();
             if (kept.Count >= wanted || items.Count < request || attempt == MaxAttempts)
             {
                 return kept.Take(wanted).ToList();
@@ -111,7 +111,7 @@ public sealed class SimilarItemsManagerDecorator(
         var result = new List<SimilarItemsRecommendation>(categories.Count);
         foreach (var category in categories)
         {
-            var items = category.Items.Where(i => !i.HasStreamTag()).Take(itemLimit).ToList();
+            var items = category.Items.Where(i => !i.IsStreamRow()).Take(itemLimit).ToList();
             if (items.Count == 0)
                 continue;
 

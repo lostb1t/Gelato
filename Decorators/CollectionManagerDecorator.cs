@@ -83,7 +83,7 @@ public sealed class CollectionManagerDecorator(
             ).PrimaryVersionOrSelf(libraryManager);
             var id = item.Id;
 
-            if (!currentLinkedChildrenIds.Contains(id) && !item.IsStream())
+            if (!currentLinkedChildrenIds.Contains(id) && !item.IsStremioNonPrimary())
             {
                 (itemList ??= []).Add(item);
                 linkedChildrenList.Add(item);
@@ -105,7 +105,7 @@ public sealed class CollectionManagerDecorator(
             log.LogDebug(
                 "Adding item {Id} (Gelato={IsGelato}) to collection {Name}",
                 item.Id,
-                item.IsGelato(),
+                item.HasStremioId(),
                 collection.Name
             );
         }

@@ -102,7 +102,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         // Update cache before syncing
         _syncCache[series.Id] = now;
 
-        var isLocal = !series.IsGelato();
+        var isLocal = !series.HasStremioId();
 
         if (isLocal && !cfg.ExtendLocalSeriesTrees)
             return;
