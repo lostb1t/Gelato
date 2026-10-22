@@ -13,6 +13,7 @@ export default function (view) {
   const tabs = page.querySelectorAll('.tab-button');
   const tabContents = page.querySelectorAll('.tab-content');
   const tabInk = page.querySelector('.tabInk');
+  const tabStrip = page.querySelector('.gelatoTabs');
   // Which tab was open, for the next visit of the page in this browser tab.
   const TAB_KEY = 'gelato.settings.tab';
 
@@ -20,6 +21,24 @@ export default function (view) {
     if (!tab.offsetWidth) return;
     tabInk.style.width = tab.offsetWidth + 'px';
     tabInk.style.transform = 'translateX(' + tab.offsetLeft + 'px)';
+  }
+
+  // On a narrow screen the row scrolls: the side with more tabs fades out and shows a chevron.
+  function markOverflow() {
+    const max = tabStrip.scrollWidth - tabStrip.clientWidth;
+    tabStrip.classList.toggle('moreLeft', tabStrip.scrollLeft > 1);
+    tabStrip.classList.toggle('moreRight', tabStrip.scrollLeft < max - 1);
+  }
+
+  // Scrolls the open tab clear of the fade, which scrollIntoView would leave it under.
+  function revealTab(tab) {
+    const margin = 48;
+    let left = tabStrip.scrollLeft;
+    if (tab.offsetLeft - margin < left) left = tab.offsetLeft - margin;
+    else if (tab.offsetLeft + tab.offsetWidth + margin > left + tabStrip.clientWidth) {
+      left = tab.offsetLeft + tab.offsetWidth + margin - tabStrip.clientWidth;
+    }
+    if (left !== tabStrip.scrollLeft) tabStrip.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
   }
 
   function openTab(name) {
@@ -37,7 +56,7 @@ export default function (view) {
     // Again on every switch: a skin's stylesheet may apply after the page has opened.
     applyThemeAccent(page, page.querySelector('#btnSave'));
     moveInk(tab);
-    tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    revealTab(tab);
     try { sessionStorage.setItem(TAB_KEY, tab.dataset.tab); } catch (_) { /* private mode */ }
 
     // Lazy load catalogs if switching to catalogs tab
@@ -49,7 +68,17 @@ export default function (view) {
   }
 
   tabs.forEach(tab => tab.addEventListener('click', () => openTab(tab.dataset.tab)));
-  window.addEventListener('resize', () => moveInk(page.querySelector('.tab-button.active')));
+  window.addEventListener('resize', () => {
+    moveInk(page.querySelector('.tab-button.active'));
+    markOverflow();
+  });
+  tabStrip.addEventListener('scroll', markOverflow, { passive: true });
+  page.querySelector('.tabMoreLeft').addEventListener('click', () => {
+    tabStrip.scrollBy({ left: -tabStrip.clientWidth * 0.7, behavior: 'smooth' });
+  });
+  page.querySelector('.tabMoreRight').addEventListener('click', () => {
+    tabStrip.scrollBy({ left: tabStrip.clientWidth * 0.7, behavior: 'smooth' });
+  });
 
   // Elements
   const txtUrl = page.querySelector('#txtUrl');
@@ -1252,8 +1281,16 @@ export default function (view) {
     try { startTab = sessionStorage.getItem(TAB_KEY) || startTab; } catch (_) { /* private mode */ }
     openTab(startTab);
     // The ink needs the tab's size, which the font may change once it has loaded.
-    requestAnimationFrame(() => moveInk(page.querySelector('.tab-button.active')));
-    if (document.fonts) document.fonts.ready.then(() => moveInk(page.querySelector('.tab-button.active')));
+    requestAnimationFrame(() => {
+      moveInk(page.querySelector('.tab-button.active'));
+      markOverflow();
+    });
+    if (document.fonts) {
+      document.fonts.ready.then(() => {
+        moveInk(page.querySelector('.tab-button.active'));
+        markOverflow();
+      });
+    }
 
     loadConfig();
   }
