@@ -1726,6 +1726,19 @@ public sealed class MediaSourceManagerDecorator(
         // Registered only once running: a playback waits for a pre-probe under way, not for one
         // queued behind the others.
         await _preProbeSlots.WaitAsync().ConfigureAwait(false);
+
+        // Switched off while this waited for its delay or a slot.
+        if (!GelatoPlugin.Instance!.GetConfig(user.Id).PreProbe)
+        {
+            _preProbeSlots.Release();
+            _log.LogDebug(
+                "Pre-probe of {Id} source {Source} dropped: pre-probing is off",
+                item.Id,
+                source.Id
+            );
+            return;
+        }
+
         var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         if (!_preProbing.TryAdd(key, done.Task))
         {
