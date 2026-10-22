@@ -152,6 +152,10 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton(sp => new Lazy<ISubtitleManager>(
             sp.GetRequiredService<ISubtitleManager>
         ));
+        // Lazy: MediaSegmentManager takes the segment providers, whose IntroDB one uses SegmentLookups.
+        services.AddSingleton(sp => new Lazy<IMediaSegmentManager>(
+            sp.GetRequiredService<IMediaSegmentManager>
+        ));
         // Lazy: SessionManager depends on IMediaSourceManager, whose decorator uses SyncPlaySources.
         services.AddSingleton(sp => new Lazy<ISessionManager>(
             sp.GetRequiredService<ISessionManager>

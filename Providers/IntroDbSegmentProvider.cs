@@ -150,6 +150,16 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         }
 
         var before = _lookups.Get(video.Id);
+        if (before is not null && SegmentLookups.IsLost(before, request.ExistingSegments))
+        {
+            // A row made again under a deleted one's id: its answer, without its segments.
+            _logger.LogDebug(
+                "{ItemId} lost the segments IntroDB gave for it, asking again.",
+                request.ItemId
+            );
+            before = null;
+        }
+
         var outcome = SegmentLookups.None;
         IReadOnlyList<MediaSegmentDto> segments = Array.Empty<MediaSegmentDto>();
         if (video is Episode or Movie)

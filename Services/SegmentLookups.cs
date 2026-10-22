@@ -5,7 +5,9 @@ using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Model.Configuration;
+using MediaBrowser.Model.MediaSegments;
 
 namespace Gelato.Services;
 
@@ -17,9 +19,14 @@ namespace Gelato.Services;
 /// A row with an answer is not looked up again until it expires: never after a hit, after
 /// <see cref="MissRetry"/> when IntroDB had nothing, after <see cref="FailureRetry"/> when it
 /// could not be asked. A row without one (new, or looked up before this was kept) is looked up
-/// on its next playback, whatever the state of its media info.
+/// on its next playback, whatever the state of its media info. So is a hit whose row has no
+/// segments: a row's id is a hash of its URL, so a row deleted with its title and made again
+/// gets the old row's answer, and Jellyfin deletes the segments without telling the provider.
 /// </remarks>
-public sealed class SegmentLookups(PalcoCacheService cache)
+public sealed class SegmentLookups(
+    PalcoCacheService cache,
+    Lazy<IMediaSegmentManager> mediaSegmentManager
+)
 {
     public const string Hit = "hit";
     public const string Miss = "miss";
@@ -98,8 +105,17 @@ public sealed class SegmentLookups(PalcoCacheService cache)
         if (IsDisabled(libraryOptions))
             return cache.Get(OthersKey(row.Id), Namespace) != DisabledProviders(libraryOptions);
 
-        return Get(row.Id) is not { } lookup || (chapters && !lookup.Chapters);
+        return Get(row.Id) is not { } lookup
+            || (chapters && !lookup.Chapters)
+            || (lookup.Outcome == Hit && !mediaSegmentManager.Value.HasSegments(row.Id));
     }
+
+    /// <summary>
+    /// Whether the row lost what IntroDB gave for it: a hit, and none of its segment types left
+    /// on the row. Asked again then.
+    /// </summary>
+    public static bool IsLost(Lookup lookup, IEnumerable<MediaSegmentDto> segments) =>
+        lookup.Outcome == Hit && !segments.Any(s => lookup.Types.Contains(s.Type));
 
     /// <summary>
     /// Keeps that the segment providers ran for the row. Only needed with Gelato's provider
