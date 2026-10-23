@@ -3,7 +3,10 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators.MediaSources;
@@ -16,7 +19,8 @@ internal sealed class PreProbes(
     MediaSourceManagerDecorator decorator,
     ILibraryManager libraryManager,
     ILogger<MediaSourceManagerDecorator> log,
-    IHttpClientFactory httpClientFactory
+    IHttpClientFactory httpClientFactory,
+    Lazy<ISessionManager> sessionManager
 )
 {
     private readonly ILibraryManager _libraryManager = libraryManager;
@@ -231,6 +235,13 @@ internal sealed class PreProbes(
             return;
         }
 
+        // A page that shows the source without its tracks waits for them: it is told when the
+        // probe starts and ends (Frontend/js/refresh-after-probe.js).
+        var announce =
+            PlaybackPreparation.NeedsProbe(source)
+            && GelatoPlugin.Instance!.Configuration.RefreshVersionsAfterProbe;
+        var probed = false;
+
         // A stream that takes the connection and never answers would hold its slot, and the
         // playbacks waiting for it, for good.
         using var timeout = new CancellationTokenSource(PreProbeTimeout);
@@ -239,7 +250,14 @@ internal sealed class PreProbes(
             // Deleted while this waited: the instance at hand would be probed and saved back. An
             // item inserted again since has the same id, so the library's instance is the one.
             if (_libraryManager.GetItemById(item.Id) is not { } current)
+            {
+                announce = false;
                 return;
+            }
+
+            if (announce)
+                await NotifyAsync(user, SessionMessageType.RefreshProgress, Progress(item, 0))
+                    .ConfigureAwait(false);
 
             // A source with its media info is not probed, so its link is checked here: a dead one
             // is passed over by the playback that follows (FailOver). Unprobed ones are checked by
@@ -277,6 +295,7 @@ internal sealed class PreProbes(
                     timeout.Token
                 )
                 .ConfigureAwait(false);
+            probed = true;
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
@@ -298,6 +317,52 @@ internal sealed class PreProbes(
             _preProbing.TryRemove(key, out _);
             done.TrySetResult();
             _preProbeSlots.Release();
+            if (announce)
+                await AnnounceEndAsync(item, source, user, probed).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Tells the user's sessions that the probe ended and, when it saved the tracks, that the
+    /// item changed: Jellyfin says so itself only after its LibraryUpdateDuration, 30 s by
+    /// default.
+    /// </summary>
+    private async Task AnnounceEndAsync(BaseItem item, MediaSourceInfo source, User user, bool probed)
+    {
+        if (probed)
+        {
+            var ids = new[] { item.Id.ToString("N"), source.Id }.Distinct().ToArray();
+            await NotifyAsync(
+                    user,
+                    SessionMessageType.LibraryChanged,
+                    new LibraryUpdateInfo { ItemsUpdated = ids }
+                )
+                .ConfigureAwait(false);
+        }
+
+        await NotifyAsync(user, SessionMessageType.RefreshProgress, Progress(item, 100))
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>Jellyfin's RefreshProgress message for the item.</summary>
+    private static Dictionary<string, string> Progress(BaseItem item, int percent) =>
+        new()
+        {
+            ["ItemId"] = item.Id.ToString("N"),
+            ["Progress"] = percent.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        };
+
+    private async Task NotifyAsync<T>(User user, SessionMessageType type, T data)
+    {
+        try
+        {
+            await sessionManager
+                .Value.SendMessageToUserSessions([user.Id], type, data, CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log.LogDebug(ex, "Could not send {Type} to the sessions of {User}", type, user.Id);
         }
     }
 

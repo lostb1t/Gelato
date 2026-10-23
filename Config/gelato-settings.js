@@ -99,6 +99,7 @@ export default function (view) {
   const chkPersonRemoteTitles = page.querySelector('#chkPersonRemoteTitles');
   const chkHideUnplayedSearchTitles = page.querySelector('#chkHideUnplayedSearchTitles');
   const chkPreProbe = page.querySelector('#chkPreProbe');
+  const chkRefreshVersionsAfterProbe = page.querySelector('#chkRefreshVersionsAfterProbe');
   const chkPlaybackFailover = page.querySelector('#chkPlaybackFailover');
   const chkRemuxDbEnabled = page.querySelector('#chkRemuxDbEnabled');
   const chkRemuxDbContribute = page.querySelector('#chkRemuxDbContribute');
@@ -296,6 +297,22 @@ export default function (view) {
   }
 
   // Said on the Catalogs tab: an import that seems to add nothing is the filter at work.
+  // Only while pre-probing is on: nothing gets probed for the page to show otherwise.
+  function showRefreshVersions() {
+    page.querySelector('#refreshVersionsSetting').style.display = chkPreProbe.checked ? '' : 'none';
+  }
+
+  // The injected scripts need the JavaScript Injector plugin: say so on their switches.
+  async function showInjectorMissing() {
+    try {
+      const plugins = await window.ApiClient.getInstalledPlugins();
+      const found = plugins.some(p => /javascript injector/i.test(p.Name || '') && p.Status !== 'Disabled');
+      page.querySelectorAll('.injectorMissing').forEach(el => { el.style.display = found ? 'none' : ''; });
+    } catch (e) {
+      console.warn('Could not list the installed plugins', e);
+    }
+  }
+
   function showUnreleasedHint() {
     page.querySelector('#unreleasedHint').style.display = chkFilterUnreleased.checked ? '' : 'none';
   }
@@ -1006,6 +1023,9 @@ export default function (view) {
       chkHideUnplayedSearchTitles.checked = cfg.HideUnplayedSearchTitles ?? false;
       showPersonRemoteTitles();
       if (chkPreProbe) chkPreProbe.checked = cfg.PreProbe ?? true;
+      chkRefreshVersionsAfterProbe.checked = cfg.RefreshVersionsAfterProbe ?? true;
+      showRefreshVersions();
+      showInjectorMissing();
       if (chkPlaybackFailover) chkPlaybackFailover.checked = cfg.PlaybackFailover ?? false;
       if (chkRemuxDbEnabled) chkRemuxDbEnabled.checked = cfg.RemuxDbEnabled ?? true;
       if (chkRemuxDbContribute) chkRemuxDbContribute.checked = cfg.RemuxDbContribute ?? true;
@@ -1051,6 +1071,7 @@ export default function (view) {
       cfg.PersonRemoteTitles = chkPersonRemoteTitles.checked;
       cfg.HideUnplayedSearchTitles = chkHideUnplayedSearchTitles.checked;
       cfg.PreProbe = chkPreProbe.checked;
+      cfg.RefreshVersionsAfterProbe = chkRefreshVersionsAfterProbe.checked;
       cfg.PlaybackFailover = chkPlaybackFailover.checked;
       cfg.RemuxDbEnabled = chkRemuxDbEnabled.checked;
       cfg.RemuxDbContribute = chkRemuxDbContribute.checked;
@@ -1245,6 +1266,7 @@ export default function (view) {
     form.addEventListener("submit", saveConfig);
     txtCatalogSearch.addEventListener('input', renderCatalogs);
     chkFilterUnreleased.addEventListener('change', showUnreleasedHint);
+    chkPreProbe.addEventListener('change', showRefreshVersions);
     chkAddonSearch.addEventListener('change', showPersonRemoteTitles);
     chkUserAddonSearch.addEventListener('change', showUserPersonRemoteTitles);
     btnRefreshCatalogs.addEventListener('click', refreshCatalogs);

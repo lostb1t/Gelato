@@ -10,6 +10,7 @@ using MediaBrowser.Controller.LiveTv;
 using MediaBrowser.Controller.MediaSegments;
 using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
@@ -49,7 +50,8 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         RemuxDbService remuxDb,
         IHttpClientFactory httpClientFactory,
         SegmentLookups segmentLookups,
-        SyncPlaySources syncPlaySources
+        SyncPlaySources syncPlaySources,
+        Lazy<ISessionManager> sessionManager
     )
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
@@ -74,7 +76,7 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
             syncPlaySources
         );
         Failover = new StreamFailover(this, log);
-        PreProbes = new PreProbes(this, libraryManager, log, httpClientFactory);
+        PreProbes = new PreProbes(this, libraryManager, log, httpClientFactory, sessionManager);
         Probe = new StreamProbe(
             inner,
             libraryManager,

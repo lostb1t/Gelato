@@ -93,37 +93,41 @@ namespace Gelato.Services
             }
         }
 
+        /// <summary>
+        /// The bundled scripts, each with the setting that switches it on. A script not listed
+        /// here is not registered.
+        /// </summary>
+        private static readonly (string File, Func<PluginConfiguration, bool> IsOn)[] Scripts =
+        [
+            ("local-search-toggle.js", cfg => cfg.EnableJavaScriptInjection),
+            ("refresh-after-probe.js", cfg => cfg.RefreshVersionsAfterProbe && cfg.PreProbe),
+        ];
+
         private void UpdateRegistration(PluginConfiguration cfg)
         {
             lock (_lock)
             {
-                if (!cfg.EnableJavaScriptInjection)
+                // The injector takes a plugin's scripts away all at once, so every change
+                // registers the ones switched on again.
+                if (_registered)
                 {
-                    if (_registered)
-                    {
-                        UnregisterBundledScripts();
-                        _registered = false;
-                    }
-                    else
-                    {
-                        logger.LogDebug("JS injection disabled; nothing to unregister.");
-                    }
+                    UnregisterBundledScripts();
+                    _registered = false;
+                }
+
+                var files = Scripts.Where(s => s.IsOn(cfg)).Select(s => s.File).ToList();
+                if (files.Count == 0)
+                {
+                    logger.LogDebug("No injected script is switched on.");
                     return;
                 }
 
-                // Enabled in config
-                if (_registered)
-                {
-                    // already registered: re-register to update content (best-effort)
-                    UnregisterBundledScripts();
-                }
-
-                RegisterBundledScripts();
+                RegisterBundledScripts(files);
                 _registered = true;
             }
         }
 
-        private void RegisterBundledScripts()
+        private void RegisterBundledScripts(List<string> files)
         {
             if (_pluginInterfaceType is null)
             {
@@ -141,6 +145,7 @@ namespace Gelato.Services
                     .Where(n =>
                         n.EndsWith(".js", StringComparison.OrdinalIgnoreCase)
                         && n.Contains(".Frontend.")
+                        && files.Any(f => n.EndsWith("." + f, StringComparison.OrdinalIgnoreCase))
                     )
                     .OrderBy(n => n)
                     .ToList();
