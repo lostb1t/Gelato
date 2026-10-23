@@ -109,6 +109,13 @@ public sealed class GelatoItemRepository(
         if (!includesPerson)
             filter.IsDeadPerson = null;
 
+        if (!hasIncludeTypes || includeTypes.Contains(BaseItemKind.BoxSet))
+        {
+            var thin = GetThinCollections(DateTime.Today.AddDays(-bufferDays)).Ids;
+            if (thin.Length > 0)
+                filter.ExcludeItemIds = [.. filter.ExcludeItemIds, .. thin];
+        }
+
         // Query-shape based media list detection: empty IncludeItemTypes is broad-list scope,
         // otherwise only media kinds we manage are considered for stream-row exclusion.
         var isMediaListQuery =
@@ -275,6 +282,54 @@ public sealed class GelatoItemRepository(
         var read = new UnreleasedIds(cutoff.Ticks, version, ids, [.. ids]);
         if (writes.IsCounting)
             _unreleased = read;
+        return read;
+    }
+
+    /// <summary>
+    /// The collections Jellyfin made by itself ("Automatically add to collection") that fewer than
+    /// two listed movies are left in: they stay out of listings until a second one is listed.
+    /// </summary>
+    /// <remarks>
+    /// Jellyfin's CollectionPostScanTask makes one once two movies share a TMDB collection,
+    /// counting every movie in the database, so also an unreleased one or one opened from search
+    /// that Gelato keeps out of listings, and it never deletes one or takes a movie out of it.
+    /// That listed collections of one movie (or none). Collections a user or a catalog made are
+    /// left alone.
+    /// </remarks>
+    public IReadOnlySet<Guid> GetThinCollectionIds()
+    {
+        var bufferDays = GelatoPlugin.Instance?.Configuration.FilterUnreleasedBufferDays ?? 0;
+        return GetThinCollections(DateTime.Today.AddDays(-bufferDays)).Set;
+    }
+
+    private sealed record ThinCollections(long Cutoff, long Version, Guid[] Ids, HashSet<Guid> Set);
+
+    private volatile ThinCollections _thin;
+
+    // Kept like the unreleased set, until the next item write: a collection's members change with
+    // a save of the collection, a movie's release with a save of the movie.
+    private ThinCollections GetThinCollections(DateTime cutoff)
+    {
+        var version = writes.Version;
+        var kept = _thin;
+        if (kept is not null && kept.Cutoff == cutoff.Ticks && kept.Version == version)
+            return kept;
+
+        var config = GelatoPlugin.Instance?.Configuration;
+        var hidden = new HashSet<Guid>(GetPendingIds());
+        if (config?.FilterUnreleased == true)
+            hidden.UnionWith(GetUnreleased(cutoff).Ids);
+
+        Guid[] ids =
+        [
+            .. lookup
+                .AutomaticCollections()
+                .Where(c => c.Movies.Count(m => !hidden.Contains(m)) < 2)
+                .Select(c => c.Id),
+        ];
+        var read = new ThinCollections(cutoff.Ticks, version, ids, [.. ids]);
+        if (writes.IsCounting)
+            _thin = read;
         return read;
     }
 

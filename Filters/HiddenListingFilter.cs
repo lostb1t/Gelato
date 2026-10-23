@@ -9,8 +9,8 @@ namespace Gelato.Filters;
 
 /// <summary>
 /// Drops what <see cref="GelatoItemRepository"/> hides from listings from a listing response that
-/// never reached the item repository: the titles opened from search and never played, and
-/// unreleased Gelato items.
+/// never reached the item repository: the titles opened from search and never played,
+/// unreleased Gelato items, and the automatic collections left with fewer than two listed movies.
 /// </summary>
 /// <remarks>
 /// <see cref="GelatoItemRepository"/> excludes them from the query, which covers every recursive
@@ -31,6 +31,22 @@ public sealed class HiddenListingFilter(IItemRepository itemRepository) : IAsync
 
         DropPending(ctx, executed);
         DropUnreleased(ctx, executed);
+        DropThinCollections(ctx, executed);
+    }
+
+    private void DropThinCollections(ActionExecutingContext ctx, ActionExecutedContext executed)
+    {
+        if (
+            !ctx.HttpContext.IsApiListing()
+            || ctx.HttpContext.HasExplicitItemIds()
+            || itemRepository is not GelatoItemRepository repository
+            || executed.Result is not ObjectResult result
+        )
+            return;
+
+        var hidden = repository.GetThinCollectionIds();
+        if (hidden.Count > 0)
+            Drop(result, i => hidden.Contains(i.Id));
     }
 
     private void DropPending(ActionExecutingContext ctx, ActionExecutedContext executed)
