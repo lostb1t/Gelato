@@ -30,7 +30,19 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool CreateCollections { get; set; } = false;
     public int MaxCollectionItems { get; set; } = 100;
     public bool DisableSearch { get; set; } = false;
+    /// <summary>
+    /// The library-only switch in Jellyfin Web's search bar (Frontend/js/local-search-toggle.js).
+    /// Named for when it was the only injected script.
+    /// </summary>
     public bool EnableJavaScriptInjection { get; set; } = false;
+
+    /// <summary>
+    /// A title's page in Jellyfin Web shows the tracks of its version once the pre-probe has
+    /// read them, without being opened again (Frontend/js/refresh-after-probe.js). Needs
+    /// <see cref="PreProbe"/>.
+    /// </summary>
+    public bool RefreshVersionsAfterProbe { get; set; } = true;
+
     public bool LazyImages { get; set; } = false;
 
     /// <summary>

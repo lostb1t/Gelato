@@ -5,7 +5,8 @@
     const SEARCH_PREFIX = 'local:';
     let globeIcon = null;
 
-    // Inject CSS for globe icon
+    // Inject CSS for globe icon. Nothing here has a size or colour of its own: fitGlobe takes
+    // them from the skin's search field, so the globe looks the same on every skin.
     function injectSearchToggleCSS() {
         if (document.getElementById('search-toggle-styles')) return;
         const style = document.createElement('style');
@@ -13,56 +14,84 @@
         style.textContent = `
             .search-globe-icon {
                 font-family: 'Material Icons' !important;
-                font-size: 26px !important;
-                color: rgba(255, 255, 255, 0.7) !important;
-                cursor: pointer !important;
-                transition: color 0.2s ease, opacity 0.25s ease !important;
-                user-select: none !important;
-                width: 26px !important;
-                height: 26px !important;
-                display: flex !important;
-                align-items: flex-end !important;
+                font-size: var(--gelato-globe-size, 1.5em) !important;
+                line-height: 1 !important;
+                width: auto !important;
+                height: auto !important;
+                padding: .25em !important;
+                margin: 0 .25em !important;
+                display: inline-flex !important;
+                align-items: center !important;
                 justify-content: center !important;
-                border-radius: 4px !important;
-                padding: 8px !important;
-                margin-left: 8px !important;
+                align-self: center !important;
+                flex: none !important;
+                color: var(--gelato-globe-color, inherit) !important;
+                opacity: .7;
+                transform: translateY(var(--gelato-globe-shift, 0px));
+                cursor: pointer !important;
+                user-select: none !important;
+                border-radius: 50% !important;
                 position: relative !important;
                 background: transparent !important;
-                align-self: flex-end !important;
-                opacity: 0;
-                animation: fadeInGlobe 0.25s ease forwards;
+                transition: opacity .2s ease, background-color .2s ease !important;
             }
-            @keyframes fadeInGlobe { to { opacity: 1; } }
             .search-globe-icon:hover {
-                color: rgba(255, 255, 255, 0.9) !important;
-                background: rgba(255, 255, 255, 0.1) !important;
+                opacity: 1;
+                background: color-mix(in srgb, currentColor 12%, transparent) !important;
             }
             .search-globe-icon.local-mode {
-                color: rgba(255, 255, 255, 0.85) !important;
+                opacity: 1;
             }
             .search-globe-icon.local-mode::after {
                 content: '' !important;
                 position: absolute !important;
                 top: 50% !important;
-                left: 3px !important;
-                right: 3px !important;
-                height: 2px !important;
+                left: 15% !important;
+                right: 15% !important;
+                height: .08em !important;
+                min-height: 2px !important;
                 background: #ff4444 !important;
                 transform: translateY(-50%) rotate(-45deg) !important;
                 border-radius: 1px !important;
                 pointer-events: none !important;
             }
-            @media screen and (max-width: 768px) {
-                .search-globe-icon {
-                    font-size: 22px !important;
-                    width: 22px !important;
-                    height: 22px !important;
-                    padding: 6px !important;
-                    margin-left: 6px !important;
-                }
-            }
         `;
         document.head.appendChild(style);
+    }
+
+    // Sizes and colours the globe like the skin's own search icon (or the field's text where the
+    // skin hides it) and centres it on the field: the row it sits in also holds the field's
+    // label, so centring in the row puts it too high on most skins.
+    function fitGlobe() {
+        const icon = globeIcon;
+        const input = document.getElementById('searchTextInput');
+        if (!icon || !icon.isConnected || !input) return;
+        const own = input.closest('.searchFieldsInner')?.querySelector('.searchfields-icon');
+        const ownStyle = own && own.offsetParent ? getComputedStyle(own) : null;
+        const inputStyle = getComputedStyle(input);
+        const size = ownStyle
+            ? parseFloat(ownStyle.fontSize)
+            : Math.min(parseFloat(inputStyle.fontSize) * 1.5, input.getBoundingClientRect().height * .8);
+        icon.style.setProperty('--gelato-globe-size', size + 'px');
+        icon.style.setProperty('--gelato-globe-color', (ownStyle || inputStyle).color);
+
+        icon.style.setProperty('--gelato-globe-shift', '0px');
+        const a = icon.getBoundingClientRect();
+        const b = input.getBoundingClientRect();
+        const shift = Math.round((b.top + b.bottom) / 2 - (a.top + a.bottom) / 2);
+        icon.style.setProperty('--gelato-globe-shift', shift + 'px');
+    }
+
+    let fitObserver = null;
+    function watchFit() {
+        const input = document.getElementById('searchTextInput');
+        if (fitObserver) fitObserver.disconnect();
+        if (!input || typeof ResizeObserver === 'undefined') return;
+        // A skin switched or the window resized: the field changes size.
+        fitObserver = new ResizeObserver(() => fitGlobe());
+        fitObserver.observe(input);
+        const own = input.closest('.searchFieldsInner')?.querySelector('.searchfields-icon');
+        if (own) fitObserver.observe(own);
     }
 
     // Toggle state getter/setter
@@ -212,7 +241,9 @@
         if (existing && existing !== icon) existing.remove();
         if (!icon.isConnected) {
             container.parentElement.insertBefore(icon, container.nextSibling);
+            watchFit();
         }
+        fitGlobe();
     }
 
     // Initialize

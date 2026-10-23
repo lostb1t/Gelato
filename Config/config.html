@@ -242,6 +242,7 @@
                   Needs the JavaScript Injector plugin, installed and set up.
                 </div>
               </div>
+              <div class="fieldDescription injectorMissing" style="display: none;">The JavaScript Injector plugin isn't installed: install it from the plugin catalog to use this.</div>
             </div>
 
             <div class="gelatoCard">
@@ -274,6 +275,15 @@
                   <span>Probe streams before playback</span>
                 </label>
                 <div class="fieldDescription">Checks a stream's tracks when you open a title's page or pick another version, and the next episode's stream while an episode is ending, so playback starts without that wait.</div>
+              </div>
+
+              <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="refreshVersionsSetting">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkRefreshVersionsAfterProbe" />
+                  <span>Show a version's tracks as soon as they are known</span>
+                </label>
+                <div class="fieldDescription">A title's page fills in the video, audio and subtitle lists once the check above has read them, a few seconds after it opens, without opening the page again. In Jellyfin's web app, with the JavaScript Injector plugin.</div>
+                <div class="fieldDescription injectorMissing" style="display: none;">The JavaScript Injector plugin isn't installed: install it from the plugin catalog to use this.</div>
               </div>
 
               <div class="checkboxContainer checkboxContainer-withDescription">
