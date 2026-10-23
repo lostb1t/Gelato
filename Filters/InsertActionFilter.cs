@@ -1,6 +1,7 @@
 using System.Reflection;
 using Gelato.Services;
 using Jellyfin.Database.Implementations.Entities;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -17,6 +18,7 @@ public class InsertActionFilter(
     ILibraryManager libraryManager,
     PendingSearchTitles pendingTitles,
     ParentalRatings parental,
+    SearchActionFilter search,
     ILogger<InsertActionFilter> log
 ) : IAsyncActionFilter, IOrderedFilter
 {
@@ -54,9 +56,14 @@ public class InsertActionFilter(
         }
 
         var insertable = ctx.IsInsertableAction();
+        var searchResultWrite = !insertable && ctx.IsSearchResultWriteAction();
         if (
-            (!insertable && !ctx.IsCanonicalIdRead())
-            || !ctx.TryGetRouteGuid(out var guid)
+            (!insertable && !searchResultWrite && !ctx.IsCanonicalIdRead())
+            || !(
+                searchResultWrite
+                    ? ctx.TryGetRouteItemOrSeriesGuid(out var guid)
+                    : ctx.TryGetRouteGuid(out guid)
+            )
             || !ctx.TryGetUserId(out var userId)
             || userManager.GetUserById(userId) is not { } user
         )
@@ -84,16 +91,47 @@ public class InsertActionFilter(
         }
 
         var copy = manager.IsSearchCopy(userId, guid);
+        // A season or episode listing names its series as seriesId, which ReplaceGuid leaves.
+        void Redirect(Guid to)
+        {
+            ctx.ReplaceGuid(to);
+            ctx.RedirectGuids(g => g == guid ? to : null);
+        }
+
         if (FindExisting(guid, stremioMeta, userId, user, copy) is { } existing)
         {
-            ctx.ReplaceGuid(existing.Id);
+            Redirect(existing.Id);
             await next();
+            return;
+        }
+
+        // The item menu of a search result: answered as the search answered the result. Jellyfin
+        // has no item under the result's id, and the menu's actions name it in their own requests,
+        // which put the title in.
+        if (ctx.HttpContext.IsItemMenuRead())
+        {
+            if (
+                await AllowsAsync(guid, stremioMeta, userId, user, ctx.HttpContext.RequestAborted)
+                && manager.IntoBaseItem(stremioMeta) is { } unknown
+            )
+            {
+                var dto = search.GetUnknownItemDto(
+                    unknown,
+                    new DtoOptions(true) { EnableUserData = false }
+                );
+                dto.Id = guid;
+                ctx.Result = new OkObjectResult(dto);
+            }
+            else
+            {
+                ctx.Result = new NotFoundResult();
+            }
             return;
         }
 
         // A read answers for what the library has; it never puts a title in. The result stays a
         // search result until something opens it.
-        if (!insertable)
+        if (!insertable && !searchResultWrite)
         {
             await next();
             return;
@@ -124,7 +162,7 @@ public class InsertActionFilter(
             pending: true
         );
         if (baseItem is not null)
-            ctx.ReplaceGuid(baseItem.Id);
+            Redirect(baseItem.Id);
 
         await next();
 
