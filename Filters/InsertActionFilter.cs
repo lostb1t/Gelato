@@ -46,8 +46,18 @@ public class InsertActionFilter(
 
         // A client that opened a search result keeps the result's id in its page URL: the
         // reload, images, seasons, episodes, similar items and playback all name it. Every such
-        // id goes to the item the result became, whatever the action.
-        if (ctx.RedirectGuids(manager.GetInsertedId))
+        // id goes to the item the result became, whatever the action. Not to one this user cannot
+        // see: a title opened into the user's own folder that a catalog import took back to a
+        // library the user cannot open answered 404. That id goes on below as a search result.
+        var viewer = ctx.TryGetUserId(out var viewerId) ? userManager.GetUserById(viewerId) : null;
+        if (
+            ctx.RedirectGuids(searchId =>
+                manager.GetInsertedId(searchId) is { } id
+                && (viewer is null || libraryManager.GetItemById<BaseItem>(id, viewer) is not null)
+                    ? id
+                    : null
+            )
+        )
         {
             await next();
             return;
