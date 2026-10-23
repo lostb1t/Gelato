@@ -321,11 +321,19 @@ internal sealed class PlaybackPreparation(
         // A title without streams plays its placeholder, whose gelato:// path Jellyfin's probe
         // refuses: probing it only cost the click, twice.
         var fromRemuxDb = owner.GelatoData<string>("mediaInfo") == RemuxDbService.SourceRemuxDb;
+        // A stream not cached on its debrid service is probed at each playback's PlaybackInfo,
+        // and the requests of that playback go by that probe: it is not saved.
+        var uncached = !preProbe && owner.IsUncachedStream();
         var needsProbe =
             !PreProbes.IsPlaceholder(selected)
             && (
                 NeedsProbe(selected, owner)
                 || (fromRemuxDb && RemuxDbMapper.LacksPlaybackInfo(selected.MediaStreams))
+            )
+            && !(
+                uncached
+                && !_http.ReadRequest(ctx => ctx.IsPlaybackInfoAction(), false)
+                && decorator.Probe.ProbedUncachedRecently(owner.Id)
             );
 
         // A pre-probe that starts while this playback probes sees it and stays out.
@@ -344,7 +352,17 @@ internal sealed class PlaybackPreparation(
 
             await Task.WhenAll(metadataTask, segmentTask).ConfigureAwait(false);
 
-            await decorator.Probe.SaveProbedAsync(
+            // The debrid service's clip: its runtime and tracks are not saved on the row, so the
+            // row is neither listed as a clip nor kept with the clip's details once the file is
+            // there. The tracks Jellyfin's probe wrote serve this playback; the next sync drops
+            // them (RemuxDbService.ApplyCached).
+            if (uncached)
+            {
+                decorator.Probe.MarkProbedUncached(owner.Id);
+            }
+            else
+            {
+                await decorator.Probe.SaveProbedAsync(
                     owner,
                     () =>
                     {
@@ -362,6 +380,7 @@ internal sealed class PlaybackPreparation(
                     ct
                 )
                 .ConfigureAwait(false);
+            }
 
             // The probe saved the file's chapters, which the lookup before it could not see.
             if (SegmentLookups.UsesChapters(owner))
@@ -440,7 +459,7 @@ internal sealed class PlaybackPreparation(
                 decorator.Probe.ProbeLater(owner.Id);
         }
 
-        if (item.RunTimeTicks is null && selected.RunTimeTicks is not null)
+        if (!uncached && item.RunTimeTicks is null && selected.RunTimeTicks is not null)
         {
             item.RunTimeTicks = selected.RunTimeTicks;
             await decorator.Probe.SaveProbedAsync(item, null, ct).ConfigureAwait(false);

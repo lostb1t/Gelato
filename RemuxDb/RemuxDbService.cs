@@ -1,4 +1,5 @@
 using System.Globalization;
+using Gelato.Decorators.MediaSources;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
@@ -145,6 +146,38 @@ public sealed class RemuxDbService(
         row.SetGelatoData("remuxDbHash", version.ContentHash);
 
         return new PendingMediaInfo(row.Id, streams, ToChapters(version));
+    }
+
+    /// <summary>
+    /// Records whether the row's stream is cached on its debrid service, and drops media info a
+    /// probe of the service's "not cached" clip left on it: the clip's details once the stream
+    /// is cached (stored before Gelato read the flag, or while the stream sent none), and the
+    /// tracks a playback's probe of a stream not cached left behind. Its next probe reads the
+    /// file. The empty track list is returned to be saved with <see cref="Save"/>.
+    /// </summary>
+    public PendingMediaInfo? ApplyCached(Video row, bool isNewRow, bool? cached, Video primary)
+    {
+        var wasCached = row.GelatoData<bool?>("cached");
+        row.SetGelatoData("cached", cached);
+        if (isNewRow)
+            return null;
+
+        var source = row.GelatoData<string>("mediaInfo");
+        var clip =
+            cached == true && wasCached != true && VersionOrder.IsShortClip(row, primary);
+        var leftOver = cached == false && source is null && HasProbedStreams(row.Id);
+        if (!clip && !leftOver)
+            return null;
+
+        log.LogDebug(
+            "{Row} is {State} on its debrid service; dropping the clip's media info",
+            row.Id,
+            cached == true ? "cached now" : "not cached"
+        );
+        row.SetGelatoData<string?>("mediaInfo", null);
+        row.SetGelatoData<string?>("remuxDbHash", null);
+        row.RunTimeTicks = primary.RunTimeTicks;
+        return new PendingMediaInfo(row.Id, [], []);
     }
 
     /// <summary>Saves tracks and chapters <see cref="Apply"/> prepared.</summary>

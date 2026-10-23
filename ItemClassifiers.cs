@@ -38,6 +38,17 @@ public static class ItemClassifiers
     }
 
     /// <summary>
+    /// Whether the row's stream was not cached on its debrid service at the last sync. Only a
+    /// stream that said so: one that sent nothing is treated as before.
+    /// </summary>
+    /// <remarks>
+    /// Such a stream answers with the service's short clip. It is not probed ahead of playback,
+    /// and what its probe at playback finds is not saved on the row.
+    /// </remarks>
+    public static bool IsUncachedStream(this BaseItem item) =>
+        item.IsStreamRow() && item.GelatoData<bool?>("cached") == false;
+
+    /// <summary>
     /// Whether Gelato serves this item: a stream row, or an item whose path is a <c>gelato://</c>
     /// placeholder.
     /// </summary>
