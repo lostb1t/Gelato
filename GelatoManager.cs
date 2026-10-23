@@ -1429,13 +1429,20 @@ public sealed class GelatoManager(
         BaseItem item,
         MetadataRefreshOptions options,
         CancellationToken ct
+    ) => TrackInsertRefresh(item, token => provider.RefreshFullItem(item, options, token), ct);
+
+    /// <summary>
+    /// Runs the refresh of a title just put into the library where a deletion of the title stops
+    /// it (<see cref="StopInsertRefreshAsync"/>).
+    /// </summary>
+    private void TrackInsertRefresh(
+        BaseItem item,
+        Func<CancellationToken, Task> refresh,
+        CancellationToken ct
     )
     {
         var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var task = Task.Run(
-            () => provider.RefreshFullItem(item, options, cts.Token),
-            CancellationToken.None
-        );
+        var task = Task.Run(() => refresh(cts.Token), CancellationToken.None);
         var entry = (task, cts);
         _insertRefreshes[item.Id] = entry;
         _ = task.ContinueWith(
@@ -1486,23 +1493,27 @@ public sealed class GelatoManager(
     /// applied again here, once the tree is complete. This runs the refresh the insert would have
     /// queued, so the item is refreshed once either way.
     /// </summary>
+    /// <remarks>
+    /// A deletion stops it as it stops the insert's own refresh: run on after the deletion, it put
+    /// the series' seasons back into the library's cache, and opening the title again from search
+    /// answered 500.
+    /// </remarks>
     public void RefreshAndReapplyPlayedState(BaseItem item, User user, bool played)
     {
-        _ = Task.Run(async () =>
+        var options = new MetadataRefreshOptions(new DirectoryService(fileSystem))
         {
-            try
+            MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+            ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+            ReplaceAllImages = false,
+            ReplaceAllMetadata = false,
+            ForceSave = true,
+        };
+        TrackInsertRefresh(
+            item,
+            async ct =>
             {
-                var options = new MetadataRefreshOptions(new DirectoryService(fileSystem))
-                {
-                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                    ReplaceAllImages = false,
-                    ReplaceAllMetadata = false,
-                    ForceSave = true,
-                };
-                await provider
-                    .RefreshFullItem(item, options, CancellationToken.None)
-                    .ConfigureAwait(false);
+                await provider.RefreshFullItem(item, options, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
 
                 var refreshed = libraryManager.GetItemById(item.Id) ?? item;
                 if (played)
@@ -1519,16 +1530,9 @@ public sealed class GelatoManager(
                     played,
                     refreshed.Name
                 );
-            }
-            catch (Exception ex)
-            {
-                _log.LogWarning(
-                    ex,
-                    "Could not apply the played state again to {Id} after its tree was built",
-                    item.Id
-                );
-            }
-        });
+            },
+            CancellationToken.None
+        );
     }
 
     private IEnumerable<BaseItem> FindByProviderIds(
