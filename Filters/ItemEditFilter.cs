@@ -1,3 +1,5 @@
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Mvc.Filters;
 
 namespace Gelato.Filters;
@@ -67,8 +69,12 @@ public sealed class ItemEditLocks
 /// saved over the edit, name and lock included. The refresh holds the same lock
 /// (<see cref="Decorators.ProviderManagerDecorator.RefreshSingleItem"/>), so the edit waits for it
 /// and is saved last, or the refresh waits and reads the edited row.
+/// The series' own refresh comes after its episodes and reads its seasons and episodes once more
+/// to save them again (Jellyfin's <c>SeriesMetadataService.UpdateSeriesChildrenInfoAsync</c>), under
+/// the series' lock only. So an episode or season is edited under its series' lock as well, taken
+/// first: no refresh waits for a series while it holds an episode.
 /// </remarks>
-public sealed class ItemEditFilter(ItemEditLocks locks) : IAsyncActionFilter
+public sealed class ItemEditFilter(ItemEditLocks locks, ILibraryManager libraryManager) : IAsyncActionFilter
 {
     public async Task OnActionExecutionAsync(ActionExecutingContext ctx, ActionExecutionDelegate next)
     {
@@ -78,6 +84,8 @@ public sealed class ItemEditFilter(ItemEditLocks locks) : IAsyncActionFilter
             return;
         }
 
+        var seriesId = libraryManager.GetItemById(id) is IHasSeries { SeriesId: var s } ? s : Guid.Empty;
+        using (seriesId == Guid.Empty ? null : await locks.EnterAsync(seriesId, ctx.HttpContext.RequestAborted))
         using (await locks.EnterAsync(id, ctx.HttpContext.RequestAborted))
             await next();
     }
