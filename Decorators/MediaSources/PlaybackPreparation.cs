@@ -165,7 +165,8 @@ internal sealed class PlaybackPreparation(
         bool enablePathSubstitution,
         string? requestedSourceId,
         bool preProbe,
-        CancellationToken ct
+        CancellationToken ct,
+        string? preProbeKey = null
     )
     {
         if (item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode))
@@ -228,6 +229,18 @@ internal sealed class PlaybackPreparation(
         var selected = SelectByIdOrFirst(sources, mediaSourceId);
         if (selected is null)
             return sources;
+
+        // A pre-probe is for the row it was scheduled for. A sync since may have made another row
+        // the default (the first source carries the movie's id): the visit that synced pre-probes
+        // that one, under its own key, and probing it here too probed it twice at once.
+        if (preProbeKey is not null && PreProbes.PreProbeKey(selected) != preProbeKey)
+        {
+            _log.LogDebug(
+                "Pre-probe of {ItemId} dropped: its default stream is another row now",
+                item.Id
+            );
+            return sources;
+        }
 
         var canMoveOn = false;
         if (!preProbe)

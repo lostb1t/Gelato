@@ -292,7 +292,8 @@ internal sealed class PreProbes(
                     false,
                     source.Id,
                     true,
-                    timeout.Token
+                    timeout.Token,
+                    key
                 )
                 .ConfigureAwait(false);
             probed = true;
