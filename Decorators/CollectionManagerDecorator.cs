@@ -5,6 +5,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators;
@@ -16,6 +17,7 @@ public sealed class CollectionManagerDecorator(
     IProviderManager providerManager,
     IDirectoryService directoryService,
     PendingSearchTitles pendingTitles,
+    IHttpContextAccessor http,
     ILogger<CollectionManagerDecorator> log
 ) : ICollectionManager
 {
@@ -52,8 +54,18 @@ public sealed class CollectionManagerDecorator(
     }
 
     // A title opened from search and put into a collection is kept: it shows in the library again.
+    // Only when a user does it: Jellyfin's CollectionPostScanTask adds every movie of a TMDB
+    // collection to its collection on each library scan, which listed titles nobody played.
     private void ReleasePending(IEnumerable<string> ids)
     {
+        if (
+            !http.ReadRequest(
+                ctx => ctx.GetActionName() is "CreateCollection" or "AddToCollection",
+                false
+            )
+        )
+            return;
+
         foreach (var id in ids)
         {
             if (Guid.TryParse(id, out var guid))
