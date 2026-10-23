@@ -284,6 +284,10 @@ internal sealed class StreamProbe(
             // that is, and saving after it would fail on the same token anyway.
             throw;
         }
+        catch (ProbedItemDeletedException)
+        {
+            // Deleted while it was probed: SaveProbedAsync finds it gone and says so.
+        }
         catch (Exception ex)
         {
             _log.LogError(ex, "Stream probe failed for {Id}", owner.Id);
