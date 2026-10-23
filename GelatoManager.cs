@@ -1871,6 +1871,8 @@ public sealed class GelatoManager(
             streamItem.LockedFields = locked.ToArray();
 
             streamItem.ProviderIds = streamProviderIds;
+            if (remuxDb.ApplyCached(streamItem, isNewStreamItem, s.IsCached(), video) is { } forgotten)
+                mediaInfo.Add(forgotten);
             // A row with media info keeps the runtime of its file.
             if (streamItem.GelatoData<string>("mediaInfo") is null)
                 streamItem.RunTimeTicks = video.RunTimeTicks;

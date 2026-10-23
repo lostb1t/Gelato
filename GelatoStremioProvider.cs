@@ -1761,6 +1761,20 @@ public class StremioStream
     public JsonElement? StreamData { get; set; }
 
     /// <summary>
+    /// Whether the stream's debrid service has the file (AIOStreams'
+    /// <c>streamData.service.cached</c>); null when the stream does not say. A stream that is
+    /// not cached answers with the service's short "not cached" clip.
+    /// </summary>
+    public bool? IsCached() =>
+        StreamData is { ValueKind: JsonValueKind.Object } data
+        && data.TryGetProperty("service", out var service)
+        && service.ValueKind == JsonValueKind.Object
+        && service.TryGetProperty("cached", out var cached)
+        && cached.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? cached.GetBoolean()
+            : null;
+
+    /// <summary>
     /// What identifies the stream's file for RemuxDB. The torrent comes from AIOStreams'
     /// stream data, or from a URL that carries its info hash as a path segment (Torrentio and
     /// similar debrid resolve URLs).

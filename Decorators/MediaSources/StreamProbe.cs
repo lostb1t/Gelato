@@ -113,6 +113,21 @@ internal sealed class StreamProbe(
             row.SetPrimaryVersionId(primaryId);
     }
 
+    /// <summary>
+    /// How long the probe of a stream not cached on its debrid service answers the requests of
+    /// its playback: it is not saved, and Jellyfin's streaming requests, one per segment, would
+    /// probe it again. The next playback's PlaybackInfo probes it again.
+    /// </summary>
+    private static readonly TimeSpan ProbedUncachedTtl = TimeSpan.FromHours(4);
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTime> _probedUncached =
+        new();
+
+    internal void MarkProbedUncached(Guid rowId) => _probedUncached[rowId] = DateTime.UtcNow;
+
+    internal bool ProbedUncachedRecently(Guid rowId) =>
+        _probedUncached.TryGetValue(rowId, out var at) && DateTime.UtcNow - at < ProbedUncachedTtl;
+
     /// <summary>How long after playback starts a stream with RemuxDB's media info is probed.</summary>
     private static readonly TimeSpan ProbeLaterDelay = TimeSpan.FromSeconds(30);
 
@@ -142,6 +157,7 @@ internal sealed class StreamProbe(
                 if (
                     _libraryManager.RetrieveItem(rowId) is not Video row
                     || row.GelatoData<string>("mediaInfo") != RemuxDbService.SourceRemuxDb
+                    || row.IsUncachedStream()
                     || string.IsNullOrEmpty(row.Path)
                 )
                 {

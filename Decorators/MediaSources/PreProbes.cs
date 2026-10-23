@@ -140,6 +140,7 @@ internal sealed class PreProbes(
             || item.GetBaseItemKind() is not (BaseItemKind.Movie or BaseItemKind.Episode)
             || !item.IsGelatoPlaybackItem()
             || IsPlaceholder(source)
+            || IsUncached(source)
             || _preProbing.ContainsKey(PreProbeKey(source))
             || PreProbeFailedRecently(PreProbeKey(source))
         )
@@ -194,6 +195,18 @@ internal sealed class PreProbes(
         var key = PreProbeKey(source);
         if (PreProbeFailedRecently(key) || PreparedForPlaybackRecently(key))
             return;
+
+        // The probe would read the debrid service's clip, and the service may start fetching a
+        // file nobody plays. Also the next episode's, which comes here directly.
+        if (IsUncached(source))
+        {
+            _log.LogDebug(
+                "Pre-probe of {Id} source {Source} skipped: not cached on its debrid service",
+                item.Id,
+                source.Id
+            );
+            return;
+        }
 
         // Registered only once running: a playback waits for a pre-probe under way, not for one
         // queued behind the others.
@@ -309,6 +322,19 @@ internal sealed class PreProbes(
         if (sources.Count > 0 && !IsPlaceholder(sources[0]))
             await PreProbeAsync(item, sources[0], user).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Whether the source's row is a stream not cached on its debrid service
+    /// (<see cref="ItemClassifiers.IsUncachedStream"/>). Gelato's sources name their row in the
+    /// ETag; the first one carries the movie's id.
+    /// </summary>
+    private bool IsUncached(MediaSourceInfo source) =>
+        (
+            (Guid.TryParse(source.ETag, out var etag) ? _libraryManager.GetItemById(etag) : null)
+            ?? (Guid.TryParse(source.Id, out var id) ? _libraryManager.GetItemById(id) : null)
+        )
+            is { } row
+        && row.IsUncachedStream();
 
     /// <summary>
     /// The movie/episode's own placeholder, listed when the user has no streams: there is nothing
