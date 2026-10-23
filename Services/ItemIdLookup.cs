@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
 using Jellyfin.Extensions;
+using MediaBrowser.Controller.Entities.Movies;
 using Microsoft.EntityFrameworkCore;
 
 namespace Gelato.Services;
@@ -138,6 +140,65 @@ public sealed class ItemIdLookup(IDbContextFactory<JellyfinDbContext> dbFactory)
             .Select(u => u.ItemId)
             .Distinct()
             .ToHashSet();
+    }
+
+    /// <summary>
+    /// The collections Jellyfin made for a TMDB collection (the library option "Automatically add
+    /// to collection"), each with the movies it holds, stream rows left out.
+    /// </summary>
+    /// <remarks>
+    /// Such a collection is named after its movies' TMDB collection: one whose name a movie in it
+    /// carries as <c>TmdbCollectionName</c>. A collection a user or a catalog made has a name of
+    /// its own.
+    /// </remarks>
+    public IReadOnlyList<(Guid Id, Guid[] Movies)> AutomaticCollections()
+    {
+        using var db = dbFactory.CreateDbContext();
+        var links = db
+            .LinkedChildren.AsNoTracking()
+            .Where(l => l.ChildType == LinkedChildType.Manual && l.Parent!.Type == BoxSetType)
+            .Select(l => new
+            {
+                l.ParentId,
+                l.Parent!.Name,
+                l.ChildId,
+                l.Child!.Data,
+                IsStream = db.ItemValuesMap.Any(m =>
+                    m.ItemId == l.ChildId
+                    && m.ItemValue.Type == ItemValueType.Tags
+                    && m.ItemValue.CleanValue == StreamTagCleanValue
+                ),
+            })
+            .ToArray();
+
+        return links
+            .GroupBy(l => l.ParentId)
+            .Where(g => g.Any(l => l.Name is { } name && TmdbCollectionName(l.Data) == name))
+            .Select(g => (g.Key, g.Where(l => !l.IsStream).Select(l => l.ChildId).ToArray()))
+            .ToList();
+    }
+
+    private static readonly string BoxSetType = typeof(BoxSet).FullName!;
+
+    private static string? TmdbCollectionName(string? data)
+    {
+        if (data is null || !data.Contains("TmdbCollectionName", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            return doc.RootElement.TryGetProperty("TmdbCollectionName", out var name)
+                && name.ValueKind == JsonValueKind.String
+                ? name.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The versions of a movie/episode, as <see cref="VersionOwners"/> found them.</summary>

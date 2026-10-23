@@ -17,6 +17,7 @@ public sealed class CollectionManagerDecorator(
     IProviderManager providerManager,
     IDirectoryService directoryService,
     PendingSearchTitles pendingTitles,
+    GelatoItemRepository itemRepository,
     IHttpContextAccessor http,
     ILogger<CollectionManagerDecorator> log
 ) : ICollectionManager
@@ -141,10 +142,41 @@ public sealed class CollectionManagerDecorator(
     public Task RemoveFromCollectionAsync(Guid collectionId, IEnumerable<Guid> itemIds) =>
         inner.RemoveFromCollectionAsync(collectionId, itemIds);
 
-    public IEnumerable<BaseItem> CollapseItemsWithinBoxSets(
-        IEnumerable<BaseItem> items,
-        User user
-    ) => inner.CollapseItemsWithinBoxSets(items, user);
+    /// <summary>
+    /// A collection kept out of listings (<see cref="GelatoItemRepository.GetThinCollectionIds"/>)
+    /// does not take the place of its movies when a library groups movies into collections: they
+    /// are listed on their own.
+    /// </summary>
+    public IEnumerable<BaseItem> CollapseItemsWithinBoxSets(IEnumerable<BaseItem> items, User user)
+    {
+        var thin = itemRepository.GetThinCollectionIds();
+        if (thin.Count == 0)
+            return inner.CollapseItemsWithinBoxSets(items, user);
+
+        var list = items as IReadOnlyCollection<BaseItem> ?? items.ToList();
+        var collapsed = inner.CollapseItemsWithinBoxSets(list, user).ToList();
+        var hidden = collapsed.OfType<BoxSet>().Where(b => thin.Contains(b.Id)).ToList();
+        if (hidden.Count == 0)
+            return collapsed;
+
+        var shown = collapsed.Where(i => !thin.Contains(i.Id)).ToList();
+        var listed = shown.Select(i => i.Id).ToHashSet();
+        var sets = shown.OfType<BoxSet>().ToList();
+        foreach (var item in list)
+        {
+            if (
+                !listed.Contains(item.Id)
+                && hidden.Any(b => b.ContainsLinkedChildByItemId(item.Id))
+                && !sets.Any(b => b.ContainsLinkedChildByItemId(item.Id))
+            )
+            {
+                shown.Add(item);
+                listed.Add(item.Id);
+            }
+        }
+
+        return shown;
+    }
 
     public Task<Folder?> GetCollectionsFolder(bool createIfNeeded) =>
         inner.GetCollectionsFolder(createIfNeeded);
@@ -152,12 +184,18 @@ public sealed class CollectionManagerDecorator(
     /// <summary>
     /// Collections contain the movie/episode, never its stream rows. Jellyfin 12 clients show a
     /// picked version as the page item, so look its collections up on the movie.
+    /// A collection kept out of listings is not shown there either.
     /// </summary>
-    public IEnumerable<BoxSet> GetCollectionsContainingItem(User user, Guid itemId) =>
-        inner.GetCollectionsContainingItem(
-            user,
-            libraryManager.GetItemById(itemId) is { } item
-                ? item.PrimaryVersionOrSelf(libraryManager).Id
-                : itemId
-        );
+    public IEnumerable<BoxSet> GetCollectionsContainingItem(User user, Guid itemId)
+    {
+        var thin = itemRepository.GetThinCollectionIds();
+        return inner
+            .GetCollectionsContainingItem(
+                user,
+                libraryManager.GetItemById(itemId) is { } item
+                    ? item.PrimaryVersionOrSelf(libraryManager).Id
+                    : itemId
+            )
+            .Where(b => !thin.Contains(b.Id));
+    }
 }
