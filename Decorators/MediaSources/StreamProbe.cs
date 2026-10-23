@@ -109,8 +109,10 @@ internal sealed class StreamProbe(
         probed.LockedFields = synced.LockedFields;
         probed.ParentId = synced.ParentId;
         probed.DateLastRefreshed = synced.DateLastRefreshed;
-        if (synced is Video { PrimaryVersionId: { } primaryId } && probed is Video row)
-            row.SetPrimaryVersionId(primaryId);
+        // No owner is taken too: a split during the probe made the row a legacy one, whose watch
+        // state the next sync moves to the movie/episode only while the row has no owner.
+        if (synced is Video current && probed is Video row)
+            row.SetPrimaryVersionId(current.PrimaryVersionId);
     }
 
     /// <summary>
