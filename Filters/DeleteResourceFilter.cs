@@ -80,7 +80,15 @@ public sealed class DeleteResourceFilter(
                 if (item is Video row && row.IsStremioNonPrimary())
                     manager.DeleteStreamRow(row, options, true);
                 else
+                {
+                    // Jellyfin takes the tree out of its item cache by the folder's children as it
+                    // holds them, and a series kept them from before Gelato saved its seasons:
+                    // the database lost the seasons and episodes, the cache kept them, and
+                    // opening the title again saved episodes under seasons that were gone.
+                    if (item is Folder folder)
+                        folder.Children = null;
                     library.DeleteItem(item, options, true);
+                }
                 return Task.CompletedTask;
             },
             CancellationToken.None
