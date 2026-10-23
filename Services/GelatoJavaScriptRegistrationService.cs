@@ -101,6 +101,8 @@ namespace Gelato.Services
         [
             ("local-search-toggle.js", cfg => cfg.EnableJavaScriptInjection),
             ("refresh-after-probe.js", cfg => cfg.RefreshVersionsAfterProbe && cfg.PreProbe),
+            // Changes nothing the user sees but the menu's speed, so it has no setting.
+            ("item-menu.js", _ => true),
         ];
 
         private void UpdateRegistration(PluginConfiguration cfg)

@@ -328,6 +328,9 @@ public sealed class DtoServiceDecorator(
             // mark if placeholder
             if (
                 isList
+                // The item menu's read syncs nothing, so a title it finds without streams may
+                // well have some: its Play, Download and Copy stream URL look them up.
+                || _http.ReadRequest(ctx => ctx.IsItemMenuRead(), false)
                 || dto.MediaSources?.Length != 1
                 || dto.Path is null
                 || !dto.MediaSources[0].Path.HasGelatoPrefix()

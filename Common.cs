@@ -603,11 +603,51 @@ public static class ActionContextExtensions
             || actionName.Equals("GetItemLegacy", StringComparison.OrdinalIgnoreCase)
         );
 
+    /// <summary>
+    /// The query flag Gelato's injected script (item-menu.js) adds to the item request of Jellyfin
+    /// Web's item menu (right-click, or a card's three dots).
+    /// </summary>
+    public const string ItemMenuFlag = "gelatoMenu";
+
+    /// <summary>
+    /// Whether the request is the item menu's read of the item. It is the same call as the
+    /// details page's, and only the flag tells them apart. The menu needs the item as the
+    /// library has it: no stream sync, no pre-probe, and a search result stays one until an
+    /// action of the menu names it.
+    /// </summary>
+    public static bool IsItemMenuRead(this HttpContext ctx) =>
+        ctx.Request.Query.ContainsKey(ItemMenuFlag)
+        && ctx.GetActionName() is "GetItem" or "GetItemLegacy";
+
+    /// <summary>
+    /// Actions of the item menu that name a search result by its id without reading the item
+    /// first (Refresh metadata, a series' Shuffle and Download all). The menu's read used to put
+    /// the title in; now the action does. They are not insertable actions: no stream sync, and a
+    /// local series' tree is not touched by listing its seasons.
+    /// </summary>
+    private static readonly HashSet<string> SearchResultWriteActionNames = new(
+        ["RefreshItem", "GetEpisodes", "GetSeasons"],
+        StringComparer.OrdinalIgnoreCase
+    );
+
+    public static bool IsSearchResultWriteAction(this ActionExecutingContext ctx) =>
+        ctx.GetActionName() is { } actionName && SearchResultWriteActionNames.Contains(actionName);
+
+    /// <summary>
+    /// The id a request names in its route: the item's, or the series' of a season or episode
+    /// listing.
+    /// </summary>
+    public static bool TryGetRouteItemOrSeriesGuid(this ActionExecutingContext ctx, out Guid value) =>
+        ctx.TryGetRouteGuid(out value)
+        || ctx.RouteData.Values.TryGetValue("seriesId", out var raw)
+            && Guid.TryParse(raw?.ToString(), out value);
+
     public static bool IsInsertableAction(this HttpContext ctx)
     {
         var actionName = ctx.GetActionName();
         return actionName != null
             && InsertableActionNames.Contains(actionName)
+            && !ctx.IsItemMenuRead()
             && (
                 !InsertableListActionNames.Contains(actionName)
                 || InsertableListActionNames.Contains(actionName) && IsSingleItemList(ctx)

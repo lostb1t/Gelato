@@ -169,7 +169,9 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<PersonActionFilter>(order: 2);
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
-            o.Filters.AddService<DownloadFilter>();
+            // After InsertActionFilter: a search result's download names the result, which that
+            // one puts into the library first, and it keeps the media source the request names.
+            o.Filters.AddService<DownloadFilter>(order: 2);
             o.Filters.AddService<StreamUserDataFilter>();
             o.Filters.AddService<VersionActionFilter>();
             o.Filters.AddService<HiddenListingFilter>();

@@ -245,7 +245,10 @@ internal sealed class VersionList(
         if (
             user is not null
             && _http.ReadRequest(
-                ctx => ctx.GetActionName() is "GetItem" or "GetItemLegacy" && RequestsMediaSources(ctx),
+                ctx =>
+                    ctx.GetActionName() is "GetItem" or "GetItemLegacy"
+                    && RequestsMediaSources(ctx)
+                    && !ctx.IsItemMenuRead(),
                 false
             )
         )
