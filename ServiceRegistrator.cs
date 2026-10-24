@@ -36,6 +36,10 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<InsertActionFilter>();
         services.AddSingleton<SearchActionFilter>();
         services.AddSingleton<PersonActionFilter>();
+        services.AddSingleton<SimilarActionFilter>();
+        services.AddSingleton<SuggestionsActionFilter>();
+        services.AddSingleton<RemoteTitles>();
+        services.AddSingleton<TmdbTitleLists>();
         services.AddSingleton<ImageResourceFilter>();
         services.AddSingleton<DeleteResourceFilter>();
         services.AddSingleton<DownloadFilter>();
@@ -167,6 +171,8 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<InsertActionFilter>(order: 1);
             o.Filters.AddService<SearchActionFilter>(order: 2);
             o.Filters.AddService<PersonActionFilter>(order: 2);
+            o.Filters.AddService<SimilarActionFilter>(order: 2);
+            o.Filters.AddService<SuggestionsActionFilter>(order: 2);
             o.Filters.AddService<ImageResourceFilter>();
             o.Filters.AddService<DeleteResourceFilter>();
             // After InsertActionFilter: a search result's download names the result, which that

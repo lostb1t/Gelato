@@ -97,6 +97,7 @@ export default function (view) {
   const chkEnableJavaScriptInjection = page.querySelector('#chkEnableJavaScriptInjection');
   const chkLazyImages = page.querySelector('#chkLazyImages');
   const chkPersonRemoteTitles = page.querySelector('#chkPersonRemoteTitles');
+  const chkRecommendedRemoteTitles = page.querySelector('#chkRecommendedRemoteTitles');
   const chkHideUnplayedSearchTitles = page.querySelector('#chkHideUnplayedSearchTitles');
   const chkPreProbe = page.querySelector('#chkPreProbe');
   const chkRefreshVersionsAfterProbe = page.querySelector('#chkRefreshVersionsAfterProbe');
@@ -121,6 +122,7 @@ export default function (view) {
   const selUserSeriesLibrary = page.querySelector('#selUserSeriesLibrary');
   const chkUserAddonSearch = page.querySelector('#chkUserAddonSearch');
   const chkUserPersonRemoteTitles = page.querySelector('#chkUserPersonRemoteTitles');
+  const chkUserRecommendedRemoteTitles = page.querySelector('#chkUserRecommendedRemoteTitles');
 
   // The save bar
   const saveBar = page.querySelector('.gelatoSaveBar');
@@ -149,6 +151,7 @@ export default function (view) {
           SeriesPath: uc.SeriesPath,
           DisableSearch: uc.DisableSearch,
           PersonRemoteTitles: uc.PersonRemoteTitles ?? true,
+          RecommendedRemoteTitles: uc.RecommendedRemoteTitles ?? true,
         };
       }
     });
@@ -286,6 +289,8 @@ export default function (view) {
     const off = !chkAddonSearch.checked;
     chkPersonRemoteTitles.disabled = off;
     page.querySelector('#personRemoteTitlesSetting').classList.toggle('gelatoNested-off', off);
+    chkRecommendedRemoteTitles.disabled = off;
+    page.querySelector('#recommendedRemoteTitlesSetting').classList.toggle('gelatoNested-off', off);
     chkHideUnplayedSearchTitles.disabled = off;
     page.querySelector('#hideUnplayedSearchTitlesSetting').classList.toggle('gelatoNested-off', off);
   }
@@ -294,6 +299,8 @@ export default function (view) {
     const off = !chkUserAddonSearch.checked;
     chkUserPersonRemoteTitles.disabled = off;
     page.querySelector('#userPersonRemoteTitlesSetting').classList.toggle('gelatoNested-off', off);
+    chkUserRecommendedRemoteTitles.disabled = off;
+    page.querySelector('#userRecommendedRemoteTitlesSetting').classList.toggle('gelatoNested-off', off);
   }
 
   // Said on the Catalogs tab: an import that seems to add nothing is the filter at work.
@@ -1020,6 +1027,7 @@ export default function (view) {
       if (chkEnableJavaScriptInjection) chkEnableJavaScriptInjection.checked = cfg.EnableJavaScriptInjection || false;
       if (chkLazyImages) chkLazyImages.checked = cfg.LazyImages ?? false;
       if (chkPersonRemoteTitles) chkPersonRemoteTitles.checked = cfg.PersonRemoteTitles ?? true;
+      chkRecommendedRemoteTitles.checked = cfg.RecommendedRemoteTitles ?? true;
       chkHideUnplayedSearchTitles.checked = cfg.HideUnplayedSearchTitles ?? false;
       showPersonRemoteTitles();
       if (chkPreProbe) chkPreProbe.checked = cfg.PreProbe ?? true;
@@ -1069,6 +1077,7 @@ export default function (view) {
       cfg.EnableJavaScriptInjection = chkEnableJavaScriptInjection.checked;
       cfg.LazyImages = chkLazyImages.checked;
       cfg.PersonRemoteTitles = chkPersonRemoteTitles.checked;
+      cfg.RecommendedRemoteTitles = chkRecommendedRemoteTitles.checked;
       cfg.HideUnplayedSearchTitles = chkHideUnplayedSearchTitles.checked;
       cfg.PreProbe = chkPreProbe.checked;
       cfg.RefreshVersionsAfterProbe = chkRefreshVersionsAfterProbe.checked;
@@ -1089,7 +1098,8 @@ export default function (view) {
         MoviePath: override.MoviePath,
         SeriesPath: override.SeriesPath,
         DisableSearch: override.DisableSearch,
-        PersonRemoteTitles: override.PersonRemoteTitles ?? true
+        PersonRemoteTitles: override.PersonRemoteTitles ?? true,
+        RecommendedRemoteTitles: override.RecommendedRemoteTitles ?? true
       }));
 
       await window.ApiClient.updatePluginConfiguration(pluginId, cfg);
@@ -1209,6 +1219,7 @@ export default function (view) {
       fillLibrarySelect(selUserSeriesLibrary, 'series', override.SeriesPath || '');
       chkUserAddonSearch.checked = !override.DisableSearch;
       chkUserPersonRemoteTitles.checked = override.PersonRemoteTitles ?? true;
+      chkUserRecommendedRemoteTitles.checked = override.RecommendedRemoteTitles ?? true;
     } else {
       // New
       txtUserUrl.value = currentConfig?.Url || '';
@@ -1217,6 +1228,7 @@ export default function (view) {
       // A new override starts from the settings everyone has.
       chkUserAddonSearch.checked = chkAddonSearch.checked;
       chkUserPersonRemoteTitles.checked = chkPersonRemoteTitles.checked;
+      chkUserRecommendedRemoteTitles.checked = chkRecommendedRemoteTitles.checked;
     }
     showUserPersonRemoteTitles();
   }
@@ -1250,7 +1262,8 @@ export default function (view) {
       MoviePath: moviePath,
       SeriesPath: seriesPath,
       DisableSearch: !chkUserAddonSearch.checked,
-      PersonRemoteTitles: chkUserPersonRemoteTitles.checked
+      PersonRemoteTitles: chkUserPersonRemoteTitles.checked,
+      RecommendedRemoteTitles: chkUserRecommendedRemoteTitles.checked
     };
 
     renderOverridesList();

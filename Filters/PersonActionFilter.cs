@@ -33,9 +33,9 @@ public class PersonActionFilter(
     IUserManager userManager,
     ILibraryManager libraryManager,
     IItemRepository itemRepository,
-    IServerConfigurationManager serverConfig,
     GelatoManager manager,
     SearchActionFilter search,
+    RemoteTitles remoteTitles,
     ParentalRatings parental,
     ILogger<PersonActionFilter> log
 ) : IAsyncActionFilter
@@ -95,9 +95,6 @@ public class PersonActionFilter(
         "Author",
         "Creator",
     };
-
-    /// <summary>How long a page waits for TMDB release lookups and imdb ids of its stand-ins.</summary>
-    private static readonly TimeSpan LookupBudget = TimeSpan.FromSeconds(3);
 
     public async Task OnActionExecutionAsync(
         ActionExecutingContext ctx,
@@ -351,7 +348,7 @@ public class PersonActionFilter(
     {
         var tmdbId = person.GetProviderId(MetadataProvider.Tmdb)!;
         var credits = await stremio
-            .GetPersonCreditsAsync(tmdbId, MetadataLanguage(), ct)
+            .GetPersonCreditsAsync(tmdbId, remoteTitles.MetadataLanguage(), ct)
             .ConfigureAwait(false);
         if (credits is null)
             return [];
@@ -365,7 +362,7 @@ public class PersonActionFilter(
             return [];
 
         var metas = Filmography(credits, person.Name)
-            .Select(c => (Credit: c, Meta: ToMeta(c)))
+            .Select(c => (Credit: c, Meta: RemoteTitles.ToMeta(c)))
             .Where(c => c.Meta is not null && kinds.Contains(c.Meta.Type == StremioMediaType.Movie ? BaseItemKind.Movie : BaseItemKind.Series))
             .Select(c => (c.Credit, Meta: c.Meta!))
             .ToList();
@@ -373,35 +370,15 @@ public class PersonActionFilter(
         if (cfg.FilterUnreleased)
         {
             // As search does: a movie premiered within the last year is judged by TMDB's digital
-            // release date, memoised per movie. One that does not answer in time stays hidden.
-            var lookups = metas.Where(m => m.Meta.NeedsReleaseLookup()).ToList();
-            if (lookups.Count > 0)
-            {
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(LookupBudget);
-                try
-                {
-                    await Parallel
-                        .ForEachAsync(
-                            lookups,
-                            new ParallelOptions
-                            {
-                                MaxDegreeOfParallelism = 4,
-                                CancellationToken = cts.Token,
-                            },
-                            async (m, t) =>
-                                await stremio
-                                    .EnrichDigitalReleaseDateAsync(m.Meta, t)
-                                    .ConfigureAwait(false)
-                        )
-                        .ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-                {
-                    log.LogDebug("Person {Name}: TMDB release lookups ran out of time", person.Name);
-                }
-            }
-
+            // release date. One that does not answer in time stays hidden.
+            await remoteTitles
+                .EnrichReleaseDatesAsync(
+                    metas.Select(m => m.Meta),
+                    stremio,
+                    RemoteTitles.LookupBudget,
+                    ct
+                )
+                .ConfigureAwait(false);
             metas = metas.Where(m => m.Meta.IsReleased(cfg.FilterUnreleasedBufferDays)).ToList();
         }
 
@@ -491,21 +468,6 @@ public class PersonActionFilter(
     }
 
     /// <summary>
-    /// The server's metadata language, as TMDB takes it ("de-DE"): the titles the library's own
-    /// items are named in.
-    /// </summary>
-    private string? MetadataLanguage()
-    {
-        var language = serverConfig.Configuration.PreferredMetadataLanguage;
-        var country = serverConfig.Configuration.MetadataCountryCode;
-        if (string.IsNullOrWhiteSpace(language))
-            return null;
-        return string.IsNullOrWhiteSpace(country) || language.Contains('-')
-            ? language
-            : $"{language}-{country}";
-    }
-
-    /// <summary>
     /// The person's own titles among their TMDB credits, most popular first, each once: roles
     /// (not appearances as themselves, archive footage, talk, news or reality shows) and the
     /// directing, writing and creating crew credits. Producer credits are left out.
@@ -553,48 +515,6 @@ public class PersonActionFilter(
 
         var first = new string(role.TakeWhile(char.IsLetter).ToArray());
         return first.ToLowerInvariant() is "self" or "himself" or "herself" or "themselves" or "themself";
-    }
-
-    /// <summary>The meta a credit stands for, keyed by its TMDB id as the addon resolves it.</summary>
-    internal static StremioMeta? ToMeta(TmdbPersonCredit credit)
-    {
-        var type = credit.MediaType switch
-        {
-            "movie" => StremioMediaType.Movie,
-            "tv" => StremioMediaType.Series,
-            _ => StremioMediaType.Unknown,
-        };
-        var name = type == StremioMediaType.Movie ? credit.Title : credit.Name;
-        if (type == StremioMediaType.Unknown || string.IsNullOrWhiteSpace(name))
-            return null;
-
-        var date = type == StremioMediaType.Movie ? credit.ReleaseDate : credit.FirstAirDate;
-        DateTime? released = DateTime.TryParseExact(
-            date,
-            "yyyy-MM-dd",
-            CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
-            out var d
-        )
-            ? d
-            : null;
-
-        return new StremioMeta
-        {
-            Id = $"tmdb:{credit.Id.ToString(CultureInfo.InvariantCulture)}",
-            Type = type,
-            Name = name,
-            Description = credit.Overview,
-            Poster = credit.PosterPath is { Length: > 0 } poster
-                ? $"https://image.tmdb.org/t/p/w500{poster}"
-                : null,
-            Background = credit.BackdropPath is { Length: > 0 } backdrop
-                ? $"https://image.tmdb.org/t/p/original{backdrop}"
-                : null,
-            Released = released,
-            Year = released?.Year,
-            ImdbRating = credit.VoteCount > 0 ? credit.VoteAverage : null,
-        };
     }
 
     /// <summary>
@@ -695,25 +615,20 @@ public class PersonActionFilter(
         if (remote.Count == 0 && slice.All(e => e is BaseItemDto))
             return slice.Cast<BaseItemDto>().ToList();
 
-        // A meta addon that takes no tmdb: ids (Cinemeta) cannot open a title by its TMDB id:
-        // such a stand-in carries its imdb id, as search's results do.
-        var withImdb = await WithImdbIdsAsync(remote, stremio, ct).ConfigureAwait(false);
-
-        var options = new DtoOptions(false)
-        {
-            Fields = SearchActionFilter.SearchResultFields,
-            EnableImages = true,
-            EnableUserData = false,
-        };
-        var unknownOptions = new DtoOptions(false)
-        {
-            Fields = SearchActionFilter.UnknownItemFields,
-            EnableImages = true,
-            EnableUserData = false,
-        };
-        var unknownIds = await search
-            .FindUnknownIdsAsync(withImdb.Values.Select(r => r.Item.Id), ct)
+        var withImdb = await remoteTitles
+            .ApplyImdbIdsAsync(remote.Select(r => r.Meta), stremio, RemoteTitles.LookupBudget, ct)
             .ConfigureAwait(false);
+        var standIns = remote
+            .Select(r =>
+                withImdb.Contains(r.Meta) && manager.IntoBaseItem(r.Meta) is { } item
+                    ? (r.Meta, item)
+                    : (r.Meta, r.Item)
+            )
+            .ToList();
+        var standInDtos = await remoteTitles
+            .BuildStandInsAsync(standIns, userId, ct)
+            .ConfigureAwait(false);
+        var next = 0;
 
         var dtos = new List<BaseItemDto>(slice.Count);
         foreach (var entry in slice)
@@ -742,71 +657,9 @@ public class PersonActionFilter(
                 continue;
             }
 
-            var title = withImdb[(RemoteTitle)entry];
-            var searchId = StremioUri.FromBaseItem(title.Item)!.ToGuid();
-            var dto = unknownIds.Contains(title.Item.Id)
-                ? search.GetUnknownItemDto(title.Item, unknownOptions)
-                : dtoService.GetBaseItemDto(title.Item, options);
-            dto.Id = searchId;
-            dtos.Add(dto);
-
-            manager.SaveStremioMeta(searchId, title.Meta);
-            manager.RememberSearchFolder(userId, searchId, null);
-            manager.RememberSearchCopy(userId, searchId, false);
+            dtos.Add(standInDtos[next++]);
         }
 
         return dtos;
-    }
-
-    private async Task<Dictionary<RemoteTitle, RemoteTitle>> WithImdbIdsAsync(
-        List<RemoteTitle> remote,
-        GelatoStremioProvider stremio,
-        CancellationToken ct
-    )
-    {
-        var result = remote.ToDictionary(r => r, r => r);
-        var servesTmdb = new Dictionary<StremioMediaType, bool>();
-        foreach (var type in remote.Select(r => r.Meta.Type).Distinct())
-            servesTmdb[type] = await stremio.ServesTmdbMetaAsync(type).ConfigureAwait(false);
-
-        var lookups = remote.Where(r => !servesTmdb[r.Meta.Type]).ToList();
-        if (lookups.Count == 0)
-            return result;
-
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        cts.CancelAfter(LookupBudget);
-        try
-        {
-            await Parallel
-                .ForEachAsync(
-                    lookups,
-                    new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cts.Token },
-                    async (r, t) =>
-                    {
-                        var tmdbId = r.Meta.Id["tmdb:".Length..];
-                        if (
-                            await stremio
-                                .GetCachedImdbIdFromTmdbAsync(tmdbId, r.Meta.Type, t)
-                                .ConfigureAwait(false)
-                                is not { } imdbId
-                        )
-                            return;
-
-                        r.Meta.ImdbId = imdbId;
-                        if (manager.IntoBaseItem(r.Meta) is { } item)
-                        {
-                            lock (result)
-                                result[r] = r with { Item = item };
-                        }
-                    }
-                )
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            log.LogDebug("Person page: imdb id lookups ran out of time");
-        }
-
-        return result;
     }
 }

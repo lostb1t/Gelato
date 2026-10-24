@@ -53,6 +53,14 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool PersonRemoteTitles { get; set; } = true;
 
     /// <summary>
+    /// A movie's or series' "More like this" leads with TMDB's recommendations for it, and the
+    /// Movies Suggestions tab's rows add TMDB's titles, the ones the library does not hold as
+    /// results that open like a search's. Not while <see cref="DisableSearch"/> keeps searches to
+    /// the library.
+    /// </summary>
+    public bool RecommendedRemoteTitles { get; set; } = true;
+
+    /// <summary>
     /// A title put into the library because someone opened it from search stays out of the
     /// library's listings until someone plays it, marks it a favourite, likes it (a watchlist)
     /// or adds it to a collection or playlist, and is removed again when nobody did within
@@ -234,6 +242,12 @@ public class UserConfig
     public bool PersonRemoteTitles { get; set; } = true;
 
     /// <summary>
+    /// The user's own <see cref="PluginConfiguration.RecommendedRemoteTitles"/>. On for an override
+    /// saved before it existed, as the global default.
+    /// </summary>
+    public bool RecommendedRemoteTitles { get; set; } = true;
+
+    /// <summary>
     /// Apply user overrides to base configuration - replaces all overridable fields
     /// </summary>
     public PluginConfiguration ApplyOverrides(PluginConfiguration baseConfig)
@@ -247,6 +261,7 @@ public class UserConfig
             SeriesPath = SeriesPath,
             DisableSearch = DisableSearch,
             PersonRemoteTitles = PersonRemoteTitles,
+            RecommendedRemoteTitles = RecommendedRemoteTitles,
 
             // All other fields from base config
             StreamTTL = baseConfig.StreamTTL,
