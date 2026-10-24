@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.29.0] - 2026-10-24\n\n### 🚀 Features\n\n- Exclude uncached streams from pre-probing (#336)\n- Show a version's tracks as soon as they are known (#340)\n\n### 🐛 Bug Fixes\n\n- Show that more settings tabs exist on a phone (#330)\n- Keep an episode edit made during its refresh (#331)\n- Keep a deleted series gone when trees go off (#332)\n- Stop a queued pre-probe once pre-probing is off (#333)\n- Draw the setup's cone like the logo (#335)\n- Keep an episode edit made as its series refreshes (#337)\n- Hide one-movie collections, keep search titles hidden (#338)\n- Reopen a series deleted right after it was added (#339)\n- Keep a split row's watch state when a probe ends after the split (#343)\n- No error logged for a probe of a deleted title (#342)\n- Probe a stream once when a page is opened twice (#341)\n- Open a title again from search after it left your own folder (#345)\n- Keep a series deleted after marking it played (#344)\n- List a new series' seasons from the first open (#347)\n\n### ⚡ Performance\n\n- Open the item menu without waiting for streams (#346)\n\n### 🚜 Refactor\n\n- Sort Gelato's wrappers around Jellyfin (#334)\n",
+        "checksum": "bd1712c322f4c7ee85c868541b92a7db",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.29.0/gelato_0.26.29.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-24T13:08:35Z",
+        "version": "0.26.29.0"
+      },
+      {
         "changelog": "## [0.26.28.0] - 2026-10-22\n\n### 🚀 Features\n\n- Take settings and addon changes without a restart (#320)\n- Show the cast on a title's first open (#327)\n\n### 🐛 Bug Fixes\n\n- Run the other segment providers when gelato introdb is disabled (#322)\n- An empty addon url in a per-user override means the global addon (#323)\n- Honor a user's parental in search and insert (#324)\n- Support more meta providers for series (#325)\n- Show actors with any meta provider (#326)\n- Keep your place in a movie after a short stream (#328)\n- Get skip credits back for a title added again (#329)\n",
         "checksum": "f80ada08800e4f0cdd5dc8da73b9f992",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.28.0/gelato_0.26.28.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-24T05:42:30Z",
         "version": "0.26.14.2"
-      },
-      {
-        "changelog": "## [0.26.14.1] - 2026-04-21\r\n\r\n### 🐛 Bug Fixes\r\n\r\n- Dont filter by digital release date for items older then a year\r\n",
-        "checksum": "26aa2467fb106dc93369065a4ecfea78",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.1/gelato_0.26.14.1.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-21T18:43:14Z",
-        "version": "0.26.14.1"
       }
     ]
   }
