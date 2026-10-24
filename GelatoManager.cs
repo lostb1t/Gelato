@@ -4009,6 +4009,16 @@ public sealed class GelatoManager(
         if (!string.IsNullOrWhiteSpace(meta.ImdbId))
             item.SetProviderId(MetadataProvider.Imdb, meta.ImdbId);
 
+        // A series' TVDB id sets its presentation key (EnrichMetaAsync).
+        if (
+            meta.Type is StremioMediaType.Series
+            && !string.IsNullOrWhiteSpace(meta.TvdbIdExtra)
+            && !item.HasProviderId(MetadataProvider.Tvdb)
+        )
+        {
+            item.SetProviderId(MetadataProvider.Tvdb, meta.TvdbIdExtra);
+        }
+
         // Fall back to the catalog id when ImdbId is absent OR blank. Addons
         // commonly emit "imdb_id": "" rather than omitting the field, and `??`
         // does not treat an empty string as missing - so a meta carrying a
@@ -4099,19 +4109,42 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
-    /// Enriches <paramref name="meta"/> with digital release dates from TMDB when
-    /// the meta is a movie and <c>App_Extras.ReleaseDates</c> is not yet populated.
+    /// Enriches <paramref name="meta"/> from TMDB: a movie with digital release dates when
+    /// <c>App_Extras.ReleaseDates</c> is not yet populated, a series with its TVDB id when the
+    /// meta has none.
     /// </summary>
+    /// <remarks>
+    /// A series' presentation key, which its seasons and episodes are listed by, is its TVDB id
+    /// when it has one. Inserted without it, the refresh after the insert sets it and the key
+    /// changes, and until the children are saved with the new key the series lists none or some
+    /// of them.
+    /// </remarks>
     public async Task EnrichMetaAsync(StremioMeta meta, CancellationToken ct)
     {
+        var stremio = GelatoPlugin.Instance?.Configuration.Stremio;
+        if (stremio is null)
+            return;
+
+        if (meta.Type == StremioMediaType.Series)
+        {
+            var ids = meta.GetProviderIds();
+            if (
+                !ids.ContainsKey(nameof(MetadataProvider.Tvdb))
+                && ids.TryGetValue(nameof(MetadataProvider.Tmdb), out var tmdbId)
+            )
+            {
+                meta.TvdbIdExtra = await stremio
+                    .GetCachedTvdbIdFromTmdbAsync(tmdbId, ct)
+                    .ConfigureAwait(false);
+            }
+
+            return;
+        }
+
         if (meta.Type != StremioMediaType.Movie)
             return;
 
         if (meta.App_Extras?.ReleaseDates is not null)
-            return;
-
-        var stremio = GelatoPlugin.Instance?.Configuration.Stremio;
-        if (stremio is null)
             return;
 
         await stremio.EnrichDigitalReleaseDateAsync(meta, ct).ConfigureAwait(false);

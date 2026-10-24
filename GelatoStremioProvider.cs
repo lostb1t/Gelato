@@ -699,9 +699,20 @@ public class GelatoStremioProvider(
     /// asked. For a meta provider that serves <c>tt</c> ids only (Cinemeta) and a caller that has
     /// a TMDB id alone.
     /// </summary>
-    public async Task<string?> GetImdbIdFromTmdbAsync(
+    public Task<string?> GetImdbIdFromTmdbAsync(
         string tmdbId,
         StremioMediaType mediaType,
+        CancellationToken cancellationToken
+    ) => GetExternalIdFromTmdbAsync(tmdbId, mediaType, "imdb_id", cancellationToken);
+
+    /// <summary>
+    /// One of the ids TMDB lists for a movie or series (<c>external_ids</c>), or null when it
+    /// lists none or cannot be asked. TMDB gives the TVDB id as a number.
+    /// </summary>
+    private async Task<string?> GetExternalIdFromTmdbAsync(
+        string tmdbId,
+        StremioMediaType mediaType,
+        string field,
         CancellationToken cancellationToken
     )
     {
@@ -716,14 +727,25 @@ public class GelatoStremioProvider(
                 .GetStringAsync(url, cancellationToken)
                 .ConfigureAwait(false);
             using var doc = JsonDocument.Parse(response);
-            return doc.RootElement.TryGetProperty("imdb_id", out var id)
-                && id.GetString() is { Length: > 0 } imdbId
-                ? imdbId
-                : null;
+            if (!doc.RootElement.TryGetProperty(field, out var id))
+                return null;
+            var value = id.ValueKind switch
+            {
+                JsonValueKind.String => id.GetString(),
+                JsonValueKind.Number => id.GetRawText(),
+                _ => null,
+            };
+            return string.IsNullOrEmpty(value) ? null : value;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
-            log.LogDebug(ex, "GetImdbIdFromTmdb: no answer for {Kind} {TmdbId}", kind, tmdbId);
+            log.LogDebug(
+                ex,
+                "GetExternalIdFromTmdb: no {Field} for {Kind} {TmdbId}",
+                field,
+                kind,
+                tmdbId
+            );
             return null;
         }
     }
@@ -755,6 +777,39 @@ public class GelatoStremioProvider(
         if (imdbId is not null)
             ImdbIdByTmdbId[key] = imdbId;
         return imdbId;
+    }
+
+    /// <summary>
+    /// TMDB's TVDB ids of series by TMDB id: a series' TVDB id does not change, so it is asked
+    /// for once.
+    /// </summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
+        string,
+        string
+    > TvdbIdByTmdbId = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The TVDB id TMDB lists for a series, remembered, or null when it lists none or cannot be
+    /// asked. A failed request is not remembered.
+    /// </summary>
+    public async Task<string?> GetCachedTvdbIdFromTmdbAsync(
+        string tmdbId,
+        CancellationToken cancellationToken
+    )
+    {
+        if (TvdbIdByTmdbId.TryGetValue(tmdbId, out var known))
+            return known;
+
+        var tvdbId = await GetExternalIdFromTmdbAsync(
+                tmdbId,
+                StremioMediaType.Series,
+                "tvdb_id",
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+        if (tvdbId is not null)
+            TvdbIdByTmdbId[tmdbId] = tvdbId;
+        return tvdbId;
     }
 
     /// <summary>
