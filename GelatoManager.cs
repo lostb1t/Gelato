@@ -2304,8 +2304,38 @@ public sealed class GelatoManager(
     /// <summary>
     /// Playback through a row that was not a version yet saved its state on the row alone. When
     /// the rows become versions, the newest state among them moves to the movie/episode, per user,
-    /// unless the movie's own is newer. Once: adopted rows have an owner from then on.
+    /// unless the movie's own is newer or the order is ambiguous. Once: adopted rows have an owner
+    /// from then on.
     /// </summary>
+    private static bool HasMeaningfulWatchState(UserItemData data) =>
+        data.Played || data.PlayCount > 0 || data.PlaybackPositionTicks > 0;
+
+    private static bool ShouldAdoptWatchState(UserItemData local, UserItemData source)
+    {
+        if (!HasMeaningfulWatchState(source))
+            return false;
+        if (!HasMeaningfulWatchState(local))
+            return true;
+
+        // An undated state cannot prove it is newer than another meaningful state.
+        // Equal dates also keep the file-backed item's state.
+        return local.LastPlayedDate is { } localDate
+            && source.LastPlayedDate is { } sourceDate
+            && sourceDate > localDate;
+    }
+
+    private static void CopyAdoptedWatchState(UserItemData local, UserItemData source)
+    {
+        // A newer watched state intentionally clears an older resume point; a row with only a
+        // play count does not.
+        if (source.Played || source.PlaybackPositionTicks > 0)
+            local.PlaybackPositionTicks = source.PlaybackPositionTicks;
+        local.Played = source.Played || local.Played;
+        local.PlayCount = Math.Max(local.PlayCount, source.PlayCount);
+        if (source.LastPlayedDate is { } sourceDate)
+            local.LastPlayedDate = sourceDate + Services.StreamUserDataSync.CopyOffset;
+    }
+
     private void AdoptWatchState(Video primary, IReadOnlyCollection<Video> rows)
     {
         if (rows.Count == 0)
@@ -2316,23 +2346,19 @@ public sealed class GelatoManager(
             try
             {
                 var best = rows.Select(r => userDataManager.GetUserData(user, r))
-                    .Where(d => d is not null && (d.PlaybackPositionTicks > 0 || d.Played))
+                    .Where(d => d is not null && HasMeaningfulWatchState(d))
                     .OrderByDescending(d => d!.LastPlayedDate ?? DateTime.MinValue)
                     .FirstOrDefault();
                 if (
                     best is null
                     || userDataManager.GetUserData(user, primary) is not { } data
-                    || (data.LastPlayedDate ?? DateTime.MinValue)
-                        >= (best.LastPlayedDate ?? DateTime.MinValue)
+                    || !ShouldAdoptWatchState(data, best)
                 )
                 {
                     continue;
                 }
 
-                data.PlaybackPositionTicks = best.PlaybackPositionTicks;
-                data.Played = best.Played || data.Played;
-                data.PlayCount = Math.Max(data.PlayCount, best.PlayCount);
-                data.LastPlayedDate = best.LastPlayedDate + Services.StreamUserDataSync.CopyOffset;
+                CopyAdoptedWatchState(data, best);
                 userDataManager.SaveUserData(
                     user,
                     primary,
