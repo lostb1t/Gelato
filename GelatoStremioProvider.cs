@@ -15,6 +15,9 @@ public class GelatoStremioProvider(
     ILogger<GelatoStremioProvider> log
 )
 {
+    /// <summary>The addon's URL, as a key for what depends on the addon.</summary>
+    internal string AddonUrl => baseUrl;
+
     private StremioManifest? _manifest;
     private StremioCatalog? _movieSearchCatalog;
     private StremioCatalog? _seriesSearchCatalog;
@@ -874,6 +877,92 @@ public class GelatoStremioProvider(
     }
 
     /// <summary>
+    /// TMDB's recommendations for a movie or series (<c>movie/{id}/recommendations</c>,
+    /// <c>tv/{id}/recommendations</c>, the first page of about 20), in
+    /// <paramref name="language"/>, or null when TMDB does not answer. A movie can be asked for by
+    /// its imdb id too. Not memoised: <see cref="Services.TmdbTitleLists"/> keeps them.
+    /// </summary>
+    public async Task<List<TmdbTitle>?> GetRecommendationsAsync(
+        StremioMediaType mediaType,
+        string id,
+        string? language,
+        CancellationToken cancellationToken
+    )
+    {
+        var kind = mediaType is StremioMediaType.Series ? "tv" : "movie";
+        log.LogDebug("GetRecommendations: asking TMDB for {Kind} {Id}", kind, id);
+        var url =
+            $"https://api.themoviedb.org/3/{kind}/{Uri.EscapeDataString(id)}/recommendations?api_key={GetTmdbApiKey()}"
+            + (string.IsNullOrWhiteSpace(language) ? "" : $"&language={Uri.EscapeDataString(language)}");
+        try
+        {
+            using var client = http.CreateClient(nameof(GelatoStremioProvider));
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var response = await client
+                .GetStringAsync(url, cancellationToken)
+                .ConfigureAwait(false);
+            var titles =
+                JsonSerializer.Deserialize<TmdbResults<TmdbTitle>>(response, JsonOpts)?.Results
+                ?? [];
+            foreach (var title in titles)
+                title.MediaType ??= kind;
+            return titles;
+        }
+        // A title TMDB does not know has no recommendations, for good.
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return [];
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            log.LogDebug(
+                "GetRecommendations: TMDB did not answer for {Kind} {Id}: {Error}",
+                kind,
+                id,
+                ex.Message
+            );
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The TMDB id of the movie or series TMDB knows under an imdb or TVDB id
+    /// (<paramref name="source"/> <c>imdb_id</c> or <c>tvdb_id</c>, <c>find/{id}</c>), "" when
+    /// TMDB knows none, null when it does not answer.
+    /// </summary>
+    public async Task<string?> FindTmdbIdAsync(
+        string externalId,
+        string source,
+        StremioMediaType mediaType,
+        CancellationToken cancellationToken
+    )
+    {
+        var url =
+            $"https://api.themoviedb.org/3/find/{Uri.EscapeDataString(externalId)}?api_key={GetTmdbApiKey()}&external_source={source}";
+        try
+        {
+            using var client = http.CreateClient(nameof(GelatoStremioProvider));
+            client.Timeout = TimeSpan.FromSeconds(10);
+            var response = await client
+                .GetStringAsync(url, cancellationToken)
+                .ConfigureAwait(false);
+            using var doc = JsonDocument.Parse(response);
+            var results = mediaType is StremioMediaType.Series ? "tv_results" : "movie_results";
+            return
+                doc.RootElement.TryGetProperty(results, out var found)
+                && found.GetArrayLength() > 0
+                && found[0].TryGetProperty("id", out var id)
+                ? id.GetInt32().ToString(CultureInfo.InvariantCulture)
+                : "";
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            log.LogDebug("FindTmdbId: TMDB did not answer for {Id}: {Error}", externalId, ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Sets the release dates of the movie TMDB knows under <paramref name="imdbId"/>, and
     /// memoises its TMDB id. A movie TMDB does not know (404) is memoised as null, so a library
     /// full of movies without a digital release date does not ask for the same id over and over.
@@ -1405,6 +1494,17 @@ public class StremioMeta
         return GetPremiereDate() is { } premiere && premiere <= now && premiere >= now.AddYears(-1);
     }
 
+    /// <summary>
+    /// A copy to hand out of a meta that a cache keeps: what reads and fills in a meta replaces
+    /// its properties and those of its <see cref="App_Extras"/>, so those two levels are copied.
+    /// </summary>
+    public StremioMeta Copy()
+    {
+        var copy = (StremioMeta)MemberwiseClone();
+        copy.App_Extras = App_Extras?.Copy();
+        return copy;
+    }
+
     public bool IsValid()
     {
         return !Id.Contains("error");
@@ -1528,6 +1628,8 @@ public class StremioTrailerStream
 
 public class StremioAppExtras
 {
+    internal StremioAppExtras Copy() => (StremioAppExtras)MemberwiseClone();
+
     public List<StremioCast>? Cast { get; set; }
     public List<StremioCast>? Directors { get; set; }
     public List<StremioCast>? Writers { get; set; }
@@ -1678,7 +1780,8 @@ public class TmdbPersonCredits
     public List<TmdbPersonCredit> Crew { get; set; } = [];
 }
 
-public class TmdbPersonCredit
+/// <summary>A movie or series as TMDB lists it: in a person's credits or a title's recommendations.</summary>
+public class TmdbTitle
 {
     public int Id { get; set; }
 
@@ -1713,6 +1816,10 @@ public class TmdbPersonCredit
     public List<int>? GenreIds { get; set; }
 
     public bool Adult { get; set; }
+}
+
+public class TmdbPersonCredit : TmdbTitle
+{
     public string? Character { get; set; }
     public string? Job { get; set; }
     public string? Department { get; set; }

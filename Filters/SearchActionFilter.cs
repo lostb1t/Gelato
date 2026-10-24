@@ -7,6 +7,8 @@ using Jellyfin.Database.Implementations;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
@@ -735,6 +737,9 @@ public class SearchActionFilter(
         return (dtos, covered);
     }
 
+    private static readonly string MovieType = typeof(Movie).FullName!;
+    private static readonly string SeriesType = typeof(Series).FullName!;
+
     /// <summary>
     /// The library items any of the results stands in for, in two queries for the whole search:
     /// the items holding one of the results' provider ids, then those items. Asking
@@ -742,10 +747,14 @@ public class SearchActionFilter(
     /// most results are not in the library, so the miss has to be the cheap case. Whatever the
     /// user may see: an item the user's parental control hides is found too, so that its title is
     /// no result rather than a stand-in for it (the callers leave out what the user cannot see).
+    /// With <paramref name="titlesOnly"/> only movies and series that are no other title's version
+    /// are matched, and taken from Jellyfin's item cache: loading the 90 titles a Suggestions tab's
+    /// TMDB lists match on a prod copy as one listing cost 50 to 70 ms, the query itself 6 ms.
     /// </summary>
     internal async Task<IReadOnlyList<BaseItem>> FindLibraryItemsAsync(
         IEnumerable<BaseItem> candidates,
-        CancellationToken ct
+        CancellationToken ct,
+        bool titlesOnly = false
     )
     {
         var providerIds = candidates.SelectMany(c => c.ProviderIds).ToList();
@@ -760,9 +769,18 @@ public class SearchActionFilter(
         {
             // Names and values are matched separately, so a pair from two different results
             // can match too; FindMatches sorts that out on the loaded items.
-            itemIds = await db
+            var matches = db
                 .BaseItemProviders.AsNoTracking()
-                .Where(p => names.Contains(p.ProviderId) && values.Contains(p.ProviderValue))
+                .Where(p => names.Contains(p.ProviderId) && values.Contains(p.ProviderValue));
+            if (titlesOnly)
+            {
+                matches = matches.Where(p =>
+                    (p.Item.Type == MovieType || p.Item.Type == SeriesType)
+                    && p.Item.PrimaryVersionId == null
+                );
+            }
+
+            itemIds = await matches
                 .Select(p => p.ItemId)
                 .Distinct()
                 .ToArrayAsync(ct)
@@ -771,6 +789,16 @@ public class SearchActionFilter(
 
         if (itemIds.Length == 0)
             return [];
+
+        // The query kept titles only; Jellyfin's item cache answers most of them without a read.
+        if (titlesOnly)
+        {
+            return itemIds
+                .Select(id => libraryManager.GetItemById(id))
+                .Where(i => i is Movie or Series && !i.IsStreamRow())
+                .Select(i => i!)
+                .ToList();
+        }
 
         return libraryManager.GetItemList(
             new InternalItemsQuery

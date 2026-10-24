@@ -222,6 +222,13 @@
                 </label>
                 <div class="fieldDescription">An actor's or director's page also lists their other movies and series from TMDB. They open like search results. Works only while the search above is on.</div>
               </div>
+              <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="recommendedRemoteTitlesSetting">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkRecommendedRemoteTitles" />
+                  <span>Show recommended titles that aren't in the library</span>
+                </label>
+                <div class="fieldDescription">"More like this" on a movie or series starts with TMDB's recommendations for it, and the Suggestions tab of Movies adds TMDB's picks to each row: up to half of them titles you don't have yet. They open like search results. A title or row seen for the first time may only show them the next time. Works only while the search above is on.</div>
+              </div>
               <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="hideUnplayedSearchTitlesSetting">
                 <label>
                   <input is="emby-checkbox" type="checkbox" id="chkHideUnplayedSearchTitles" />
@@ -392,6 +399,13 @@
                   <label>
                     <input is="emby-checkbox" type="checkbox" id="chkUserPersonRemoteTitles" />
                     <span>Show a person's titles that aren't in the library</span>
+                  </label>
+                  <div class="fieldDescription">Works only while this user's search above is on.</div>
+                </div>
+                <div class="checkboxContainer checkboxContainer-withDescription gelatoNested" id="userRecommendedRemoteTitlesSetting">
+                  <label>
+                    <input is="emby-checkbox" type="checkbox" id="chkUserRecommendedRemoteTitles" />
+                    <span>Show recommended titles that aren't in the library</span>
                   </label>
                   <div class="fieldDescription">Works only while this user's search above is on.</div>
                 </div>

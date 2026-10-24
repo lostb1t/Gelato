@@ -54,6 +54,15 @@ public sealed class GelatoCache(ItemWriteCounter writes, ILogger<GelatoCache> lo
     /// </summary>
     public IMemoryCache Memo => _memo;
 
+    private readonly MemoryCache _tmdb = new(new MemoryCacheOptions());
+
+    /// <summary>
+    /// What TMDB answered: titles' recommendations and which TMDB id a title has. A
+    /// configuration save keeps them, since nothing Gelato is configured with goes into TMDB's
+    /// answers.
+    /// </summary>
+    public IMemoryCache Tmdb => _tmdb;
+
     /// <summary>The addon client for <paramref name="baseUrl"/>, one per URL.</summary>
     public GelatoStremioProvider Provider(
         string baseUrl,

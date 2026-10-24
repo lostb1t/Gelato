@@ -38,7 +38,8 @@ public sealed class ParentalRatings(ILogger<ParentalRatings> log)
             || user.GetPreference(PreferenceKind.AllowedTags).Length > 0
         );
 
-    private static bool NeedsRating(User user) =>
+    /// <summary>Whether the user's parental settings judge a title by its rating.</summary>
+    public static bool NeedsRating(User user) =>
         user.MaxParentalRatingScore.HasValue
         || user.GetPreferenceValues<UnratedItem>(PreferenceKind.BlockUnratedItems)
             is { Length: > 0 } blocked
@@ -49,13 +50,16 @@ public sealed class ParentalRatings(ILogger<ParentalRatings> log)
     /// within <see cref="LookupBudget"/>, for the ratings neither the addon nor an earlier lookup
     /// gave; a title whose lookup did not answer in time is left out for a user whose settings
     /// need its rating, as the unreleased filter leaves out a movie whose dates did not come.
+    /// <paramref name="budget"/> replaces the <see cref="LookupBudget"/>: zero asks TMDB nothing
+    /// and leaves out every title whose rating is not known yet.
     /// </summary>
     public async Task<List<StremioMeta>> FilterAsync(
         IReadOnlyList<StremioMeta> metas,
         User? user,
         Func<StremioMediaType, Folder?> folderOf,
         GelatoStremioProvider stremio,
-        CancellationToken ct
+        CancellationToken ct,
+        TimeSpan? budget = null
     )
     {
         if (!Restricts(user) || metas.Count == 0)
@@ -65,7 +69,11 @@ public sealed class ParentalRatings(ILogger<ParentalRatings> log)
         if (NeedsRating(user!))
         {
             var lookups = metas.Where(NeedsLookup).ToList();
-            if (lookups.Count > 0)
+            if (lookups.Count > 0 && budget == TimeSpan.Zero)
+            {
+                unanswered.UnionWith(lookups);
+            }
+            else if (lookups.Count > 0)
             {
                 // The lookups swallow their own failures, a cancelled request's too: one counts
                 // as answered when it ended before the budget did.
@@ -74,7 +82,7 @@ public sealed class ParentalRatings(ILogger<ParentalRatings> log)
                     bool
                 >(ReferenceEqualityComparer.Instance);
                 using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(LookupBudget);
+                cts.CancelAfter(budget ?? LookupBudget);
                 try
                 {
                     await Parallel
@@ -156,7 +164,8 @@ public sealed class ParentalRatings(ILogger<ParentalRatings> log)
         return Allows(meta, folder, user, out _);
     }
 
-    private static bool NeedsLookup(StremioMeta meta) =>
+    /// <summary>Whether the title's rating has to be asked from TMDB first.</summary>
+    public static bool NeedsLookup(StremioMeta meta) =>
         string.IsNullOrWhiteSpace(meta.App_Extras?.Certification)
         && (
             meta.Type == StremioMediaType.Movie
@@ -164,7 +173,8 @@ public sealed class ParentalRatings(ILogger<ParentalRatings> log)
                 : meta.App_Extras?.ContentRatings is null
         );
 
-    private static Task LookupAsync(
+    /// <summary>Asks TMDB for the title's rating (<see cref="NeedsLookup"/>).</summary>
+    public static Task LookupAsync(
         StremioMeta meta,
         GelatoStremioProvider stremio,
         CancellationToken ct
