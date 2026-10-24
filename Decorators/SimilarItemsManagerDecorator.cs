@@ -2,6 +2,7 @@ using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Model.Configuration;
 using MediaBrowser.Model.Entities;
 
@@ -17,10 +18,18 @@ namespace Gelato.Decorators;
 /// outscore everything else: a movie's page listed its own versions as similar items. Jellyfin
 /// drops alternate versions by PrimaryVersionId, which rows synced before they were linked as
 /// versions do not have.
+/// <para>
+/// The same scoring fills the Movies Suggestions tab's rows, so they also listed what the library's
+/// listings hide: unreleased titles with the unreleased filter on (a catalog's "Avengers:
+/// Doomsday" under "Because you watched"), and titles opened from search and never played. The
+/// listing filter (<see cref="Filters.HiddenListingFilter"/>) cannot reach into a row, and dropping
+/// them after the cut would leave the rows short, so they go here with the stream rows.
+/// </para>
 /// </remarks>
 public sealed class SimilarItemsManagerDecorator(
     ISimilarItemsManager inner,
-    ILibraryManager libraryManager
+    ILibraryManager libraryManager,
+    IItemRepository itemRepository
 ) : ISimilarItemsManager
 {
     // Jellyfin's default when the client sends no limit.
@@ -108,10 +117,14 @@ public sealed class SimilarItemsManagerDecorator(
             )
             .ConfigureAwait(false);
 
+        var hidden = HiddenIds();
         var result = new List<SimilarItemsRecommendation>(categories.Count);
         foreach (var category in categories)
         {
-            var items = category.Items.Where(i => !i.IsStreamRow()).Take(itemLimit).ToList();
+            var items = category
+                .Items.Where(i => !i.IsStreamRow() && !hidden.Contains(i.Id))
+                .Take(itemLimit)
+                .ToList();
             if (items.Count == 0)
                 continue;
 
@@ -127,5 +140,21 @@ public sealed class SimilarItemsManagerDecorator(
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// What the library's listings hide: titles opened from search and never played, and with the
+    /// unreleased filter on, the unreleased ones.
+    /// </summary>
+    private HashSet<Guid> HiddenIds()
+    {
+        var hidden = new HashSet<Guid>();
+        if (itemRepository is not GelatoItemRepository repository)
+            return hidden;
+
+        hidden.UnionWith(repository.GetPendingIds());
+        if (GelatoPlugin.Instance?.Configuration is { FilterUnreleased: true } cfg)
+            hidden.UnionWith(repository.GetUnreleasedIds(cfg.FilterUnreleasedBufferDays));
+        return hidden;
     }
 }
