@@ -18,9 +18,6 @@
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.0" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Remove="tests/**/*.cs" />
-  </ItemGroup>
-  <ItemGroup>
     <EmbeddedResource Include="Config\config.html" />
     <EmbeddedResource Include="Config\*.css" />
     <EmbeddedResource Include="Config\*.js" />
