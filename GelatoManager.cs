@@ -2302,39 +2302,13 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
-    /// Playback through a row that was not a version yet saved its state on the row alone. When
-    /// the rows become versions, the newest state among them moves to the movie/episode, per user,
-    /// unless the movie's own is newer or the order is ambiguous. Once: adopted rows have an owner
-    /// from then on.
+    /// Playback through a stream row can leave watch state on the row alone, both when
+    /// rows become movie versions and when a local episode replaces a virtual one.
+    /// Adopt the row's state if the destination has none; otherwise retain the
+    /// existing last-played-date ordering, per user.
     /// </summary>
     private static bool HasMeaningfulWatchState(UserItemData data) =>
         data.Played || data.PlayCount > 0 || data.PlaybackPositionTicks > 0;
-
-    private static bool ShouldAdoptWatchState(UserItemData local, UserItemData source)
-    {
-        if (!HasMeaningfulWatchState(source))
-            return false;
-        if (!HasMeaningfulWatchState(local))
-            return true;
-
-        // An undated state cannot prove it is newer than another meaningful state.
-        // Equal dates also keep the file-backed item's state.
-        return local.LastPlayedDate is { } localDate
-            && source.LastPlayedDate is { } sourceDate
-            && sourceDate > localDate;
-    }
-
-    private static void CopyAdoptedWatchState(UserItemData local, UserItemData source)
-    {
-        // A newer watched state intentionally clears an older resume point; a row with only a
-        // play count does not.
-        if (source.Played || source.PlaybackPositionTicks > 0)
-            local.PlaybackPositionTicks = source.PlaybackPositionTicks;
-        local.Played = source.Played || local.Played;
-        local.PlayCount = Math.Max(local.PlayCount, source.PlayCount);
-        if (source.LastPlayedDate is { } sourceDate)
-            local.LastPlayedDate = sourceDate + Services.StreamUserDataSync.CopyOffset;
-    }
 
     private void AdoptWatchState(Video primary, IReadOnlyCollection<Video> rows)
     {
@@ -2352,13 +2326,18 @@ public sealed class GelatoManager(
                 if (
                     best is null
                     || userDataManager.GetUserData(user, primary) is not { } data
-                    || !ShouldAdoptWatchState(data, best)
+                    || (HasMeaningfulWatchState(data)
+                        && (data.LastPlayedDate ?? DateTime.MinValue)
+                            >= (best.LastPlayedDate ?? DateTime.MinValue))
                 )
                 {
                     continue;
                 }
 
-                CopyAdoptedWatchState(data, best);
+                data.PlaybackPositionTicks = best.PlaybackPositionTicks;
+                data.Played = best.Played || data.Played;
+                data.PlayCount = Math.Max(data.PlayCount, best.PlayCount);
+                data.LastPlayedDate = best.LastPlayedDate + Services.StreamUserDataSync.CopyOffset;
                 userDataManager.SaveUserData(
                     user,
                     primary,
