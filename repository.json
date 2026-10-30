@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.30.0] - 2026-10-30\n\n### 🚀 Features\n\n- Show recommended titles that aren't in the library (#349)\n\n### 🐛 Bug Fixes\n\n- Undated watched/resume state migration (#348)\n- Keep the subtitle task from searching every stream (#352)\n\n### ⚙️ Miscellaneous Tasks\n\n- Remove the unused Palco cache API (#353)\n",
+        "checksum": "6129acb59341e30fa8fd8d34bc3a0463",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.0/gelato_0.26.30.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-10-30T20:06:08Z",
+        "version": "0.26.30.0"
+      },
+      {
         "changelog": "## [0.26.29.0] - 2026-10-24\n\n### 🚀 Features\n\n- Exclude uncached streams from pre-probing (#336)\n- Show a version's tracks as soon as they are known (#340)\n\n### 🐛 Bug Fixes\n\n- Show that more settings tabs exist on a phone (#330)\n- Keep an episode edit made during its refresh (#331)\n- Keep a deleted series gone when trees go off (#332)\n- Stop a queued pre-probe once pre-probing is off (#333)\n- Draw the setup's cone like the logo (#335)\n- Keep an episode edit made as its series refreshes (#337)\n- Hide one-movie collections, keep search titles hidden (#338)\n- Reopen a series deleted right after it was added (#339)\n- Keep a split row's watch state when a probe ends after the split (#343)\n- No error logged for a probe of a deleted title (#342)\n- Probe a stream once when a page is opened twice (#341)\n- Open a title again from search after it left your own folder (#345)\n- Keep a series deleted after marking it played (#344)\n- List a new series' seasons from the first open (#347)\n\n### ⚡ Performance\n\n- Open the item menu without waiting for streams (#346)\n\n### 🚜 Refactor\n\n- Sort Gelato's wrappers around Jellyfin (#334)\n",
         "checksum": "bd1712c322f4c7ee85c868541b92a7db",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.29.0/gelato_0.26.29.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-27T19:52:46Z",
         "version": "0.26.14.3"
-      },
-      {
-        "changelog": "## [0.26.14.2] - 2026-04-24\n\n### 🐛 Bug Fixes\n\n- Wrong release date year condition\n",
-        "checksum": "c9e8b914596f45200024a91b598c0055",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.2/gelato_0.26.14.2.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-24T05:42:30Z",
-        "version": "0.26.14.2"
       }
     ]
   }
