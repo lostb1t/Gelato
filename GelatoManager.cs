@@ -2308,10 +2308,14 @@ public sealed class GelatoManager(
     }
 
     /// <summary>
-    /// Playback through a row that was not a version yet saved its state on the row alone. When
-    /// the rows become versions, the newest state among them moves to the movie/episode, per user,
-    /// unless the movie's own is newer. Once: adopted rows have an owner from then on.
+    /// Playback through a stream row can leave watch state on the row alone, both when
+    /// rows become movie versions and when a local episode replaces a virtual one.
+    /// Adopt the row's state if the destination has none; otherwise retain the
+    /// existing last-played-date ordering, per user.
     /// </summary>
+    private static bool HasMeaningfulWatchState(UserItemData data) =>
+        data.Played || data.PlayCount > 0 || data.PlaybackPositionTicks > 0;
+
     private void AdoptWatchState(Video primary, IReadOnlyCollection<Video> rows)
     {
         if (rows.Count == 0)
@@ -2322,14 +2326,15 @@ public sealed class GelatoManager(
             try
             {
                 var best = rows.Select(r => userDataManager.GetUserData(user, r))
-                    .Where(d => d is not null && (d.PlaybackPositionTicks > 0 || d.Played))
+                    .Where(d => d is not null && HasMeaningfulWatchState(d))
                     .OrderByDescending(d => d!.LastPlayedDate ?? DateTime.MinValue)
                     .FirstOrDefault();
                 if (
                     best is null
                     || userDataManager.GetUserData(user, primary) is not { } data
-                    || (data.LastPlayedDate ?? DateTime.MinValue)
-                        >= (best.LastPlayedDate ?? DateTime.MinValue)
+                    || (HasMeaningfulWatchState(data)
+                        && (data.LastPlayedDate ?? DateTime.MinValue)
+                            >= (best.LastPlayedDate ?? DateTime.MinValue))
                 )
                 {
                     continue;
