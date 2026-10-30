@@ -17,6 +17,7 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Providers;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators
@@ -31,6 +32,10 @@ namespace Gelato.Decorators
         private readonly IUserManager _userManager;
         private readonly IHttpContextAccessor _http;
         private readonly KeyLock _downloads = new();
+
+        // As long as the provider keeps the addon's answer.
+        private static readonly TimeSpan NothingFoundTtl = TimeSpan.FromHours(1);
+        private readonly MemoryCache _nothingFound = new(new MemoryCacheOptions());
 
         /// <summary>
         /// Set while Gelato probes a stream. Jellyfin's probe downloads the library's subtitle
@@ -100,14 +105,52 @@ namespace Gelato.Decorators
         {
             // nasty hack to prevent some plugins chocking on remote files
             // request.MediaPath = request.MediaPath + ".strm";
+            if (!request.IsAutomated)
+                return _inner.SearchSubtitles(request, cancellationToken);
+
             if (
-                request.IsAutomated
-                && (InProbe(request.MediaPath) || SkipAutomatedSearch(request.MediaPath, request.Language))
+                InProbe(request.MediaPath)
+                || NothingFound(request)
+                || SkipAutomatedSearch(request.MediaPath, request.Language)
             )
                 return Task.FromResult(Array.Empty<RemoteSubtitleInfo>());
 
-            return _inner.SearchSubtitles(request, cancellationToken);
+            return SearchAndRemember(request, cancellationToken);
         }
+
+        private async Task<RemoteSubtitleInfo[]> SearchAndRemember(
+            SubtitleSearchRequest request,
+            CancellationToken cancellationToken
+        )
+        {
+            var found = await _inner.SearchSubtitles(request, cancellationToken).ConfigureAwait(false);
+
+            // Not after a failed addon call: that comes back empty as well, and is not cached.
+            if (
+                found.Length == 0
+                && NothingFoundKey(request) is { } key
+                && SubtitleProvider.AddonAnswered(request)
+            )
+                _nothingFound.Set(key, true, NothingFoundTtl);
+
+            return found;
+        }
+
+        /// <summary>
+        /// "Download missing subtitles" searches every stream row of a title once per language, and
+        /// the answer is the title's, so a library with many rows cost thousands of searches
+        /// in a run that found nothing. A title and language with no subtitle are
+        /// asked about once, and the rows after it cost no query.
+        /// </summary>
+        private bool NothingFound(SubtitleSearchRequest request) =>
+            NothingFoundKey(request) is { } key && _nothingFound.TryGetValue(key, out _);
+
+        // The disabled fetchers are the library's: another library may ask other providers.
+        private static string NothingFoundKey(SubtitleSearchRequest request) =>
+            request.MediaPath?.IsUrl() == true && request.GetProviderId("Stremio") is not null
+                ? $"{SubtitleProvider.SearchId(request)}|{request.Language}|{request.IsPerfectMatch}|"
+                    + string.Join(',', request.DisabledSubtitleFetchers ?? [])
+                : null;
 
         private bool InProbe(string path)
         {
