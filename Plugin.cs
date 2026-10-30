@@ -17,7 +17,6 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly GelatoStremioProviderFactory _stremioFactory;
     private readonly GelatoCache _cache;
     private readonly ITaskManager _taskManager;
-    public PalcoCacheService PalcoCache { get; } // Migrated Palco Cache Service
 
     public GelatoPlugin(
         IApplicationPaths applicationPaths,
@@ -25,7 +24,6 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         IXmlSerializer xmlSerializer,
         ILogger<GelatoPlugin> log,
         GelatoStremioProviderFactory stremioFactory,
-        PalcoCacheService palcoCache,
         ITaskManager taskManager,
         GelatoCache cache
     )
@@ -35,7 +33,6 @@ public class GelatoPlugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _log = log;
         _manager = manager;
         _stremioFactory = stremioFactory;
-        PalcoCache = palcoCache;
         _taskManager = taskManager;
         _cache = cache;
     }

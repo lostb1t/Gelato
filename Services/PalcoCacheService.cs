@@ -123,42 +123,6 @@ public class PalcoCacheService : IDisposable
         }
     }
 
-    public Dictionary<string, string> GetBulk(IEnumerable<string> keys, string ns = "")
-    {
-        var result = new Dictionary<string, string>();
-        foreach (var key in keys)
-        {
-            var value = Get(key, ns);
-            if (value != null)
-                result[key] = value;
-        }
-        return result;
-    }
-
-    public (int total, int expired, long size) GetStats()
-    {
-        lock (_lock)
-        {
-            if (_connection == null)
-                return (0, 0, 0);
-
-            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-            using var cmd1 = _connection.CreateCommand();
-            cmd1.CommandText = "SELECT COUNT(*) FROM cache";
-            var total = Convert.ToInt32(cmd1.ExecuteScalar());
-
-            using var cmd2 = _connection.CreateCommand();
-            cmd2.CommandText =
-                "SELECT COUNT(*) FROM cache WHERE expires_at IS NOT NULL AND expires_at < @now";
-            cmd2.Parameters.AddWithValue("@now", now);
-            var expired = Convert.ToInt32(cmd2.ExecuteScalar());
-
-            var size = File.Exists(_dbPath) ? new FileInfo(_dbPath).Length : 0;
-            return (total, expired, size);
-        }
-    }
-
     public void Dispose()
     {
         _connection?.Close();
