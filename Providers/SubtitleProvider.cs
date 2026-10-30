@@ -96,54 +96,10 @@ namespace Gelato.Providers
         )
         {
             IReadOnlyList<StremioSubtitle> subs;
-            string filename = string.Empty;
             try
             {
-                // Prefer the filename stored in GelatoData (set from BehaviorHints.Filename during stream
-                // insertion), since the stream URL often doesn't contain a meaningful filename.
-                // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
-                var streamItem = _library
-                    .GetItemList(
-                        new InternalItemsQuery
-                        {
-                            Path = request.MediaPath,
-                            IncludeOwnedItems = true,
-                        }
-                    )
-                    .FirstOrDefault();
-                var gelatoFilename = streamItem?.GelatoData<string>("filename");
-
-                if (!string.IsNullOrEmpty(gelatoFilename))
-                {
-                    filename = gelatoFilename;
-                    _log.LogDebug("Using GelatoData filename: {Filename}", filename);
-                }
-                else if (
-                    Uri.TryCreate(request.MediaPath, UriKind.Absolute, out var uri)
-                    && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-                )
-                {
-                    filename = Path.GetFileName(uri.LocalPath);
-                }
-                else
-                {
-                    filename = Path.GetFileName(request.MediaPath);
-                }
-                var mediaType =
-                    request.ContentType == VideoContentType.Episode
-                        ? StremioMediaType.Series
-                        : StremioMediaType.Movie;
-
-                var stremioId = request.GetProviderId("Stremio");
-                var imdbId = request.GetProviderId("ImdbId");
-
-                if (imdbId != null)
-                {
-                    stremioId =
-                        request.ContentType == VideoContentType.Episode
-                            ? $"{imdbId}:{request.ParentIndexNumber}:{request.IndexNumber}"
-                            : imdbId;
-                }
+                var mediaType = MediaType(request);
+                var stremioId = SearchId(request);
 
                 if (string.IsNullOrEmpty(stremioId))
                 {
@@ -188,9 +144,13 @@ namespace Gelato.Providers
                 filtered.Count
             );
 
+            // The file name only ranks what is left, and looking it up costs a query.
+            if (filtered.Count == 0)
+                return Array.Empty<RemoteSubtitleInfo>();
+
             // Derive release name from media path for title matching.
             // The SearchSubtitles decorator appends ".strm" so strip that first, then strip the real extension.
-            var rawFilename = filename;
+            var rawFilename = ReleaseFilename(request.MediaPath);
             if (rawFilename.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
                 rawFilename = rawFilename[..^5];
             var releaseName = Path.GetFileNameWithoutExtension(rawFilename);
@@ -246,6 +206,52 @@ namespace Gelato.Providers
                 ThreeLetterISOLanguageName = request.Language,
             });
         }
+
+        private string ReleaseFilename(string mediaPath)
+        {
+            // Prefer the filename stored in GelatoData (set from BehaviorHints.Filename during stream
+            // insertion), since the stream URL often doesn't contain a meaningful filename.
+            // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
+            var streamItem = _library
+                .GetItemList(
+                    new InternalItemsQuery { Path = mediaPath, IncludeOwnedItems = true }
+                )
+                .FirstOrDefault();
+            var gelatoFilename = streamItem?.GelatoData<string>("filename");
+
+            if (!string.IsNullOrEmpty(gelatoFilename))
+            {
+                _log.LogDebug("Using GelatoData filename: {Filename}", gelatoFilename);
+                return gelatoFilename;
+            }
+
+            return
+                Uri.TryCreate(mediaPath, UriKind.Absolute, out var uri)
+                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                ? Path.GetFileName(uri.LocalPath)
+                : Path.GetFileName(mediaPath);
+        }
+
+        private static StremioMediaType MediaType(SubtitleSearchRequest request) =>
+            request.ContentType == VideoContentType.Episode
+                ? StremioMediaType.Series
+                : StremioMediaType.Movie;
+
+        /// <summary>The id the addon is asked about for a search, shared by all of a title's streams.</summary>
+        public static string? SearchId(SubtitleSearchRequest request)
+        {
+            var imdbId = request.GetProviderId("ImdbId");
+            if (imdbId == null)
+                return request.GetProviderId("Stremio");
+
+            return request.ContentType == VideoContentType.Episode
+                ? $"{imdbId}:{request.ParentIndexNumber}:{request.IndexNumber}"
+                : imdbId;
+        }
+
+        /// <summary>Whether the addon's answer for a search is cached: it answered, and recently.</summary>
+        public static bool AddonAnswered(SubtitleSearchRequest request) =>
+            SearchId(request) is { } id && _cache.TryGetValue(ListCacheKey(id, MediaType(request)), out _);
 
         public async Task<SubtitleResponse> GetSubtitles(
             string id,
