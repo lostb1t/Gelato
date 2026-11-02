@@ -10,13 +10,6 @@ namespace Gelato.Controllers;
 [Route("gelato")]
 public sealed class GelatoApiController : ControllerBase
 {
-    private readonly GelatoManager _gelatoManager;
-
-    public GelatoApiController(GelatoManager gelatoManager)
-    {
-        _gelatoManager = gelatoManager;
-    }
-
     [HttpGet("meta/{stremioMetaType}/{Id}")]
     [Authorize]
     public async Task<ActionResult<StremioMeta>> GelatoMeta(
@@ -35,13 +28,4 @@ public sealed class GelatoApiController : ControllerBase
 
     // [HttpGet("catalogs")]
     // Moved to CatalogController
-
-    [HttpGet("subtitles/{itemId:guid}")]
-    public ActionResult<IEnumerable<StremioSubtitle>> GetSubtitles(
-        [FromRoute, Required] Guid itemId
-    )
-    {
-        var subs = _gelatoManager.GetStremioSubtitlesCache(itemId);
-        return Ok(subs ?? new List<StremioSubtitle>());
-    }
 }

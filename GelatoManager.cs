@@ -58,16 +58,6 @@ public sealed class GelatoManager(
 
     private readonly ILogger<GelatoManager> _log = loggerFactory.CreateLogger<GelatoManager>();
 
-    public void SetStremioSubtitlesCache(Guid guid, List<StremioSubtitle> subs)
-    {
-        cache.Memo.Set($"subs:{guid}", subs, TimeSpan.FromMinutes(3600));
-    }
-
-    public List<StremioSubtitle>? GetStremioSubtitlesCache(Guid guid)
-    {
-        return cache.Memo.Get<List<StremioSubtitle>>($"subs:{guid}");
-    }
-
     // Orders a stream sync and a reset. Not the wall clock: when it is set back between the two,
     // a reset gets the older stamp and the sync before it counts as the newer one.
     private static long _streamSyncSeq;
