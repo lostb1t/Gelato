@@ -130,6 +130,12 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             .ConfigurePrimaryHttpMessageHandler(() =>
                 new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All }
             );
+        // Stream links the server fetches itself: every connection is held to StreamHosts' rule.
+        services
+            .AddHttpClient(StreamHosts.ClientName)
+            .ConfigurePrimaryHttpMessageHandler(() =>
+                new SocketsHttpHandler { ConnectCallback = StreamHosts.ConnectAsync }
+            );
         services.AddSingleton<RemuxDbContributor>();
         services.AddSingleton<IHostedService>(sp => sp.GetRequiredService<RemuxDbContributor>());
         services.AddSingleton<RemuxDbService>();

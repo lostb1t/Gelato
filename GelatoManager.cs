@@ -1738,6 +1738,38 @@ public sealed class GelatoManager(
             .Where(s => s is not null)
             .ToList();
 
+        // A link the server must not fetch gets no row, so nothing probes, downloads or plays it.
+        // Checked once per host, all hosts at once: a title's streams mostly share one or two.
+        var hostChecks = acceptable
+            .Select(s => StreamLinks.AsHttpUri(s!.Url))
+            .OfType<Uri>()
+            .DistinctBy(u => u.IdnHost, StringComparer.OrdinalIgnoreCase)
+            .Select(async u => (u.IdnHost, Reason: await StreamHosts.BlockedAsync(u, ct).ConfigureAwait(false)));
+        var blockedHosts = (await Task.WhenAll(hostChecks).ConfigureAwait(false)).ToDictionary(
+            h => h.IdnHost,
+            h => h.Reason,
+            StringComparer.OrdinalIgnoreCase
+        );
+        acceptable.RemoveAll(s =>
+        {
+            if (
+                StreamLinks.AsHttpUri(s!.Url) is not { } link
+                || blockedHosts.GetValueOrDefault(link.IdnHost) is not { } reason
+            )
+            {
+                return false;
+            }
+
+            _log.LogWarning(
+                "Stream {StreamName} of {Item} skipped: {Url} is {Reason}",
+                s.Name,
+                video.Name,
+                Redact.Url(s.Url),
+                reason
+            );
+            return true;
+        });
+
         // Get existing streams. A movie's rows only by Stremio id: movies of a collection share
         // the TmdbCollection id, and the other movies' rows would be treated as stale below.
         // Episodes keep matching on all ids, which also finds rows synced under an older

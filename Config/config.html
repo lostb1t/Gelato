@@ -301,6 +301,14 @@
                 <div class="fieldDescription">Skips a stream known not to work (a dead link, or one with no video) and plays the title's next stream, trying the first 3. A version you pick yourself plays as it is.</div>
               </div>
 
+              <div class="checkboxContainer checkboxContainer-withDescription">
+                <label>
+                  <input is="emby-checkbox" type="checkbox" id="chkAllowLocalNetworkStreams" />
+                  <span>Allow streams from the local network</span>
+                </label>
+                <div class="fieldDescription">Keeps streams whose link points at this server or your local network, such as a MediaFlow or StremThru proxy you host yourself. Off, only the addon's own host may be local.</div>
+              </div>
+
               <div class="inputContainer">
                 <label class="inputLabel inputLabelUnfocused" for="txtStreamTTL">Keep streams for (seconds):</label>
                 <input type="number" id="txtStreamTTL" class="emby-input" />
