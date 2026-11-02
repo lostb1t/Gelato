@@ -107,6 +107,12 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool PlaybackFailover { get; set; }
 
     /// <summary>
+    /// Keep streams whose link points at a loopback or private address. Off, only the addon's
+    /// own host may be one; link-local addresses are dropped either way (lostb1t/Gelato#356).
+    /// </summary>
+    public bool AllowLocalNetworkStreams { get; set; } = true;
+
+    /// <summary>
     /// Submit a stream's probe to RemuxDB when it played a file RemuxDB did not know. Anonymous,
     /// and only for streams whose torrent is known.
     /// </summary>

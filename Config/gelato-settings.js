@@ -102,6 +102,7 @@ export default function (view) {
   const chkPreProbe = page.querySelector('#chkPreProbe');
   const chkRefreshVersionsAfterProbe = page.querySelector('#chkRefreshVersionsAfterProbe');
   const chkPlaybackFailover = page.querySelector('#chkPlaybackFailover');
+  const chkAllowLocalNetworkStreams = page.querySelector('#chkAllowLocalNetworkStreams');
   const chkRemuxDbEnabled = page.querySelector('#chkRemuxDbEnabled');
   const chkRemuxDbContribute = page.querySelector('#chkRemuxDbContribute');
 
@@ -1035,6 +1036,7 @@ export default function (view) {
       showRefreshVersions();
       showInjectorMissing();
       if (chkPlaybackFailover) chkPlaybackFailover.checked = cfg.PlaybackFailover ?? false;
+      if (chkAllowLocalNetworkStreams) chkAllowLocalNetworkStreams.checked = cfg.AllowLocalNetworkStreams ?? true;
       if (chkRemuxDbEnabled) chkRemuxDbEnabled.checked = cfg.RemuxDbEnabled ?? true;
       if (chkRemuxDbContribute) chkRemuxDbContribute.checked = cfg.RemuxDbContribute ?? true;
 
@@ -1082,6 +1084,7 @@ export default function (view) {
       cfg.PreProbe = chkPreProbe.checked;
       cfg.RefreshVersionsAfterProbe = chkRefreshVersionsAfterProbe.checked;
       cfg.PlaybackFailover = chkPlaybackFailover.checked;
+      cfg.AllowLocalNetworkStreams = chkAllowLocalNetworkStreams.checked;
       cfg.RemuxDbEnabled = chkRemuxDbEnabled.checked;
       cfg.RemuxDbContribute = chkRemuxDbContribute.checked;
 

@@ -68,7 +68,7 @@ public sealed class DownloadFilter(
             if (streamUris.Count > 0)
             {
                 var aborted = ctx.HttpContext.RequestAborted;
-                var client = httpClientFactory.CreateClient();
+                var client = httpClientFactory.CreateClient(StreamHosts.ClientName);
 
                 for (var i = 0; i < streamUris.Count; i++)
                 {

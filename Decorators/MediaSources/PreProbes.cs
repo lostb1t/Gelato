@@ -269,7 +269,7 @@ internal sealed class PreProbes(
             )
             {
                 var reason = await StreamLinks
-                    .CheckAsync(httpClientFactory.CreateClient(), uri, StreamFailover.StartTimeout, timeout.Token)
+                    .CheckAsync(httpClientFactory.CreateClient(StreamHosts.ClientName), uri, StreamFailover.StartTimeout, timeout.Token)
                     .ConfigureAwait(false);
                 if (reason is not null)
                 {
