@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.30.1] - 2026-11-02\n\n### 🐛 Bug Fixes\n\n- Remove the unauthenticated subtitles route (#358)\n- Stop the server fetching streams from link-local hosts (#359)\n\n### 📚 Documentation\n\n- Explain RemuxDB and how to turn it off (#357)\n",
+        "checksum": "45299dce1a8a6ac9b2550db68e930446",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.1/gelato_0.26.30.1.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-11-02T20:52:34Z",
+        "version": "0.26.30.1"
+      },
+      {
         "changelog": "## [0.26.30.0] - 2026-10-30\n\n### 🚀 Features\n\n- Show recommended titles that aren't in the library (#349)\n\n### 🐛 Bug Fixes\n\n- Undated watched/resume state migration (#348)\n- Keep the subtitle task from searching every stream (#352)\n\n### ⚙️ Miscellaneous Tasks\n\n- Remove the unused Palco cache API (#353)\n",
         "checksum": "6129acb59341e30fa8fd8d34bc3a0463",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.0/gelato_0.26.30.0.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-04-28T08:34:18Z",
         "version": "0.26.14.4"
-      },
-      {
-        "changelog": "## [0.26.14.3] - 2026-04-27\n\n### 🐛 Bug Fixes\n\n- Replace path with stub on playbackinfo to prevent leaking\n",
-        "checksum": "02b4488880685e82e817341776791360",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.3/gelato_0.26.14.3.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-27T19:52:46Z",
-        "version": "0.26.14.3"
       }
     ]
   }
