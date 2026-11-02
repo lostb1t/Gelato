@@ -65,6 +65,14 @@ An approved request adds the movie or series to your library, and Seerr marks it
 
 - Gelato supports only **AIOStreams**.
 
+### RemuxDB
+
+Gelato uses RemuxDB, a shared database of stream media info (audio, subtitles, quality, runtime), so a title shows its info before you play it and playback skips its probe. This is on by default.
+
+- **Look up:** Gelato sends RemuxDB the title's IMDb id (plus season and episode for an episode) and a random id for your install. That id is tied to nothing else.
+- **Contribute:** only when RemuxDB has no data for a stream you played yet, and only for a stream whose torrent is known, Gelato sends the torrent's infohash, the file name and size, the title's IMDb, TMDB, and TVDB ids, and the media info it probed. No links, accounts, or personal data.
+- **Turn it off:** clear **Look up media info on RemuxDB** and **Contribute to RemuxDB** on the **Playback** tab, or in the setup assistant. The two are independent: turning off lookups doesn't stop contributions, so clear both to stop all contact with RemuxDB.
+
 ### FAQ
 
 - After you change your config in AIOStreams, save it there, then select **Refresh** on the **Catalogs** tab of the Gelato settings. Gelato reads the addon again; you don't need to restart, also not after changing Gelato's settings.
