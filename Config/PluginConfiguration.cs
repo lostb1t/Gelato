@@ -320,7 +320,8 @@ public class GelatoStremioProviderFactory(
                         log.CreateLogger<Services.StremioAddonClient>()
                     ),
                     tmdb,
-                    log.CreateLogger<GelatoStremioProvider>()
+                    log.CreateLogger<GelatoStremioProvider>(),
+                    cache
                 )
         );
     }

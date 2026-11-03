@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Gelato.Providers;
+using Gelato.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Subtitles;
@@ -17,7 +18,6 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Providers;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Decorators
@@ -33,9 +33,7 @@ namespace Gelato.Decorators
         private readonly IHttpContextAccessor _http;
         private readonly KeyLock _downloads = new();
 
-        // As long as the provider keeps the addon's answer.
-        private static readonly TimeSpan NothingFoundTtl = TimeSpan.FromHours(1);
-        private readonly MemoryCache _nothingFound = new(new MemoryCacheOptions());
+        private readonly GelatoCache _cache;
 
         /// <summary>
         /// Set while Gelato probes a stream. Jellyfin's probe downloads the library's subtitle
@@ -51,9 +49,11 @@ namespace Gelato.Decorators
             ILocalizationManager localization,
             IMediaSourceManager mediaSourceManager,
             IUserManager userManager,
-            IHttpContextAccessor http
+            IHttpContextAccessor http,
+            GelatoCache cache
         )
         {
+            _cache = cache;
             _inner = inner;
             _log = log;
             _libraryManager = libraryManager;
@@ -129,9 +129,9 @@ namespace Gelato.Decorators
             if (
                 found.Length == 0
                 && NothingFoundKey(request) is { } key
-                && SubtitleProvider.AddonAnswered(request)
+                && SubtitleProvider.AddonAnswered(_cache, request)
             )
-                _nothingFound.Set(key, true, NothingFoundTtl);
+                _cache.Set(GelatoCache.Subtitles, "nothing-found|" + key, true);
 
             return found;
         }
@@ -143,7 +143,8 @@ namespace Gelato.Decorators
         /// asked about once, and the rows after it cost no query.
         /// </summary>
         private bool NothingFound(SubtitleSearchRequest request) =>
-            NothingFoundKey(request) is { } key && _nothingFound.TryGetValue(key, out _);
+            NothingFoundKey(request) is { } key
+            && _cache.Contains(GelatoCache.Subtitles, "nothing-found|" + key);
 
         // The disabled fetchers are the library's: another library may ask other providers.
         private static string NothingFoundKey(SubtitleSearchRequest request) =>
@@ -322,7 +323,7 @@ namespace Gelato.Decorators
             // Jellyfin's id is "{provider}_{id}"; only Gelato's own subtitles have a known language.
             var parts = subtitleId.Split('_', 2);
             var language = NormalizeLanguage(
-                parts.Length == 2 ? SubtitleProvider.CachedLanguage(parts[1]) : null
+                parts.Length == 2 ? SubtitleProvider.CachedLanguage(_cache, parts[1]) : null
             );
             if (
                 string.IsNullOrEmpty(language)

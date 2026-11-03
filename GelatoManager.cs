@@ -31,7 +31,6 @@ public sealed class GelatoManager(
     GelatoItemRepository repo,
     IItemPersistenceService persistence,
     IFileSystem fileSystem,
-    IMemoryCache memoryCache,
     ILibraryManager libraryManager,
     IDirectoryService directoryService,
     IApplicationPaths appPaths,
@@ -72,8 +71,9 @@ public sealed class GelatoManager(
     /// </summary>
     public void SetStreamSync(string guid, int generation)
     {
-        cache.SetMemo(
-            $"streamsync:{guid}",
+        cache.Set(
+            GelatoCache.StreamSync,
+            guid,
             Interlocked.Increment(ref _streamSyncSeq),
             TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL),
             generation
@@ -86,10 +86,10 @@ public sealed class GelatoManager(
     /// </summary>
     public bool HasStreamSync(string guid, Guid itemId)
     {
-        if (!cache.Memo.TryGetValue($"streamsync:{guid}", out long syncedAt))
+        if (!cache.TryGet(GelatoCache.StreamSync, guid, out long syncedAt))
             return false;
 
-        return !memoryCache.TryGetValue($"streamsync-reset:{itemId}", out long resetAt)
+        return !cache.TryGet(GelatoCache.StreamSyncReset, itemId.ToString(), out long resetAt)
             || syncedAt > resetAt;
     }
 
@@ -99,8 +99,9 @@ public sealed class GelatoManager(
     /// </summary>
     public void ResetStreamSync(Guid itemId)
     {
-        memoryCache.Set(
-            $"streamsync-reset:{itemId}",
+        cache.Set(
+            GelatoCache.StreamSyncReset,
+            itemId.ToString(),
             Interlocked.Increment(ref _streamSyncSeq),
             TimeSpan.FromSeconds(GelatoPlugin.Instance!.Configuration.StreamTTL)
         );
@@ -111,17 +112,17 @@ public sealed class GelatoManager(
 
     public void SaveStremioMeta(Guid guid, StremioMeta meta)
     {
-        memoryCache.Set($"meta:{guid}", meta, StremioMetaTtl);
+        cache.Set(GelatoCache.Search, $"meta:{guid}", meta, StremioMetaTtl);
     }
 
     public StremioMeta? GetStremioMeta(Guid guid)
     {
-        return memoryCache.TryGetValue($"meta:{guid}", out var value) ? value as StremioMeta : null;
+        return cache.TryGet(GelatoCache.Search, $"meta:{guid}", out StremioMeta? value) ? value : null;
     }
 
     public void RemoveStremioMeta(Guid guid)
     {
-        memoryCache.Remove($"meta:{guid}");
+        cache.Remove(GelatoCache.Search, $"meta:{guid}");
     }
 
     /// <summary>
@@ -131,7 +132,7 @@ public sealed class GelatoManager(
     /// </summary>
     public void RememberInsertedId(Guid searchId, Guid itemId)
     {
-        memoryCache.Set($"inserted:{searchId}", itemId, TimeSpan.FromHours(24));
+        cache.Set(GelatoCache.Search, $"inserted:{searchId}", itemId, TimeSpan.FromHours(24));
     }
 
     /// <summary>
@@ -140,13 +141,13 @@ public sealed class GelatoManager(
     /// </summary>
     public Guid? GetInsertedId(Guid searchId)
     {
-        if (!memoryCache.TryGetValue($"inserted:{searchId}", out Guid itemId))
+        if (!cache.TryGet(GelatoCache.Search, $"inserted:{searchId}", out Guid itemId))
             return null;
 
         if (libraryManager.GetItemById(itemId) is not null)
             return itemId;
 
-        memoryCache.Remove($"inserted:{searchId}");
+        cache.Remove(GelatoCache.Search, $"inserted:{searchId}");
         return null;
     }
 
@@ -157,12 +158,7 @@ public sealed class GelatoManager(
     /// </summary>
     public void ClearCache()
     {
-        if (memoryCache is MemoryCache shared)
-        {
-            shared.Compact(1.0);
-        }
-
-        cache.Invalidate(GelatoPlugin.Instance!.Configuration);
+        cache.Clear(GelatoPlugin.Instance!.Configuration);
 
         _log.LogDebug("Cache cleared");
     }
@@ -412,14 +408,14 @@ public sealed class GelatoManager(
     {
         var key = $"searchfolder:{userId}:{searchId}";
         if (folder is null)
-            memoryCache.Remove(key);
+            cache.Remove(GelatoCache.Search, key);
         else
-            memoryCache.Set(key, folder.Id, TimeSpan.FromMinutes(360));
+            cache.Set(GelatoCache.Search, key, folder.Id, TimeSpan.FromMinutes(360));
     }
 
     /// <summary>The folder a search result was last found for, while it is still there.</summary>
     public Folder? GetSearchFolder(Guid userId, Guid searchId) =>
-        memoryCache.TryGetValue($"searchfolder:{userId}:{searchId}", out Guid id)
+        cache.TryGet(GelatoCache.Search, $"searchfolder:{userId}:{searchId}", out Guid id)
             ? libraryManager.GetItemById(id) as Folder
             : null;
 
@@ -433,11 +429,11 @@ public sealed class GelatoManager(
         var key = $"searchcopy:{userId}:{searchId}";
         if (!copy)
         {
-            memoryCache.Remove(key);
+            cache.Remove(GelatoCache.Search, key);
             return;
         }
 
-        memoryCache.Set(key, true, TimeSpan.FromMinutes(360));
+        cache.Set(GelatoCache.Search, key, true, TimeSpan.FromMinutes(360));
 
         // An open of the result before, while it was not a copy, went to the file and is
         // remembered for the redirect, which runs before anything else: the copy would never
@@ -447,12 +443,12 @@ public sealed class GelatoManager(
             && libraryManager.GetItemById(inserted) is { } item
             && !item.HasStremioId()
         )
-            memoryCache.Remove($"inserted:{searchId}");
+            cache.Remove(GelatoCache.Search, $"inserted:{searchId}");
     }
 
     /// <summary>Whether opening the search result adds a copy of a title held as a file.</summary>
     public bool IsSearchCopy(Guid userId, Guid searchId) =>
-        memoryCache.TryGetValue($"searchcopy:{userId}:{searchId}", out bool copy) && copy;
+        cache.TryGet(GelatoCache.Search, $"searchcopy:{userId}:{searchId}", out bool copy) && copy;
 
     /// <summary>
     /// Whether the item is in one of the libraries <paramref name="folder"/> is in.
@@ -1076,8 +1072,8 @@ public sealed class GelatoManager(
 
             var cfg = GelatoPlugin.Instance!.Configuration;
             // The lookup is memoized, misses too, and the folder may be seconds old.
-            cache.Memo.Remove($"rootfolder:{cfg.MoviePath}");
-            cache.Memo.Remove($"rootfolder:{cfg.SeriesPath}");
+            cache.Remove(GelatoCache.Folders, $"rootfolder:{cfg.MoviePath}");
+            cache.Remove(GelatoCache.Folders, $"rootfolder:{cfg.SeriesPath}");
             var movieFolder = RescueFolder(
                 () => TryGetMovieFolder(cfg),
                 BaseItemKind.Movie,
@@ -1131,7 +1127,7 @@ public sealed class GelatoManager(
         }
 
         var key = $"rootfolder:{path}";
-        if (cache.Memo.TryGetValue(key, out Folder? cached))
+        if (cache.TryGet(GelatoCache.Folders, key, out Folder? cached))
         {
             return cached;
         }
@@ -1144,9 +1140,9 @@ public sealed class GelatoManager(
         {
             // Said once in a while, not on every lookup: the lookup runs for every request.
             var warned = $"seedfailed:{path}";
-            if (!cache.Memo.TryGetValue(warned, out _))
+            if (!cache.Contains(GelatoCache.Folders, warned))
             {
-                cache.Memo.Set(warned, true, TimeSpan.FromMinutes(10));
+                cache.Set(GelatoCache.Folders, warned, true, TimeSpan.FromMinutes(10));
                 _log.LogWarning(ex, "Could not write the seed file into {Path}", path);
             }
         }
@@ -1157,7 +1153,7 @@ public sealed class GelatoManager(
 
         // Misses are cached too, so a configured-but-not-yet-added library does not cost
         // a directory probe and a query on every request while it is being set up.
-        cache.Memo.Set(key, folder, FolderCacheTtl);
+        cache.Set(GelatoCache.Folders, key, folder, FolderCacheTtl);
         return folder;
     }
 

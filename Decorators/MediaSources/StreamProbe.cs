@@ -1,4 +1,5 @@
 using Gelato.RemuxDb;
+using Gelato.Services;
 using Jellyfin.Extensions;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -24,7 +25,8 @@ internal sealed class StreamProbe(
     Lazy<ISubtitleManager> subtitleManager,
     Lazy<GelatoManager> manager,
     Lazy<IProviderManager> providerManager,
-    RemuxDbService remuxDb
+    RemuxDbService remuxDb,
+    GelatoCache cache
 )
 {
     private readonly IMediaSourceManager _inner = inner;
@@ -122,13 +124,11 @@ internal sealed class StreamProbe(
     /// </summary>
     private static readonly TimeSpan ProbedUncachedTtl = TimeSpan.FromHours(4);
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, DateTime> _probedUncached =
-        new();
-
-    internal void MarkProbedUncached(Guid rowId) => _probedUncached[rowId] = DateTime.UtcNow;
+    internal void MarkProbedUncached(Guid rowId) =>
+        cache.Set(GelatoCache.Probes, "uncached|" + rowId, true, ProbedUncachedTtl);
 
     internal bool ProbedUncachedRecently(Guid rowId) =>
-        _probedUncached.TryGetValue(rowId, out var at) && DateTime.UtcNow - at < ProbedUncachedTtl;
+        cache.Contains(GelatoCache.Probes, "uncached|" + rowId);
 
     /// <summary>How long after playback starts a stream with RemuxDB's media info is probed.</summary>
     private static readonly TimeSpan ProbeLaterDelay = TimeSpan.FromSeconds(30);

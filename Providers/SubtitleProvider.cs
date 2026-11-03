@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Gelato.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Providers;
@@ -18,7 +19,6 @@ using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Providers;
 using MediaBrowser.Model.Querying;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace Gelato.Providers
@@ -29,20 +29,17 @@ namespace Gelato.Providers
         private readonly ILogger<SubtitleProvider> _log;
         private readonly ILibraryManager _library;
         private readonly ILocalizationManager _localization;
-
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
-
-        // Static so the cache is shared across all instances — Jellyfin may create
-        // provider instances via its own assembly scanning, separate from the DI container.
-        private static readonly IMemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
+        private readonly GelatoCache _cache;
 
         public SubtitleProvider(
             IHttpClientFactory http,
             ILogger<SubtitleProvider> log,
             ILibraryManager library,
-            ILocalizationManager localization
+            ILocalizationManager localization,
+            GelatoCache cache
         )
         {
+            _cache = cache;
             _http = http;
             _log = log;
             _library = library;
@@ -55,7 +52,7 @@ namespace Gelato.Providers
             new[] { VideoContentType.Movie, VideoContentType.Episode };
 
         /// <summary>
-        /// Fetches the subtitle list for <paramref name="uri"/>, using <see cref="IMemoryCache"/>.
+        /// Fetches the subtitle list for <paramref name="uri"/>, using <see cref="GelatoCache"/>.
         /// On a cache miss the stremio endpoint is called and both the list and every individual
         /// subtitle entry are stored so <see cref="GetSubtitles"/> can serve them without a
         /// second network round-trip.
@@ -69,7 +66,7 @@ namespace Gelato.Providers
             var listKey = ListCacheKey(id, mediaType);
 
             if (
-                _cache.TryGetValue(listKey, out IReadOnlyList<StremioSubtitle>? cached)
+                _cache.TryGet(GelatoCache.Subtitles, listKey, out IReadOnlyList<StremioSubtitle>? cached)
                 && cached is not null
             )
             {
@@ -82,10 +79,10 @@ namespace Gelato.Providers
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
             var subs = await cfg.Stremio!.GetSubtitlesAsync(id, mediaType).ConfigureAwait(false);
 
-            _cache.Set(listKey, (IReadOnlyList<StremioSubtitle>)subs, CacheTtl);
+            _cache.Set(GelatoCache.Subtitles, listKey, (IReadOnlyList<StremioSubtitle>)subs);
 
             foreach (var s in subs)
-                _cache.Set(SubCacheKey(PathSafeId(s.Id)), s, CacheTtl);
+                _cache.Set(GelatoCache.Subtitles, SubCacheKey(PathSafeId(s.Id)), s);
 
             return subs;
         }
@@ -250,15 +247,16 @@ namespace Gelato.Providers
         }
 
         /// <summary>Whether the addon's answer for a search is cached: it answered, and recently.</summary>
-        public static bool AddonAnswered(SubtitleSearchRequest request) =>
-            SearchId(request) is { } id && _cache.TryGetValue(ListCacheKey(id, MediaType(request)), out _);
+        public static bool AddonAnswered(GelatoCache cache, SubtitleSearchRequest request) =>
+            SearchId(request) is { } id
+            && cache.Contains(GelatoCache.Subtitles, ListCacheKey(id, MediaType(request)));
 
         public async Task<SubtitleResponse> GetSubtitles(
             string id,
             CancellationToken cancellationToken
         )
         {
-            if (!_cache.TryGetValue(SubCacheKey(id), out StremioSubtitle sub))
+            if (!_cache.TryGet(GelatoCache.Subtitles, SubCacheKey(id), out StremioSubtitle sub))
             {
                 _log.LogWarning("Subtitle cache miss/expired for id={Id}", id);
                 throw new FileNotFoundException($"Subtitle not found for id {id}");
@@ -354,8 +352,8 @@ namespace Gelato.Providers
         /// The language a subtitle this provider listed is saved under, while it is cached.
         /// </summary>
         /// <param name="id">The id <see cref="Search"/> handed out.</param>
-        public static string? CachedLanguage(string id) =>
-            _cache.TryGetValue(SubCacheKey(id), out StremioSubtitle sub)
+        public static string? CachedLanguage(GelatoCache cache, string id) =>
+            cache.TryGet(GelatoCache.Subtitles, SubCacheKey(id), out StremioSubtitle sub)
                 ? sub.LangCode ?? sub.Lang
                 : null;
 

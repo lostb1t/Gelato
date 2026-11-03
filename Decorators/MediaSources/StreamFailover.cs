@@ -12,7 +12,8 @@ namespace Gelato.Decorators.MediaSources;
 /// </summary>
 internal sealed class StreamFailover(
     MediaSourceManagerDecorator decorator,
-    ILogger<MediaSourceManagerDecorator> log
+    ILogger<MediaSourceManagerDecorator> log,
+    GelatoCache cache
 )
 {
     private readonly ILogger<MediaSourceManagerDecorator> _log = log;
@@ -26,10 +27,6 @@ internal sealed class StreamFailover(
     // The stream a playback moved on to, by the dead stream's row. The source keeps the id the
     // client asked for: Jellyfin picks the source out of the answer by that id, in PlaybackInfo
     // and in every streaming request after it.
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        (string Row, DateTime At)
-    > _failover = new();
 
     /// <summary>
     /// At the start of a playback: the stream the title plays by default, or the next of its
@@ -49,7 +46,7 @@ internal sealed class StreamFailover(
     {
         canMoveOn = false;
         var key = PreProbes.PreProbeKey(selected);
-        _failover.TryRemove(key, out _);
+        cache.Remove(GelatoCache.Probes, "failover|" + key);
         if (
             !GelatoPlugin.Instance!.Configuration.PlaybackFailover
             || item.IsStremioNonPrimary()
@@ -80,7 +77,12 @@ internal sealed class StreamFailover(
             return selected;
 
         var candidate = candidates[index];
-        _failover[key] = (PreProbes.PreProbeKey(candidate), DateTime.UtcNow);
+        cache.Set(
+            GelatoCache.Probes,
+            "failover|" + key,
+            PreProbes.PreProbeKey(candidate),
+            FailoverTtl
+        );
         candidate.Id = selected.Id;
         _log.LogInformation(
             "Playing stream {Index} of {Item}: the streams before it did not start",
@@ -97,17 +99,10 @@ internal sealed class StreamFailover(
     internal MediaSourceInfo FailedOver(IReadOnlyList<MediaSourceInfo> list, MediaSourceInfo selected)
     {
         var key = PreProbes.PreProbeKey(selected);
-        if (!_failover.TryGetValue(key, out var entry))
+        if (!cache.TryGet(GelatoCache.Probes, "failover|" + key, out string? row))
             return selected;
 
-        var now = DateTime.UtcNow;
-        if (now - entry.At >= FailoverTtl)
-        {
-            _failover.TryRemove(key, out _);
-            return selected;
-        }
-
-        if (list.FirstOrDefault(s => PreProbes.PreProbeKey(s) == entry.Row) is not { } replacement)
+        if (list.FirstOrDefault(s => PreProbes.PreProbeKey(s) == row) is not { } replacement)
             return selected;
 
         replacement.Id = selected.Id;
@@ -116,21 +111,11 @@ internal sealed class StreamFailover(
 
     // Sources found dead lately: no answer, an error, a body cut short or no video at all. A
     // playback of the title's default source moves on from them (FailOver).
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _dead =
-        new();
-
     internal void MarkDead(string key)
     {
         decorator.PreProbes.MarkPreProbeFailed(key);
-        foreach (var (staleKey, deadAt) in _dead)
-        {
-            if (DateTime.UtcNow - deadAt >= PreProbes.PreProbeRetry)
-                _dead.TryRemove(staleKey, out _);
-        }
-
-        _dead[key] = DateTime.UtcNow;
+        cache.Set(GelatoCache.Probes, "dead|" + key, true, PreProbes.PreProbeRetry);
     }
 
-    private bool DeadRecently(string key) =>
-        _dead.TryGetValue(key, out var deadAt) && DateTime.UtcNow - deadAt < PreProbes.PreProbeRetry;
+    private bool DeadRecently(string key) => cache.Contains(GelatoCache.Probes, "dead|" + key);
 }

@@ -16,7 +16,8 @@ namespace Gelato.Decorators.MediaSources;
 internal sealed class VersionOrder(
     MediaSourceManagerDecorator decorator,
     ILibraryManager libraryManager,
-    IUserDataManager userDataManager
+    IUserDataManager userDataManager,
+    GelatoCache cache
 )
 {
     private readonly ILibraryManager _libraryManager = libraryManager;
@@ -71,10 +72,7 @@ internal sealed class VersionOrder(
     // The binge group an episode follows, per user: the group of the stream the episode before it
     // is played with. Kept in memory only: it is for the episode that plays next, and playing the
     // episode before it sets it again.
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        (Guid User, Guid Item),
-        (string Group, DateTime SetAt)
-    > _bingeGroups = new();
+    private static string BingeKey(Guid userId, Guid itemId) => $"{userId}|{itemId}";
 
     /// <summary>
     /// Makes <paramref name="next"/> follow the binge group of the stream <paramref name="played"/>
@@ -86,22 +84,14 @@ internal sealed class VersionOrder(
     /// </summary>
     public void FollowBingeGroup(BaseItem played, string? mediaSourceId, BaseItem next, User user)
     {
-        var key = (user.Id, next.Id);
         var group = FindPlayedRow(played, mediaSourceId, user)?.GelatoData<string>("bingeGroup");
         if (string.IsNullOrEmpty(group))
         {
-            _bingeGroups.TryRemove(key, out _);
+            cache.Remove(GelatoCache.BingeGroups, BingeKey(user.Id, next.Id));
             return;
         }
 
-        // Not all at once: the stream under an episode's id must not change while it plays.
-        if (_bingeGroups.Count > 1000)
-        {
-            foreach (var (stale, _) in _bingeGroups.OrderBy(g => g.Value.SetAt).Take(500))
-                _bingeGroups.TryRemove(stale, out _);
-        }
-
-        _bingeGroups[key] = (group, DateTime.UtcNow);
+        cache.Set(GelatoCache.BingeGroups, BingeKey(user.Id, next.Id), group);
     }
 
     /// <summary>The stream row a playback of the item plays, null for a file.</summary>
@@ -134,10 +124,14 @@ internal sealed class VersionOrder(
         Guid userId
     )
     {
-        if (versions.Count < 2 || !_bingeGroups.TryGetValue((userId, primary.Id), out var follows))
+        if (
+            versions.Count < 2
+            || !cache.TryGet(GelatoCache.BingeGroups, BingeKey(userId, primary.Id), out string? follows)
+            || follows is null
+        )
             return;
 
-        var at = versions.FindIndex(v => v.Row.GelatoData<string>("bingeGroup") == follows.Group);
+        var at = versions.FindIndex(v => v.Row.GelatoData<string>("bingeGroup") == follows);
         if (at < 1 || IsShortClip(versions[at].Row, primary))
             return;
 

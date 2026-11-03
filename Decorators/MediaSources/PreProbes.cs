@@ -20,7 +20,8 @@ internal sealed class PreProbes(
     ILibraryManager libraryManager,
     ILogger<MediaSourceManagerDecorator> log,
     IHttpClientFactory httpClientFactory,
-    Lazy<ISessionManager> sessionManager
+    Lazy<ISessionManager> sessionManager,
+    GelatoCache cache
 )
 {
     private readonly ILibraryManager _libraryManager = libraryManager;
@@ -62,22 +63,8 @@ internal sealed class PreProbes(
     /// </summary>
     internal static readonly TimeSpan PreProbeRetry = TimeSpan.FromMinutes(30);
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        DateTime
-    > _preProbeFailed = new();
-
-    private bool PreProbeFailedRecently(string key)
-    {
-        if (!_preProbeFailed.TryGetValue(key, out var failedAt))
-            return false;
-
-        if (DateTime.UtcNow - failedAt < PreProbeRetry)
-            return true;
-
-        _preProbeFailed.TryRemove(new KeyValuePair<string, DateTime>(key, failedAt));
-        return false;
-    }
+    private bool PreProbeFailedRecently(string key) =>
+        cache.Contains(GelatoCache.Probes, "preprobe-failed|" + key);
 
     /// <summary>
     /// How long a source a playback prepared is not pre-probed. The player loads the item again
@@ -85,41 +72,14 @@ internal sealed class PreProbes(
     /// </summary>
     internal static readonly TimeSpan PreparedForPlaybackWindow = TimeSpan.FromMinutes(1);
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        DateTime
-    > _preparedForPlayback = new();
-
-    internal void MarkPreparedForPlayback(string key)
-    {
-        var now = DateTime.UtcNow;
-        foreach (var (staleKey, preparedAt) in _preparedForPlayback)
-        {
-            if (now - preparedAt >= PreparedForPlaybackWindow)
-                _preparedForPlayback.TryRemove(staleKey, out _);
-        }
-
-        _preparedForPlayback[key] = now;
-    }
+    internal void MarkPreparedForPlayback(string key) =>
+        cache.Set(GelatoCache.Probes, "prepared|" + key, true, PreparedForPlaybackWindow);
 
     private bool PreparedForPlaybackRecently(string key) =>
-        _preparedForPlayback.TryGetValue(key, out var preparedAt)
-        && DateTime.UtcNow - preparedAt < PreparedForPlaybackWindow;
+        cache.Contains(GelatoCache.Probes, "prepared|" + key);
 
-    internal void MarkPreProbeFailed(string key)
-    {
-        // Sources nobody opens again are dropped once the map grows.
-        if (_preProbeFailed.Count > 1000)
-        {
-            foreach (var (staleKey, failedAt) in _preProbeFailed)
-            {
-                if (DateTime.UtcNow - failedAt >= PreProbeRetry)
-                    _preProbeFailed.TryRemove(staleKey, out _);
-            }
-        }
-
-        _preProbeFailed[key] = DateTime.UtcNow;
-    }
+    internal void MarkPreProbeFailed(string key) =>
+        cache.Set(GelatoCache.Probes, "preprobe-failed|" + key, true, PreProbeRetry);
 
     // Pre-probes running at once. A playback is never held up by this: it probes on its own.
     private readonly SemaphoreSlim _preProbeSlots = new(2);
