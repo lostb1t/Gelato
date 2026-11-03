@@ -20,7 +20,7 @@ namespace Gelato.Services;
 /// TMDB's own lists are kept in <see cref="GelatoCache.Tmdb"/> for <see cref="ListLifetime"/>,
 /// the same for every user (a person's credits in <see cref="GelatoStremioProvider"/>). The
 /// prepared metas depend on the addon (whether it takes tmdb: ids), so they are in
-/// <see cref="GelatoCache.Memo"/>, which a save empties, keyed by its URL, and prepared again
+/// <see cref="GelatoCache.TitleLists"/>, which a save empties, keyed by its URL, and prepared again
 /// after <see cref="Freshness"/>: a movie's digital release date can come meanwhile. The old ones
 /// are answered until the new ones are there. Which of the titles the library holds is worked out
 /// with them, and again in the background once an item was written since: a request asks the
@@ -124,7 +124,7 @@ public sealed class TmdbTitleLists(
         bool withRatings
     )
     {
-        var prepared = cache.Memo.Get<Prepared>(key);
+        cache.TryGet(GelatoCache.TitleLists, key, out Prepared? prepared);
         if (
             prepared is null
             || prepared.At + Freshness < DateTime.UtcNow
@@ -193,7 +193,8 @@ public sealed class TmdbTitleLists(
                 await PrepareAsync(metas, stremio, withRatings, cts.Token).ConfigureAwait(false);
                 var heldAt = writes.Version;
                 var held = await HeldAsync(metas, cts.Token).ConfigureAwait(false);
-                cache.SetMemo(
+                cache.Set(
+                    GelatoCache.TitleLists,
                     key,
                     new Prepared(metas, DateTime.UtcNow, withRatings, held, heldAt),
                     ListLifetime,
@@ -234,7 +235,8 @@ public sealed class TmdbTitleLists(
                 using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(1));
                 var heldAt = writes.Version;
                 var held = await HeldAsync(prepared.Metas, cts.Token).ConfigureAwait(false);
-                cache.SetMemo(
+                cache.Set(
+                    GelatoCache.TitleLists,
                     key,
                     prepared with { Held = held, HeldAt = heldAt },
                     ListLifetime,
@@ -316,14 +318,14 @@ public sealed class TmdbTitleLists(
 
         var language = remoteTitles.MetadataLanguage();
         var listKey = $"recommendations|{title.Type}:{tmdbId}|{language}";
-        if (!cache.Tmdb.TryGetValue<List<TmdbTitle>>(listKey, out var list) || list is null)
+        if (!cache.TryGet(GelatoCache.Tmdb, listKey, out List<TmdbTitle>? list) || list is null)
         {
             list = await stremio
                 .GetRecommendationsAsync(title.Type, tmdbId, language, ct)
                 .ConfigureAwait(false);
             if (list is null)
                 return null;
-            cache.Tmdb.Set(listKey, list, ListLifetime);
+            cache.Set(GelatoCache.Tmdb, listKey, list, ListLifetime);
         }
 
         return list.Where(t => !t.Adult)
@@ -390,14 +392,14 @@ public sealed class TmdbTitleLists(
             return "";
 
         var key = $"tmdb-id|{title.Type}|{source}:{value}";
-        if (cache.Tmdb.TryGetValue<string>(key, out var known) && known is not null)
+        if (cache.TryGet(GelatoCache.TmdbIds, key, out string? known) && known is not null)
             return known;
 
         var found = await stremio
             .FindTmdbIdAsync(value!, source, title.Type, ct)
             .ConfigureAwait(false);
         if (found is not null)
-            cache.Tmdb.Set(key, found, ListLifetime);
+            cache.Set(GelatoCache.TmdbIds, key, found);
         return found;
     }
 }

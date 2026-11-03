@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using Gelato.Services;
 using Jellyfin.Data.Enums;
 using Jellyfin.Data.Events;
 using MediaBrowser.Common.Net;
@@ -19,7 +19,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
     private readonly GelatoManager _manager;
     private readonly IProviderManager _provider;
     private readonly IHttpClientFactory _http;
-    private readonly ConcurrentDictionary<Guid, DateTime> _syncCache = new();
+    private readonly GelatoCache _cache;
     private static readonly TimeSpan CacheExpiry = TimeSpan.FromMinutes(2);
 
     public GelatoSeriesProvider(
@@ -27,9 +27,11 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         ILibraryManager libraryManager,
         IProviderManager provider,
         GelatoManager manager,
-        IHttpClientFactory http
+        IHttpClientFactory http,
+        GelatoCache cache
     )
     {
+        _cache = cache;
         _log = logger;
         _libraryManager = libraryManager;
         _manager = manager;
@@ -84,7 +86,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
 
         // Check cache
         var now = DateTime.UtcNow;
-        if (!_syncCache.TryGetValue(series.Id, out var lastSync))
+        if (!_cache.TryGet(GelatoCache.SeriesSync, series.Id.ToString(), out DateTime lastSync))
         {
             lastSync = genericEventArgs.Argument.DateLastSaved;
         }
@@ -100,7 +102,7 @@ public sealed class GelatoSeriesProvider : IRemoteMetadataProvider<Series, Serie
         }
 
         // Update cache before syncing
-        _syncCache[series.Id] = now;
+        _cache.Set(GelatoCache.SeriesSync, series.Id.ToString(), now);
 
         var isLocal = !series.HasStremioId();
 

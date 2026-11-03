@@ -13,7 +13,8 @@ public class GelatoStremioProvider(
     string baseUrl,
     Services.StremioAddonClient addon,
     Services.TmdbClient tmdb,
-    ILogger<GelatoStremioProvider> log
+    ILogger<GelatoStremioProvider> log,
+    Services.GelatoCache cache
 )
 {
     /// <summary>The addon's URL, as a key for what depends on the addon.</summary>
@@ -22,24 +23,11 @@ public class GelatoStremioProvider(
     private StremioManifest? _manifest;
     private StremioCatalog? _movieSearchCatalog;
     private StremioCatalog? _seriesSearchCatalog;
-    private static readonly TimeSpan MetaCacheTtl = TimeSpan.FromMinutes(5);
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        (StremioMeta Meta, DateTime Expiry)
-    > _metaCache = new(StringComparer.OrdinalIgnoreCase);
+    // The memos are regions of the cache (Services/GelatoCache.cs). The addon's metas are per
+    // addon URL; TMDB's answers do not depend on the addon.
+    private string MetaKey(string id) => $"{baseUrl}|{id.ToLowerInvariant()}";
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        string?
-    > _tmdbIdByImdbId = new(StringComparer.OrdinalIgnoreCase);
-
-    private StremioMeta? GetCachedMeta(string id)
-    {
-        if (_metaCache.TryGetValue(id, out var entry) && entry.Expiry > DateTime.UtcNow)
-            return entry.Meta;
-        _metaCache.TryRemove(id, out _);
-        return null;
-    }
+    private static string TmdbKey(string kind, string id) => $"{kind}|{id.ToLowerInvariant()}";
 
     /// <summary>
     /// Whether the addon is AIOStreams. Instances can rebrand the manifest id
@@ -64,8 +52,8 @@ public class GelatoStremioProvider(
     private int _manifestReadingFrom;
 
     /// <summary>
-    /// Makes the next use read the manifest again, and wait for it, and forgets the metas read from
-    /// the addon as it was.
+    /// Makes the next use read the manifest again, and wait for it, (a save empties the metas
+    /// read from the addon as it was).
     /// </summary>
     public void Expire()
     {
@@ -74,8 +62,6 @@ public class GelatoStremioProvider(
             _expiries++;
             _manifestExpired = true;
         }
-
-        _metaCache.Clear();
     }
 
     /// <summary>
@@ -181,14 +167,14 @@ public class GelatoStremioProvider(
         TimeSpan? ttl = null
     )
     {
-        var cached = GetCachedMeta(id);
-        if (cached is not null)
-            return cached;
-
-        var meta = await addon.GetMetaAsync(id, mediaType);
-        if (meta is not null)
-            _metaCache[id] = (meta, DateTime.UtcNow.Add(ttl ?? MetaCacheTtl));
-        return meta;
+        return await cache
+            .GetOrAddAsync(
+                Services.GelatoCache.Addon,
+                MetaKey(id),
+                () => addon.GetMetaAsync(id, mediaType),
+                ttl: ttl
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -377,16 +363,11 @@ public class GelatoStremioProvider(
     /// movie hit that premiered within the last year, and the same titles come up again and
     /// again; both lists change at most daily.
     /// </summary>
-    private static readonly TimeSpan ReleaseInfoTtl = TimeSpan.FromHours(12);
-
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        (TmdbReleaseDatesContainer Dates, bool HasWatchProviders, DateTime Expiry)
-    > _releaseInfo = new(StringComparer.OrdinalIgnoreCase);
+    private sealed record ReleaseInfo(TmdbReleaseDatesContainer Dates, bool HasWatchProviders);
 
     /// <summary>
     /// Fetches TMDB release dates and whether TMDB lists a watch provider for the given movie
-    /// meta, memoised per movie for <see cref="ReleaseInfoTtl"/>.
+    /// meta, memoised per movie.
     /// </summary>
     public async Task EnrichDigitalReleaseDateAsync(
         StremioMeta meta,
@@ -396,7 +377,13 @@ public class GelatoStremioProvider(
         if (meta.App_Extras?.ReleaseDates is not null)
             return;
 
-        if (_releaseInfo.TryGetValue(meta.Id, out var known) && known.Expiry > DateTime.UtcNow)
+        if (
+            cache.TryGet(
+                Services.GelatoCache.Tmdb,
+                TmdbKey("release", meta.Id),
+                out ReleaseInfo? known
+            ) && known is not null
+        )
         {
             meta.App_Extras ??= new StremioAppExtras();
             meta.App_Extras.ReleaseDates = known.Dates;
@@ -408,22 +395,17 @@ public class GelatoStremioProvider(
 
         if (meta.App_Extras?.ReleaseDates is { } dates)
         {
-            _releaseInfo[meta.Id] = (
-                dates,
-                meta.App_Extras.HasWatchProviders,
-                DateTime.UtcNow + ReleaseInfoTtl
+            cache.Set(
+                Services.GelatoCache.Tmdb,
+                TmdbKey("release", meta.Id),
+                new ReleaseInfo(dates, meta.App_Extras.HasWatchProviders)
             );
         }
     }
 
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        (List<TmdbContentRating> Ratings, DateTime Expiry)
-    > ContentRatings = new(StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     /// Sets a series' TMDB content ratings, per country, memoised per series for
-    /// <see cref="ReleaseInfoTtl"/>: what the parental control of a user judges a series the
+    /// the TMDB region's lifetime: what the parental control of a user judges a series the
     /// library does not hold by. A series TMDB does not know gets an empty list, so it is unrated
     /// rather than unknown; one TMDB did not answer for keeps none.
     /// </summary>
@@ -435,10 +417,16 @@ public class GelatoStremioProvider(
         if (meta.Type != StremioMediaType.Series || meta.App_Extras?.ContentRatings is not null)
             return;
 
-        if (ContentRatings.TryGetValue(meta.Id, out var known) && known.Expiry > DateTime.UtcNow)
+        if (
+            cache.TryGet(
+                Services.GelatoCache.Tmdb,
+                TmdbKey("ratings", meta.Id),
+                out List<TmdbContentRating>? known
+            ) && known is not null
+        )
         {
             meta.App_Extras ??= new StremioAppExtras();
-            meta.App_Extras.ContentRatings = known.Ratings;
+            meta.App_Extras.ContentRatings = known;
             return;
         }
 
@@ -465,13 +453,17 @@ public class GelatoStremioProvider(
 
             meta.App_Extras ??= new StremioAppExtras();
             meta.App_Extras.ContentRatings = ratings;
-            ContentRatings[meta.Id] = (ratings, DateTime.UtcNow + ReleaseInfoTtl);
+            cache.Set(Services.GelatoCache.Tmdb, TmdbKey("ratings", meta.Id), ratings);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             meta.App_Extras ??= new StremioAppExtras();
             meta.App_Extras.ContentRatings = [];
-            ContentRatings[meta.Id] = ([], DateTime.UtcNow + ReleaseInfoTtl);
+            cache.Set(
+                Services.GelatoCache.Tmdb,
+                TmdbKey("ratings", meta.Id),
+                new List<TmdbContentRating>()
+            );
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
@@ -494,7 +486,13 @@ public class GelatoStremioProvider(
             if (string.IsNullOrWhiteSpace(imdbId))
                 return;
 
-            if (!_tmdbIdByImdbId.TryGetValue(imdbId, out tmdbId))
+            if (
+                !cache.TryGet(
+                    Services.GelatoCache.TmdbIds,
+                    TmdbKey("by-imdb", imdbId),
+                    out tmdbId
+                )
+            )
             {
                 await EnrichByImdbIdAsync(meta, imdbId, cancellationToken).ConfigureAwait(false);
                 return;
@@ -520,7 +518,13 @@ public class GelatoStremioProvider(
             when (ex.StatusCode == HttpStatusCode.NotFound
                 && providerIds.GetValueOrDefault(nameof(MetadataProvider.Imdb)) is { Length: > 0 } imdbId
                 // TMDB already said it has no movie under that imdb id either.
-                && !(_tmdbIdByImdbId.TryGetValue(imdbId, out var known) && known is null)
+                && !(
+                    cache.TryGet(
+                        Services.GelatoCache.TmdbIds,
+                        TmdbKey("by-imdb", imdbId),
+                        out string? known
+                    ) && known is null
+                )
             )
         {
             log.LogDebug(
@@ -564,11 +568,6 @@ public class GelatoStremioProvider(
     /// TMDB's imdb ids by kind and TMDB id, as <see cref="GetImdbIdFromTmdbAsync"/> answered
     /// them: a title's imdb id does not change, so it is asked for once.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        string?
-    > ImdbIdByTmdbId = new(StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     /// <see cref="GetImdbIdFromTmdbAsync"/>, remembered. A failed request is not remembered.
     /// </summary>
@@ -578,26 +577,20 @@ public class GelatoStremioProvider(
         CancellationToken cancellationToken
     )
     {
-        var key = $"{mediaType}:{tmdbId}";
-        if (ImdbIdByTmdbId.TryGetValue(key, out var known))
-            return known;
-
-        var imdbId = await GetImdbIdFromTmdbAsync(tmdbId, mediaType, cancellationToken)
+        return await cache
+            .GetOrAddAsync(
+                Services.GelatoCache.TmdbIds,
+                TmdbKey("imdb", $"{mediaType}:{tmdbId}"),
+                () => GetImdbIdFromTmdbAsync(tmdbId, mediaType, cancellationToken),
+                ct: cancellationToken
+            )
             .ConfigureAwait(false);
-        if (imdbId is not null)
-            ImdbIdByTmdbId[key] = imdbId;
-        return imdbId;
     }
 
     /// <summary>
     /// TMDB's TVDB ids of series by TMDB id: a series' TVDB id does not change, so it is asked
     /// for once.
     /// </summary>
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        string
-    > TvdbIdByTmdbId = new(StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     /// The TVDB id TMDB lists for a series, remembered, or null when it lists none or cannot be
     /// asked. A failed request is not remembered.
@@ -607,36 +600,26 @@ public class GelatoStremioProvider(
         CancellationToken cancellationToken
     )
     {
-        if (TvdbIdByTmdbId.TryGetValue(tmdbId, out var known))
-            return known;
-
-        var tvdbId = await tmdb.GetExternalIdAsync(
-                tmdbId,
-                StremioMediaType.Series,
-                "tvdb_id",
-                cancellationToken
+        return await cache
+            .GetOrAddAsync(
+                Services.GelatoCache.TmdbIds,
+                TmdbKey("tvdb", tmdbId),
+                () =>
+                    tmdb.GetExternalIdAsync(
+                        tmdbId,
+                        StremioMediaType.Series,
+                        "tvdb_id",
+                        cancellationToken
+                    ),
+                ct: cancellationToken
             )
             .ConfigureAwait(false);
-        if (tvdbId is not null)
-            TvdbIdByTmdbId[tmdbId] = tvdbId;
-        return tvdbId;
     }
 
     /// <summary>
-    /// How long a person's TMDB credits are kept. A filmography changes rarely, and a person's
-    /// page asks for them once per section.
-    /// </summary>
-    private static readonly TimeSpan PersonCreditsTtl = TimeSpan.FromHours(12);
-
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<
-        string,
-        (TmdbPersonCredits Credits, DateTime Expiry)
-    > PersonCredits = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
     /// A person's movie and series credits from TMDB, in <paramref name="language"/>, memoised
-    /// per person and language for <see cref="PersonCreditsTtl"/>, or null when TMDB does not
-    /// answer.
+    /// per person and language (a filmography changes rarely, and a person page asks for it once
+    /// per section), or null when TMDB does not answer.
     /// </summary>
     public async Task<TmdbPersonCredits?> GetPersonCreditsAsync(
         string tmdbPersonId,
@@ -644,20 +627,20 @@ public class GelatoStremioProvider(
         CancellationToken cancellationToken
     )
     {
-        var key = $"{tmdbPersonId}|{language}";
+        var key = TmdbKey("credits", $"{tmdbPersonId}|{language}");
         if (
-            PersonCredits.TryGetValue(key, out var known)
-            && known.Expiry > DateTime.UtcNow
+            cache.TryGet(Services.GelatoCache.Tmdb, key, out TmdbPersonCredits? known)
+            && known is not null
         )
         {
             log.LogDebug("GetPersonCredits: person {TmdbId} from the cache", tmdbPersonId);
-            return known.Credits;
+            return known;
         }
 
         var credits = await tmdb.GetPersonCreditsAsync(tmdbPersonId, language, cancellationToken)
             .ConfigureAwait(false);
         if (credits is not null)
-            PersonCredits[key] = (credits, DateTime.UtcNow + PersonCreditsTtl);
+            cache.Set(Services.GelatoCache.Tmdb, key, credits);
         return credits;
     }
 
@@ -698,12 +681,16 @@ public class GelatoStremioProvider(
         {
             var movie = await tmdb.GetMovieReleaseDatesAsync(imdbId, cancellationToken)
                 .ConfigureAwait(false);
-            _tmdbIdByImdbId[imdbId] = movie?.Id?.ToString(CultureInfo.InvariantCulture);
+            cache.Set(
+                Services.GelatoCache.TmdbIds,
+                TmdbKey("by-imdb", imdbId),
+                movie?.Id?.ToString(CultureInfo.InvariantCulture)
+            );
             ApplyTmdbMovie(meta, movie);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
-            _tmdbIdByImdbId[imdbId] = null;
+            cache.Set<string?>(Services.GelatoCache.TmdbIds, TmdbKey("by-imdb", imdbId), null);
         }
         catch (Exception ex)
         {

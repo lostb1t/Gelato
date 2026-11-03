@@ -35,7 +35,7 @@ public sealed class RemuxDbContributor(
     public void Enqueue(RemuxDbTitle title, RemuxDbSubmission submission)
     {
         var key = SentKey(submission);
-        if (owner.Memo.TryGetValue(key, out _))
+        if (owner.Contains(GelatoCache.RemuxDb, key))
             return;
 
         if (!_queue.Writer.TryWrite((title, submission)))
@@ -44,7 +44,7 @@ public sealed class RemuxDbContributor(
             return;
         }
 
-        owner.Memo.Set(key, true, SentTtl);
+        owner.Set(GelatoCache.RemuxDb, key, true, SentTtl);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -72,7 +72,7 @@ public sealed class RemuxDbContributor(
                 }
                 else
                 {
-                    owner.Memo.Remove(SentKey(submission));
+                    owner.Remove(GelatoCache.RemuxDb, SentKey(submission));
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -81,7 +81,7 @@ public sealed class RemuxDbContributor(
             }
             catch (Exception ex)
             {
-                owner.Memo.Remove(SentKey(submission));
+                owner.Remove(GelatoCache.RemuxDb, SentKey(submission));
                 log.LogWarning(
                     "RemuxDB submission for {Filename} failed: {Error}",
                     submission.Filename,

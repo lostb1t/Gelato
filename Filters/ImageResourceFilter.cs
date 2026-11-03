@@ -1,4 +1,5 @@
 using Gelato.Decorators;
+using Gelato.Services;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -21,7 +22,8 @@ public sealed class ImageResourceFilter(
     GelatoManager manager,
     ILibraryManager libraryManager,
     IApplicationPaths appPaths,
-    ILogger<ImageResourceFilter> log
+    ILogger<ImageResourceFilter> log,
+    GelatoCache cache
 ) : IAsyncResourceFilter
 {
     public async Task OnResourceExecutionAsync(
@@ -225,7 +227,7 @@ public sealed class ImageResourceFilter(
 
         try
         {
-            return ImageProcessorDecorator.IsKnownDead(File.ReadAllText(urlFile).Trim());
+            return ImageProcessorDecorator.IsKnownDead(cache, File.ReadAllText(urlFile).Trim());
         }
         catch (IOException)
         {

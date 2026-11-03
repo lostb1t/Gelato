@@ -15,7 +15,12 @@ namespace Gelato.Controllers;
 [ApiController]
 [Route("gelato/addon")]
 [Authorize(Policy = Policies.RequiresElevation)]
-public class AddonController(IHttpClientFactory http, ILoggerFactory log, TmdbClient tmdb) : ControllerBase
+public class AddonController(
+    IHttpClientFactory http,
+    ILoggerFactory log,
+    TmdbClient tmdb,
+    Gelato.Services.GelatoCache cache
+) : ControllerBase
 {
     /// <summary>The URL comes in the body: it carries the user's addon config.</summary>
     public sealed class CheckRequest
@@ -49,7 +54,8 @@ public class AddonController(IHttpClientFactory http, ILoggerFactory log, TmdbCl
             baseUrl,
             new StremioAddonClient(baseUrl, http, log.CreateLogger<StremioAddonClient>()),
             tmdb,
-            log.CreateLogger<GelatoStremioProvider>()
+            log.CreateLogger<GelatoStremioProvider>(),
+            cache
         );
         var watch = Stopwatch.StartNew();
         var manifest = await provider.GetManifestAsync(force: true).ConfigureAwait(false);

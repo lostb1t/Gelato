@@ -89,7 +89,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
     private readonly IntroDbClient _introDbClient;
     private readonly IChapterRepository _chapters;
     private readonly SegmentLookups _lookups;
-    private readonly IMemoryCache _cache;
+    private readonly GelatoCache _cache;
     private readonly ILogger<IntroDbSegmentProvider> _logger;
 
     /// <summary>
@@ -121,7 +121,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         _introDbClient = introDbClient;
         _chapters = chapters;
         _lookups = lookups;
-        _cache = cache.Memo;
+        _cache = cache;
         _logger = logger;
     }
 
@@ -249,7 +249,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
         var noIntroKey = isMovie
             ? $"gelato:introdb:none:{imdbId}:movie"
             : $"gelato:introdb:none:{imdbId}:{seasonNumber}:{episodeNumber}";
-        if (_cache.TryGetValue(noIntroKey, out _))
+        if (_cache.Contains(GelatoCache.IntroDb, noIntroKey))
         {
             _logger.LogDebug(
                 "IntroDB had nothing for {ItemId} (IMDb {Title}) lately, not asking again.",
@@ -337,7 +337,7 @@ public class IntroDbSegmentProvider : IMediaSegmentProvider
 
         if (segments.Count == 0)
         {
-            _cache.Set(noIntroKey, true, NoIntroTtl);
+            _cache.Set(GelatoCache.IntroDb, noIntroKey, true, NoIntroTtl);
             _logger.LogDebug(
                 "No segments from IntroDB for {ItemId} (IMDb {Title}).",
                 request.ItemId,

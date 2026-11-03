@@ -51,7 +51,8 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         IHttpClientFactory httpClientFactory,
         SegmentLookups segmentLookups,
         SyncPlaySources syncPlaySources,
-        Lazy<ISessionManager> sessionManager
+        Lazy<ISessionManager> sessionManager,
+        GelatoCache cache
     )
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
@@ -63,7 +64,7 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
 
         Sync = new StreamSyncOnOpen(libraryManager, log, manager, subtitleProvider);
         Versions = new VersionList(this, inner, libraryManager, log, http, manager);
-        Order = new VersionOrder(this, libraryManager, userDataManager);
+        Order = new VersionOrder(this, libraryManager, userDataManager, cache);
         Playback = new PlaybackPreparation(
             this,
             inner,
@@ -75,8 +76,15 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
             segmentLookups,
             syncPlaySources
         );
-        Failover = new StreamFailover(this, log);
-        PreProbes = new PreProbes(this, libraryManager, log, httpClientFactory, sessionManager);
+        Failover = new StreamFailover(this, log, cache);
+        PreProbes = new PreProbes(
+            this,
+            libraryManager,
+            log,
+            httpClientFactory,
+            sessionManager,
+            cache
+        );
         Probe = new StreamProbe(
             inner,
             libraryManager,
@@ -85,7 +93,8 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
             subtitleManager,
             manager,
             providerManager,
-            remuxDb
+            remuxDb,
+            cache
         );
         Segments = new SegmentRuns(libraryManager, log, mediaSegmentManager, segmentLookups);
     }

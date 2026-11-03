@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using Gelato.Services;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Drawing;
@@ -16,50 +16,31 @@ public sealed class ImageProcessorDecorator(
     IApplicationPaths appPaths,
     Lazy<ProviderManagerDecorator> providerManager,
     Lazy<ILibraryManager> libraryManager,
-    ILogger<ImageProcessorDecorator> log
+    ILogger<ImageProcessorDecorator> log,
+    GelatoCache cache
 ) : IImageProcessor
 {
     // Remote images that answered with an error, and until when they are left alone. A still of an
     // episode that has not aired yet is simply not there yet, and retrying it on every single
     // request only produced the same 404 again (issue 226). A permanent answer is remembered for
     // hours — the still usually appears within days — a transient one only for minutes.
-    private static readonly ConcurrentDictionary<string, DateTime> FailedUrls = new(
-        StringComparer.Ordinal
-    );
     private static readonly TimeSpan PermanentFailureTtl = TimeSpan.FromHours(6);
     private static readonly TimeSpan TransientFailureTtl = TimeSpan.FromMinutes(5);
 
     /// <summary>
     /// Whether the URL failed recently and should not be fetched again yet.
     /// </summary>
-    public static bool IsKnownDead(string url)
-    {
-        if (!FailedUrls.TryGetValue(url, out var until))
-            return false;
-        if (DateTime.UtcNow < until)
-            return true;
-        FailedUrls.TryRemove(url, out _);
-        return false;
-    }
+    public static bool IsKnownDead(GelatoCache cache, string url) =>
+        cache.Contains(GelatoCache.Images, url);
 
-    private static void RememberFailure(string url, Exception ex)
+    private static void RememberFailure(GelatoCache cache, string url, Exception ex)
     {
         // A 4xx means the image is not there; anything else (5xx, a timeout, no route) can be over
         // in a moment.
         var permanent =
             ex is HttpRequestException { StatusCode: { } status }
             && (int)status is >= 400 and < 500;
-        if (FailedUrls.Count > 4096)
-        {
-            var now = DateTime.UtcNow;
-            foreach (var (key, expiry) in FailedUrls)
-            {
-                if (expiry <= now)
-                    FailedUrls.TryRemove(key, out _);
-            }
-        }
-
-        FailedUrls[url] = DateTime.UtcNow + (permanent ? PermanentFailureTtl : TransientFailureTtl);
+        cache.Set(GelatoCache.Images, url, true, permanent ? PermanentFailureTtl : TransientFailureTtl);
     }
 
     // Return a hardcoded blurhash for any zero-byte/missing placeholder that has a .url sidecar,
@@ -105,7 +86,7 @@ public sealed class ImageProcessorDecorator(
                 if (urlFile is not null)
                 {
                     var url = (await File.ReadAllTextAsync(urlFile).ConfigureAwait(false)).Trim();
-                    if (IsKnownDead(url))
+                    if (IsKnownDead(cache, url))
                     {
                         log.LogDebug(
                             "ImageProcessor: {Url} failed recently, not fetching it again for {Id}",
@@ -140,7 +121,7 @@ public sealed class ImageProcessorDecorator(
                             options.Image.Type,
                             Redact.Url(url)
                         );
-                        FailedUrls.TryRemove(url, out _);
+                        cache.Remove(GelatoCache.Images, url);
                     }
                     catch (Exception ex)
                     {
@@ -150,7 +131,7 @@ public sealed class ImageProcessorDecorator(
                             options.Item.Id,
                             Redact.Url(url)
                         );
-                        RememberFailure(url, ex);
+                        RememberFailure(cache, url, ex);
                     }
                 }
                 else

@@ -83,7 +83,7 @@ public sealed class RemuxDbClient(HttpClient http, GelatoCache owner, ILogger<Re
     )
     {
         var key = CacheKey(title);
-        if (owner.Memo.TryGetValue(key, out IReadOnlyList<RemuxDbVersion>? cached) && cached is not null)
+        if (owner.TryGet(GelatoCache.RemuxDb, key, out IReadOnlyList<RemuxDbVersion>? cached) && cached is not null)
             return cached;
 
         // RemuxDB reads season and episode from the id itself (tt0903747:1:1) and ignores
@@ -150,14 +150,14 @@ public sealed class RemuxDbClient(HttpClient http, GelatoCache owner, ILogger<Re
             title.CacheKey,
             versions.Count
         );
-        owner.Memo.Set(key, versions, ttl);
+        owner.Set(GelatoCache.RemuxDb, key, versions, ttl);
         return versions;
     }
 
     /// <summary>Forgets a title's lookup, so a file just submitted is found on the next sync.</summary>
     public void Forget(RemuxDbTitle title)
     {
-        owner.Memo.Remove(CacheKey(title));
+        owner.Remove(GelatoCache.RemuxDb, CacheKey(title));
         _ = Ahead.TryTake(title.CacheKey);
     }
 
