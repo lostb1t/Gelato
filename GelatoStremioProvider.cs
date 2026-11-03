@@ -11,7 +11,8 @@ namespace Gelato;
 
 public class GelatoStremioProvider(
     string baseUrl,
-    IHttpClientFactory http,
+    Services.StremioAddonClient addon,
+    Services.TmdbClient tmdb,
     ILogger<GelatoStremioProvider> log
 )
 {
@@ -21,11 +22,6 @@ public class GelatoStremioProvider(
     private StremioManifest? _manifest;
     private StremioCatalog? _movieSearchCatalog;
     private StremioCatalog? _seriesSearchCatalog;
-    private static readonly JsonSerializerOptions JsonOpts = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
-
     private static readonly TimeSpan MetaCacheTtl = TimeSpan.FromMinutes(5);
     private readonly System.Collections.Concurrent.ConcurrentDictionary<
         string,
@@ -45,8 +41,6 @@ public class GelatoStremioProvider(
         return null;
     }
 
-    private const string AioStreamsUserAgent = "AIOStreams/1.0";
-
     /// <summary>
     /// Whether the addon is AIOStreams. Instances can rebrand the manifest id
     /// (<c>com.aiostreams.viren070</c> by default) and name, but keep the product in one of them.
@@ -57,83 +51,6 @@ public class GelatoStremioProvider(
             manifest.Id.Contains("aiostreams", StringComparison.OrdinalIgnoreCase)
             || manifest.Name.Contains("aiostreams", StringComparison.OrdinalIgnoreCase)
         );
-
-    private HttpClient NewClient()
-    {
-        var c = http.CreateClient(nameof(GelatoStremioProvider));
-        c.Timeout = TimeSpan.FromSeconds(30);
-        c.DefaultRequestHeaders.UserAgent.TryParseAdd(GelatoPlugin.UserAgent);
-        return c;
-    }
-
-    private string BuildUrl(string[] segments, IEnumerable<string>? extras = null)
-    {
-        var parts = segments.Select(Uri.EscapeDataString).ToArray();
-        var path = string.Join("/", parts);
-
-        var extrasPart = string.Empty;
-        if (extras != null)
-        {
-            var enumerable = extras.ToList();
-            extrasPart = enumerable.Count != 0 ? "/" + string.Join("&", enumerable) : string.Empty;
-        }
-
-        var url = $"{baseUrl}/{path}{extrasPart}.json";
-        url = url.Replace("%3A", ":").Replace("%3a", ":");
-        return url;
-    }
-
-    private async Task<T?> GetJsonAsync<T>(string url, string? userAgent = null)
-    {
-        // The base URL carries the user's addon config, so only the resource after it is logged.
-        var resource = url.StartsWith(baseUrl, StringComparison.Ordinal)
-            ? url[baseUrl.Length..]
-            : Redact.Url(url);
-        log.LogDebug(
-            "GetJsonAsync: requesting {Resource} from {Addon}",
-            resource,
-            Redact.Url(baseUrl)
-        );
-
-        try
-        {
-            var c = NewClient();
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            if (userAgent is not null)
-                request.Headers.UserAgent.ParseAdd(userAgent);
-            var resp = await c.SendAsync(request).ConfigureAwait(false); // No using statement
-
-            if (!resp.IsSuccessStatusCode)
-            {
-                log.LogWarning(
-                    "GetJsonAsync: request failed for {Resource} with {StatusCode} {ReasonPhrase}",
-                    resource,
-                    resp.StatusCode,
-                    resp.ReasonPhrase
-                );
-
-                throw new HttpRequestException(
-                    $"HTTP {resp.StatusCode}: {resp.ReasonPhrase}",
-                    null,
-                    resp.StatusCode
-                );
-            }
-
-            await using var s = await resp.Content.ReadAsStreamAsync().ConfigureAwait(false);
-            return await JsonSerializer.DeserializeAsync<T>(s, JsonOpts).ConfigureAwait(false);
-        }
-        // A non-success status was logged above; the exception only carries it to the caller.
-        catch (Exception ex) when (ex is not HttpRequestException { StatusCode: not null })
-        {
-            log.LogError(
-                ex,
-                "GetJsonAsync: error fetching or parsing {Resource} from {Addon}",
-                resource,
-                Redact.Url(baseUrl)
-            );
-            throw;
-        }
-    }
 
     // A manifest, when it is read again and whether a save asked for it (GelatoCache.Invalidate).
     private DateTime _manifestDue;
@@ -196,8 +113,7 @@ public class GelatoStremioProvider(
         _manifestExpired = false;
         try
         {
-            var url = $"{baseUrl}/manifest.json";
-            var m = await GetJsonAsync<StremioManifest>(url).ConfigureAwait(false);
+            var m = await addon.GetManifestAsync().ConfigureAwait(false);
             // A save came in meanwhile: the read after it decides. Without a manifest yet, this one
             // is kept until then rather than leaving its waiters with none.
             if (from != Volatile.Read(ref _expiries) && _manifest is not null)
@@ -269,11 +185,10 @@ public class GelatoStremioProvider(
         if (cached is not null)
             return cached;
 
-        var url = BuildUrl(["meta", mediaType.ToString().ToLower(), id]);
-        var r = await GetJsonAsync<StremioMetaResponse>(url);
-        if (r?.Meta is { } meta)
+        var meta = await addon.GetMetaAsync(id, mediaType);
+        if (meta is not null)
             _metaCache[id] = (meta, DateTime.UtcNow.Add(ttl ?? MetaCacheTtl));
-        return r?.Meta;
+        return meta;
     }
 
     /// <summary>
@@ -458,33 +373,6 @@ public class GelatoStremioProvider(
     }
 
     /// <summary>
-    /// Fetches digital (type 4) release dates from TMDB for the given TMDB movie ID
-    /// Uses the TMDB API key from the Jellyfin TMDB plugin if configured, otherwise falls back
-    /// to the built-in default key.
-    /// </summary>
-    private static string GetTmdbApiKey()
-    {
-        const string defaultKey = "4219e299c89411838049ab0dab19ebd5";
-        try
-        {
-            // Avoid a hard compile-time dependency on MediaBrowser.Providers.
-            // Jellyfin.Providers is loaded at runtime — grab the key via reflection if available.
-            var pluginType = Type.GetType(
-                "MediaBrowser.Providers.Plugins.Tmdb.Plugin, Jellyfin.Providers",
-                throwOnError: false
-            );
-            var instance = pluginType?.GetProperty("Instance")?.GetValue(null);
-            var cfg = instance?.GetType().GetProperty("Configuration")?.GetValue(instance);
-            var key = cfg?.GetType().GetProperty("TmdbApiKey")?.GetValue(cfg) as string;
-            return string.IsNullOrWhiteSpace(key) ? defaultKey : key;
-        }
-        catch
-        {
-            return defaultKey;
-        }
-    }
-
-    /// <summary>
     /// How long a movie's TMDB release dates and watch providers are kept. Search asks for every
     /// movie hit that premiered within the last year, and the same titles come up again and
     /// again; both lists change at most daily.
@@ -554,13 +442,9 @@ public class GelatoStremioProvider(
             return;
         }
 
-        var apiKey = GetTmdbApiKey();
         var providerIds = meta.GetProviderIds();
         try
         {
-            using var client = http.CreateClient(nameof(GelatoStremioProvider));
-            client.Timeout = TimeSpan.FromSeconds(10);
-
             var tmdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Tmdb));
             if (
                 string.IsNullOrWhiteSpace(tmdbId)
@@ -568,37 +452,15 @@ public class GelatoStremioProvider(
                 { Length: > 0 } imdbId
             )
             {
-                var found = await client
-                    .GetStringAsync(
-                        $"https://api.themoviedb.org/3/find/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&external_source=imdb_id",
-                        cancellationToken
-                    )
+                tmdbId = await tmdb.FindSeriesIdByImdbIdAsync(imdbId, cancellationToken)
                     .ConfigureAwait(false);
-                using var doc = JsonDocument.Parse(found);
-                tmdbId =
-                    doc.RootElement.TryGetProperty("tv_results", out var tv)
-                    && tv.GetArrayLength() > 0
-                    && tv[0].TryGetProperty("id", out var id)
-                        ? id.GetInt32().ToString(CultureInfo.InvariantCulture)
-                        : null;
             }
 
             var ratings = new List<TmdbContentRating>();
             if (!string.IsNullOrWhiteSpace(tmdbId))
             {
-                var response = await client
-                    .GetStringAsync(
-                        $"https://api.themoviedb.org/3/tv/{Uri.EscapeDataString(tmdbId)}/content_ratings?api_key={apiKey}",
-                        cancellationToken
-                    )
+                ratings = await tmdb.GetContentRatingsAsync(tmdbId, cancellationToken)
                     .ConfigureAwait(false);
-                ratings =
-                    JsonSerializer
-                        .Deserialize<TmdbResults<TmdbContentRating>>(
-                            response,
-                            JsonOpts
-                        )
-                        ?.Results ?? [];
             }
 
             meta.App_Extras ??= new StremioAppExtras();
@@ -621,7 +483,6 @@ public class GelatoStremioProvider(
     {
         log.LogDebug("EnrichDigitalReleaseDate: asking TMDB for {Id} ({Name})", meta.Id, meta.Name);
         var providerIds = meta.GetProviderIds();
-        var apiKey = GetTmdbApiKey();
         var tmdbId = providerIds.GetValueOrDefault(nameof(MetadataProvider.Tmdb));
         if (string.IsNullOrWhiteSpace(tmdbId))
         {
@@ -635,29 +496,21 @@ public class GelatoStremioProvider(
 
             if (!_tmdbIdByImdbId.TryGetValue(imdbId, out tmdbId))
             {
-                await EnrichByImdbIdAsync(meta, imdbId, apiKey, cancellationToken)
-                    .ConfigureAwait(false);
+                await EnrichByImdbIdAsync(meta, imdbId, cancellationToken).ConfigureAwait(false);
                 return;
             }
             if (string.IsNullOrWhiteSpace(tmdbId))
                 return;
         }
 
-        // The movie details with both lists appended, not /release_dates alone: the watch
-        // providers come along in the same request.
-        var url =
-            $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(tmdbId)}?api_key={apiKey}&append_to_response={TmdbAppend}";
-
         try
         {
-            using var client = http.CreateClient(nameof(GelatoStremioProvider));
-            client.Timeout = TimeSpan.FromSeconds(10);
-            var response = await client
-                .GetStringAsync(url, cancellationToken)
-                .ConfigureAwait(false);
+            // The movie details with both lists appended, not /release_dates alone: the watch
+            // providers come along in the same request.
             ApplyTmdbMovie(
                 meta,
-                JsonSerializer.Deserialize<TmdbMovieReleaseDates>(response, JsonOpts)
+                await tmdb.GetMovieReleaseDatesAsync(tmdbId, cancellationToken)
+                    .ConfigureAwait(false)
             );
         }
         // An addon can map the movie to a TMDB id TMDB does not have (deleted or merged there).
@@ -677,8 +530,7 @@ public class GelatoStremioProvider(
                 meta.Id,
                 imdbId
             );
-            await EnrichByImdbIdAsync(meta, imdbId, apiKey, cancellationToken)
-                .ConfigureAwait(false);
+            await EnrichByImdbIdAsync(meta, imdbId, cancellationToken).ConfigureAwait(false);
         }
         // Any other error from TMDB is not transient either.
         catch (HttpRequestException ex) when (ex.StatusCode is not null)
@@ -706,52 +558,7 @@ public class GelatoStremioProvider(
         string tmdbId,
         StremioMediaType mediaType,
         CancellationToken cancellationToken
-    ) => GetExternalIdFromTmdbAsync(tmdbId, mediaType, "imdb_id", cancellationToken);
-
-    /// <summary>
-    /// One of the ids TMDB lists for a movie or series (<c>external_ids</c>), or null when it
-    /// lists none or cannot be asked. TMDB gives the TVDB id as a number.
-    /// </summary>
-    private async Task<string?> GetExternalIdFromTmdbAsync(
-        string tmdbId,
-        StremioMediaType mediaType,
-        string field,
-        CancellationToken cancellationToken
-    )
-    {
-        var kind = mediaType is StremioMediaType.Series ? "tv" : "movie";
-        var url =
-            $"https://api.themoviedb.org/3/{kind}/{Uri.EscapeDataString(tmdbId)}/external_ids?api_key={GetTmdbApiKey()}";
-        try
-        {
-            using var client = http.CreateClient(nameof(GelatoStremioProvider));
-            client.Timeout = TimeSpan.FromSeconds(10);
-            var response = await client
-                .GetStringAsync(url, cancellationToken)
-                .ConfigureAwait(false);
-            using var doc = JsonDocument.Parse(response);
-            if (!doc.RootElement.TryGetProperty(field, out var id))
-                return null;
-            var value = id.ValueKind switch
-            {
-                JsonValueKind.String => id.GetString(),
-                JsonValueKind.Number => id.GetRawText(),
-                _ => null,
-            };
-            return string.IsNullOrEmpty(value) ? null : value;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
-        {
-            log.LogDebug(
-                ex,
-                "GetExternalIdFromTmdb: no {Field} for {Kind} {TmdbId}",
-                field,
-                kind,
-                tmdbId
-            );
-            return null;
-        }
-    }
+    ) => tmdb.GetExternalIdAsync(tmdbId, mediaType, "imdb_id", cancellationToken);
 
     /// <summary>
     /// TMDB's imdb ids by kind and TMDB id, as <see cref="GetImdbIdFromTmdbAsync"/> answered
@@ -803,7 +610,7 @@ public class GelatoStremioProvider(
         if (TvdbIdByTmdbId.TryGetValue(tmdbId, out var known))
             return known;
 
-        var tvdbId = await GetExternalIdFromTmdbAsync(
+        var tvdbId = await tmdb.GetExternalIdAsync(
                 tmdbId,
                 StremioMediaType.Series,
                 "tvdb_id",
@@ -827,10 +634,9 @@ public class GelatoStremioProvider(
     > PersonCredits = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// A person's movie and series credits from TMDB (<c>person/{id}/combined_credits</c>),
-    /// in <paramref name="language"/> (titles and overviews; TMDB falls back to the original),
-    /// memoised per person and language for <see cref="PersonCreditsTtl"/>, or null when TMDB
-    /// does not answer.
+    /// A person's movie and series credits from TMDB, in <paramref name="language"/>, memoised
+    /// per person and language for <see cref="PersonCreditsTtl"/>, or null when TMDB does not
+    /// answer.
     /// </summary>
     public async Task<TmdbPersonCredits?> GetPersonCreditsAsync(
         string tmdbPersonId,
@@ -848,119 +654,34 @@ public class GelatoStremioProvider(
             return known.Credits;
         }
 
-        log.LogDebug("GetPersonCredits: asking TMDB for person {TmdbId}", tmdbPersonId);
-        var url =
-            $"https://api.themoviedb.org/3/person/{Uri.EscapeDataString(tmdbPersonId)}/combined_credits?api_key={GetTmdbApiKey()}"
-            + (string.IsNullOrWhiteSpace(language) ? "" : $"&language={Uri.EscapeDataString(language)}");
-        try
-        {
-            using var client = http.CreateClient(nameof(GelatoStremioProvider));
-            client.Timeout = TimeSpan.FromSeconds(10);
-            var response = await client
-                .GetStringAsync(url, cancellationToken)
-                .ConfigureAwait(false);
-            var credits =
-                JsonSerializer.Deserialize<TmdbPersonCredits>(response, JsonOpts)
-                ?? new TmdbPersonCredits();
+        var credits = await tmdb.GetPersonCreditsAsync(tmdbPersonId, language, cancellationToken)
+            .ConfigureAwait(false);
+        if (credits is not null)
             PersonCredits[key] = (credits, DateTime.UtcNow + PersonCreditsTtl);
-            return credits;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
-        {
-            log.LogWarning(
-                "GetPersonCredits: TMDB did not answer for person {TmdbId}: {Error}",
-                tmdbPersonId,
-                ex.Message
-            );
-            return null;
-        }
+        return credits;
     }
 
     /// <summary>
-    /// TMDB's recommendations for a movie or series (<c>movie/{id}/recommendations</c>,
-    /// <c>tv/{id}/recommendations</c>, the first page of about 20), in
-    /// <paramref name="language"/>, or null when TMDB does not answer. A movie can be asked for by
-    /// its imdb id too. Not memoised: <see cref="Services.TmdbTitleLists"/> keeps them.
+    /// TMDB's recommendations for a movie or series, or null when TMDB does not answer. Not
+    /// memoised: <see cref="Services.TmdbTitleLists"/> keeps them.
     /// </summary>
-    public async Task<List<TmdbTitle>?> GetRecommendationsAsync(
+    public Task<List<TmdbTitle>?> GetRecommendationsAsync(
         StremioMediaType mediaType,
         string id,
         string? language,
         CancellationToken cancellationToken
-    )
-    {
-        var kind = mediaType is StremioMediaType.Series ? "tv" : "movie";
-        log.LogDebug("GetRecommendations: asking TMDB for {Kind} {Id}", kind, id);
-        var url =
-            $"https://api.themoviedb.org/3/{kind}/{Uri.EscapeDataString(id)}/recommendations?api_key={GetTmdbApiKey()}"
-            + (string.IsNullOrWhiteSpace(language) ? "" : $"&language={Uri.EscapeDataString(language)}");
-        try
-        {
-            using var client = http.CreateClient(nameof(GelatoStremioProvider));
-            client.Timeout = TimeSpan.FromSeconds(10);
-            var response = await client
-                .GetStringAsync(url, cancellationToken)
-                .ConfigureAwait(false);
-            var titles =
-                JsonSerializer.Deserialize<TmdbResults<TmdbTitle>>(response, JsonOpts)?.Results
-                ?? [];
-            foreach (var title in titles)
-                title.MediaType ??= kind;
-            return titles;
-        }
-        // A title TMDB does not know has no recommendations, for good.
-        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return [];
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
-        {
-            log.LogDebug(
-                "GetRecommendations: TMDB did not answer for {Kind} {Id}: {Error}",
-                kind,
-                id,
-                ex.Message
-            );
-            return null;
-        }
-    }
+    ) => tmdb.GetRecommendationsAsync(mediaType, id, language, cancellationToken);
 
     /// <summary>
-    /// The TMDB id of the movie or series TMDB knows under an imdb or TVDB id
-    /// (<paramref name="source"/> <c>imdb_id</c> or <c>tvdb_id</c>, <c>find/{id}</c>), "" when
-    /// TMDB knows none, null when it does not answer.
+    /// The TMDB id of the movie or series TMDB knows under an imdb or TVDB id, "" when TMDB
+    /// knows none, null when it does not answer.
     /// </summary>
-    public async Task<string?> FindTmdbIdAsync(
+    public Task<string?> FindTmdbIdAsync(
         string externalId,
         string source,
         StremioMediaType mediaType,
         CancellationToken cancellationToken
-    )
-    {
-        var url =
-            $"https://api.themoviedb.org/3/find/{Uri.EscapeDataString(externalId)}?api_key={GetTmdbApiKey()}&external_source={source}";
-        try
-        {
-            using var client = http.CreateClient(nameof(GelatoStremioProvider));
-            client.Timeout = TimeSpan.FromSeconds(10);
-            var response = await client
-                .GetStringAsync(url, cancellationToken)
-                .ConfigureAwait(false);
-            using var doc = JsonDocument.Parse(response);
-            var results = mediaType is StremioMediaType.Series ? "tv_results" : "movie_results";
-            return
-                doc.RootElement.TryGetProperty(results, out var found)
-                && found.GetArrayLength() > 0
-                && found[0].TryGetProperty("id", out var id)
-                ? id.GetInt32().ToString(CultureInfo.InvariantCulture)
-                : "";
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
-        {
-            log.LogDebug("FindTmdbId: TMDB did not answer for {Id}: {Error}", externalId, ex.Message);
-            return null;
-        }
-    }
+    ) => tmdb.FindIdAsync(externalId, source, mediaType, cancellationToken);
 
     /// <summary>
     /// Sets the release dates of the movie TMDB knows under <paramref name="imdbId"/>, and
@@ -970,20 +691,13 @@ public class GelatoStremioProvider(
     private async Task EnrichByImdbIdAsync(
         StremioMeta meta,
         string imdbId,
-        string apiKey,
         CancellationToken cancellationToken
     )
     {
         try
         {
-            using var client = http.CreateClient(nameof(GelatoStremioProvider));
-            client.Timeout = TimeSpan.FromSeconds(10);
-            var url =
-                $"https://api.themoviedb.org/3/movie/{Uri.EscapeDataString(imdbId)}?api_key={apiKey}&append_to_response={TmdbAppend}";
-            var response = await client
-                .GetStringAsync(url, cancellationToken)
+            var movie = await tmdb.GetMovieReleaseDatesAsync(imdbId, cancellationToken)
                 .ConfigureAwait(false);
-            var movie = JsonSerializer.Deserialize<TmdbMovieReleaseDates>(response, JsonOpts);
             _tmdbIdByImdbId[imdbId] = movie?.Id?.ToString(CultureInfo.InvariantCulture);
             ApplyTmdbMovie(meta, movie);
         }
@@ -1041,9 +755,6 @@ public class GelatoStremioProvider(
             }
         );
 
-    // TMDB's watch providers ride along with the release dates: one request for both.
-    private const string TmdbAppend = "release_dates,watch/providers";
-
     private static void ApplyTmdbMovie(StremioMeta meta, TmdbMovieReleaseDates? movie)
     {
         if (movie?.ReleaseDates is not { } container)
@@ -1070,18 +781,8 @@ public class GelatoStremioProvider(
 
     private async Task<List<StremioStream>> GetStreamsAsync(string id, StremioMediaType mediaType)
     {
-        var url = BuildUrl(["stream", mediaType.ToString().ToLower(), id]);
-        // AIOStreams only adds its stream data (the torrent's info hash, the file's size) for
-        // requests it takes for another AIOStreams, told by the User-Agent. RemuxDB needs the
-        // hash to match and accept a file; Remux asks the same way. Other addons keep getting
-        // Gelato's own.
         var manifest = await GetManifestAsync().ConfigureAwait(false);
-        var r = await GetJsonAsync<StremioStreamsResponse>(
-            url,
-            IsAioStreams(manifest) ? AioStreamsUserAgent : null
-        );
-
-        return r?.Streams ?? [];
+        return await addon.GetStreamsAsync(id, mediaType, IsAioStreams(manifest));
     }
 
     public async Task<List<StremioSubtitle>> GetSubtitlesAsync(
@@ -1089,9 +790,7 @@ public class GelatoStremioProvider(
         StremioMediaType mediaType
     )
     {
-        var url = BuildUrl(["subtitles", mediaType.ToString().ToLower(), id]);
-        var r = await GetJsonAsync<StremioSubtitleResponse>(url);
-        return r.Subtitles;
+        return await addon.GetSubtitlesAsync(id, mediaType);
     }
 
     public async Task<IReadOnlyList<StremioMeta>> GetCatalogMetasAsync(
@@ -1101,16 +800,7 @@ public class GelatoStremioProvider(
         int? skip = null
     )
     {
-        var extras = new List<string>();
-        if (!string.IsNullOrWhiteSpace(search))
-            extras.Add($"search={Uri.EscapeDataString(search)}");
-        if (skip is > 0)
-            extras.Add($"skip={skip}");
-
-        // seen maybe one type thats capital, but thats their issue
-        var url = BuildUrl(["catalog", mediaType.ToLower(), id], extras);
-        var r = await GetJsonAsync<StremioCatalogResponse>(url);
-        return r?.Metas ?? [];
+        return await addon.GetCatalogAsync(id, mediaType, search, skip);
     }
 
     public async Task<IReadOnlyList<StremioMeta>> SearchAsync(

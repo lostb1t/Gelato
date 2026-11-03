@@ -69,10 +69,10 @@ public sealed class RemoteTitles(
             Name = name,
             Description = title.Overview,
             Poster = title.PosterPath is { Length: > 0 } poster
-                ? $"https://image.tmdb.org/t/p/w500{poster}"
+                ? TmdbClient.PosterUrl(poster)
                 : null,
             Background = title.BackdropPath is { Length: > 0 } backdrop
-                ? $"https://image.tmdb.org/t/p/original{backdrop}"
+                ? TmdbClient.BackdropUrl(backdrop)
                 : null,
             Released = released,
             Year = released?.Year,
