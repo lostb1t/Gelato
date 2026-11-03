@@ -297,7 +297,8 @@ public class UserConfig
 public class GelatoStremioProviderFactory(
     IHttpClientFactory http,
     ILoggerFactory log,
-    Services.GelatoCache cache
+    Services.GelatoCache cache,
+    Services.TmdbClient tmdb
 )
 {
     public GelatoStremioProvider Create(Guid userId)
@@ -310,7 +311,17 @@ public class GelatoStremioProviderFactory(
     {
         return cache.Provider(
             cfg.GetBaseUrl(),
-            url => new GelatoStremioProvider(url, http, log.CreateLogger<GelatoStremioProvider>())
+            url =>
+                new GelatoStremioProvider(
+                    url,
+                    new Services.StremioAddonClient(
+                        url,
+                        http,
+                        log.CreateLogger<Services.StremioAddonClient>()
+                    ),
+                    tmdb,
+                    log.CreateLogger<GelatoStremioProvider>()
+                )
         );
     }
 }

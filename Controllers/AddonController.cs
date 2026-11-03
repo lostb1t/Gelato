@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Gelato.Config;
+using Gelato.Services;
 using MediaBrowser.Common.Api;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -14,7 +15,7 @@ namespace Gelato.Controllers;
 [ApiController]
 [Route("gelato/addon")]
 [Authorize(Policy = Policies.RequiresElevation)]
-public class AddonController(IHttpClientFactory http, ILoggerFactory log) : ControllerBase
+public class AddonController(IHttpClientFactory http, ILoggerFactory log, TmdbClient tmdb) : ControllerBase
 {
     /// <summary>The URL comes in the body: it carries the user's addon config.</summary>
     public sealed class CheckRequest
@@ -46,7 +47,8 @@ public class AddonController(IHttpClientFactory http, ILoggerFactory log) : Cont
         // A provider of its own: the factory's are cached per URL, and this one may never be saved.
         var provider = new GelatoStremioProvider(
             baseUrl,
-            http,
+            new StremioAddonClient(baseUrl, http, log.CreateLogger<StremioAddonClient>()),
+            tmdb,
             log.CreateLogger<GelatoStremioProvider>()
         );
         var watch = Stopwatch.StartNew();

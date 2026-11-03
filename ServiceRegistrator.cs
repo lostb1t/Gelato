@@ -68,6 +68,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         );
         services.DecorateSingle<IItemCountService, ItemCountServiceDecorator>();
         services.DecorateSingle<IMediaStreamRepository, MediaStreamRepositoryDecorator>();
+        services.AddSingleton<Services.TmdbClient>();
         services.AddSingleton<GelatoStremioProviderFactory>();
         services.AddSingleton(sp => new Lazy<GelatoManager>(sp.GetRequiredService<GelatoManager>));
         services.AddSingleton<CatalogService>();
