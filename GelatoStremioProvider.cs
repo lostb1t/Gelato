@@ -894,6 +894,16 @@ public struct StremioSubtitle
     public string? Title { get; set; }
     public string? Moviehash { get; set; }
 
+    private static readonly Dictionary<string, string> OpenSubtitlesVariants = new(
+        StringComparer.OrdinalIgnoreCase
+    )
+    {
+        ["pob"] = "pt-br",
+        ["spl"] = "es-419",
+        ["zht"] = "zh-tw",
+        ["zhe"] = "ze",
+    };
+
     public string? TwoLetterISOLanguageName(ILocalizationManager localization)
     {
         // AIOStreams sends lang as the ISO 639-2/B code ("ger") and lang_code as the two-letter one ("de").
@@ -906,6 +916,13 @@ public struct StremioSubtitle
         if (string.IsNullOrWhiteSpace(lng))
         {
             return null;
+        }
+
+        // OpenSubtitles' own codes for variants, which are in no ISO list. The values are the
+        // ones Jellyfin lists for them (iso6392.txt).
+        if (OpenSubtitlesVariants.TryGetValue(lng, out var variant))
+        {
+            return variant;
         }
 
         // CultureInfo only knows the T codes (deu), Jellyfin's list the B codes (ger) as well.
