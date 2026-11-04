@@ -126,12 +126,14 @@ namespace Gelato.Providers
                 string.IsNullOrEmpty(lang)
                     ? subs
                     : subs.Where(s =>
-                        string.Equals(
-                            (s.TwoLetterISOLanguageName(_localization) ?? "").Trim().ToLower(),
-                            lang,
-                            StringComparison.OrdinalIgnoreCase
-                        )
-                    )
+                    {
+                        var subLang = (s.TwoLetterISOLanguageName(_localization) ?? "")
+                            .Trim()
+                            .ToLower();
+                        // A search for "pt" also offers "pt-br"; "pt-br" only offers "pt-br".
+                        return subLang == lang
+                            || (!lang.Contains('-') && subLang.StartsWith(lang + "-"));
+                    })
             ).ToList();
 
             _log.LogInformation(
