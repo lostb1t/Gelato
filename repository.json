@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.30.2] - 2026-11-06\n\n### 🐛 Bug Fixes\n\n- Find subtitles in more language variants (#364)\n\n### 🚜 Refactor\n\n- One client per outside service (#361)\n- Keep every memo in one size-limited cache (#362)\n",
+        "checksum": "0527e38f1b0f24d4e2eb3fe85b945637",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.2/gelato_0.26.30.2.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-11-06T21:02:41Z",
+        "version": "0.26.30.2"
+      },
+      {
         "changelog": "## [0.26.30.1] - 2026-11-02\n\n### 🐛 Bug Fixes\n\n- Remove the unauthenticated subtitles route (#358)\n- Stop the server fetching streams from link-local hosts (#359)\n\n### 📚 Documentation\n\n- Explain RemuxDB and how to turn it off (#357)\n",
         "checksum": "45299dce1a8a6ac9b2550db68e930446",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.1/gelato_0.26.30.1.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-05-05T10:10:39Z",
         "version": "0.26.14.5"
-      },
-      {
-        "changelog": "## [0.26.14.4] - 2026-04-28\n\n### 🐛 Bug Fixes\n\n- Clear dead person filter\n",
-        "checksum": "2a69da81349997adbd9e56de6f014555",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.4/gelato_0.26.14.4.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-04-28T08:34:18Z",
-        "version": "0.26.14.4"
       }
     ]
   }
