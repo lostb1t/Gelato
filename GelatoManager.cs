@@ -3620,6 +3620,15 @@ public sealed class GelatoManager(
 
     public void CleanVirtualTreeItem(Series series, CancellationToken ct)
     {
+        // The series page runs this on every visit. Loading all of a big series' episodes to find
+        // none to remove took 5 to 8 seconds on a library of 240k episodes; two indexed lookups
+        // answer it. Nothing Gelato added below the series and no sync mark: nothing to clean.
+        if (
+            !idLookup.AnyStremioItemUnder(series.Id)
+            && series.Tags?.Contains(TreeSyncedTag, StringComparer.OrdinalIgnoreCase) != true
+        )
+            return;
+
         var allEpisodes = libraryManager
             .GetItemList(
                 new InternalItemsQuery

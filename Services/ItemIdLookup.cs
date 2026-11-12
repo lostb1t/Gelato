@@ -39,6 +39,17 @@ public sealed class ItemIdLookup(IDbContextFactory<JellyfinDbContext> dbFactory)
             .ToArray();
     }
 
+    /// <summary>Whether anything below <paramref name="ancestorId"/> carries a Stremio id.</summary>
+    public bool AnyStremioItemUnder(Guid ancestorId)
+    {
+        using var db = dbFactory.CreateDbContext();
+        return db
+            .AncestorIds.AsNoTracking()
+            .Where(a => a.ParentItemId == ancestorId)
+            .Join(db.BaseItemProviders, a => a.ItemId, p => p.ItemId, (a, p) => p)
+            .Any(p => p.ProviderId == "Stremio" && p.ProviderValue != "");
+    }
+
     /// <summary>The ids of the items tagged <paramref name="tag"/>.</summary>
     public Guid[] WithTag(string tag)
     {
