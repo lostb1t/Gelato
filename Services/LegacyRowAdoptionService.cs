@@ -24,9 +24,12 @@ public sealed class LegacyRowAdoptionService(
     GelatoItemRepository repo,
     IItemPersistenceService persistence,
     GelatoManager manager,
+    ItemIdLookup lookup,
     ILogger<LegacyRowAdoptionService> log
 ) : IHostedService
 {
+    private const int BatchSize = 500;
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         _ = Task.Run(() => RunAsync(cancellationToken), cancellationToken);
@@ -42,107 +45,123 @@ public sealed class LegacyRowAdoptionService(
             // The library is still coming up when hosted services start.
             await Task.Delay(TimeSpan.FromSeconds(20), ct).ConfigureAwait(false);
 
-            var rows = repo.GetItemList(
-                    new InternalItemsQuery
-                    {
-                        IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
-                        Recursive = true,
-                        HasAnyProviderId = new Dictionary<string, string>
-                        {
-                            { "Stremio", string.Empty },
-                            { "stremio", string.Empty },
-                        },
-                        IsDeadPerson = true,
-                        IncludeOwnedItems = true,
-                    }
-                )
-                .OfType<Video>()
-                .Where(v => v.IsStreamRow())
-                .ToList();
+            var ids = lookup.LegacyStreamRows();
+            if (ids.Length == 0)
+            {
+                log.LogDebug("Legacy stream rows: none to adopt");
+                return;
+            }
 
             var adopted = 0;
             var titles = 0;
             var orphans = 0;
-            // Per title: the rows share the Stremio id of their movie/episode.
-            foreach (
-                var group in rows.Where(v => v.PrimaryVersionId is null)
-                    .GroupBy(v => (Kind: v.GetBaseItemKind(), Id: v.GetProviderId("Stremio") ?? ""))
-            )
+            var stamped = 0;
+            // Batches keep memory flat: a library holds tens of thousands of stream rows.
+            foreach (var batch in ids.Chunk(BatchSize))
             {
                 ct.ThrowIfCancellationRequested();
-                if (group.Key.Id.Length == 0)
-                {
-                    orphans += group.Count();
-                    continue;
-                }
-
-                var primaries = repo.GetItemList(
+                var rows = repo.GetItemList(
                         new InternalItemsQuery
                         {
-                            IncludeItemTypes = [group.Key.Kind],
+                            ItemIds = batch,
+                            IncludeItemTypes = [BaseItemKind.Movie, BaseItemKind.Episode],
+                            Recursive = true,
                             HasAnyProviderId = new Dictionary<string, string>
                             {
-                                { "Stremio", group.Key.Id },
+                                { "Stremio", string.Empty },
+                                { "stremio", string.Empty },
                             },
-                            Recursive = true,
                             IsDeadPerson = true,
+                            IncludeOwnedItems = true,
                         }
                     )
                     .OfType<Video>()
-                    .Where(v => !v.IsStreamRow() && v.PrimaryVersionId is null)
+                    .Where(v => v.IsStreamRow())
                     .ToList();
-                if (primaries.Count == 0)
-                {
-                    orphans += group.Count();
-                    continue;
-                }
 
-                // The same title can exist more than once (a local copy, per-user folders): a row
-                // goes to the copy in its own folder, like the sync puts it there.
+                // Per title: the rows share the Stremio id of their movie/episode.
                 foreach (
-                    var byPrimary in group.GroupBy(row =>
-                        primaries.FirstOrDefault(p => p.ParentId == row.ParentId) ?? primaries[0]
-                    )
+                    var group in rows.Where(v => v.PrimaryVersionId is null)
+                        .GroupBy(v => (Kind: v.GetBaseItemKind(), Id: v.GetProviderId("Stremio") ?? ""))
                 )
                 {
-                    var primary = byPrimary.Key;
-                    var mine = byPrimary.ToList();
-                    await manager
-                        .RunExclusiveAsync(
-                            primary.Id,
-                            token => manager.AdoptLegacyRows(primary, mine, token),
-                            ct
+                    ct.ThrowIfCancellationRequested();
+                    if (group.Key.Id.Length == 0)
+                    {
+                        orphans += group.Count();
+                        continue;
+                    }
+
+                    var primaries = repo.GetItemList(
+                            new InternalItemsQuery
+                            {
+                                IncludeItemTypes = [group.Key.Kind],
+                                HasAnyProviderId = new Dictionary<string, string>
+                                {
+                                    { "Stremio", group.Key.Id },
+                                },
+                                Recursive = true,
+                                IsDeadPerson = true,
+                            }
                         )
-                        .ConfigureAwait(false);
-                    adopted += mine.Count;
-                    titles++;
-                }
-            }
+                        .OfType<Video>()
+                        .Where(v => !v.IsStreamRow() && v.PrimaryVersionId is null)
+                        .ToList();
+                    if (primaries.Count == 0)
+                    {
+                        orphans += group.Count();
+                        continue;
+                    }
 
-            // Rows already owned but without a stamp (a build that linked but did not stamp).
-            var unstamped = rows.Where(v =>
-                    v.PrimaryVersionId is not null && v.DateLastRefreshed == DateTime.MinValue
-                )
-                .ToList();
-            if (unstamped.Count > 0)
-            {
-                var now = DateTime.UtcNow;
-                foreach (var row in unstamped)
+                    // The same title can exist more than once (a local copy, per-user folders): a row
+                    // goes to the copy in its own folder, like the sync puts it there.
+                    foreach (
+                        var byPrimary in group.GroupBy(row =>
+                            primaries.FirstOrDefault(p => p.ParentId == row.ParentId) ?? primaries[0]
+                        )
+                    )
+                    {
+                        var primary = byPrimary.Key;
+                        var mine = byPrimary.ToList();
+                        await manager
+                            .RunExclusiveAsync(
+                                primary.Id,
+                                token => manager.AdoptLegacyRows(primary, mine, token),
+                                ct
+                            )
+                            .ConfigureAwait(false);
+                        adopted += mine.Count;
+                        titles++;
+                    }
+                }
+
+                // Rows already owned but without a stamp (a build that linked but did not stamp).
+                var unstamped = rows.Where(v =>
+                        v.PrimaryVersionId is not null && v.DateLastRefreshed == DateTime.MinValue
+                    )
+                    .ToList();
+                if (unstamped.Count > 0)
                 {
-                    row.DateLastRefreshed = now;
-                    row.DateLastSaved = now;
+                    var now = DateTime.UtcNow;
+                    foreach (var row in unstamped)
+                    {
+                        row.DateLastRefreshed = now;
+                        row.DateLastSaved = now;
+                    }
+
+                    persistence.SaveItems(unstamped, ct);
+                    stamped += unstamped.Count;
                 }
 
-                persistence.SaveItems(unstamped, ct);
             }
 
-            if (adopted > 0 || unstamped.Count > 0 || orphans > 0)
+            if (adopted > 0 || stamped > 0 || orphans > 0)
             {
                 log.LogInformation(
                     "Legacy stream rows: {Adopted} adopted for {Titles} title(s), {Stamped} stamped, {Orphans} without a title",
                     adopted,
                     titles,
-                    unstamped.Count,
+                    stamped,
                     orphans
                 );
             }
