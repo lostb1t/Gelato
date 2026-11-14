@@ -887,10 +887,47 @@ public static class ActionContextExtensions
                     property.SetValue(value, ids.Select(g => map(g) ?? g).Distinct().ToArray());
                     changed = true;
                     break;
+                case not null when RedirectBodyItem(value, map):
+                    changed = true;
+                    break;
             }
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Redirects the item a request body names as <c>ItemId</c> and, when it holds the same id,
+    /// <c>MediaSourceId</c>: the playback reports (<c>/Sessions/Playing</c>, <c>/Progress</c>,
+    /// <c>/Stopped</c>). A client that played a search result reports with the id it opened;
+    /// Jellyfin finds no item under it and drops the report, so the position was not saved.
+    /// </summary>
+    /// <remarks>
+    /// The body is one of Jellyfin's API models, which a plugin does not reference, so the
+    /// properties are found by name.
+    /// </remarks>
+    private static bool RedirectBodyItem(object body, Func<Guid, Guid?> map)
+    {
+        if (
+            body is string or Array or ValueType
+            || body.GetType().GetProperty("ItemId") is not { CanWrite: true } itemProp
+            || itemProp.PropertyType != typeof(Guid)
+            || itemProp.GetValue(body) is not Guid itemId
+            || map(itemId) is not { } to
+        )
+            return false;
+
+        itemProp.SetValue(body, to);
+        if (
+            body.GetType().GetProperty("MediaSourceId") is { CanWrite: true } sourceProp
+            && sourceProp.PropertyType == typeof(string)
+            && sourceProp.GetValue(body) is string source
+            && Guid.TryParse(source, out var sourceId)
+            && sourceId == itemId
+        )
+            sourceProp.SetValue(body, to.ToString("N"));
+
+        return true;
     }
 
     public static void ReplaceGuid(this ActionExecutingContext ctx, Guid value)
