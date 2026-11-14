@@ -9,6 +9,22 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.30.4] - 2026-11-14\n\n### 🐛 Bug Fixes\n\n- Stop running out of memory on big libraries (#369)\n- Save play state of a played search result (#370)\n",
+        "checksum": "9cdc209a3769bd6caf7169877c4901bf",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.4/gelato_0.26.30.4.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-11-14T12:39:05Z",
+        "version": "0.26.30.4"
+      },
+      {
+        "changelog": "## [0.26.30.3] - 2026-11-12\n\n### 🐛 Bug Fixes\n\n- Open local series pages without loading every episode (#366)\n",
+        "checksum": "",
+        "sourceUrl": "",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-11-12T22:16:52Z",
+        "version": "0.26.30.3"
+      },
+      {
         "changelog": "## [0.26.30.2] - 2026-11-06\n\n### 🐛 Bug Fixes\n\n- Find subtitles in more language variants (#364)\n\n### 🚜 Refactor\n\n- One client per outside service (#361)\n- Keep every memo in one size-limited cache (#362)\n",
         "checksum": "0527e38f1b0f24d4e2eb3fe85b945637",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.2/gelato_0.26.30.2.zip",
@@ -231,22 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-05-05T16:37:10Z",
         "version": "0.26.14.7"
-      },
-      {
-        "changelog": "## [0.26.14.6] - 2026-05-05\n\n### 🐛 Bug Fixes\n\n- Return of the purge task\n",
-        "checksum": "3745ad4779835509c60d62d17557c162",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.6/gelato_0.26.14.6.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-05-05T10:50:58Z",
-        "version": "0.26.14.6"
-      },
-      {
-        "changelog": "## [0.26.14.5] - 2026-05-05\n\n### 🐛 Bug Fixes\n\n- Do not mark items as virtual in listings\n\n### 🚜 Refactor\n\n- Use bulk deleye to speed up purge\n",
-        "checksum": "117f2a4b5daa5bf8e9cfda1653ad012d",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.5/gelato_0.26.14.5.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-05-05T10:10:39Z",
-        "version": "0.26.14.5"
       }
     ]
   }
