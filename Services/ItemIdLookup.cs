@@ -39,6 +39,33 @@ public sealed class ItemIdLookup(IDbContextFactory<JellyfinDbContext> dbFactory)
             .ToArray();
     }
 
+    /// <summary>
+    /// The ids of the stream rows an older Gelato left half done: not yet a version of their
+    /// movie/episode (no owner), or owned but without a refresh stamp.
+    /// </summary>
+    /// <remarks>
+    /// Ids only, so the caller loads them in batches: a library of 95k episodes used to be
+    /// materialised whole, stream rows or not, on every start.
+    /// </remarks>
+    public Guid[] LegacyStreamRows()
+    {
+        using var db = dbFactory.CreateDbContext();
+        return db
+            .ItemValuesMap.AsNoTracking()
+            .Where(m =>
+                m.ItemValue.Type == ItemValueType.Tags
+                && m.ItemValue.CleanValue == StreamTagCleanValue
+                && (
+                    m.Item.PrimaryVersionId == null
+                    || m.Item.DateLastRefreshed == null
+                    || m.Item.DateLastRefreshed == DateTime.MinValue
+                )
+            )
+            .Select(m => m.ItemId)
+            .Distinct()
+            .ToArray();
+    }
+
     /// <summary>Whether anything below <paramref name="ancestorId"/> carries a Stremio id.</summary>
     public bool AnyStremioItemUnder(Guid ancestorId)
     {
