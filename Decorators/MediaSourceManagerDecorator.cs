@@ -13,6 +13,7 @@ using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.Subtitles;
 using MediaBrowser.Model.Dto;
+using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
@@ -52,7 +53,8 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         SegmentLookups segmentLookups,
         SyncPlaySources syncPlaySources,
         Lazy<ISessionManager> sessionManager,
-        GelatoCache cache
+        GelatoCache cache,
+        ILocalizationManager localization
     )
     {
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
@@ -63,7 +65,15 @@ public sealed class MediaSourceManagerDecorator : IMediaSourceManager
         ArgumentNullException.ThrowIfNull(config);
 
         Sync = new StreamSyncOnOpen(libraryManager, log, manager, subtitleProvider);
-        Versions = new VersionList(this, inner, libraryManager, log, http, manager);
+        Versions = new VersionList(
+            this,
+            inner,
+            libraryManager,
+            log,
+            http,
+            manager,
+            localization
+        );
         Order = new VersionOrder(this, libraryManager, userDataManager, cache);
         Playback = new PlaybackPreparation(
             this,
