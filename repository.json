@@ -9,6 +9,14 @@
     "owner": "lstb1t",
     "versions": [
       {
+        "changelog": "## [0.26.31.0] - 2026-11-24\n\n### 🚀 Features\n\n- Send the stream's file name to the subtitle addon (#375)\n\n### 🐛 Bug Fixes\n\n- Pick downloaded subtitles by language (#374)\n- Show a name for subtitles without a title (#377)\n",
+        "checksum": "c19d4578ed1c597a440a16acbff61fe4",
+        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.31.0/gelato_0.26.31.0.zip",
+        "targetAbi": "12.1.0.0",
+        "timestamp": "2026-11-24T19:43:36Z",
+        "version": "0.26.31.0"
+      },
+      {
         "changelog": "## [0.26.30.4] - 2026-11-14\n\n### 🐛 Bug Fixes\n\n- Stop running out of memory on big libraries (#369)\n- Save play state of a played search result (#370)\n",
         "checksum": "9cdc209a3769bd6caf7169877c4901bf",
         "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.30.4/gelato_0.26.30.4.zip",
@@ -239,14 +247,6 @@
         "targetAbi": "10.11.6.0",
         "timestamp": "2026-05-13T20:57:50Z",
         "version": "0.26.14.8"
-      },
-      {
-        "changelog": "## [0.26.14.7] - 2026-05-05\n\n### 🐛 Bug Fixes\n\n- Revert stub\n",
-        "checksum": "0e4fb500ec0017c612db1280c400ae8c",
-        "sourceUrl": "https://github.com/lostb1t/Gelato/releases/download/v0.26.14.7/gelato_0.26.14.7.zip",
-        "targetAbi": "10.11.6.0",
-        "timestamp": "2026-05-05T16:37:10Z",
-        "version": "0.26.14.7"
       }
     ]
   }
