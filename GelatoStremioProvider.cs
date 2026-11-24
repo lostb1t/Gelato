@@ -896,6 +896,31 @@ public struct StremioSubtitle
     public string? Title { get; set; }
     public string? Moviehash { get; set; }
 
+    /// <summary>
+    /// The release name to show and rank by. OpenSubtitles V3+ sends it as Title; SubSource and SubDL
+    /// only put it in Id, as "name_<n>" (OpenSubtitles ids look like "v3+|<n>|name.lang").
+    /// </summary>
+    [JsonIgnore]
+    public readonly string DisplayName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Title))
+                return Title;
+            var name = Id ?? "";
+            if (name.StartsWith("v3+|", StringComparison.Ordinal))
+            {
+                var bar = name.IndexOf('|', 4);
+                if (bar >= 0)
+                    name = name[(bar + 1)..];
+            }
+            var us = name.LastIndexOf('_');
+            if (us > 0 && us < name.Length - 1 && name.Skip(us + 1).All(char.IsAsciiDigit))
+                name = name[..us];
+            return name;
+        }
+    }
+
     private static readonly Dictionary<string, string> OpenSubtitlesVariants = new(
         StringComparer.OrdinalIgnoreCase
     )
