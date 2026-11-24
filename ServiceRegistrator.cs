@@ -45,6 +45,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
         services.AddSingleton<DownloadFilter>();
         services.AddSingleton<StreamUserDataFilter>();
         services.AddSingleton<VersionActionFilter>();
+        services.AddSingleton<EpisodeStartFilter>();
         services.AddSingleton<HiddenListingFilter>();
         services.AddSingleton<PendingTagFilter>();
         services.AddSingleton<PendingSearchTitles>();
@@ -187,6 +188,7 @@ public class ServiceRegistrator : IPluginServiceRegistrator
             o.Filters.AddService<DownloadFilter>(order: 2);
             o.Filters.AddService<StreamUserDataFilter>();
             o.Filters.AddService<VersionActionFilter>();
+            o.Filters.AddService<EpisodeStartFilter>();
             o.Filters.AddService<HiddenListingFilter>();
             o.Filters.AddService<PendingTagFilter>();
             o.Filters.AddService<MediaSegmentFilter>();
