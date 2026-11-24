@@ -8,6 +8,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
+using MediaBrowser.Model.Globalization;
 using MediaBrowser.Model.MediaInfo;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -24,7 +25,8 @@ internal sealed class VersionList(
     ILibraryManager libraryManager,
     ILogger<MediaSourceManagerDecorator> log,
     IHttpContextAccessor http,
-    Lazy<GelatoManager> manager
+    Lazy<GelatoManager> manager,
+    ILocalizationManager localization
 )
 {
     private readonly IMediaSourceManager _inner = inner;
@@ -32,6 +34,7 @@ internal sealed class VersionList(
     private readonly ILogger<MediaSourceManagerDecorator> _log = log;
     private readonly IHttpContextAccessor _http = http;
     private readonly Lazy<GelatoManager> _manager = manager;
+    private readonly ILocalizationManager _localization = localization;
 
     internal IReadOnlyList<MediaSourceInfo> BuildStaticMediaSources(
         BaseItem item,
@@ -420,6 +423,11 @@ internal sealed class VersionList(
                     given[file] = index;
                 }
 
+                // The file is named with the addon's code (nl), Jellyfin's default selection and
+                // the player want the three-letter one (nld) and its name. The file keeps its name
+                // and index: a renamed one left a hole in the indexes.
+                var culture = langCode.Length > 0 ? _localization.FindLanguageInfo(langCode) : null;
+
                 streams.Add(
                     new MediaStream
                     {
@@ -428,7 +436,8 @@ internal sealed class VersionList(
                         IsExternalUrl = false,
                         SupportsExternalStream = true,
                         Path = file,
-                        Language = langCode,
+                        Language = culture?.ThreeLetterISOLanguageName ?? langCode,
+                        LocalizedLanguage = culture?.DisplayName,
                         Codec = codec,
                         Index = index,
                         IsDefault = false,
