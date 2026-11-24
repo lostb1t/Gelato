@@ -1922,6 +1922,14 @@ public sealed class GelatoManager(
             {
                 streamItem.SetGelatoData("filename", s.BehaviorHints.Filename);
             }
+            if (s.BehaviorHints?.VideoSize is > 0)
+            {
+                streamItem.SetGelatoData("videoSize", s.BehaviorHints.VideoSize);
+            }
+            if (!string.IsNullOrEmpty(s.BehaviorHints?.VideoHash))
+            {
+                streamItem.SetGelatoData("videoHash", s.BehaviorHints.VideoHash);
+            }
             streamItem.SetGelatoData("index", index);
             streamItem.SetGelatoData("guid", streamGuid);
             try

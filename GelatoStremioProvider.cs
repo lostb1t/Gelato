@@ -1,3 +1,4 @@
+using Gelato.Services;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
@@ -774,10 +775,11 @@ public class GelatoStremioProvider(
 
     public async Task<List<StremioSubtitle>> GetSubtitlesAsync(
         string id,
-        StremioMediaType mediaType
+        StremioMediaType mediaType,
+        SubtitleExtras? extras = null
     )
     {
-        return await addon.GetSubtitlesAsync(id, mediaType);
+        return await addon.GetSubtitlesAsync(id, mediaType, extras);
     }
 
     public async Task<IReadOnlyList<StremioMeta>> GetCatalogMetasAsync(

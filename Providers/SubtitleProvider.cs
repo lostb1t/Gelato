@@ -60,10 +60,11 @@ namespace Gelato.Providers
         public async Task<IReadOnlyList<StremioSubtitle>> GetSubtitlesAsync(
             string id,
             StremioMediaType mediaType,
-            CancellationToken ct
+            CancellationToken ct,
+            SubtitleExtras? extras = null
         )
         {
-            var listKey = ListCacheKey(id, mediaType);
+            var listKey = ListCacheKey(id, mediaType, extras);
 
             if (
                 _cache.TryGet(GelatoCache.Subtitles, listKey, out IReadOnlyList<StremioSubtitle>? cached)
@@ -77,7 +78,7 @@ namespace Gelato.Providers
             _log.LogDebug("Subtitle list cache MISS key={Key}", listKey);
 
             var cfg = GelatoPlugin.Instance!.GetConfig(Guid.Empty);
-            var subs = await cfg.Stremio!.GetSubtitlesAsync(id, mediaType).ConfigureAwait(false);
+            var subs = await cfg.Stremio!.GetSubtitlesAsync(id, mediaType, extras).ConfigureAwait(false);
 
             _cache.Set(GelatoCache.Subtitles, listKey, (IReadOnlyList<StremioSubtitle>)subs);
 
@@ -93,6 +94,10 @@ namespace Gelato.Providers
         )
         {
             IReadOnlyList<StremioSubtitle> subs;
+            // The release the search is for. An automated search ("download missing subtitles")
+            // asks once per title instead: its answer is shared by every row, and it is looked up
+            // lazily, only to rank what the addon returned.
+            BaseItem? row = null;
             try
             {
                 var mediaType = MediaType(request);
@@ -107,7 +112,18 @@ namespace Gelato.Providers
                     return Array.Empty<RemoteSubtitleInfo>();
                 }
 
-                subs = await GetSubtitlesAsync(stremioId, mediaType, cancellationToken)
+                SubtitleExtras? extras = null;
+                if (!request.IsAutomated)
+                {
+                    row = StreamRow(request.MediaPath);
+                    extras = SubtitleExtras.Create(
+                        row?.GelatoData<string>("filename"),
+                        row?.GelatoData<long?>("videoSize"),
+                        row?.GelatoData<string>("videoHash")
+                    );
+                }
+
+                subs = await GetSubtitlesAsync(stremioId, mediaType, cancellationToken, extras)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -149,7 +165,7 @@ namespace Gelato.Providers
 
             // Derive release name from media path for title matching.
             // The SearchSubtitles decorator appends ".strm" so strip that first, then strip the real extension.
-            var rawFilename = ReleaseFilename(request.MediaPath);
+            var rawFilename = ReleaseFilename(request.MediaPath, row);
             if (rawFilename.EndsWith(".strm", StringComparison.OrdinalIgnoreCase))
                 rawFilename = rawFilename[..^5];
             var releaseName = Path.GetFileNameWithoutExtension(rawFilename);
@@ -206,16 +222,19 @@ namespace Gelato.Providers
             });
         }
 
-        private string ReleaseFilename(string mediaPath)
-        {
-            // Prefer the filename stored in GelatoData (set from BehaviorHints.Filename during stream
-            // insertion), since the stream URL often doesn't contain a meaningful filename.
-            // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
-            var streamItem = _library
+        // Stream rows are alternate versions, which Jellyfin leaves out of queries by default.
+        private BaseItem? StreamRow(string mediaPath) =>
+            _library
                 .GetItemList(
                     new InternalItemsQuery { Path = mediaPath, IncludeOwnedItems = true }
                 )
                 .FirstOrDefault();
+
+        private string ReleaseFilename(string mediaPath, BaseItem? row)
+        {
+            // Prefer the filename stored in GelatoData (set from BehaviorHints.Filename during stream
+            // insertion), since the stream URL often doesn't contain a meaningful filename.
+            var streamItem = row ?? StreamRow(mediaPath);
             var gelatoFilename = streamItem?.GelatoData<string>("filename");
 
             if (!string.IsNullOrEmpty(gelatoFilename))
@@ -345,8 +364,13 @@ namespace Gelato.Providers
                 .Select(t => t.ToLowerInvariant())
                 .ToHashSet();
 
-        private static string ListCacheKey(string id, StremioMediaType mediaType) =>
-            $"gelato:subtitles:{mediaType.ToString().ToLower()}/{id}";
+        private static string ListCacheKey(
+            string id,
+            StremioMediaType mediaType,
+            SubtitleExtras? extras = null
+        ) =>
+            $"gelato:subtitles:{mediaType.ToString().ToLower()}/{id}"
+            + (extras is null ? "" : "|" + extras.CacheKey);
 
         private static string SubCacheKey(string id) => $"gelato:subtitle:{id}";
 

@@ -141,10 +141,15 @@ public class StremioAddonClient(string baseUrl, IHttpClientFactory http, ILogger
         return r?.Streams ?? [];
     }
 
-    public async Task<List<StremioSubtitle>> GetSubtitlesAsync(string id, StremioMediaType mediaType)
+    /// <param name="extras">What Stremio sends along so an addon can match a release.</param>
+    public async Task<List<StremioSubtitle>> GetSubtitlesAsync(
+        string id,
+        StremioMediaType mediaType,
+        SubtitleExtras? extras = null
+    )
     {
         var r = await GetJsonAsync<StremioSubtitleResponse>(
-            BuildUrl(["subtitles", Kind(mediaType), id])
+            BuildUrl(["subtitles", Kind(mediaType), id], extras?.ToPairs())
         );
         return r.Subtitles;
     }
