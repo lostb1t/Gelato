@@ -175,7 +175,7 @@ namespace Gelato.Providers
             var scored = filtered
                 .Select(s =>
                 {
-                    var titleScore = TitleMatchScore(releaseName, s.Title);
+                    var titleScore = TitleMatchScore(releaseName, s.DisplayName);
                     var trusted = s.FromTrusted == true ? 0.2 : 0.0;
                     var notAi = s.AiTranslated == false ? 0.1 : 0.0;
                     return (
@@ -196,7 +196,7 @@ namespace Gelato.Providers
                     bonus,
                     s.FromTrusted,
                     s.AiTranslated,
-                    s.Title ?? "(no title)"
+                    s.DisplayName
                 );
 
             // Nothing is picked here: Jellyfin gets the whole list in this order.
@@ -205,7 +205,7 @@ namespace Gelato.Providers
                 var top = scored[0];
                 _log.LogInformation(
                     "Top ranked subtitle: '{Title}' (score={Score:F2} title={TitleScore:F2} bonus={Bonus:F2})",
-                    top.Sub.Title ?? "(no title)",
+                    top.Sub.DisplayName,
                     top.Score,
                     top.TitleScore,
                     top.Bonus
@@ -215,7 +215,7 @@ namespace Gelato.Providers
             return scored.Select(x => new RemoteSubtitleInfo
             {
                 Id = PathSafeId(x.Sub.Id),
-                Name = Uri.UnescapeDataString(x.Sub.Title ?? ""),
+                Name = Uri.UnescapeDataString(x.Sub.DisplayName),
                 ProviderName = Name,
                 Format = GuessSubtitleCodec(x.Sub.Url),
                 ThreeLetterISOLanguageName = request.Language,
